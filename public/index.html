@@ -595,7 +595,7 @@ function buildCode(b){
   const rz=card.querySelector('.rz');
   rz.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); rz.setPointerCapture(e.pointerId);
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur();
-    const cr=card.getBoundingClientRect(), sx=e.clientX, sy=e.clientY, w0=cr.width, h0=cr.height; card.classList.add('resizing'); card.classList.remove('settle'); b.resizing=true; card.style.maxWidth='none';
+    const cr=card.getBoundingClientRect(), sx=e.clientX, sy=e.clientY, w0=cr.width, h0=cr.height; card.classList.add('resizing'); card.classList.remove('settle'); b.resizing=true; card.style.maxWidth='none'; card.style.flex='0 0 auto';   // картка не стискається під блок, округлений до сітки
     /* під час руху картка йде за курсором плавно; модель (cw/ch) уже округлена до сітки; при відпусканні — короткий доїзд до сітки.
        По горизонталі — ширина; по вертикалі — скільки рядків видно у згорнутому стані (вище за вміст = показати все) */
     const move=ev=>{ const g=G(), avail=Math.max(minw(b), rawWidth(b))-CL();
@@ -603,7 +603,7 @@ function buildCode(b){
       const total=b.text.split('\n').length, hFree=h0+(ev.clientY-sy)-32-4-32, lines=Math.max(3, Math.round(hFree/g));
       if(lines>=total){ b.ch=undefined; b.open=true; } else { b.ch=lines; b.open=false; }
       applyCut(); card.style.width=wpx+'px'; pre.style.height=(b.ch? Math.max(3*g, Math.min(total*g, hFree))+4 : (total*g+4))+'px'; if(!b.ch) pre.style.height=''; relayout(b); };
-    const up=()=>{ rz.removeEventListener('pointermove',move); rz.removeEventListener('pointerup',up); rz.removeEventListener('pointercancel',up); card.classList.remove('resizing'); b.resizing=false; card.style.maxWidth='';
+    const up=()=>{ rz.removeEventListener('pointermove',move); rz.removeEventListener('pointerup',up); rz.removeEventListener('pointercancel',up); card.classList.remove('resizing'); b.resizing=false; card.style.maxWidth=''; card.style.flex='';
       card.classList.add('settle'); applyCut(); relayout(b); setTimeout(()=>card.classList.remove('settle'),220); markDirty(); };
     rz.addEventListener('pointermove',move); rz.addEventListener('pointerup',up); rz.addEventListener('pointercancel',up); });
   rz.addEventListener('dblclick',e=>{ e.stopPropagation(); b.cw=undefined; b.ch=undefined; b.open=false; applyCut(); relayout(b); markDirty(); });
