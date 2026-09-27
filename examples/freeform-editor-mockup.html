@@ -117,7 +117,7 @@ button{font-family:inherit}
 <main class="sheet" id="sheet">
   <div class="empty" id="empty">
     <div class="big">Клацніть будь-де — і пишіть саме там</div>
-    <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки: рядок завжди лягає рівно між двома рядами точок. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути в інше місце.</div>
+    <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки: рядок лягає рівно між двома рядами точок, а починається на стовпчику точок. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути в інше місце.</div>
   </div>
 </main>
 
@@ -127,12 +127,13 @@ button{font-family:inherit}
 (function(){
   const sheet=document.getElementById('sheet'), empty=document.getElementById('empty'),
         cnt=document.getElementById('cnt'), toast=document.getElementById('toast');
-  const KEY='freeform-editor-v2';
+  const KEY='freeform-editor-v3';
   const MINW=140;           // мінімальна ширина блока, px
   const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
   const G=()=>cssN('--g')||24;                       // крок сітки
   const OFF=()=>cssN('--handle')+2+6;                 // ручка + gap + padding тексту: від краю блока до початку тексту
-  const snap=v=>Math.round(v/G())*G();                // середина між двома точками = k·G
+  const snap=v=>Math.round(v/G())*G();                // середина між двома рядами точок = k·G (для Y)
+  const snapCol=v=>Math.round((v-G()/2)/G())*G()+G()/2; // стовпчик точок = k·G+G/2 (для X: текст починається на лівій межі клітинки)
   const ghost=document.createElement('div'); ghost.className='ghost'; sheet.appendChild(ghost);
   let blocks=[];            // {id, fx, fy, text}   fx,fy — частки від розміру аркуша (0..1)
   let toastShown=false;
@@ -143,13 +144,13 @@ button{font-family:inherit}
 
   /* ── розкладка: перерахунок px із часток; ширина — до правого краю (макс. вільний простір) ── */
   /* fx,fy описують ПОЧАТОК ТЕКСТУ (не край блока). Початок завжди прилипає до сітки:
-     по X — середина між двома стовпчиками точок, по Y — середина між двома рядами;
+     по X — на стовпчику точок (ліва межа клітинки), по Y — середина між двома рядами (між верхньою і нижньою точкою);
      висота рядка = крок сітки, тож і наступні рядки лягають між точками. */
   function origin(px,py){
     const W=sheetW(), g=G(), pad=cssN('--pad');
-    let tx=snap(px), ty=snap(py);
-    tx=Math.min(tx, Math.floor((W-pad-MINW)/g)*g);  // не вужче за MINW
-    tx=Math.max(tx, g);                              // не в самий край
+    let tx=snapCol(px), ty=snap(py);
+    tx=Math.min(tx, Math.floor((W-pad-MINW-g/2)/g)*g+g/2);  // не вужче за MINW
+    tx=Math.max(tx, g+g/2);                                 // не в самий край (другий стовпчик)
     ty=Math.max(ty, 2*g);                            // під шапкою
     return {tx,ty};
   }
