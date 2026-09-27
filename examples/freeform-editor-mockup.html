@@ -15,7 +15,8 @@
   --sel:rgba(35,131,226,.14); --sel-line:rgba(35,131,226,.55);
   --shadow:0 4px 18px rgba(15,15,15,.14), 0 0 0 .5px rgba(15,15,15,.08);
   --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  --pad:24px; --handle:22px; --fs:16px;
+  /* ритм аркуша: крок сітки = висота рядка = 1.5 × кегль (16 → 24). Один токен --g тримає і точки, і рядки, і відступи */
+  --fs:16px; --g:24px; --pad:var(--g); --handle:22px;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
@@ -33,7 +34,7 @@
   --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6);
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
 }
-@media (max-width:640px){ :root{ --pad:14px; --handle:20px; --fs:17px; } }
+@media (max-width:640px){ :root{ --pad:14px; --handle:20px; --fs:16px; } }
 
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -57,7 +58,7 @@ button{font-family:inherit}
 /* ── аркуш: займає весь екран, зростає донизу, коли блоки виходять за межу ── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text;
   /* ледь помітна сітка, щоб відчувався «аркуш» — вимикається кнопкою */
-  background-image:radial-gradient(var(--line-2) .8px,transparent .9px);background-size:24px 24px;background-position:12px 12px}
+  background-image:radial-gradient(var(--line-2) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:calc(var(--g)/2) calc(var(--g)/2)}
 .sheet.nogrid{background-image:none}
 
 /* підказка на порожньому аркуші */
@@ -70,11 +71,11 @@ button{font-family:inherit}
 
 /* ── текстовий блок ───────────────────────────────────────────────── */
 .blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;transition:box-shadow .12s,background .12s}
-.blk .txt{flex:1 1 auto;min-width:0;min-height:1.5em;padding:3px 6px;font-size:var(--fs);line-height:1.5;outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
+.blk .txt{flex:1 1 auto;min-width:0;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .blk .txt:focus{background:transparent}
 /* ручка ⋮⋮ — як у Notion, зʼявляється при наведенні або при фокусі (для тачу) */
-.grip{flex:0 0 var(--handle);width:var(--handle);height:24px;margin-top:2px;display:flex;align-items:center;justify-content:center;border-radius:4px;
+.grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;
   color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
 .grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
 .grip:hover{background:var(--hover-2);color:var(--ink-2)}
@@ -86,8 +87,11 @@ button{font-family:inherit}
 .blk.drag .txt{pointer-events:none}
 @media (hover:none){ .grip{opacity:.45} .blk .grip{margin-left:-2px} }
 
+/* привид-курсор: слідує за мишею по порожньому аркушу, стрибаючи по клітинках сітки */
+.ghost{position:absolute;width:2px;height:var(--g);background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
+@media (hover:hover){ .sheet.hov .ghost{display:block} }
 /* мітка-курсор у місці кліку (на мить), щоб було видно, «де» почався текст */
-.ping{position:absolute;width:2px;height:22px;background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
+.ping{position:absolute;width:2px;height:var(--g);background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
 @keyframes ping{0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(1.4)}}
 
 /* нижній тост із підказкою після першого блока */
@@ -113,7 +117,7 @@ button{font-family:inherit}
 <main class="sheet" id="sheet">
   <div class="empty" id="empty">
     <div class="big">Клацніть будь-де — і пишіть саме там</div>
-    <div class="sm">Аркуш порожній і займає весь екран. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути в інше місце.</div>
+    <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки: рядок завжди лягає рівно між двома рядами точок. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути в інше місце.</div>
   </div>
 </main>
 
@@ -123,8 +127,13 @@ button{font-family:inherit}
 (function(){
   const sheet=document.getElementById('sheet'), empty=document.getElementById('empty'),
         cnt=document.getElementById('cnt'), toast=document.getElementById('toast');
-  const KEY='freeform-editor-v1';
+  const KEY='freeform-editor-v2';
   const MINW=140;           // мінімальна ширина блока, px
+  const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
+  const G=()=>cssN('--g')||24;                       // крок сітки
+  const OFF=()=>cssN('--handle')+2+6;                 // ручка + gap + padding тексту: від краю блока до початку тексту
+  const snap=v=>Math.round(v/G())*G();                // середина між двома точками = k·G
+  const ghost=document.createElement('div'); ghost.className='ghost'; sheet.appendChild(ghost);
   let blocks=[];            // {id, fx, fy, text}   fx,fy — частки від розміру аркуша (0..1)
   let toastShown=false;
 
@@ -133,16 +142,27 @@ button{font-family:inherit}
   function sheetH(){ return Math.max(sheet.clientHeight, window.innerHeight); }
 
   /* ── розкладка: перерахунок px із часток; ширина — до правого краю (макс. вільний простір) ── */
+  /* fx,fy описують ПОЧАТОК ТЕКСТУ (не край блока). Початок завжди прилипає до сітки:
+     по X — середина між двома стовпчиками точок, по Y — середина між двома рядами;
+     висота рядка = крок сітки, тож і наступні рядки лягають між точками. */
+  function origin(px,py){
+    const W=sheetW(), g=G(), pad=cssN('--pad');
+    let tx=snap(px), ty=snap(py);
+    tx=Math.min(tx, Math.floor((W-pad-MINW)/g)*g);  // не вужче за MINW
+    tx=Math.max(tx, g);                              // не в самий край
+    ty=Math.max(ty, 2*g);                            // під шапкою
+    return {tx,ty};
+  }
+  function place(b,tx,ty){
+    const W=sheetW(), pad=cssN('--pad'), left=tx-OFF(), top=ty-G()/2;   // рядок центруємо між рядами точок
+    b.el.style.left=left+'px'; b.el.style.top=top+'px';
+    b.el.style.width=(W-pad-left)+'px';                                 // займаємо все, що є праворуч
+    return {left,top};
+  }
   function layout(b){
-    const W=sheetW(), H=sheetH(), pad=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pad'))||24;
-    const handle=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle'))||22;
-    let x=Math.round(b.fx*W), y=Math.round(b.fy*H);
-    // блок не може стати вужчим за MINW — тоді зсуваємо його ліворуч
-    x=Math.min(x, Math.max(pad, W-pad-MINW));
-    x=Math.max(x, pad-handle);             // ручка може трохи «висіти» за полем
-    y=Math.max(y, 48);                     // під шапкою
-    b.el.style.left=x+'px'; b.el.style.top=y+'px';
-    b.el.style.width=(W-pad-x)+'px';       // займаємо все, що є праворуч
+    const o=origin(b.fx*sheetW(), b.fy*sheetH());
+    place(b,o.tx,o.ty);
+    b.fx=o.tx/sheetW(); b.fy=o.ty/sheetH();          // зберігаємо вже «прилиплі» частки
   }
   function layoutAll(){ blocks.forEach(layout); growSheet(); }
   function growSheet(){
@@ -164,7 +184,7 @@ button{font-family:inherit}
     txt.addEventListener('blur',()=>{ el.classList.remove('focus'); if(!txt.textContent.trim()) remove(b); else save(); });
     txt.addEventListener('input',()=>{ b.text=txt.textContent; growSheet(); save(); });
     txt.addEventListener('keydown',e=>{
-      if(e.key==='Escape'){ txt.blur(); }
+      if(e.key==='Escape'){ txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
       if(e.key==='Backspace' && !txt.textContent){ e.preventDefault(); remove(b); }
     });
     txt.addEventListener('paste',e=>{ // лише простий текст
@@ -192,16 +212,23 @@ button{font-family:inherit}
     if(e.button!==0) return;
     const r=sheet.getBoundingClientRect();
     const x=e.clientX-r.left, y=e.clientY-r.top;
-    // мітка в місці кліку
-    const p=document.createElement('div'); p.className='ping'; p.style.left=x+'px'; p.style.top=(y-11)+'px'; sheet.appendChild(p); setTimeout(()=>p.remove(),500);
-    // курсор кліку — це початок тексту: віднімаємо ширину ручки й відступ тексту, а по вертикалі центруємо рядок
-    const handle=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle'))||22;
-    const b=make({fx:(x-handle-6)/sheetW(), fy:(y-15)/sheetH()}, false);
+    const o=origin(x,y);                    // початок тексту — найближча клітинка сітки
+    // мітка в місці, куди «прилип» курсор
+    const p=document.createElement('div'); p.className='ping'; p.style.left=(o.tx-1)+'px'; p.style.top=(o.ty-G()/2)+'px'; sheet.appendChild(p); setTimeout(()=>p.remove(),500);
+    const b=make({fx:o.tx/sheetW(), fy:o.ty/sheetH()}, false);
     save();
     // фокус після завершення pointerdown, інакше браузер зніме його
-    e.preventDefault(); setTimeout(()=>b.txt.focus(),0);
+    e.preventDefault(); b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0);
     if(!toastShown){ toastShown=true; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),4500); }
   });
+
+  sheet.addEventListener('pointermove',e=>{
+    if(e.pointerType!=='mouse'){ return; }
+    if(e.target!==sheet && !e.target.closest('.empty')){ sheet.classList.remove('hov'); return; }
+    const r=sheet.getBoundingClientRect(), o=origin(e.clientX-r.left, e.clientY-r.top);
+    ghost.style.left=(o.tx-1)+'px'; ghost.style.top=(o.ty-G()/2)+'px'; sheet.classList.add('hov');
+  });
+  sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
 
   /* ── перетягування за ручку (миша + тач через Pointer Events) ─────── */
   function drag(b, grip){
@@ -216,13 +243,14 @@ button{font-family:inherit}
       if(!b.el.classList.contains('drag')) return;
       const dx=e.clientX-sx, dy=e.clientY-sy;
       if(Math.abs(dx)+Math.abs(dy)>2) moved=true;
-      b.el.style.left=(ox+dx)+'px'; b.el.style.top=(oy+dy)+'px';
+      // прилипаємо до сітки вже під час руху — блок стрибає по клітинках
+      const o=origin(ox+dx+OFF(), oy+dy+G()/2); place(b,o.tx,o.ty);
     });
     const end=e=>{
       if(!b.el.classList.contains('drag')) return;
       b.el.classList.remove('drag');
       // фіксуємо нове місце у частках аркуша, щоб розкладка пережила ресайз
-      b.fx=b.el.offsetLeft/sheetW(); b.fy=b.el.offsetTop/sheetH();
+      b.fx=(b.el.offsetLeft+OFF())/sheetW(); b.fy=(b.el.offsetTop+G()/2)/sheetH();
       layout(b); growSheet(); save();
       if(!moved) b.txt.focus();   // простий тап по ручці на тачі = редагувати
     };
