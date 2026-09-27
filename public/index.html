@@ -462,18 +462,19 @@ function buildText(b){
   b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="txt" contenteditable="true" data-ph="Пишіть…"></div>';
   b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text;
   b.txt.addEventListener('focus',()=>b.el.classList.add('focus'));
-  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.trim()) remove(b); else flushSave(); });
-  b.txt.addEventListener('input',()=>{ b.text=b.txt.textContent; relayout(b); markDirty(); });
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.trim()) remove(b); else { b.text=readTxt(); flushSave(); } });
+  const readTxt=()=>b.txt.innerText.replace(/\n$/,'');   // innerText зберігає переноси рядків (<br>, <div>), textContent їх губить
+  b.txt.addEventListener('input',()=>{ b.text=readTxt(); relayout(b); markDirty(); });
   b.txt.addEventListener('keydown',e=>{
     if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
     if(e.key==='Backspace' && !b.txt.textContent){ e.preventDefault(); remove(b); }
   });
   // вставка: у порожній блок код стає блоком коду; інакше — простий текст
-  b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text'); e.preventDefault(); if(!t) return;
+  b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); e.preventDefault(); if(!t) return;
     const wasEmpty=!b.txt.textContent.trim();
     if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,'Вставлено як код','Зробити текстом',()=>toText(nb)); return; }
     document.execCommand('insertText',false,t);
-    if(wasEmpty && maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text)); });
+    b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text)); });
 }
 /* перетворення блоків: та сама клітинка, той самий id */
 function toCode(b, text){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,kind:'code',text:text.replace(/\r\n?/g,'\n').replace(/\n+$/,'')}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
@@ -560,7 +561,7 @@ sheet.addEventListener('pointermove',e=>{
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
 document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
-  const t=(e.clipboardData||window.clipboardData).getData('text'); if(!t||!t.trim()) return; e.preventDefault();
+  const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live().map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
   const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty();
   if(isCode) chip(b,'Вставлено як код','Зробити текстом',()=>toText(b)); else if(maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text));
