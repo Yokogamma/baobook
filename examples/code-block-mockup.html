@@ -259,7 +259,7 @@ function highlight(src, lang){
     else out+=(KW.test(t)?'<b class="k">'+esc(t)+'</b>':esc(t));
     last=m.index+t.length; }
   out+=esc(src.slice(last));
-  return out.split('\n').map(l=>'<span class="ln">'+(l||' ')+'</span>').join('\n');
+  return out.split('\n').map(l=>'<span class="ln">'+l+'</span>').join('\n');
 }
 
 /* ── блок коду ───────────────────────────────────────────────────────── */
@@ -283,10 +283,25 @@ function makeCode(text, opts={}){
   function view(){ const lines=src.split('\n'); const cut=!expanded && lines.length>COLLAPSE_AT;
     code.innerHTML=highlight(cut? lines.slice(0,SHOW).join('\n') : src, el.dataset.lang);
     more.hidden=!(lines.length>COLLAPSE_AT); more.textContent=cut? `Показати всі ${lines.length} рядків` : 'Згорнути'; }
-  function unlock(focus=true){ editing=true; expanded=true; el.classList.replace('locked','editing'); code.textContent=src; more.hidden=true;
+  /* зсув у тексті: (вузол, offset) підсвіченого DOM → номер символа в src. Текст DOM = src, тож достатньо скласти довжини текстових вузлів перед точкою */
+  function globalOffset(node, off){ let n=0; const w=document.createTreeWalker(code, NodeFilter.SHOW_TEXT); let t;
+    while((t=w.nextNode())){ if(t===node) return n+off; const pos=node.compareDocumentPosition(t);
+      if(pos & Node.DOCUMENT_POSITION_PRECEDING){ n+=t.length; continue; }
+      if(node.nodeType!==3 && (pos & Node.DOCUMENT_POSITION_CONTAINED_BY)){ let ch=t; while(ch.parentNode!==node) ch=ch.parentNode; if([...node.childNodes].indexOf(ch)<off){ n+=t.length; continue; } return n; }
+      return n; }
+    return n; }
+  function offsetFromPoint(x,y){ let node,off; if(document.caretPositionFromPoint){ const c=document.caretPositionFromPoint(x,y); if(!c) return null; node=c.offsetNode; off=c.offset; }
+    else if(document.caretRangeFromPoint){ const r=document.caretRangeFromPoint(x,y); if(!r) return null; node=r.startContainer; off=r.startOffset; } else return null;
+    return code.contains(node)? globalOffset(node,off) : null; }
+  function selOffsets(){ const s=getSelection(); if(!s||!s.rangeCount||!code.contains(s.anchorNode)||!code.contains(s.focusNode)) return null;
+    const a=globalOffset(s.anchorNode,s.anchorOffset), b=globalOffset(s.focusNode,s.focusOffset); return {a:Math.min(a,b), b:Math.max(a,b)}; }
+  let lastPoint=null;
+  /* sel: {a,b} — куди поставити курсор/виділення після розблокування; без нього — поточне виділення у блоці, інакше кінець */
+  function unlock(focus=true, sel){ if(sel===undefined) sel=selOffsets(); editing=true; expanded=true; el.classList.replace('locked','editing'); code.textContent=src; more.hidden=true;
     code.contentEditable='plaintext-only'; if(!code.isContentEditable) code.contentEditable='true';
     pre.setAttribute('aria-readonly','false'); lockB.setAttribute('aria-pressed','false'); lockB.title='Редагування · закриється сам, коли вийдете з блока (або Esc)';
-    if(focus){ code.focus(); const r=document.createRange(); r.selectNodeContents(code); r.collapse(false); const s=getSelection(); s.removeAllRanges(); s.addRange(r); } }
+    if(focus){ code.focus(); const t=code.firstChild, r=document.createRange(); if(t){ const L=t.length, a=sel? Math.min(sel.a,L) : L, b=sel? Math.min(sel.b,L) : L; r.setStart(t,a); r.setEnd(t,b); } else { r.selectNodeContents(code); r.collapse(false); }
+      const s=getSelection(); s.removeAllRanges(); s.addRange(r); } }
   function lock(){ if(editing){ src=code.innerText.replace(/\n+$/,''); } editing=false; code.contentEditable='false'; el.classList.replace('editing','locked');
     pre.setAttribute('aria-readonly','true'); lockB.setAttribute('aria-pressed','true'); lockB.title='Тільки читання · натисніть, щоб редагувати (Ctrl+E)'; view(); }
   function hint(t){ el.querySelectorAll('.hint').forEach(h=>h.remove()); const h=document.createElement('div'); h.className='hint'; h.innerHTML=t; el.appendChild(h); el.classList.add('pulse'); setTimeout(()=>el.classList.remove('pulse'),400); setTimeout(()=>h.remove(),1700); }
@@ -298,8 +313,8 @@ function makeCode(text, opts={}){
   el.querySelector('.num').addEventListener('click',e=>{ const on=!el.classList.contains('num'); el.classList.toggle('num',on); e.currentTarget.setAttribute('aria-pressed',on); });
   el.querySelector('.lang').addEventListener('click',e=>{ const keys=Object.keys(LANGS); const cur=el.dataset.lang; const next=keys[(keys.indexOf(cur)+1)%keys.length]; el.dataset.lang=next; e.currentTarget.textContent=LANGS[next]; if(!editing) view(); });
   more.addEventListener('click',()=>{ expanded=!expanded; view(); });
-  pre.addEventListener('pointerdown',()=>{ if(!editing){ el._t0=Date.now(); } });
-  pre.addEventListener('dblclick',()=>{ if(!editing) unlock(); });
+  pre.addEventListener('pointerdown',e=>{ if(!editing) lastPoint={x:e.clientX,y:e.clientY}; });
+  pre.addEventListener('dblclick',e=>{ if(!editing){ const o=offsetFromPoint(e.clientX,e.clientY); unlock(true, o==null? undefined : {a:o,b:o}); } });
   pre.addEventListener('keydown',e=>{ if(!editing && e.key.length===1 && !e.ctrlKey && !e.metaKey){ e.preventDefault(); hint('Тільки читання · <b>натисніть замок</b>, щоб редагувати'); } if(e.key==='Escape' && editing){ e.preventDefault(); lock(); } });
   pre.addEventListener('beforeinput',e=>{ if(!editing){ e.preventDefault(); hint('Тільки читання · <b>натисніть замок</b>, щоб редагувати'); } });
   el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='e'){ e.preventDefault(); editing? lock() : unlock(); }
