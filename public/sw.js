@@ -1,7 +1,7 @@
 /* Чистий аркуш — service worker.
    Оболонка застосунку: мережа спершу, кеш як запасний варіант (щоб оновлення приходили одразу, а без мережі все відкривалось).
    Шрифти Google: з кешу, оновлення у фоні. Дані нотаток у localStorage — сюди не потрапляють. */
-const VERSION='v1';
+const VERSION='v2';
 const SHELL='sheet-shell-'+VERSION, FONTS='sheet-fonts';
 const PRECACHE=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
