@@ -56,10 +56,12 @@ button{font-family:inherit}
 .cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px;padding:0 6px}
 
 /* ── аркуш: займає весь екран, зростає донизу, коли блоки виходять за межу ── */
-.sheet{position:relative;width:100%;min-height:100dvh;cursor:text;
-  /* ледь помітна сітка, щоб відчувався «аркуш» — вимикається кнопкою */
-  background-image:radial-gradient(var(--line-2) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}  /* точки в k·G+G/2 → рядок k·G…(k+1)·G лягає рівно між рядами */
-.sheet.nogrid{background-image:none}
+.sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
+/* поле точок — лише там, де може стояти текст: зліва/справа/знизу по клітинці чистого поля, зверху дві (під шапкою).
+   Розмір поля (--fw/--fh) рахує скрипт як ціле число клітинок, щоб по краях не було «половинок» точок */
+.sheet::before{content:"";position:absolute;left:var(--g);top:calc(2*var(--g));width:var(--fw,calc(100% - 2*var(--g)));height:var(--fh,calc(100% - 3*var(--g)));pointer-events:none;
+  background-image:radial-gradient(var(--line-2) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}  /* точка в центрі плитки → перша в 1.5·G по X і 2.5·G по Y */
+.sheet.nogrid::before{display:none}
 
 /* підказка на порожньому аркуші */
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;
@@ -172,7 +174,10 @@ button{font-family:inherit}
     }
     live().forEach(render); growSheet();
   }
-  function growSheet(){ let bottom=0; live().forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(window.innerHeight, bottom+5*G())+'px'; }
+  function growSheet(){ let bottom=0; live().forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(window.innerHeight, bottom+5*G())+'px'; field(); }
+  // поле точок: стовпчики від x=1.5·G до правого відступу, ряди від y=2.5·G до нижнього — цілими клітинками
+  function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;   // від краю до крайньої точки — не менше клітинки
+    sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
   /* ── блок ──────────────────────────────────────────────────────────── */
   function make(d, focus){
@@ -262,7 +267,7 @@ button{font-family:inherit}
     document.documentElement.dataset.theme = cur==='dark'?'light':'dark';
   });
   try{ if(localStorage.getItem(KEY+':grid')==='0') sheet.classList.add('nogrid'); }catch(_){}
-  load(); update();
+  load(); update(); field();
 })();
 </script>
 </body>
