@@ -58,7 +58,7 @@ button{font-family:inherit}
 /* ── аркуш: займає весь екран, зростає донизу, коли блоки виходять за межу ── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text;
   /* ледь помітна сітка, щоб відчувався «аркуш» — вимикається кнопкою */
-  background-image:radial-gradient(var(--line-2) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:calc(var(--g)/2) calc(var(--g)/2)}
+  background-image:radial-gradient(var(--line-2) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}  /* точки в k·G+G/2 → рядок k·G…(k+1)·G лягає рівно між рядами */
 .sheet.nogrid{background-image:none}
 
 /* підказка на порожньому аркуші */
@@ -80,7 +80,7 @@ button{font-family:inherit}
 .grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
 .grip:hover{background:var(--hover-2);color:var(--ink-2)}
 .blk:hover .grip,.blk.focus .grip,.blk.drag .grip{opacity:1}
-.blk:hover{background:var(--hover)}
+.blk:hover{background:var(--hover);background-clip:content-box;padding:2px 0;margin-top:-2px}
 .blk.focus{background:transparent}
 .blk.drag{background:var(--page);box-shadow:var(--shadow);cursor:grabbing;z-index:10}
 .blk.drag .grip{cursor:grabbing}
@@ -88,10 +88,10 @@ button{font-family:inherit}
 @media (hover:none){ .grip{opacity:.45} .blk .grip{margin-left:-2px} }
 
 /* привид-курсор: слідує за мишею по порожньому аркушу, стрибаючи по клітинках сітки */
-.ghost{position:absolute;width:2px;height:var(--g);background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
+.ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
 @media (hover:hover){ .sheet.hov .ghost{display:block} }
 /* мітка-курсор у місці кліку (на мить), щоб було видно, «де» почався текст */
-.ping{position:absolute;width:2px;height:var(--g);background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
+.ping{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
 @keyframes ping{0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(1.4)}}
 
 /* нижній тост із підказкою після першого блока */
