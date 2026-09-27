@@ -170,7 +170,7 @@ td:first-child{font-weight:500;white-space:nowrap;color:var(--ink)}
     <span>або <kbd>Ctrl</kbd>+<kbd>V</kbd> на аркуші — вставлене саме розпізнається як код чи текст</span>
     <span class="seg">Новий блок:<span class="themes" role="group" aria-label="Стан нового блока після вставки"><button class="tb" id="defLocked" aria-pressed="true">тільки читання</button><button class="tb" id="defOpen" aria-pressed="false">одразу редагувати</button></span></span>
   </div>
-  <div class="note"><b>Як це працює.</b> Вставлений код прилітає з підсвіткою і кнопкою «Копіювати» у режимі <b>«тільки читання»</b> (замок закритий): клік у текст нічого не змінює, лише підказка біля замка. Замок, <kbd>Ctrl</kbd>+<kbd>E</kbd> або подвійний клік відкривають редагування: рамка стає акцентною, зʼявляється курсор. <kbd>Esc</kbd> або замок — знову тільки читання. Перемикач «Новий блок» праворуч дає спробувати другий варіант: код одразу відкритий для правки, а замок вішаєте самі. Довгі рядки на десктопі прокручуються, на тачі переносяться; <b>↩</b> перемикає, <b>#</b> — номери рядків. Понад 14 рядків — блок згортається до 12 із кнопкою «Показати всі».</div>
+  <div class="note"><b>Як це працює.</b> Вставлений код прилітає з підсвіткою і кнопкою «Копіювати» у режимі <b>«тільки читання»</b> (замок закритий): клік у текст нічого не змінює, лише підказка біля замка. Замок, <kbd>Ctrl</kbd>+<kbd>E</kbd> або подвійний клік відкривають редагування: рамка стає акцентною, зʼявляється курсор. Вийшли з блока — клік будь-де поза ним, <kbd>Esc</kbd> або замок — і він сам знову тільки для читання. Перемикач «Новий блок» праворуч дає спробувати другий варіант: код одразу відкритий для правки, а замок вішаєте самі. Довгі рядки на десктопі прокручуються, на тачі переносяться; <b>↩</b> перемикає, <b>#</b> — номери рядків. Понад 14 рядків — блок згортається до 12 із кнопкою «Показати всі».</div>
 
   <h2>Стани</h2>
   <div class="grid" id="states"></div>
@@ -183,7 +183,7 @@ td:first-child{font-weight:500;white-space:nowrap;color:var(--ink)}
     <li><b>Вставка.</b> Код — лише за впевненості: є ``` або щонайменше три рядки з відступами, дужками, крапками з комою чи ключовими словами. Інакше — текстовий блок. 6 секунд висить чіп «Вставлено як код · Зробити текстом» (або навпаки «Зробити кодом»), щоб виправити розпізнавання одним кліком.</li>
     <li><b>«Тільки читання», не «заблоковано».</b> У Apple Notes і OneNote «замок» означає пароль і ховає вміст, тому в підписах і підказках пишемо «тільки читання», а іконка-замок лишається як звичний символ.</li>
     <li><b>Стан після вставки — налаштування.</b> Типово блок приходить у режимі «тільки читання»: це страховка від випадкових правок, заради якої замок і потрібен. Альтернатива (так радить огляд практик): відкритий одразу, бо сценарій передбачає правку; тоді замок вішаєте свідомо. На тачі — завжди тільки читання, щоб дотик не викликав клавіатуру. Виділяти й копіювати можна в будь-якому стані.</li>
-    <li><b>Відкрити / закрити.</b> Клік по замку, <kbd>Ctrl</kbd>+<kbd>E</kbd> або подвійний клік у код (як подвійний тап у Evernote). Закрити — замок або <kbd>Esc</kbd>. Спроба друкувати в закритий блок — тиха підказка біля замка, без модальних вікон.</li>
+    <li><b>Відкрити / закрити.</b> Клік по замку, <kbd>Ctrl</kbd>+<kbd>E</kbd> або подвійний клік у код (як подвійний тап у Evernote). Закривається сам, щойно фокус виходить із блока: клік поза ним, <kbd>Tab</kbd>, перехід до іншого блока; також <kbd>Esc</kbd> або замок. Відкритим лишається лише той блок, у якому зараз курсор. Спроба друкувати в закритий блок — тиха підказка біля замка, без модальних вікон.</li>
     <li><b>Копіювати завжди видно.</b> Це головна кнопка, тому вона не ховається за наведенням (на відміну від решти). Копіюється чистий текст без форматування й без номерів рядків. Підтвердження «Скопійовано» на 1,5 с. Гаряча клавіша при фокусі на блоці — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>.</li>
     <li><b>Довгі рядки.</b> На десктопі — горизонтальна прокрутка (як у Notion), бо перенос ламає читання коду. На тачі — перенос типово (як у Confluence): горизонтальна прокрутка всередині сторінки ловить жести. Кнопка ↩ перемикає й запамʼятовується для блока.</li>
     <li><b>Номери рядків вимкнені.</b> Для тимчасового шматка вони зайві; вмикаються кнопкою # і не потрапляють у копію.</li>
@@ -285,7 +285,7 @@ function makeCode(text, opts={}){
     more.hidden=!(lines.length>COLLAPSE_AT); more.textContent=cut? `Показати всі ${lines.length} рядків` : 'Згорнути'; }
   function unlock(focus=true){ editing=true; expanded=true; el.classList.replace('locked','editing'); code.textContent=src; more.hidden=true;
     code.contentEditable='plaintext-only'; if(!code.isContentEditable) code.contentEditable='true';
-    pre.setAttribute('aria-readonly','false'); lockB.setAttribute('aria-pressed','false'); lockB.title='Редагування · натисніть, щоб зробити тільки для читання (Esc)';
+    pre.setAttribute('aria-readonly','false'); lockB.setAttribute('aria-pressed','false'); lockB.title='Редагування · закриється сам, коли вийдете з блока (або Esc)';
     if(focus){ code.focus(); const r=document.createRange(); r.selectNodeContents(code); r.collapse(false); const s=getSelection(); s.removeAllRanges(); s.addRange(r); } }
   function lock(){ if(editing){ src=code.innerText.replace(/\n+$/,''); } editing=false; code.contentEditable='false'; el.classList.replace('editing','locked');
     pre.setAttribute('aria-readonly','true'); lockB.setAttribute('aria-pressed','true'); lockB.title='Тільки читання · натисніть, щоб редагувати (Ctrl+E)'; view(); }
@@ -305,6 +305,8 @@ function makeCode(text, opts={}){
   el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='e'){ e.preventDefault(); editing? lock() : unlock(); }
     if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='c'){ e.preventDefault(); copy(); } });
   pre.addEventListener('click',()=>{ if(!editing && getSelection().isCollapsed) { pre.focus(); } });
+  // вийшли з блока (клік поза ним, Tab, перехід в інший блок) → замок повертається сам
+  el.addEventListener('focusout',()=>{ setTimeout(()=>{ if(editing && !el.contains(document.activeElement)) lock(); },0); });
   pre.tabIndex=0;
   view(); if(opts.editing) unlock(false); if(opts.wrapped===undefined? TOUCH : opts.wrapped){ el.classList.add('wrapped'); el.querySelector('.wrapb').setAttribute('aria-pressed','true'); } if(opts.num){ el.classList.add('num'); el.querySelector('.num').setAttribute('aria-pressed','true'); }
   el.api={lock,unlock,copy,get src(){ return editing? code.innerText : src; }};
@@ -365,7 +367,7 @@ const states=$('#states');
 function card(title, tag, node, text){ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<h3><span>${title}</span>${tag||''}</h3>`; const st=document.createElement('div'); st.className='stage'; st.style.cursor='default'; st.appendChild(node); c.appendChild(st); if(text){ const p=document.createElement('p'); p.innerHTML=text; c.appendChild(p); } states.appendChild(c); return c; }
 card('Тільки читання (типово)','<span class="tag ok">default</span>', makeCode(SAMPLES[2]), 'Видно мову, «Копіювати» і закритий замок. Решта кнопок зʼявляється при наведенні. Текст виділяється й копіюється, але не редагується.');
 { const n=makeCode(SAMPLES[2]); n.classList.add('touch'); card('Наведення / тач','', n, 'Панель повністю: <b>#</b> номери, <b>↩</b> перенос, «Копіювати», замок. На тачі так виглядає завжди, цілі 44 px.'); }
-{ const n=makeCode(SAMPLES[2],{editing:true}); card('Редагування','', n, 'Замок відкритий і акцентний, рамка підсвічена, підсвітка синтаксису вимкнена, щоб курсор не стрибав. <kbd>Esc</kbd> закриває і повертає підсвітку.'); }
+{ const n=makeCode(SAMPLES[2],{editing:true}); card('Редагування','', n, 'Замок відкритий і акцентний, рамка підсвічена, підсвітка синтаксису вимкнена, щоб курсор не стрибав. Клік поза блоком або <kbd>Esc</kbd> закриває і повертає підсвітку.'); }
 { const n=makeCode(SAMPLES[3]); const b=n.querySelector('.copy'); b.innerHTML=ICO.check+'<span>Скопійовано</span>'; b.classList.add('done'); card('Скопійовано','', n, 'Підтвердження на кнопці 1,5 с. Копіюється чистий текст: без підсвітки, без номерів рядків, без хвостового переносу.'); }
 { const n=makeCode(SAMPLES[1],{wrapped:true,num:true}); card('Перенос + номери рядків','', n, 'Для довгих рядків CSS перенос корисний. Номери рядків не потрапляють у виділення і копію.'); }
 { const n=makeCode(LONG); card('Довгий блок згорнуто','', n, '22 рядки → показано 12 і кнопка «Показати всі 22 рядки». Так один вставлений файл не зʼїдає весь аркуш.'); }
