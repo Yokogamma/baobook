@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Аркуш">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
 /* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
    бо на темному тлі тонка крапка з прозорістю «лінії» майже зникає ─────────────── */
@@ -23,6 +23,8 @@
   --hover:rgba(55,53,47,.06); --hover-2:rgba(55,53,47,.12);
   --sel:rgba(35,131,226,.14); --sel-line:rgba(35,131,226,.55);
   --dot:rgba(55,53,47,.18); --paper:none;
+  --code-bg:#f6f5f2; --code-line:rgba(55,53,47,.14); --accent:#2383e2; --k:#7c3aad; --s:#1f7a45; --n:#b45309; --c:#9a978f; --t:#1d5fae;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --shadow:0 4px 18px rgba(15,15,15,.14), 0 0 0 .5px rgba(15,15,15,.08);
   --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   /* ритм аркуша: крок сітки = висота рядка = 1.5 × кегль (16 → 24). Один токен --g тримає і точки, і рядки, і відступи */
@@ -35,6 +37,7 @@
   --hover:rgba(255,255,255,.07); --hover-2:rgba(255,255,255,.13);
   --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6);
   --dot:rgba(255,255,255,.32);
+  --code-bg:#232323; --code-line:rgba(255,255,255,.14); --accent:#59a4f0; --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0;
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
 } }
 :root[data-theme="dark"]{
@@ -43,6 +46,7 @@
   --hover:rgba(255,255,255,.07); --hover-2:rgba(255,255,255,.13);
   --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6);
   --dot:rgba(255,255,255,.32);
+  --code-bg:#232323; --code-line:rgba(255,255,255,.14); --accent:#59a4f0; --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0;
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
 }
 /* пісок / папірус: теплий бежевий аркуш із ледь помітним зерном і волокнами, чорнило — темно-коричневе, акцент — вохра */
@@ -53,6 +57,7 @@
   --hover:rgba(80,58,25,.08); --hover-2:rgba(80,58,25,.15);
   --sel:rgba(150,100,30,.15); --sel-line:rgba(150,100,30,.7);
   --dot:rgba(80,58,25,.30);
+  --code-bg:#ebdfc4; --code-line:rgba(80,58,25,.16); --accent:#9a6a1e; --k:#8a3f7a; --s:#3f6f2a; --n:#a1541a; --c:#a08f70; --t:#2d5f9e;
   --shadow:0 4px 18px rgba(60,40,10,.18), 0 0 0 .5px rgba(60,40,10,.10);
   --paper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .40 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='l' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .92 0 0 0 .07 0'/%3E%3C/filter%3E%3Cfilter id='h' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .035 0'/%3E%3C/filter%3E%3Cfilter id='v' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5 .008' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E");
 }
@@ -148,7 +153,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .sheet.has .empty{opacity:0}
 
 .blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;pointer-events:none}
-.blk .grip,.blk .txt{pointer-events:auto}
+.blk .grip,.blk .txt,.blk .cblk{pointer-events:auto}
 .blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -162,6 +167,44 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .blk.drag .grip{cursor:grabbing}
 .blk.drag .txt{pointer-events:none}
 @media (hover:none){ .grip{opacity:.45} }
+
+/* ── блок коду: картка з шапкою, «тільки читання» за замовчуванням ─────── */
+.cblk{position:relative;flex:0 1 auto;width:fit-content;min-width:min(320px,100%);max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:13.5px;line-height:var(--g);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.cbar{display:flex;align-items:center;gap:2px;height:32px;padding:0 6px 0 4px;font-family:var(--sans);font-size:12px;color:var(--ink-3);user-select:none;-webkit-user-select:none}
+.cbar .grow{flex:1}
+.lang{border:0;background:transparent;color:var(--ink-3);font:inherit;font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:0 8px;height:24px;border-radius:6px;cursor:pointer}
+.lang:hover{background:var(--hover);color:var(--ink-2)}
+.cb{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font:inherit;font-size:12px;cursor:pointer;opacity:0;transition:opacity .12s,background .12s,color .12s}
+.cb .i{font-size:14px}
+.cb:hover{background:var(--hover-2);color:var(--ink)}
+.cb[aria-pressed="true"]{color:var(--ink-2);background:var(--hover)}
+.cb.copy{opacity:1;color:var(--ink-2)} .cb.lock{opacity:1}
+.cblk:hover .cb,.cblk:focus-within .cb,.cblk.editing .cb{opacity:1}
+.cb.copy.done{color:#116b45} :root[data-theme="dark"] .cb.copy.done{color:#8fe0b6}
+.cb.lock .open{display:none} .cblk.editing .cb.lock .open{display:block} .cblk.editing .cb.lock .closed{display:none}
+.cblk.editing{border-color:var(--sel-line);box-shadow:0 0 0 3px var(--sel)}
+.cblk.editing .cbar{border-bottom:.5px solid var(--line)}
+.cblk.editing .cb.lock{color:var(--accent)}
+.code{margin:0;padding:4px 14px 12px;overflow-x:auto;overflow-y:hidden;white-space:pre;tab-size:2;outline:0;counter-reset:l;cursor:default;-webkit-overflow-scrolling:touch;font-variant-ligatures:none}
+.cblk.editing .code{cursor:text}
+.cblk.wrapped .code{white-space:pre-wrap;overflow-wrap:anywhere}
+.code code{font:inherit;display:block;outline:0;min-height:var(--g)}
+.code code:empty::before{content:attr(data-ph);color:var(--ink-3)}
+.ln{display:inline}
+.cblk.num .code{padding-left:8px}
+.cblk.num .ln::before{content:counter(l);counter-increment:l;display:inline-block;width:2.2em;margin-right:12px;text-align:right;color:var(--ink-3);user-select:none;-webkit-user-select:none;font-size:11.5px}
+.code .k{color:var(--k);font-weight:500} .code .s{color:var(--s)} .code .n{color:var(--n)} .code .c{color:var(--c);font-style:normal} .code .t{color:var(--t)}
+.more{display:block;width:100%;border:0;border-top:.5px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-family:var(--sans);font-size:12.5px;height:32px;cursor:pointer;border-radius:0 0 10px 10px}
+.more:hover{background:var(--hover)} .more[hidden]{display:none}
+.hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:12px;color:var(--ink-2);pointer-events:none}
+.hint b{color:var(--ink);font-weight:500}
+.cblk.pulse .cb.lock{animation:pulse .35s} @keyframes pulse{50%{transform:scale(1.25)}}
+.blk.drag .cblk{box-shadow:var(--shadow)}
+@media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:40px;min-width:44px;padding:0 12px;justify-content:center} }
+/* чіп після вставки: «Вставлено як код · Зробити текстом» */
+.chip{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);background:var(--page);border:.5px solid var(--line-2);border-radius:999px;padding:4px 6px 4px 10px;box-shadow:var(--shadow);white-space:nowrap}
+.chip button{border:0;background:var(--hover);color:var(--ink);font:inherit;font-size:12px;padding:2px 8px;border-radius:999px;cursor:pointer}
+.chip button:hover{background:var(--hover-2)} .chip .x{background:transparent;color:var(--ink-3);padding:2px 6px}
 
 .gbox{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:6px;pointer-events:none;display:none;transition:left .15s,top .15s}
 .gbox.on{display:block} .gbox.bad{border-color:rgba(235,87,87,.8);background:rgba(235,87,87,.12)}
@@ -216,7 +259,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     <div class="sheet" id="sheet">
       <div class="empty" id="empty">
         <div class="big">Клацніть будь-де — і пишіть саме там</div>
-        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</div>
+        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Вставлений код стає блоком коду під замком: скопіювати можна одразу, редагувати — знявши замок. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</div>
       </div>
     </div>
   </main>
@@ -229,7 +272,55 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
-const MINW=140;
+const MINW=140, MINW_CODE=280;                      // мінімальна ширина текстового блока / блока коду
+const minw=b=>b&&b.kind==='code'?MINW_CODE:MINW;
+const TOUCH=matchMedia('(hover:none)').matches;
+
+/* ══ код: мова, розпізнавання вставки, підсвітка ═══════════════════════ */
+const LANGS={javascript:'JavaScript',html:'HTML',css:'CSS',python:'Python',sql:'SQL',shell:'Shell',rust:'Rust',c:'C / C++',json:'JSON',text:'Код'};
+function guessLang(t){
+  if(/^\s*</.test(t) && /<\/?[a-z][\w-]*[^>]*>/i.test(t)) return 'html';
+  if(/^\s*[.#@:\w-]+[^{]*\{[^}]*:[^}]*\}/m.test(t) && !/\b(function|const|let|=>)\b/.test(t)) return 'css';
+  if(/^\s*(def |class \w+\(?.*:|import \w+|from \w+ import|print\()/m.test(t)) return 'python';
+  if(/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|WITH|ALTER)\b/im.test(t)) return 'sql';
+  if(/^\s*(\$ |#!\/bin\/(ba|z)?sh|sudo |apt |brew |npm |npx |pip |git |cd |ls |curl )/m.test(t)) return 'shell';
+  if(/#include|int main\(|std::/.test(t)) return 'c';
+  if(/^\s*[\[{][\s\S]*[\]}]\s*$/.test(t) && /"\w+"\s*:/.test(t)) return 'json';
+  if(/\b(pub fn|fn \w+\s*\(|impl |println!|let mut )/.test(t) && !/\b(function|=>|const|var)\b/.test(t)) return 'rust';
+  if(/\b(const|let|var|function|=>|import .* from|console\.log|export)\b/.test(t)) return 'javascript';
+  return 'text';
+}
+function codeScore(t){ const L=t.split('\n').filter(l=>l.trim()); if(!L.length) return 0; let score=0;
+  for(const l of L){ if(/^\s{2,}\S/.test(l)||/\t/.test(l)) score++; if(/[;{}()\[\]=<>|]\s*$/.test(l)) score++;
+    if(/^\s*(const|let|var|function|import|export|class|def|return|if|for|while|public|private|#include|SELECT|FROM|\$ |<\/?[a-z]|[.#@][\w-]+\s*\{|[\w-]+\s*:\s*[^;]+;)/i.test(l)) score++; }
+  return score/L.length; }
+// код — лише за впевненості: є ``` або ≥3 рядки з ознаками коду; інакше текст (із чіпом «Зробити кодом», якщо ознаки все ж є)
+function looksLikeCode(t){ if(/^\s*```/m.test(t)) return true; const L=t.split('\n').filter(l=>l.trim()); if(L.length<3) return false; return codeScore(t)>=0.7 || guessLang(t)!=='text'; }
+function maybeCode(t){ return codeScore(t)>=0.4 || guessLang(t)!=='text'; }
+const KW=/^(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|import|export|from|default|try|catch|finally|throw|async|await|yield|typeof|instanceof|in|of|this|super|null|undefined|true|false|def|elif|lambda|pass|with|as|not|and|or|is|None|True|False|self|fn|mut|pub|struct|impl|enum|match|use|mod|SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|JOIN|ON|AS|AND|OR|NOT|NULL|ORDER|BY|GROUP|LIMIT|CREATE|TABLE|int|float|double|char|void|bool|string|public|private|static|final|include|define|echo|sudo|git|npm|npx|cd|ls|curl|apt|pip|brew|then|fi|done|esac)$/;
+const escH=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+/* чотири ролі кольорів; кожен рядок — span.ln, текст DOM = вихідному тексту символ у символ (для позиції курсора) */
+function highlight(src, lang){
+  const cmt=(lang==='python'||lang==='shell')?'#[^\\n]*':lang==='sql'?'--[^\\n]*':lang==='html'?'<!--[\\s\\S]*?-->':lang==='css'?'/\\*[\\s\\S]*?\\*/':'//[^\\n]*|/\\*[\\s\\S]*?\\*/';
+  const re=new RegExp('('+cmt+')|("(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|`(?:\\\\.|[^`\\\\])*`)|(\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|ms|s)?\\b)|(</?[A-Za-z][\\w-]*|/?>)|([A-Za-z_][\\w!]*)','g');
+  let out='', last=0, m;
+  while((m=re.exec(src))){ out+=escH(src.slice(last,m.index)); const t=m[0];
+    if(m[1]) out+='<i class="c">'+escH(t).replace(/\n/g,'</i>\n<i class="c">')+'</i>';
+    else if(m[2]) out+='<b class="s">'+escH(t).replace(/\n/g,'</b>\n<b class="s">')+'</b>';
+    else if(m[3]) out+='<b class="n">'+escH(t)+'</b>';
+    else if(m[4]) out+=(lang==='html'?'<b class="t">'+escH(t)+'</b>':escH(t));
+    else out+=(KW.test(t)?'<b class="k">'+escH(t)+'</b>':escH(t));
+    last=m.index+t.length; }
+  out+=escH(src.slice(last));
+  return out.split('\n').map(l=>'<span class="ln">'+l+'</span>').join('\n');
+}
+const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+  check:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 7"/></svg>',
+  wrap:'<svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-4M4 18h4"/><path d="M13 16l-2 2 2 2"/></svg>',
+  lockC:'<svg class="i closed" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  lockO:'<svg class="i open" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>'};
+const GRIP='<div class="grip" title="Перетягнути"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
+const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
 const G=()=>cssN('--g')||24, PAD=()=>cssN('--pad'), OFF=()=>cssN('--handle')+2+6;   // ручка + gap + padding тексту
 function el(t,c,parent){ const e=document.createElement(t); e.className=c; (parent||sheet).appendChild(e); return e; }
@@ -293,7 +384,7 @@ function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
 
 /* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
-function serialize(){ return blocks.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text})); }
+function serialize(){ return blocks.filter(b=>b.id).map(b=>{ const d={id:b.id,fx:b.fx,row:b.row,text:b.text}; if(b.kind==='code'){ d.kind='code'; d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; } return d; }); }
 function markDirty(){ dirty=true; savedEl.textContent='●'; savedEl.className='saved pend'; clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); const ok=db.save(cur);
   savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok) savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800);
@@ -332,16 +423,18 @@ const maxCol=()=>Math.floor((W()-PAD()-MINW-G()/2)/G());
 const clampCol=c=>Math.max(1, Math.min(maxCol(), c)), clampRow=r=>Math.max(2, r);
 const colOfX=x=>clampCol(Math.round((x-G()/2)/G())), rowOfY=y=>clampRow(Math.round((y-G()/2)/G()));
 const live=()=>blocks.filter(b=>!b.hidden);
-function rect(b){ const x0=xOf(b.col), xl=x0-OFF(); return {x0, xl, y0:yOf(b.row), r0:b.row, r1:b.row+(b.lines||1), x1:xl+(b.w||MINW)}; }
+function rect(b){ const x0=xOf(b.col), xl=x0-OFF(); return {x0, xl, y0:yOf(b.row), r0:b.row, r1:b.row+(b.lines||1), x1:xl+(b.w||minw(b))}; }
 function rawWidth(b){ const r=rect(b); let right=W()-PAD();
   for(const o of live()){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl-6); }
   return right-r.xl; }
-function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-6-L.xl<MINW; }
-function tooTight(b){ const r=rect(b); return r.xl+MINW>W()-PAD()+1 || rawWidth(b)<MINW; }
+function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-6-L.xl<minw(left); }
+function tooTight(b){ const r=rect(b); return r.xl+minw(b)>W()-PAD()+1 || rawWidth(b)<minw(b); }
 function fits(b){ return !tooTight(b) && !live().some(o=>o!==b && overlaps(b,o)); }
-function render(b){ const r=rect(b); b.w=Math.max(MINW, rawWidth(b));
+function render(b){ const r=rect(b); b.w=Math.max(minw(b), rawWidth(b));
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
-  if(b.el===gbox) gbox.style.height=(b.lines*G())+'px'; else b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }
+  if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
+  else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
+  else b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }
 function resolve(fixed){
   for(let pass=0;pass<3;pass++){
     live().forEach(render);
@@ -355,21 +448,96 @@ function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
 function make(d, focus){
-  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, text:d.text||'', lines:1, w:MINW};
+  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, text:d.text||'', lines:1, w:MINW, kind:d.kind==='code'?'code':undefined, lang:d.lang, wrap:d.wrap, num:d.num};
   if(b.col===undefined) b.col=colOfX(b.fx*W()); if(b.fx===undefined) b.fx=xOf(b.col)/W();
-  b.el=el('div','blk'); b.el.innerHTML='<div class="grip" title="Перетягнути"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>';
-  b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text; blocks.push(b);
+  if(b.kind==='code') buildCode(b); else buildText(b);
+  blocks.push(b); b.el.addEventListener('pointerdown',e=>e.stopPropagation()); drag(b, b.el.querySelector('.grip'));
+  resolve(b); update(); if(focus) focusBlock(b); return b;
+}
+function focusBlock(b){ if(b.kind==='code') b.api.unlock(); else b.txt.focus(); }
+function relayout(b){ const before=b.lines; render(b); if(b.lines!==before) resolve(b); else growSheet(); }
+
+/* текстовий блок */
+function buildText(b){
+  b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="txt" contenteditable="true" data-ph="Пишіть…"></div>';
+  b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text;
   b.txt.addEventListener('focus',()=>b.el.classList.add('focus'));
-  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!b.txt.textContent.trim()) remove(b); else flushSave(); });
-  b.txt.addEventListener('input',()=>{ b.text=b.txt.textContent; const before=b.lines; render(b); if(b.lines!==before) resolve(b); else growSheet(); markDirty(); });
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.trim()) remove(b); else flushSave(); });
+  b.txt.addEventListener('input',()=>{ b.text=b.txt.textContent; relayout(b); markDirty(); });
   b.txt.addEventListener('keydown',e=>{
     if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
     if(e.key==='Backspace' && !b.txt.textContent){ e.preventDefault(); remove(b); }
   });
-  b.txt.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text')); });
-  b.el.addEventListener('pointerdown',e=>e.stopPropagation());
-  drag(b, b.el.querySelector('.grip'));
-  resolve(b); update(); if(focus) b.txt.focus(); return b;
+  // вставка: у порожній блок код стає блоком коду; інакше — простий текст
+  b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text'); e.preventDefault(); if(!t) return;
+    const wasEmpty=!b.txt.textContent.trim();
+    if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,'Вставлено як код','Зробити текстом',()=>toText(nb)); return; }
+    document.execCommand('insertText',false,t);
+    if(wasEmpty && maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text)); });
+}
+/* перетворення блоків: та сама клітинка, той самий id */
+function toCode(b, text){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,kind:'code',text:text.replace(/\r\n?/g,'\n').replace(/\n+$/,'')}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
+function toText(b){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,text:b.text}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
+function chip(b, label, btnLabel, onSwap){ sheet.querySelectorAll('.chip').forEach(c=>c.remove()); const c=el('div','chip'); c.innerHTML=label+' <button class="swap">'+btnLabel+'</button><button class="x" title="Сховати">✕</button>';
+  c.style.left=(b.el.offsetLeft+OFF())+'px'; c.style.top=(b.el.offsetTop+b.el.offsetHeight+4)+'px'; c.addEventListener('pointerdown',e=>e.stopPropagation());
+  const kill=()=>c.remove(); c.querySelector('.x').addEventListener('click',kill); c.querySelector('.swap').addEventListener('click',()=>{ kill(); onSwap(); }); setTimeout(kill,6000); }
+
+/* блок коду: замок («тільки читання») типово, копіювати можна завжди */
+function buildCode(b){
+  b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked"><div class="cbar"><button class="lang" title="Мова коду — натисніть, щоб змінити"></button><span class="grow"></span>'
+    +'<button class="cb num" title="Номери рядків" aria-pressed="false">#</button><button class="cb wrapb" title="Перенос довгих рядків" aria-pressed="false">'+ICO.wrap+'</button>'
+    +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button></div>'
+    +'<pre class="code" spellcheck="false" aria-readonly="true" tabindex="0"><code data-ph="Код…"></code></pre><button class="more" hidden></button></div>';
+  const card=b.el.querySelector('.cblk'), code=card.querySelector('code'), pre=card.querySelector('.code'), more=card.querySelector('.more'), lockB=card.querySelector('.lock'), copyB=card.querySelector('.copy'), langB=card.querySelector('.lang');
+  b.card=card; b.code=code; b.editing=false; b.expanded=false;
+  if(!LANGS[b.lang]) b.lang=guessLang(b.text); langB.textContent=LANGS[b.lang];
+  if(b.wrap===undefined) b.wrap=TOUCH; b.wrap=!!b.wrap; b.num=!!b.num;
+  card.classList.toggle('wrapped',b.wrap); card.querySelector('.wrapb').setAttribute('aria-pressed',b.wrap); card.classList.toggle('num',b.num); card.querySelector('.num').setAttribute('aria-pressed',b.num);
+  function view(){ const L=b.text.split('\n'); const cut=!b.expanded && L.length>COLLAPSE_AT; code.innerHTML=highlight(cut? L.slice(0,SHOW).join('\n') : b.text, b.lang);
+    more.hidden=!(L.length>COLLAPSE_AT); more.textContent=cut? 'Показати всі '+L.length+' рядків' : 'Згорнути'; }
+  // позиція курсора: (вузол, offset) підсвіченого DOM → номер символа; текст DOM = b.text
+  function globalOffset(node, off){ let n=0; const w=document.createTreeWalker(code, NodeFilter.SHOW_TEXT); let t;
+    while((t=w.nextNode())){ if(t===node) return n+off; const pos=node.compareDocumentPosition(t);
+      if(pos & Node.DOCUMENT_POSITION_PRECEDING){ n+=t.length; continue; }
+      if(node.nodeType!==3 && (pos & Node.DOCUMENT_POSITION_CONTAINED_BY)){ let ch=t; while(ch.parentNode!==node) ch=ch.parentNode; if([...node.childNodes].indexOf(ch)<off){ n+=t.length; continue; } return n; }
+      return n; }
+    return n; }
+  function offsetFromPoint(x,y){ let node,off; if(document.caretPositionFromPoint){ const c=document.caretPositionFromPoint(x,y); if(!c) return null; node=c.offsetNode; off=c.offset; }
+    else if(document.caretRangeFromPoint){ const r=document.caretRangeFromPoint(x,y); if(!r) return null; node=r.startContainer; off=r.startOffset; } else return null;
+    return code.contains(node)? globalOffset(node,off) : null; }
+  function selOffsets(){ const s=getSelection(); if(!s||!s.rangeCount||!code.contains(s.anchorNode)||!code.contains(s.focusNode)) return null;
+    const a=globalOffset(s.anchorNode,s.anchorOffset), c=globalOffset(s.focusNode,s.focusOffset); return {a:Math.min(a,c), b:Math.max(a,c)}; }
+  function unlock(focus=true, sel){ if(b.editing) return; if(sel===undefined) sel=selOffsets();
+    b.editing=true; b.expanded=true; card.classList.replace('locked','editing'); b.el.classList.add('focus'); code.textContent=b.text; more.hidden=true;
+    code.contentEditable='plaintext-only'; if(!code.isContentEditable) code.contentEditable='true';
+    pre.setAttribute('aria-readonly','false'); lockB.setAttribute('aria-pressed','false'); lockB.title='Редагування · закриється сам, коли вийдете з блока (або Esc)'; relayout(b);
+    if(focus){ code.focus(); const t=code.firstChild, r=document.createRange(); if(t){ const L=t.length, a=sel?Math.min(sel.a,L):L, c=sel?Math.min(sel.b,L):L; r.setStart(t,a); r.setEnd(t,c); } else { r.selectNodeContents(code); r.collapse(false); }
+      const s=getSelection(); s.removeAllRanges(); s.addRange(r); } }
+  function lock(){ if(!b.editing) return; b.text=code.innerText.replace(/\n+$/,''); b.editing=false; code.contentEditable='false'; card.classList.replace('editing','locked'); b.el.classList.remove('focus');
+    pre.setAttribute('aria-readonly','true'); lockB.setAttribute('aria-pressed','true'); lockB.title='Тільки читання · натисніть, щоб редагувати (Ctrl+E)';
+    if(!b.text.trim()){ if(blocks.includes(b)) remove(b); return; } view(); relayout(b); flushSave(); }
+  function hint(t){ card.querySelectorAll('.hint').forEach(h=>h.remove()); const h=document.createElement('div'); h.className='hint'; h.innerHTML=t; card.appendChild(h); card.classList.add('pulse'); setTimeout(()=>card.classList.remove('pulse'),400); setTimeout(()=>h.remove(),1700); }
+  const HINT='Тільки читання · <b>натисніть замок</b>, щоб редагувати';
+  async function copy(){ const t=b.editing? code.innerText : b.text; let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(_){ try{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); ok=document.execCommand('copy'); ta.remove(); }catch(__){} }
+    copyB.innerHTML=(ok?ICO.check:ICO.copy)+'<span>'+(ok?'Скопійовано':'Не вдалося')+'</span>'; copyB.classList.toggle('done',ok); clearTimeout(copyB._t); copyB._t=setTimeout(()=>{ copyB.innerHTML=ICO.copy+'<span>Копіювати</span>'; copyB.classList.remove('done'); },1500); }
+  lockB.addEventListener('click',()=>{ b.editing? lock() : unlock(); });
+  copyB.addEventListener('click',copy);
+  card.querySelector('.wrapb').addEventListener('click',e=>{ b.wrap=!b.wrap; card.classList.toggle('wrapped',b.wrap); e.currentTarget.setAttribute('aria-pressed',b.wrap); relayout(b); markDirty(); });
+  card.querySelector('.num').addEventListener('click',e=>{ b.num=!b.num; card.classList.toggle('num',b.num); e.currentTarget.setAttribute('aria-pressed',b.num); relayout(b); markDirty(); });
+  langB.addEventListener('click',()=>{ const keys=Object.keys(LANGS); b.lang=keys[(keys.indexOf(b.lang)+1)%keys.length]; langB.textContent=LANGS[b.lang]; if(!b.editing) view(); markDirty(); });
+  more.addEventListener('click',()=>{ b.expanded=!b.expanded; view(); relayout(b); });
+  pre.addEventListener('dblclick',e=>{ if(!b.editing){ const o=offsetFromPoint(e.clientX,e.clientY); unlock(true, o==null? undefined : {a:o,b:o}); } });
+  pre.addEventListener('click',()=>{ if(!b.editing && getSelection().isCollapsed) pre.focus(); });
+  pre.addEventListener('keydown',e=>{ if(!b.editing){ if(e.key.length===1 && !e.ctrlKey && !e.metaKey){ e.preventDefault(); hint(HINT); } return; }
+    if(e.key==='Escape'){ e.preventDefault(); lock(); } else if(e.key==='Tab'){ e.preventDefault(); document.execCommand('insertText',false,'  '); } });
+  pre.addEventListener('beforeinput',e=>{ if(!b.editing){ e.preventDefault(); hint(HINT); } });
+  code.addEventListener('input',()=>{ b.text=code.innerText.replace(/\n+$/,''); relayout(b); markDirty(); });
+  code.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text')); });
+  b.el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='e'){ e.preventDefault(); b.editing? lock() : unlock(); }
+    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='c'){ e.preventDefault(); copy(); } });
+  // вийшли з блока (клік поза ним, Tab, інший блок) → замок повертається сам
+  b.el.addEventListener('focusout',()=>{ setTimeout(()=>{ if(b.editing && !b.el.contains(document.activeElement)) lock(); },0); });
+  b.api={lock,unlock,view,copy}; view();
 }
 function remove(b){ blocks=blocks.filter(x=>x!==b); b.el.remove(); resolve(); update(); markDirty(); }
 function update(){ sheet.classList.toggle('has', blocks.length>0); cnt.textContent=blocks.length? blocks.length+(blocks.length===1?' блок':blocks.length<5?' блоки':' блоків') : ''; }
@@ -391,6 +559,12 @@ sheet.addEventListener('pointermove',e=>{
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
+document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
+  const t=(e.clipboardData||window.clipboardData).getData('text'); if(!t||!t.trim()) return; e.preventDefault();
+  const row=Math.max(2, ...live().map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
+  const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty();
+  if(isCode) chip(b,'Вставлено як код','Зробити текстом',()=>toText(b)); else if(maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text));
+  b.el.scrollIntoView({block:'nearest'}); });
 
 function drag(b, grip){
   let sx,sy,ox,oy,moved,from,others,probe;
@@ -398,7 +572,7 @@ function drag(b, grip){
     e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId);
     sx=e.clientX; sy=e.clientY; ox=b.el.offsetLeft; oy=b.el.offsetTop; moved=false; from={col:b.col,row:b.row};
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
-    probe={col:b.col,row:b.row,lines:b.lines,w:b.w,el:gbox}; b.hidden=true; blocks.push(probe);
+    probe={col:b.col,row:b.row,lines:b.lines,w:b.w,kind:b.kind,el:gbox}; b.hidden=true; blocks.push(probe);
     b.el.classList.add('drag'); gbox.className='gbox on';
   });
   grip.addEventListener('pointermove',e=>{
@@ -417,7 +591,7 @@ function drag(b, grip){
     if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; }
     else { b.col=probe.col; b.row=probe.row; }
     b.fx=xOf(b.col)/W(); others.forEach(o=>delete o.row0); probe=null;
-    resolve(b); if(moved) markDirty(); if(!moved) b.txt.focus();
+    resolve(b); if(moved) markDirty(); if(!moved) focusBlock(b);
   };
   grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
 }

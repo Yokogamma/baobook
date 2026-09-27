@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Код на аркуші · мокап</title>
+<meta name="description" content="Мокап блока коду для «Чистого аркуша»: тимчасово вставити, підправити, скопіювати назад. Замок від випадкових правок, кнопка «Копіювати», перенос рядків, номери рядків, розпізнавання коду при вставці.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+/* ── палітри як у редакторі + токени коду ─────────────────────────────── */
+:root{
+  --page:#ffffff; --ink:#37352f; --ink-2:#787774; --ink-3:#b4b3b0;
+  --line:rgba(55,53,47,.09); --line-2:rgba(55,53,47,.16);
+  --hover:rgba(55,53,47,.06); --hover-2:rgba(55,53,47,.12);
+  --sel:rgba(35,131,226,.14); --sel-line:rgba(35,131,226,.55); --accent:#2383e2;
+  --dot:rgba(55,53,47,.18);
+  --shadow:0 4px 18px rgba(15,15,15,.14), 0 0 0 .5px rgba(15,15,15,.08);
+  --code-bg:#f6f5f2; --code-line:rgba(55,53,47,.14); --code-bar:rgba(55,53,47,.035);
+  --k:#7c3aad; --s:#1f7a45; --n:#b45309; --c:#9a978f; --t:#1d5fae;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --g:24px;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme]){
+  --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --hover:rgba(255,255,255,.07); --hover-2:rgba(255,255,255,.13);
+  --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6); --accent:#59a4f0;
+  --dot:rgba(255,255,255,.32);
+  --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
+  --code-bg:#232323; --code-line:rgba(255,255,255,.14); --code-bar:rgba(255,255,255,.04);
+  --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0; } }
+:root[data-theme="dark"]{
+  --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --hover:rgba(255,255,255,.07); --hover-2:rgba(255,255,255,.13);
+  --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6); --accent:#59a4f0;
+  --dot:rgba(255,255,255,.32);
+  --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
+  --code-bg:#232323; --code-line:rgba(255,255,255,.14); --code-bar:rgba(255,255,255,.04);
+  --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0; }
+:root[data-theme="sand"]{
+  --page:#f4e7d0; --ink:#3a3020; --ink-2:#7a6a4c; --ink-3:#b0a083;
+  --line:rgba(80,58,25,.10); --line-2:rgba(80,58,25,.18);
+  --hover:rgba(80,58,25,.08); --hover-2:rgba(80,58,25,.15);
+  --sel:rgba(150,100,30,.15); --sel-line:rgba(150,100,30,.7); --accent:#9a6a1e;
+  --dot:rgba(80,58,25,.30);
+  --shadow:0 4px 18px rgba(60,40,10,.18), 0 0 0 .5px rgba(60,40,10,.10);
+  --code-bg:#ebdfc4; --code-line:rgba(80,58,25,.16); --code-bar:rgba(80,58,25,.05);
+  --k:#8a3f7a; --s:#3f6f2a; --n:#a1541a; --c:#a08f70; --t:#2d5f9e; }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);-webkit-text-size-adjust:100%}
+button{font-family:inherit}
+.i{width:1em;height:1em;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.wrap{max-width:1120px;margin:0 auto;padding:26px 16px 64px}
+h1{font-size:22px;font-weight:600;margin:0 0 6px}
+h2{font-size:16px;font-weight:600;margin:34px 0 10px}
+.lead{color:var(--ink-2);font-size:14.5px;line-height:1.55;margin:0;max-width:72ch}
+.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.themes{display:flex;gap:2px;border:.5px solid var(--line-2);border-radius:8px;padding:2px}
+.tb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer}
+.tb:hover{background:var(--hover);color:var(--ink)} .tb[aria-pressed="true"]{background:var(--hover-2);color:var(--ink)}
+.tag{display:inline-flex;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;vertical-align:middle}
+.tag.ok{background:#dff3e8;color:#116b45} .tag.so{background:#fdf1d8;color:#7a4a08} .tag.no{background:#fbe7e7;color:#9b2c2c}
+:root[data-theme="dark"] .tag.ok{background:#163a2b;color:#8fe0b6} :root[data-theme="dark"] .tag.so{background:#3e2f12;color:#f0cf8a} :root[data-theme="dark"] .tag.no{background:#3f1d1d;color:#f0a0a0}
+.note{margin:12px 0 0;padding:12px 14px;border:.5px solid var(--line-2);border-radius:10px;font-size:13.5px;line-height:1.55;color:var(--ink-2)} .note b{color:var(--ink);font-weight:500}
+kbd{font:inherit;font-size:12px;padding:0 5px;border:.5px solid var(--line-2);border-bottom-width:1.5px;border-radius:4px;color:var(--ink-2);background:var(--page)}
+
+/* ── демо-аркуш із сіткою ─────────────────────────────────────────────── */
+.stage{position:relative;border:.5px solid var(--line-2);border-radius:14px;overflow:hidden;background:var(--page);min-height:420px;padding:36px 36px 36px;cursor:text}
+.stage::before{content:"";position:absolute;inset:24px;pointer-events:none;background-image:radial-gradient(var(--dot) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}
+.stage>*{position:relative}
+.flow{display:flex;flex-direction:column;gap:24px;max-width:760px}
+.tblk{font-size:16px;line-height:24px;padding:0 6px;border-radius:4px;outline:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.tblk:empty::before{content:attr(data-ph);color:var(--ink-3)}
+.tblk:hover{background:var(--hover)}
+.stagebar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0;align-items:center;font-size:12.5px;color:var(--ink-3)}
+.seg{display:inline-flex;align-items:center;gap:6px;margin-left:auto;color:var(--ink-2)} .seg .themes{padding:2px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:.5px solid var(--line-2);border-radius:8px;background:var(--page);color:var(--ink);font-size:13px;cursor:pointer}
+.btn:hover{background:var(--hover)}
+
+/* ── блок коду ────────────────────────────────────────────────────────── */
+.cblk{position:relative;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:13.5px;line-height:24px;color:var(--ink);transition:border-color .15s,box-shadow .15s;max-width:100%}
+.cbar{display:flex;align-items:center;gap:2px;height:32px;padding:0 6px 0 4px;border-bottom:.5px solid transparent;font-family:var(--sans);font-size:12px;color:var(--ink-3);user-select:none;-webkit-user-select:none}
+.cbar .grow{flex:1}
+.lang{border:0;background:transparent;color:var(--ink-3);font:inherit;font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:0 8px;height:24px;border-radius:6px;cursor:pointer}
+.lang:hover{background:var(--hover);color:var(--ink-2)}
+.cb{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font:inherit;font-size:12px;cursor:pointer;opacity:0;transition:opacity .12s,background .12s,color .12s}
+.cb .i{font-size:14px}
+.cb:hover{background:var(--hover-2);color:var(--ink)}
+.cb[aria-pressed="true"]{color:var(--ink-2);background:var(--hover)}
+.cb.copy{opacity:1;color:var(--ink-2)}           /* «Копіювати» видно завжди — це головна дія */
+.cb.lock{opacity:1}                              /* і замок теж: стан має бути видимим */
+.cblk:hover .cb,.cblk:focus-within .cb,.cblk.editing .cb,.cblk.touch .cb{opacity:1}
+.cblk.touch .cbar{height:48px} .cblk.touch .cb{height:40px;min-width:44px;padding:0 12px;justify-content:center}
+@media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:40px;min-width:44px;padding:0 12px;justify-content:center} }
+.cb.copy.done{color:#116b45} :root[data-theme="dark"] .cb.copy.done{color:#8fe0b6}
+.cb.lock .open{display:none} .cblk.editing .cb.lock .open{display:block} .cblk.editing .cb.lock .closed{display:none}
+.cblk.editing{border-color:var(--sel-line);box-shadow:0 0 0 3px var(--sel)}
+.cblk.editing .cbar{border-bottom-color:var(--line)}
+.cblk.editing .cb.lock{color:var(--accent)}
+.code{margin:0;padding:4px 14px 12px;overflow-x:auto;overflow-y:hidden;white-space:pre;tab-size:2;outline:0;counter-reset:l;cursor:default;-webkit-overflow-scrolling:touch;font-variant-ligatures:none}
+.cblk.editing .code{cursor:text}
+.cblk.wrapped .code{white-space:pre-wrap;overflow-wrap:anywhere}
+.code code{font:inherit;display:block;outline:0}   /* редагований елемент — блок без UA-рамки фокусу: інакше браузер малює її навколо кожного рядка */
+.ln{display:inline}
+.cblk.num .code{padding-left:8px}
+.cblk.num .ln::before{content:counter(l);counter-increment:l;display:inline-block;width:2.2em;margin-right:12px;text-align:right;color:var(--ink-3);user-select:none;-webkit-user-select:none;font-size:11.5px}
+.code .k{color:var(--k);font-weight:500} .code .s{color:var(--s);font-weight:400} .code .n{color:var(--n);font-weight:400} .code .c{color:var(--c);font-style:normal} .code .t{color:var(--t);font-weight:400}
+.more{display:block;width:100%;border:0;border-top:.5px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-family:var(--sans);font-size:12.5px;height:32px;cursor:pointer;border-radius:0 0 10px 10px}
+.more:hover{background:var(--hover)} .more[hidden]{display:none}
+.hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;white-space:normal;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:12px;color:var(--ink-2);pointer-events:none}
+.hint b{color:var(--ink);font-weight:500}
+.cblk.pulse .cb.lock{animation:pulse .35s}
+@keyframes pulse{50%{transform:scale(1.25)}}
+/* чіп після автовставки */
+.chip{display:inline-flex;align-items:center;gap:8px;margin:-14px 0 0;font-family:var(--sans);font-size:12px;color:var(--ink-2);background:var(--page);border:.5px solid var(--line-2);border-radius:999px;padding:4px 6px 4px 10px;align-self:flex-start;box-shadow:var(--shadow)}
+.chip button{border:0;background:var(--hover);color:var(--ink);font:inherit;font-size:12px;padding:2px 8px;border-radius:999px;cursor:pointer}
+.chip button:hover{background:var(--hover-2)}
+.chip .x{background:transparent;color:var(--ink-3);padding:2px 6px}
+
+/* ── галерея станів і альтернатив ─────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:14px}
+.card{border:.5px solid var(--line-2);border-radius:12px;padding:12px 12px 12px;background:var(--page)}
+.card h3{font-size:13px;font-weight:600;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card p{margin:8px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.card .stage{min-height:0;padding:24px 18px 18px;border-radius:10px} .card .stage::before{inset:12px}
+.card .cblk{font-size:12.5px}
+.phone{width:320px;max-width:100%;margin:0 auto;border:.5px solid var(--line-2);border-radius:18px;padding:10px;background:var(--page)}
+/* альтернативи */
+.alt-b .cbar{position:absolute;right:6px;top:6px;height:auto;padding:2px;background:var(--page);box-shadow:var(--shadow);border-radius:8px;opacity:0;transition:opacity .12s} .alt-b:hover .cbar{opacity:1}
+.alt-b .cbar .lang,.alt-b .cbar .grow{display:none} .alt-b .code{padding:12px 14px} .alt-b .cb{opacity:1}
+.alt-b .corner{position:absolute;left:10px;top:-8px;font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);background:var(--page);padding:0 5px}
+.alt-c{background:#1b1d22;border-color:#1b1d22;color:#e6e6e4} .alt-c .cbar{border-bottom:.5px solid rgba(255,255,255,.1)} .alt-c .lang,.alt-c .cb{color:#8a8f98} .alt-c .cb.copy{color:#c9cdd4}
+.alt-c .dots{display:inline-flex;gap:5px;padding:0 6px 0 8px} .alt-c .dots i{width:9px;height:9px;border-radius:50%;background:#ff5f57} .alt-c .dots i:nth-child(2){background:#febc2e} .alt-c .dots i:nth-child(3){background:#28c840}
+.alt-c .code .k{color:#c792ea} .alt-c .code .s{color:#8fd3a5} .alt-c .code .n{color:#f0b66a} .alt-c .code .c{color:#6b7280} .alt-c .code .t{color:#82b4f0}
+.alt-c .cb:hover{background:rgba(255,255,255,.1);color:#fff}
+/* поведінка */
+.rules{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:10px 18px}
+.rules li{font-size:13.5px;line-height:1.55;color:var(--ink-2);padding-left:22px;position:relative}
+.rules li::before{content:"";position:absolute;left:4px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--sel-line)}
+.rules b{color:var(--ink);font-weight:500}
+table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.45;margin-top:8px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-top:.5px solid var(--line-2)} th{font-weight:600;color:var(--ink-2);font-size:12px;border-top:0}
+td:first-child{font-weight:500;white-space:nowrap;color:var(--ink)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px 24px;margin-top:10px}
+.src{font-size:12px;color:var(--ink-3);line-height:1.6;margin-top:8px} .src a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div>
+      <h1>Код на аркуші: вставити, підправити, забрати</h1>
+      <p class="lead">Блок коду для «Чистого аркуша» під один сценарій: тимчасово скопіювати шматок коду, трохи поправити й скопіювати назад. Головні дії — <b>Копіювати</b> і <b>замок</b>: поки він закритий, текст можна лише виділяти й копіювати, випадково стерти нічого не вийде.</p>
+    </div>
+    <div class="themes" role="group" aria-label="Тема"><button class="tb" data-t="light" aria-pressed="true">Світла</button><button class="tb" data-t="dark">Темна</button><button class="tb" data-t="sand">Пісок</button></div>
+  </div>
+
+  <h2>Рекомендований варіант <span class="tag ok">інтерактивно — спробуйте</span></h2>
+  <div class="stage" id="stage">
+    <div class="flow" id="flow">
+      <div class="tblk" contenteditable="true" spellcheck="false">Підправити дебаунс і повернути в проєкт. Затримка 300 мс — забагато для пошуку, спробувати 150.</div>
+    </div>
+  </div>
+  <div class="stagebar">
+    <button class="btn" id="pasteBtn"><svg class="i" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM7 6H5v14h14V6h-2"/><path d="M9 13h6M9 17h4"/></svg>Симулювати вставку коду</button>
+    <button class="btn" id="pasteTextBtn">Симулювати вставку тексту</button>
+    <span>або <kbd>Ctrl</kbd>+<kbd>V</kbd> на аркуші — вставлене саме розпізнається як код чи текст</span>
+    <span class="seg">Новий блок:<span class="themes" role="group" aria-label="Стан нового блока після вставки"><button class="tb" id="defLocked" aria-pressed="true">тільки читання</button><button class="tb" id="defOpen" aria-pressed="false">одразу редагувати</button></span></span>
+  </div>
+  <div class="note"><b>Як це працює.</b> Вставлений код прилітає з підсвіткою і кнопкою «Копіювати» у режимі <b>«тільки читання»</b> (замок закритий): клік у текст нічого не змінює, лише підказка біля замка. Замок, <kbd>Ctrl</kbd>+<kbd>E</kbd> або подвійний клік відкривають редагування: рамка стає акцентною, зʼявляється курсор. Вийшли з блока — клік будь-де поза ним, <kbd>Esc</kbd> або замок — і він сам знову тільки для читання. Перемикач «Новий блок» праворуч дає спробувати другий варіант: код одразу відкритий для правки, а замок вішаєте самі. Довгі рядки на десктопі прокручуються, на тачі переносяться; <b>↩</b> перемикає, <b>#</b> — номери рядків. Понад 14 рядків — блок згортається до 12 із кнопкою «Показати всі».</div>
+
+  <h2>Стани</h2>
+  <div class="grid" id="states"></div>
+
+  <h2>Альтернативи оформлення</h2>
+  <div class="grid" id="alts"></div>
+
+  <h2>Поведінка, яку пропоную</h2>
+  <ul class="rules">
+    <li><b>Вставка.</b> Код — лише за впевненості: є ``` або щонайменше три рядки з відступами, дужками, крапками з комою чи ключовими словами. Інакше — текстовий блок. 6 секунд висить чіп «Вставлено як код · Зробити текстом» (або навпаки «Зробити кодом»), щоб виправити розпізнавання одним кліком.</li>
+    <li><b>«Тільки читання», не «заблоковано».</b> У Apple Notes і OneNote «замок» означає пароль і ховає вміст, тому в підписах і підказках пишемо «тільки читання», а іконка-замок лишається як звичний символ.</li>
+    <li><b>Стан після вставки — налаштування.</b> Типово блок приходить у режимі «тільки читання»: це страховка від випадкових правок, заради якої замок і потрібен. Альтернатива (так радить огляд практик): відкритий одразу, бо сценарій передбачає правку; тоді замок вішаєте свідомо. На тачі — завжди тільки читання, щоб дотик не викликав клавіатуру. Виділяти й копіювати можна в будь-якому стані.</li>
+    <li><b>Відкрити / закрити.</b> Клік по замку, <kbd>Ctrl</kbd>+<kbd>E</kbd> або подвійний клік у код (як подвійний тап у Evernote). Закривається сам, щойно фокус виходить із блока: клік поза ним, <kbd>Tab</kbd>, перехід до іншого блока; також <kbd>Esc</kbd> або замок. Відкритим лишається лише той блок, у якому зараз курсор. Спроба друкувати в закритий блок — тиха підказка біля замка, без модальних вікон.</li>
+    <li><b>Копіювати завжди видно.</b> Це головна кнопка, тому вона не ховається за наведенням (на відміну від решти). Копіюється чистий текст без форматування й без номерів рядків. Підтвердження «Скопійовано» на 1,5 с. Гаряча клавіша при фокусі на блоці — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>.</li>
+    <li><b>Довгі рядки.</b> На десктопі — горизонтальна прокрутка (як у Notion), бо перенос ламає читання коду. На тачі — перенос типово (як у Confluence): горизонтальна прокрутка всередині сторінки ловить жести. Кнопка ↩ перемикає й запамʼятовується для блока.</li>
+    <li><b>Номери рядків вимкнені.</b> Для тимчасового шматка вони зайві; вмикаються кнопкою # і не потрапляють у копію.</li>
+    <li><b>Мова.</b> Вгадується за вставленим текстом (JS, HTML, CSS, Python, SQL, Shell, JSON…), підпис у шапці — кнопка вибору. Підсвітка стримана: чотири ролі кольорів, без курсиву й лігатур, у кожній темі свій набір.</li>
+    <li><b>Тач.</b> Панель видима завжди (hover-only контролів на тачі не існує), цілі 44 px, редагування лише після замка — випадковий дотик не викличе клавіатуру.</li>
+    <li><b>Сітка.</b> Рядки коду теж 24 px, блок починається на ряду точок, тож не ламає ритм аркуша.</li>
+  </ul>
+
+  <h2 id="others-h">Що роблять інші</h2>
+  <p class="lead">Огляд за офіційними довідками й журналами змін (посилання внизу). Те, чого в документації немає, тут не стверджується.</p>
+  <table>
+    <tr><th>Продукт</th><th>Копіювати</th><th>Захист від правок</th><th>Вставка, мова, довгі рядки</th></tr>
+    <tr><td>Notion</td><td>Лише при наведенні, справа вгорі, текстова «Copy».</td><td>«Lock page» на всю сторінку: бейдж Locked, «Unlock for me / for everyone». Автоблокування немає.</td><td>Мова зліва вгорі з пошуком по списку. Перенос типово вимкнений, є «Wrap code».</td></tr>
+    <tr><td>Bear</td><td>Кнопка зліва біля першого рядка при наведенні; на iOS — «Side Actions», бо наведення немає.</td><td>«Make Read-Only» ↔ «Make Editable», іконка справа вгорі; пошук @readonly.</td><td>«Paste From → Code»; ``` з 250+ мовами.</td></tr>
+    <tr><td>Evernote</td><td>—</td><td>«Edit protection»: нотатка відкривається лише для читання, правка — подвійним тапом по тексту.</td><td>—</td></tr>
+    <tr><td>Obsidian</td><td>Кнопка Copy у режимі читання.</td><td>Reading ↔ Editing, Ctrl/Cmd+E, іконки книга/олівець.</td><td>``` через Prism.</td></tr>
+    <tr><td>Confluence</td><td>—</td><td>—</td><td>Нові блоки переносяться типово; тумблери Wrap і Line numbers; мова визначається автоматично з поміткою «(detected)»; згортання «expand source».</td></tr>
+    <tr><td>Craft</td><td>—</td><td>Замка немає, лише view-only шаринг.</td><td>Меню ⋯ → мова й тема; є перенос; блок росте, внутрішнього скролу немає.</td></tr>
+    <tr><td>Google Docs</td><td>—</td><td>Режими «Editing / Suggesting / Viewing».</td><td>Блок коду з підписом мови (з грудня 2022).</td></tr>
+    <tr><td>Slack</td><td>—</td><td>Сніпет править лише автор (олівець при наведенні).</td><td>Сніпет: Ctrl/⌘+Shift+Enter; у мобільних застосунках сніпети недоступні.</td></tr>
+    <tr><td>ChatGPT · Claude</td><td>«Copy the code»; у Claude — переглянути, скопіювати або завантажити в панелі артефакту.</td><td>—</td><td>Мітка мови; у ChatGPT блок можна правити прямо в чаті.</td></tr>
+    <tr><td>GitHub · Telegram</td><td>—</td><td>—</td><td>``` + Linguist для підсвітки; Telegram з 30.11.2023 сам визначає мову у ```-блоках.</td></tr>
+    <tr><td>VS Code · Figma</td><td>—</td><td>VS Code: readonly-редактор, при спробі вводу — вбудоване «Cannot edit in read-only editor». Figma: замок шару, ⌘⇧L — на канвасі не рухається, у панелі вибирається.</td><td>—</td></tr>
+    <tr><td>Apple Notes · OneNote</td><td>—</td><td>«Замок» = пароль або Face ID: ховає вміст, від правок не захищає. Блока коду в Apple Notes немає.</td><td>—</td></tr>
+    <tr><td>Стандарти</td><td colspan="3">MDN: aria-readonly — «не редагується, але лишається операбельним», не заважати навігації й копіюванню; aria-pressed для кнопки-перемикача з незмінною назвою. Apple HIG: цілі 44×44 pt. WCAG 2.5.8: мінімум 24×24 px.</td></tr>
+  </table>
+  <div class="two">
+    <div class="note"><b>Що беру в аркуш.</b> «Тільки читання» замість «заблоковано» у підписах (Bear, Evernote); «Копіювати» видно завжди — Bear на iOS і Slack на мобільних показують, чим закінчуються hover-only контроли; подвійний клік/тап для правки (Evernote); Ctrl+E як в Obsidian; перенос типово на тачі (Confluence) і прокрутка на десктопі (Notion); автовизначення мови з ручним вибором (Confluence); aria-readonly + aria-pressed; цілі 44 px.</div>
+    <div class="note"><b>Де розходжуся з оглядом.</b> Огляд радить вставляти код одразу відкритим (сценарій передбачає правку) і вішати замок свідомо. Я лишаю типовим «тільки читання»: мета замка — страховка від випадкових правок, а відкрити блок коштує один клік або подвійний клік. У демо є перемикач — спробуйте обидва. Також лишаю тонку рамку навколо блока: на пісочній темі сам тінт майже не читається.</div>
+  </div>
+  <div class="src">Джерела: <a href="https://www.notion.com/help/code-blocks">Notion · Code blocks</a> · <a href="https://www.notion.com/help/collaborate-within-a-workspace">Notion · Lock page</a> · <a href="https://support.atlassian.com/confluence-cloud/docs/insert-elements-into-a-page/">Confluence · Code block</a> · <a href="https://support.craft.do/en/write-and-edit/code">Craft · Code</a> · <a href="https://blog.bear.app/2025/02/bear-2-3-11-update-read-only-mode-new-themes-and-more/">Bear 2.3.11 · Read-only</a> · <a href="https://community.bear.app/t/bear-2-2-0-improved-folding-copy-code-button-and-new-themes/13006">Bear 2.2 · Copy code</a> · <a href="https://help.evernote.com/hc/en-us/articles/360053951213-Enable-edit-protection">Evernote · Edit protection</a> · <a href="https://slack.com/help/articles/204145658-Create-or-paste-code-snippets-in-Slack">Slack · Code snippets</a> · <a href="https://obsidian.md/help/edit-and-read">Obsidian · Edit and read</a> · <a href="https://help.openai.com/en/articles/20001246-working-with-writing-blocks-and-code-blocks-in-chatgpt">ChatGPT · Code blocks</a> · <a href="https://code.visualstudio.com/updates/v1_79">VS Code 1.79 · Read-only</a> · <a href="https://workspaceupdates.googleblog.com/2022/12/format-display-code-google-docs.html">Google Docs · Code blocks</a> · <a href="https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks">GitHub · Code blocks</a> · <a href="https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-readonly">MDN · aria-readonly</a> · <a href="https://developer.apple.com/design/human-interface-guidelines/accessibility">Apple HIG · Accessibility</a></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ── мова: груба евристика по вставленому тексту ─────────────────────── */
+const LANGS={javascript:'JavaScript',html:'HTML',css:'CSS',python:'Python',sql:'SQL',shell:'Shell',rust:'Rust',c:'C / C++',json:'JSON',text:'Код'};
+function guessLang(t){
+  if(/^\s*</.test(t) && /<\/?[a-z][\w-]*[^>]*>/i.test(t)) return 'html';
+  if(/^\s*[.#@:\w-]+[^{]*\{[^}]*:[^}]*\}/m.test(t) && !/\b(function|const|let|=>)\b/.test(t)) return 'css';
+  if(/^\s*(def |class \w+\(?.*:|import \w+|from \w+ import|print\()/m.test(t)) return 'python';
+  if(/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|WITH|ALTER)\b/im.test(t)) return 'sql';
+  if(/^\s*(\$ |#!\/bin\/(ba|z)?sh|sudo |apt |brew |npm |npx |pip |git |cd |ls |curl )/m.test(t)) return 'shell';
+  if(/#include|int main\(|std::/.test(t)) return 'c';
+  if(/^\s*[\[{][\s\S]*[\]}]\s*$/.test(t) && /"\w+"\s*:/.test(t)) return 'json';
+  if(/\b(pub fn|fn \w+\s*\(|impl |println!|let mut )/.test(t) && !/\b(function|=>|const|var)\b/.test(t)) return 'rust';
+  if(/\b(const|let|var|function|=>|import .* from|console\.log|export)\b/.test(t)) return 'javascript';
+  return 'text';
+}
+function codeScore(t){ const L=t.split('\n').filter(l=>l.trim()); if(!L.length) return 0; let score=0;
+  for(const l of L){ if(/^\s{2,}\S/.test(l)||/\t/.test(l)) score++; if(/[;{}()\[\]=<>|]\s*$/.test(l)) score++;
+    if(/^\s*(const|let|var|function|import|export|class|def|return|if|for|while|public|private|#include|SELECT|FROM|\$ |<\/?[a-z]|[.#@][\w-]+\s*\{|[\w-]+\s*:\s*[^;]+;)/i.test(l)) score++; }
+  return score/L.length; }
+// код — лише за впевненості: є ``` або ≥3 рядки з ознаками коду; інакше текст (з чіпом «Зробити кодом», якщо ознаки все ж є)
+function looksLikeCode(t){ if(/^\s*```/m.test(t)) return true; const L=t.split('\n').filter(l=>l.trim());
+  if(L.length<3) return false; return codeScore(t)>=0.7 || guessLang(t)!=='text'; }
+function maybeCode(t){ return codeScore(t)>=0.4 || guessLang(t)!=='text'; }
+/* ── підсвітка: чотири кольори, коментарі курсивом; рядок = span.ln ───── */
+const KW=/^(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|import|export|from|default|try|catch|finally|throw|async|await|yield|typeof|instanceof|in|of|this|super|null|undefined|true|false|def|elif|lambda|pass|with|as|not|and|or|is|None|True|False|self|fn|mut|pub|struct|impl|enum|match|use|mod|SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|JOIN|ON|AS|AND|OR|NOT|NULL|ORDER|BY|GROUP|LIMIT|CREATE|TABLE|int|float|double|char|void|bool|string|public|private|static|final|include|define|echo|sudo|git|npm|npx|cd|ls|curl|apt|pip|brew|then|fi|done|elif|esac)$/;
+function highlight(src, lang){
+  const cmt = (lang==='python'||lang==='shell') ? '#[^\\n]*' : lang==='sql' ? '--[^\\n]*' : lang==='html' ? '<!--[\\s\\S]*?-->' : (lang==='css') ? '/\\*[\\s\\S]*?\\*/' : '//[^\\n]*|/\\*[\\s\\S]*?\\*/';
+  const re=new RegExp('('+cmt+')|("(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|`(?:\\\\.|[^`\\\\])*`)|(\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|ms|s)?\\b)|(</?[A-Za-z][\\w-]*|/?>)|([A-Za-z_][\\w!]*)','g');
+  let out='', last=0, m;
+  while((m=re.exec(src))){ out+=esc(src.slice(last,m.index)); const t=m[0];
+    if(m[1]) out+='<i class="c">'+esc(t).replace(/\n/g,'</i>\n<i class="c">')+'</i>';
+    else if(m[2]) out+='<b class="s">'+esc(t).replace(/\n/g,'</b>\n<b class="s">')+'</b>';
+    else if(m[3]) out+='<b class="n">'+esc(t)+'</b>';
+    else if(m[4]) out+=(lang==='html'?'<b class="t">'+esc(t)+'</b>':esc(t));
+    else out+=(KW.test(t)?'<b class="k">'+esc(t)+'</b>':esc(t));
+    last=m.index+t.length; }
+  out+=esc(src.slice(last));
+  return out.split('\n').map(l=>'<span class="ln">'+l+'</span>').join('\n');
+}
+
+/* ── блок коду ───────────────────────────────────────────────────────── */
+const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+  check:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 7"/></svg>',
+  wrap:'<svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-4M4 18h4"/><path d="M13 16l-2 2 2 2"/></svg>',
+  lockC:'<svg class="i closed" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  lockO:'<svg class="i open" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>'};
+const COLLAPSE_AT=14, SHOW=12, TOUCH=matchMedia('(hover:none)').matches; let DEFAULT_LOCKED=true;
+function makeCode(text, opts={}){
+  const lang=opts.lang||guessLang(text);
+  const el=document.createElement('div'); el.className='cblk locked'+(opts.cls?' '+opts.cls:''); el.dataset.lang=lang; el.tabIndex=-1;
+  el.innerHTML=`<div class="cbar"><button class="lang" title="Мова коду — натисніть, щоб змінити">${LANGS[lang]||lang}</button><span class="grow"></span>
+    <button class="cb num" title="Номери рядків" aria-pressed="false">#</button>
+    <button class="cb wrapb" title="Перенос довгих рядків" aria-pressed="false">${ICO.wrap}</button>
+    <button class="cb copy" title="Копіювати (Ctrl+Shift+C)">${ICO.copy}<span>Копіювати</span></button>
+    <button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">${ICO.lockC}${ICO.lockO}</button></div>
+    <pre class="code" spellcheck="false" aria-readonly="true"><code></code></pre><button class="more" hidden></button>`;
+  const code=el.querySelector('code'), pre=el.querySelector('.code'), more=el.querySelector('.more'), lockB=el.querySelector('.lock'), copyB=el.querySelector('.copy');
+  let src=text.replace(/\r\n?/g,'\n').replace(/\n+$/,''), expanded=false, editing=false;
+  function view(){ const lines=src.split('\n'); const cut=!expanded && lines.length>COLLAPSE_AT;
+    code.innerHTML=highlight(cut? lines.slice(0,SHOW).join('\n') : src, el.dataset.lang);
+    more.hidden=!(lines.length>COLLAPSE_AT); more.textContent=cut? `Показати всі ${lines.length} рядків` : 'Згорнути'; }
+  /* зсув у тексті: (вузол, offset) підсвіченого DOM → номер символа в src. Текст DOM = src, тож достатньо скласти довжини текстових вузлів перед точкою */
+  function globalOffset(node, off){ let n=0; const w=document.createTreeWalker(code, NodeFilter.SHOW_TEXT); let t;
+    while((t=w.nextNode())){ if(t===node) return n+off; const pos=node.compareDocumentPosition(t);
+      if(pos & Node.DOCUMENT_POSITION_PRECEDING){ n+=t.length; continue; }
+      if(node.nodeType!==3 && (pos & Node.DOCUMENT_POSITION_CONTAINED_BY)){ let ch=t; while(ch.parentNode!==node) ch=ch.parentNode; if([...node.childNodes].indexOf(ch)<off){ n+=t.length; continue; } return n; }
+      return n; }
+    return n; }
+  function offsetFromPoint(x,y){ let node,off; if(document.caretPositionFromPoint){ const c=document.caretPositionFromPoint(x,y); if(!c) return null; node=c.offsetNode; off=c.offset; }
+    else if(document.caretRangeFromPoint){ const r=document.caretRangeFromPoint(x,y); if(!r) return null; node=r.startContainer; off=r.startOffset; } else return null;
+    return code.contains(node)? globalOffset(node,off) : null; }
+  function selOffsets(){ const s=getSelection(); if(!s||!s.rangeCount||!code.contains(s.anchorNode)||!code.contains(s.focusNode)) return null;
+    const a=globalOffset(s.anchorNode,s.anchorOffset), b=globalOffset(s.focusNode,s.focusOffset); return {a:Math.min(a,b), b:Math.max(a,b)}; }
+  let lastPoint=null;
+  /* sel: {a,b} — куди поставити курсор/виділення після розблокування; без нього — поточне виділення у блоці, інакше кінець */
+  function unlock(focus=true, sel){ if(sel===undefined) sel=selOffsets(); editing=true; expanded=true; el.classList.replace('locked','editing'); code.textContent=src; more.hidden=true;
+    code.contentEditable='plaintext-only'; if(!code.isContentEditable) code.contentEditable='true';
+    pre.setAttribute('aria-readonly','false'); lockB.setAttribute('aria-pressed','false'); lockB.title='Редагування · закриється сам, коли вийдете з блока (або Esc)';
+    if(focus){ code.focus(); const t=code.firstChild, r=document.createRange(); if(t){ const L=t.length, a=sel? Math.min(sel.a,L) : L, b=sel? Math.min(sel.b,L) : L; r.setStart(t,a); r.setEnd(t,b); } else { r.selectNodeContents(code); r.collapse(false); }
+      const s=getSelection(); s.removeAllRanges(); s.addRange(r); } }
+  function lock(){ if(editing){ src=code.innerText.replace(/\n+$/,''); } editing=false; code.contentEditable='false'; el.classList.replace('editing','locked');
+    pre.setAttribute('aria-readonly','true'); lockB.setAttribute('aria-pressed','true'); lockB.title='Тільки читання · натисніть, щоб редагувати (Ctrl+E)'; view(); }
+  function hint(t){ el.querySelectorAll('.hint').forEach(h=>h.remove()); const h=document.createElement('div'); h.className='hint'; h.innerHTML=t; el.appendChild(h); el.classList.add('pulse'); setTimeout(()=>el.classList.remove('pulse'),400); setTimeout(()=>h.remove(),1700); }
+  async function copy(){ const t=editing? code.innerText : src; let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(_){ try{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); ok=document.execCommand('copy'); ta.remove(); }catch(__){} }
+    copyB.innerHTML=(ok?ICO.check:ICO.copy)+'<span>'+(ok?'Скопійовано':'Не вдалося')+'</span>'; copyB.classList.toggle('done',ok); clearTimeout(copyB._t); copyB._t=setTimeout(()=>{ copyB.innerHTML=ICO.copy+'<span>Копіювати</span>'; copyB.classList.remove('done'); },1500); }
+  lockB.addEventListener('click',()=>{ editing? lock() : unlock(); });
+  copyB.addEventListener('click',copy);
+  el.querySelector('.wrapb').addEventListener('click',e=>{ const on=!el.classList.contains('wrapped'); el.classList.toggle('wrapped',on); e.currentTarget.setAttribute('aria-pressed',on); });
+  el.querySelector('.num').addEventListener('click',e=>{ const on=!el.classList.contains('num'); el.classList.toggle('num',on); e.currentTarget.setAttribute('aria-pressed',on); });
+  el.querySelector('.lang').addEventListener('click',e=>{ const keys=Object.keys(LANGS); const cur=el.dataset.lang; const next=keys[(keys.indexOf(cur)+1)%keys.length]; el.dataset.lang=next; e.currentTarget.textContent=LANGS[next]; if(!editing) view(); });
+  more.addEventListener('click',()=>{ expanded=!expanded; view(); });
+  pre.addEventListener('pointerdown',e=>{ if(!editing) lastPoint={x:e.clientX,y:e.clientY}; });
+  pre.addEventListener('dblclick',e=>{ if(!editing){ const o=offsetFromPoint(e.clientX,e.clientY); unlock(true, o==null? undefined : {a:o,b:o}); } });
+  pre.addEventListener('keydown',e=>{ if(!editing && e.key.length===1 && !e.ctrlKey && !e.metaKey){ e.preventDefault(); hint('Тільки читання · <b>натисніть замок</b>, щоб редагувати'); } if(e.key==='Escape' && editing){ e.preventDefault(); lock(); } });
+  pre.addEventListener('beforeinput',e=>{ if(!editing){ e.preventDefault(); hint('Тільки читання · <b>натисніть замок</b>, щоб редагувати'); } });
+  el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='e'){ e.preventDefault(); editing? lock() : unlock(); }
+    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='c'){ e.preventDefault(); copy(); } });
+  pre.addEventListener('click',()=>{ if(!editing && getSelection().isCollapsed) { pre.focus(); } });
+  // вийшли з блока (клік поза ним, Tab, перехід в інший блок) → замок повертається сам
+  el.addEventListener('focusout',()=>{ setTimeout(()=>{ if(editing && !el.contains(document.activeElement)) lock(); },0); });
+  pre.tabIndex=0;
+  view(); if(opts.editing) unlock(false); if(opts.wrapped===undefined? TOUCH : opts.wrapped){ el.classList.add('wrapped'); el.querySelector('.wrapb').setAttribute('aria-pressed','true'); } if(opts.num){ el.classList.add('num'); el.querySelector('.num').setAttribute('aria-pressed','true'); }
+  el.api={lock,unlock,copy,get src(){ return editing? code.innerText : src; }};
+  return el;
+}
+/* ── зразки ──────────────────────────────────────────────────────────── */
+const SAMPLES=[
+`// Дебаунс: викликати fn не частіше, ніж раз на wait мс
+export function debounce(fn, wait = 300) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), wait);
+  };
+}`,
+`.sheet::before{content:"";position:absolute;left:var(--g);top:calc(2*var(--g));width:var(--fw,calc(100% - 2*var(--g)));background-image:radial-gradient(var(--dot) .8px,transparent .9px);background-size:var(--g) var(--g)}
+.blk .txt{flex:0 1 auto;width:fit-content;min-width:0;padding:0 6px;font-size:var(--fs);line-height:var(--g)}`,
+`def chunks(items, size=24):
+    """Ріжемо список на шматки по size елементів."""
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+print(list(chunks(range(10), 4)))  # [[0,1,2,3],[4,5,6,7],[8,9]]`,
+`SELECT n.id, n.title, count(b.id) AS blocks
+FROM notes n LEFT JOIN blocks b ON b.note_id = n.id
+WHERE n.updated_at > now() - interval '7 days'
+GROUP BY n.id ORDER BY blocks DESC LIMIT 20;`,
+`$ git switch -c feature/code-block
+$ npm run build && npx playwright test   # перевірити перед пушем
+$ git push -u origin feature/code-block`];
+const LONG=Array.from({length:22},(_,i)=>`  ${String(i+1).padStart(2,' ')}. line = grid.rows[${i}]  // усі 22 рядки видно лише після «Показати всі»`).join('\n');
+
+/* ── демо-аркуш: вставка ─────────────────────────────────────────────── */
+const flow=$('#flow'), stage=$('#stage'); let sampleI=0;
+function chipFor(node, label, btnLabel, onSwap){ const chip=document.createElement('div'); chip.className='chip'; chip.innerHTML=label+' <button class="swap">'+btnLabel+'</button><button class="x" title="Сховати">✕</button>';
+  node.after(chip); const kill=()=>chip.remove(); chip.querySelector('.x').addEventListener('click',kill); setTimeout(kill,6000); chip.querySelector('.swap').addEventListener('click',()=>{ kill(); onSwap(); }); return chip; }
+function addBlock(text, forceCode, quiet){
+  const isCode = forceCode===undefined ? looksLikeCode(text) : forceCode;
+  if(!isCode){ const t=document.createElement('div'); t.className='tblk'; t.contentEditable='true'; t.spellcheck=false; t.textContent=text.trim(); flow.appendChild(t);
+    if(!quiet && maybeCode(text)) chipFor(t,'Вставлено як текст','Зробити кодом',()=>{ const c=addBlock(text,true,true); t.after(c); t.remove(); });
+    t.scrollIntoView({block:'nearest'}); return t; }
+  const c=makeCode(text,{editing:!DEFAULT_LOCKED && !TOUCH}); flow.appendChild(c);
+  if(!quiet) chipFor(c,'Вставлено як код','Зробити текстом',()=>{ const t=addBlock(c.api.src,false,true); c.after(t); c.remove(); });
+  if(c.classList.contains('editing')) c.querySelector('code').focus();
+  c.scrollIntoView({block:'nearest'}); return c;
+}
+$('#defLocked').addEventListener('click',()=>{ DEFAULT_LOCKED=true; $('#defLocked').setAttribute('aria-pressed','true'); $('#defOpen').setAttribute('aria-pressed','false'); });
+$('#defOpen').addEventListener('click',()=>{ DEFAULT_LOCKED=false; $('#defOpen').setAttribute('aria-pressed','true'); $('#defLocked').setAttribute('aria-pressed','false'); });
+flow.appendChild(makeCode(SAMPLES[0]));
+flow.appendChild(makeCode(SAMPLES[1]));
+$('#pasteBtn').addEventListener('click',()=>{ addBlock(SAMPLES[(sampleI++)%SAMPLES.length]); });
+$('#pasteTextBtn').addEventListener('click',()=>{ addBlock('Звичайний абзац тексту після вставки лишається текстом: у ньому немає відступів, дужок і ключових слів, тож блок коду не створюється.'); });
+stage.addEventListener('paste',e=>{ if(e.target.closest('.code')||e.target.closest('.tblk')) return; const t=(e.clipboardData||window.clipboardData).getData('text'); if(!t.trim()) return; e.preventDefault(); addBlock(t); });
+stage.addEventListener('pointerdown',e=>{ if(e.target===stage||e.target===flow) stage.focus(); }); stage.tabIndex=-1;
+
+/* ── галерея станів ──────────────────────────────────────────────────── */
+const states=$('#states');
+function card(title, tag, node, text){ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<h3><span>${title}</span>${tag||''}</h3>`; const st=document.createElement('div'); st.className='stage'; st.style.cursor='default'; st.appendChild(node); c.appendChild(st); if(text){ const p=document.createElement('p'); p.innerHTML=text; c.appendChild(p); } states.appendChild(c); return c; }
+card('Тільки читання (типово)','<span class="tag ok">default</span>', makeCode(SAMPLES[2]), 'Видно мову, «Копіювати» і закритий замок. Решта кнопок зʼявляється при наведенні. Текст виділяється й копіюється, але не редагується.');
+{ const n=makeCode(SAMPLES[2]); n.classList.add('touch'); card('Наведення / тач','', n, 'Панель повністю: <b>#</b> номери, <b>↩</b> перенос, «Копіювати», замок. На тачі так виглядає завжди, цілі 44 px.'); }
+{ const n=makeCode(SAMPLES[2],{editing:true}); card('Редагування','', n, 'Замок відкритий і акцентний, рамка підсвічена, підсвітка синтаксису вимкнена, щоб курсор не стрибав. Клік поза блоком або <kbd>Esc</kbd> закриває і повертає підсвітку.'); }
+{ const n=makeCode(SAMPLES[3]); const b=n.querySelector('.copy'); b.innerHTML=ICO.check+'<span>Скопійовано</span>'; b.classList.add('done'); card('Скопійовано','', n, 'Підтвердження на кнопці 1,5 с. Копіюється чистий текст: без підсвітки, без номерів рядків, без хвостового переносу.'); }
+{ const n=makeCode(SAMPLES[1],{wrapped:true,num:true}); card('Перенос + номери рядків','', n, 'Для довгих рядків CSS перенос корисний. Номери рядків не потрапляють у виділення і копію.'); }
+{ const n=makeCode(LONG); card('Довгий блок згорнуто','', n, '22 рядки → показано 12 і кнопка «Показати всі 22 рядки». Так один вставлений файл не зʼїдає весь аркуш.'); }
+{ const n=makeCode(SAMPLES[4],{wrapped:true}); n.classList.add('touch'); const ph=document.createElement('div'); ph.className='phone'; ph.appendChild(n); const c=document.createElement('div'); c.className='card'; c.innerHTML='<h3><span>Мобільний</span></h3>'; c.appendChild(ph); const p=document.createElement('p'); p.innerHTML='Панель завжди видима, цілі 44 px. Довгі рядки переносяться, щоб горизонтальна прокрутка не ловила жести; клавіатура не вискакує, поки замок закритий.'; c.appendChild(p); states.appendChild(c); }
+{ const n=makeCode(SAMPLES[0]); n.querySelector('.code').focus; const c=card('Спроба друкувати в закритий блок','', n, 'Замок коротко пульсує, поряд тиха підказка «Тільки читання · натисніть замок». Жодних модальних вікон.'); const h=document.createElement('div'); h.className='hint'; h.innerHTML='Тільки читання · <b>натисніть замок</b>, щоб редагувати'; n.appendChild(h); }
+
+/* ── альтернативи ────────────────────────────────────────────────────── */
+const alts=$('#alts');
+function alt(title, tag, node, pros, verdict){ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<h3><span>${title}</span>${tag}</h3>`; const st=document.createElement('div'); st.className='stage'; st.style.cursor='default'; st.appendChild(node); c.appendChild(st); const p=document.createElement('p'); p.innerHTML=pros; c.appendChild(p); alts.appendChild(c); }
+alt('A · Картка з шапкою','<span class="tag ok">рекомендую</span>', makeCode(SAMPLES[0]), '<b>+</b> мова, замок і «Копіювати» завжди на місці; зрозуміло, що це окремий обʼєкт, а не абзац. <b>−</b> трохи «важча» за чистий аркуш. Саме цей варіант у демо вгорі.');
+{ const n=makeCode(SAMPLES[0]); n.classList.add('alt-b'); const t=document.createElement('span'); t.className='corner'; t.textContent='JavaScript'; n.appendChild(t); alt('B · Мінімальний, панель при наведенні','<span class="tag so">для «читального» режиму</span>', n, '<b>+</b> найтихіший, ближче до духу чистого аркуша. <b>−</b> замок не видно, поки не навів; на тачі панель доведеться показувати завжди — і перевага зникає.'); }
+{ const n=makeCode(SAMPLES[4]); n.classList.add('alt-c'); const d=document.createElement('span'); d.className='dots'; d.innerHTML='<i></i><i></i><i></i>'; n.querySelector('.cbar').prepend(d); alt('C · «Термінал», завжди темний','<span class="tag no">не для аркуша</span>', n, '<b>+</b> код одразу впізнається, звична картинка з документацій. <b>−</b> темна пляма на світлому й пісочному аркуші ламає тон сторінки; у темній темі не відрізняється від A.'); }
+
+/* ── тема ────────────────────────────────────────────────────────────── */
+document.querySelectorAll('.themes .tb').forEach(b=>b.addEventListener('click',()=>{ document.documentElement.dataset.theme=b.dataset.t; document.querySelectorAll('.themes .tb').forEach(x=>x.setAttribute('aria-pressed',x===b)); }));
+})();
+</script>
+</body>
+</html>
