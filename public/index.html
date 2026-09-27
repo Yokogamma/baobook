@@ -188,6 +188,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .code{margin:0;padding:4px 14px 12px;overflow-x:auto;overflow-y:hidden;white-space:pre;tab-size:2;outline:0;counter-reset:l;cursor:default;-webkit-overflow-scrolling:touch;font-variant-ligatures:none}
 .cblk.editing .code{cursor:text}
 .cblk.wrapped .code{white-space:pre-wrap;overflow-wrap:anywhere}
+.cblk.wrapped{width:100%}   /* з переносом картка займає всю доступну ширину — саме по ній і переносимо; вужче — ручкою */
 .code code{font:inherit;display:block;outline:0;min-height:var(--g)}
 .code code:empty::before{content:attr(data-ph);color:var(--ink-3)}
 .ln{display:inline}
@@ -212,6 +213,17 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .cblk.resizing{border-color:var(--sel-line)}
 .cblk.settle{transition:width .16s ease} .cblk.settle .code{transition:height .16s ease}
 .lang.auto::after{content:" · авто";font-weight:400;text-transform:none;letter-spacing:0;opacity:.7}
+/* назва блока: поруч із мовою, редагується на місці; порожня показує підказку лише при наведенні */
+/* назва по центру шапки (відносно картки, тож не стрибає, коли зʼявляються кнопки); на вузьких картках — зліва після мови */
+.cblk{container-type:inline-size}
+.cbar{display:grid;grid-template-columns:minmax(max-content,1fr) minmax(0,auto) minmax(max-content,1fr);align-items:center}
+.lang{justify-self:start} .acts{display:flex;align-items:center;gap:2px;justify-self:end}
+.ctitle{justify-self:center;min-width:0;max-width:100%;padding:0 8px;height:24px;line-height:24px;border-radius:6px;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:0;cursor:text;user-select:text;-webkit-user-select:text;text-align:center}
+.ctitle:hover,.ctitle:focus{background:var(--hover)} .ctitle:focus{text-overflow:clip}
+@container (max-width:560px){ .cbar{display:flex} .acts{margin-left:auto} .ctitle{max-width:52%;flex:0 1 auto;margin-left:2px;text-align:left} .ctitle:not(:empty)::before{content:"·";margin-right:7px;color:var(--ink-3);font-weight:400} }
+.ctitle:empty::before{content:attr(data-ph);color:var(--ink-3);font-weight:400;opacity:0;transition:opacity .12s}
+.cblk:hover .ctitle:empty::before,.ctitle:focus:empty::before,.cblk.touch .ctitle:empty::before{opacity:1}
+@media (hover:none){ .ctitle:empty::before{opacity:1} }
 /* меню мови з пошуком */
 .lmenu{position:absolute;left:4px;top:30px;z-index:8;width:230px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:13px;padding:6px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
 .lmenu input{width:100%;box-sizing:border-box;border:.5px solid var(--line-2);border-radius:6px;padding:5px 8px;font:inherit;background:transparent;color:var(--ink);outline:0}
@@ -385,7 +397,7 @@ const db={
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
 function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); db.save(n); return n; }
-function lines(n){ return [...n.blocks].sort((a,b)=>(a.row-b.row)||(a.fx-b.fx)).flatMap(b=>b.text.split('\n')).map(l=>l.trim()).filter(Boolean); }
+function lines(n){ return [...n.blocks].sort((a,b)=>(a.row-b.row)||(a.fx-b.fx)).flatMap(b=>(b.kind==='code'&&b.title? [b.title] : []).concat(b.text.split('\n'))).map(l=>l.trim()).filter(Boolean); }
 function noteText(n){ return lines(n).join('\n'); }
 function titleOf(n){ return n.title.trim()||(lines(n)[0]||'').slice(0,80)||'Без назви'; }
 function previewOf(n){ const L=lines(n); return (n.title.trim()? L[0]:L[1])||''; }
@@ -420,7 +432,7 @@ function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
 
 /* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
-function serialize(){ return blocks.filter(b=>b.id).map(b=>{ const d={id:b.id,fx:b.fx,row:b.row,text:b.text}; if(b.kind==='code'){ d.kind='code'; if(b.lang) d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.open) d.open=true; } return d; }); }
+function serialize(){ return blocks.filter(b=>b.id).map(b=>{ const d={id:b.id,fx:b.fx,row:b.row,text:b.text}; if(b.kind==='code'){ d.kind='code'; if(b.lang) d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.open) d.open=true; if(b.title) d.title=b.title; } return d; }); }
 function markDirty(){ dirty=true; savedEl.textContent='●'; savedEl.className='saved pend'; clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); const ok=db.save(cur);
   savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok) savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800);
@@ -490,7 +502,7 @@ function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
 function make(d, focus){
-  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, text:d.text||'', lines:1, w:MINW, kind:d.kind==='code'?'code':undefined, lang:d.lang, wrap:d.wrap, num:d.num, cw:d.cw, ch:d.ch, open:!!d.open};
+  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, text:d.text||'', lines:1, w:MINW, kind:d.kind==='code'?'code':undefined, lang:d.lang, wrap:d.wrap, num:d.num, cw:d.cw, ch:d.ch, open:!!d.open, title:d.title||''};
   if(b.col===undefined) b.col=colOfX(b.fx*W()); if(b.fx===undefined) b.fx=xOf(b.col)/W();
   if(b.kind==='code') buildCode(b); else buildText(b);
   blocks.push(b); b.el.addEventListener('pointerdown',e=>e.stopPropagation()); drag(b, b.el.querySelector('.grip'));
@@ -527,9 +539,9 @@ function chip(b, label, btnLabel, onSwap){ sheet.querySelectorAll('.chip').forEa
 
 /* блок коду: замок («тільки читання») типово, копіювати можна завжди */
 function buildCode(b){
-  b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked"><div class="cbar"><button class="lang" title="Мова коду — натисніть, щоб змінити"></button><span class="grow"></span>'
+  b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked"><div class="cbar"><button class="lang" title="Мова коду — натисніть, щоб змінити"></button><span class="ctitle" spellcheck="false" data-ph="Назва блока…" role="textbox" aria-label="Назва блока"></span><span class="acts">'
     +'<button class="cb num" title="Номери рядків" aria-pressed="false">#</button><button class="cb wrapb" title="Перенос довгих рядків" aria-pressed="false">'+ICO.wrap+'</button>'
-    +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button></div>'
+    +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button></span></div>'
     +'<pre class="code" spellcheck="false" aria-readonly="true" tabindex="0"><code data-ph="Код…"></code></pre><div class="fade"></div><button class="more" hidden></button>'
     +'<div class="rz" title="Тягніть, щоб змінити розмір · подвійний клік — авто"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div></div>';
   const card=b.el.querySelector('.cblk'), code=card.querySelector('code'), pre=card.querySelector('.code'), more=card.querySelector('.more'), lockB=card.querySelector('.lock'), copyB=card.querySelector('.copy'), langB=card.querySelector('.lang');
@@ -537,6 +549,11 @@ function buildCode(b){
   if(!LANGS[b.lang]) b.lang=null;                       // null = авто: визначаємо з тексту щоразу
   const effLang=()=>b.lang||guessLang(b.text);
   const setLabel=()=>{ langB.textContent=langName(effLang()); langB.classList.toggle('auto',!b.lang); }; setLabel();
+  const ttlEl=card.querySelector('.ctitle'); ttlEl.textContent=b.title||''; ttlEl.contentEditable='plaintext-only'; if(!ttlEl.isContentEditable) ttlEl.contentEditable='true';
+  ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
+  ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
+  ttlEl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
+  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; flushSave(); });
   if(b.wrap===undefined) b.wrap=true; b.wrap=!!b.wrap; b.num=!!b.num;   // перенос типово: без горизонтальної смуги
   card.classList.toggle('wrapped',b.wrap); card.querySelector('.wrapb').setAttribute('aria-pressed',b.wrap); card.classList.toggle('num',b.num); card.querySelector('.num').setAttribute('aria-pressed',b.num);
   /* довгий блок: згортаємо до b.ch рядків (типово 12, якщо понад 14), решта — за кнопкою; жодної внутрішньої прокрутки */
