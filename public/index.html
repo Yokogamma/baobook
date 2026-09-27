@@ -594,7 +594,7 @@ function buildCode(b){
   /* ручка розміру: ширина/висота в клітинках сітки; висота більша за вміст = авто */
   const rz=card.querySelector('.rz');
   rz.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); rz.setPointerCapture(e.pointerId);
-    const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur();
+    const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const cr=card.getBoundingClientRect(), sx=e.clientX, sy=e.clientY, w0=cr.width, h0=cr.height; card.classList.add('resizing'); card.classList.remove('settle'); b.resizing=true; card.style.maxWidth='none'; card.style.flex='0 0 auto';   // картка не стискається під блок, округлений до сітки
     /* під час руху картка йде за курсором плавно; модель (cw/ch) уже округлена до сітки; при відпусканні — короткий доїзд до сітки.
        По горизонталі — ширина; по вертикалі — скільки рядків видно у згорнутому стані (вище за вміст = показати все) */
@@ -652,7 +652,7 @@ function drag(b, grip){
   let sx,sy,ox,oy,moved,from,others,probe;
   grip.addEventListener('pointerdown',e=>{
     e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId);
-    const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur();
+    const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     sx=e.clientX; sy=e.clientY; ox=b.el.offsetLeft; oy=b.el.offsetTop; moved=false; from={col:b.col,row:b.row};
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
     probe={col:b.col,row:b.row,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,el:gbox}; b.hidden=true; blocks.push(probe);
