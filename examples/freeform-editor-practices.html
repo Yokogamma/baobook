@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чистий аркуш · накладання блоків</title>
+<meta name="description" content="Анімовані приклади: як текстові блоки на «чистому аркуші» можуть поводитися при перетягуванні один на одного — накладання, виштовхування, заборона, ширина до сусіда, ресайз.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --page:#f7f7f5; --sheet:#ffffff; --ink:#37352f; --ink-2:#787774; --ink-3:#b4b3b0;
+  --line:rgba(55,53,47,.09); --line-2:rgba(55,53,47,.16); --dot:rgba(55,53,47,.22);
+  --hover:rgba(55,53,47,.06); --sel:rgba(35,131,226,.12); --sel-line:rgba(35,131,226,.6);
+  --bad:rgba(235,87,87,.14); --bad-line:rgba(235,87,87,.75);
+  --ok-bg:#dff3e8; --ok-ink:#116b45; --no-bg:#fbe7e7; --no-ink:#9b2c2c; --so-bg:#fdf1d8; --so-ink:#7a4a08;
+  --shadow:0 6px 20px rgba(15,15,15,.16), 0 0 0 .5px rgba(15,15,15,.08);
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --g:24px; --fs:16px;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --page:#141414; --sheet:#1e1e1e; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16); --dot:rgba(255,255,255,.22);
+  --hover:rgba(255,255,255,.07); --sel:rgba(35,131,226,.22);
+  --ok-bg:#163a2b; --ok-ink:#8fe0b6; --no-bg:#3f1d1d; --no-ink:#f0a0a0; --so-bg:#3e2f12; --so-ink:#f0cf8a;
+  --shadow:0 6px 20px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.08); } }
+:root[data-theme="dark"]{
+  --page:#141414; --sheet:#1e1e1e; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16); --dot:rgba(255,255,255,.22);
+  --hover:rgba(255,255,255,.07); --sel:rgba(35,131,226,.22);
+  --ok-bg:#163a2b; --ok-ink:#8fe0b6; --no-bg:#3f1d1d; --no-ink:#f0a0a0; --so-bg:#3e2f12; --so-ink:#f0cf8a;
+  --shadow:0 6px 20px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.08); }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);-webkit-text-size-adjust:100%}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 16px 60px}
+h1{font-size:22px;font-weight:600;margin:0 0 6px}
+.lead{color:var(--ink-2);font-size:14.5px;line-height:1.55;margin:0 0 22px;max-width:70ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:18px}
+.card{background:var(--sheet);border:.5px solid var(--line-2);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:14px 16px 8px}
+.card-h h2{font-size:15.5px;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.num{width:22px;height:22px;border-radius:50%;background:var(--hover);color:var(--ink-2);font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.card-h p{margin:0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.tag{flex:0 0 auto;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;margin-top:2px}
+.tag.ok{background:var(--ok-bg);color:var(--ok-ink)} .tag.no{background:var(--no-bg);color:var(--no-ink)} .tag.so{background:var(--so-bg);color:var(--so-ink)}
+
+/* міні-аркуш: та сама сітка, що й у редакторі */
+.stage{position:relative;margin:6px 16px 0;height:calc(var(--g)*10);border:.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--sheet)}
+.sheet{position:absolute;left:0;top:0;height:100%;width:100%;
+  background-image:radial-gradient(var(--dot) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}
+.sheet.narrow-frame{box-shadow:0 0 0 .5px var(--line-2)}
+.blk{position:absolute;display:flex;align-items:flex-start;gap:2px;border-radius:6px;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1),box-shadow .2s}
+.blk .grip{flex:0 0 22px;width:22px;height:var(--g);display:flex;align-items:center;justify-content:center;color:var(--ink-3);opacity:0;transition:opacity .15s}
+.blk .grip svg{width:14px;height:14px;fill:currentColor}
+.blk .txt{flex:1 1 auto;min-width:0;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);white-space:pre-wrap;overflow-wrap:anywhere;border-radius:4px}
+.blk.hot .grip,.blk.drag .grip{opacity:1}
+.blk.hot{background:var(--hover);background-clip:content-box;padding:2px 0;margin-top:-2px}
+.blk.drag{transition:none;box-shadow:var(--shadow);background:var(--sheet);z-index:20;opacity:.96}
+.blk.drag .txt{background:var(--sheet)}
+.blk.top{z-index:5}
+.blk.solid .txt{background:var(--sheet)}
+.blk.caret .txt::after{content:"";display:inline-block;width:2px;height:16px;margin-left:1px;vertical-align:-3px;background:var(--sel-line);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+/* контур майбутнього місця під час перетягування */
+.ghost{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:6px;pointer-events:none;opacity:0;transition:left .2s,top .2s,opacity .15s}
+.ghost.on{opacity:1} .ghost.bad{border-color:var(--bad-line);background:var(--bad)}
+.ghost .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:var(--bad-ink,#c33);background:var(--sheet);padding:0 5px;border-radius:4px;display:none}
+.ghost.bad .lbl{display:block}
+/* штучний курсор */
+.cur{position:absolute;left:0;top:0;width:22px;height:22px;z-index:30;pointer-events:none;transition:left .6s cubic-bezier(.3,.7,.3,1),top .6s cubic-bezier(.3,.7,.3,1),transform .12s;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.cur svg{width:22px;height:22px}
+.cur.press{transform:scale(.85)}
+/* підпис поточного кроку */
+.cap{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px 14px;font-size:13px;color:var(--ink-2);min-height:44px}
+.cap b{color:var(--ink);font-weight:500}
+.rep{flex:0 0 auto;border:.5px solid var(--line-2);background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;padding:5px 10px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.rep:hover{background:var(--hover);color:var(--ink)}
+.rep svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.note{margin:26px 0 0;padding:14px 16px;border:.5px solid var(--line-2);border-radius:12px;font-size:13.5px;line-height:1.6;color:var(--ink-2);background:var(--sheet)}
+.note b{color:var(--ink);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Що робити, коли блоки накладаються</h1>
+  <p class="lead">Пʼять поведінок на тій самій сітці, що й у редакторі. Курсор рухається сам: тягне блок за ручку ⋮⋮, набирає текст або звужує вікно, а сусіди реагують за правилом картки. Кожна сцена повторюється по колу.</p>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="note"><b>Рекомендація для «чистого аркуша»:</b> сцени 2, 3 і 4 разом. Ширина блока рахується до сусіда праворуч, а не до краю екрана; те, що опинилось під блоком, зсувається вниз на цілі ряди; коли місця менше за мінімальну ширину, контур червоний і кинути не можна. Той самий алгоритм при звуженні вікна (сцена 5) складає сусідні блоки у стовпчик, як Notion складає колонки на телефоні. Сцена 1 показує, чому вільне накладання не пасує цьому аркушу.</div>
+</div>
+
+<script>
+(function(){
+const G=24, OFF=30, PAD=24, MINW=140;          // ті самі константи, що в редакторі
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const GRIP='<div class="grip"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
+const CUR='<svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.5L10 20z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+
+/* ── міні-аркуш ─────────────────────────────────────────────────────── */
+class Sheet{
+  constructor(stage, opts){
+    this.stage=stage; this.o=Object.assign({width:'edge', collide:'none'},opts);
+    this.el=document.createElement('div'); this.el.className='sheet'; stage.appendChild(this.el);
+    this.ghost=document.createElement('div'); this.ghost.className='ghost'; this.ghost.innerHTML='<span class="lbl">замало місця</span>'; this.el.appendChild(this.ghost);
+    this.cur=document.createElement('div'); this.cur.className='cur'; this.cur.innerHTML=CUR; stage.appendChild(this.cur);
+    this.blocks=[];
+  }
+  W(){ return this.el.clientWidth; }
+  C(f){ return Math.max(1, Math.round(f*(this.W()-PAD)/G)); }   // стовпчик як частка ширини — сцени адаптивні
+  add(d){ const b={col:d.col,row:d.row,text:d.text,lines:1,w:MINW};
+    b.el=document.createElement('div'); b.el.className='blk'+(d.solid?' solid':''); b.el.innerHTML=GRIP+'<div class="txt"></div>';
+    b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text; this.el.appendChild(b.el); this.blocks.push(b); return b; }
+  clear(){ this.blocks.forEach(b=>b.el.remove()); this.blocks=[]; this.ghost.className='ghost'; }
+  x(col){ return G/2+col*G; }               // початок тексту — на стовпчику точок
+  y(row){ return row*G; }                   // верх рядка — на ряду точок
+  rect(b){ const x0=this.x(b.col); return {x0, y0:this.y(b.row), r0:b.row, r1:b.row+b.lines, xl:x0-OFF, x1:x0-OFF+b.w}; }
+  // «сира» ширина: до краю або до найближчого сусіда праворуч у тих самих рядах (може бути < MINW)
+  rawWidth(b){ const r=this.rect(b); let right=this.W()-PAD;
+    if(this.o.width==='neighbor'){ for(const o of this.blocks){ if(o===b||o.hidden) continue; const q=this.rect(o);
+      if(q.r0<r.r1 && q.r1>r.r0 && q.x0>r.x0) right=Math.min(right, q.xl-6); } }
+    return right-r.xl; }
+  measure(b){ b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G)); }
+  render(b){ const r=this.rect(b); b.w=Math.max(MINW, this.rawWidth(b)); b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px'; if(b.el!==this.ghost) this.measure(b); else b.el.style.height=(b.lines*G)+'px'; }
+  overlaps(a,b){ const A=this.rect(a),B=this.rect(b); return A.r0<B.r1 && A.r1>B.r0 && A.xl<B.x1 && A.x1>B.xl; }
+  fits(b){ const r=this.rect(b); return r.xl+MINW<=this.W()-PAD+1 && this.rawWidth(b)>=MINW && !this.blocks.some(o=>o!==b && !o.hidden && this.overlaps(b,o)); }
+  // виштовхування: блоки, що перетинаються з уже розставленими, зсуваються вниз на цілі ряди; fixed — той, кого не рухаємо
+  resolve(fixed){
+    const live=()=>this.blocks.filter(b=>!b.hidden);
+    for(let pass=0;pass<3;pass++){
+      live().forEach(b=>this.render(b));
+      if(this.o.collide!=='push') break;
+      const order=live().sort((a,b)=>(a===fixed?-1:b===fixed?1:0)||(a.row-b.row)||(a.col-b.col)), placed=[];
+      for(const b of order){ let guard=0; while(guard++<40){ const hit=placed.find(p=>this.overlaps(b,p)); if(!hit) break; b.row=hit.row+hit.lines; } placed.push(b); }
+    }
+    live().forEach(b=>this.render(b));
+  }
+
+  /* ── жести штучного курсора ── */
+  async moveCur(x,y,ms=600){ this.cur.style.left=x+'px'; this.cur.style.top=y+'px'; await sleep(ms); }
+  async hover(b){ const r=this.rect(b); await this.moveCur(r.xl+8, r.y0+6); b.el.classList.add('hot'); await sleep(350); }
+  async drag(b, toCol, toRow, opt={}){
+    await this.hover(b); this.cur.classList.add('press'); b.el.classList.remove('hot'); b.el.classList.add('drag'); await sleep(250);
+    const from={col:b.col,row:b.row}, steps=opt.steps||7, others=this.blocks.filter(o=>o!==b);
+    others.forEach(o=>o.row0=o.row);
+    // зонд: блок-привид у цільовій клітинці, на який реагують сусіди; сам блок їде під курсором
+    const probe={col:from.col,row:from.row,lines:b.lines,w:b.w,txt:b.txt,el:this.ghost}; b.hidden=true; this.blocks.push(probe);
+    for(let i=1;i<=steps;i++){
+      const t=i/steps, ex=1-Math.pow(1-t,2);
+      const px=this.x(from.col+(toCol-from.col)*ex)-OFF, py=this.y(from.row+(toRow-from.row)*ex);
+      b.el.style.left=px+'px'; b.el.style.top=py+'px'; this.cur.style.left=(px+8)+'px'; this.cur.style.top=(py+6)+'px';
+      probe.col=Math.round(from.col+(toCol-from.col)*ex); probe.row=Math.round(from.row+(toRow-from.row)*ex);
+      others.forEach(o=>o.row=o.row0);
+      const bad=this.o.collide==='forbid' && !this.fits(probe);
+      if(this.o.collide==='push') this.resolve(probe); else this.render(probe);
+      this.ghost.className='ghost on'+(bad?' bad':'');
+      await sleep(opt.stepMs||180);
+    }
+    await sleep(300);
+    // відпускаємо
+    this.blocks.splice(this.blocks.indexOf(probe),1); b.hidden=false; others.forEach(o=>o.row=o.row0);
+    this.cur.classList.remove('press'); b.el.classList.remove('drag'); this.ghost.className='ghost';
+    const ok=this.o.collide!=='forbid' || this.fits(probe);
+    if(ok){ b.col=toCol; b.row=toRow; if(this.o.collide==='none'){ this.blocks.forEach(o=>o.el.classList.remove('top')); b.el.classList.add('top'); } }
+    else { b.col=from.col; b.row=from.row; }
+    this.resolve(b);
+    await sleep(500); return ok;
+  }
+  async type(b, more, ms=45){ b.el.classList.add('caret'); const r=this.rect(b); await this.moveCur(r.x0+Math.min(b.w-40,220), r.y0+8);
+    for(const ch of more){ b.text+=ch; b.txt.textContent=b.text; const before=b.lines; this.measure(b); if(b.lines!==before) this.resolve(b); await sleep(ms); }
+    await sleep(600); b.el.classList.remove('caret'); }
+}
+
+/* ── сцени ───────────────────────────────────────────────────────────── */
+const T={a:'Ідея для нового проєкту', b:'Нотатка про зустріч у четвер', c:'Список покупок на вихідні', d:'Цитата, яку хочу запамʼятати'};
+const scenes=[
+ { n:1, tag:['no','не для цього аркуша'], title:'Вільне накладання, порядок шарів',
+   desc:'Miro, Figma, Freeform, Kinopio. Блоки можуть лежати один на одному, останній переміщений — зверху. Текст на тексті на чистому аркуші стає нечитабельним.',
+   opts:{width:'edge',collide:'none'},
+   setup:s=>{ s.add({col:1,row:2,text:T.a}); s.add({col:3,row:5,text:T.b}); },
+   async play(s,say){ const [a,b]=s.blocks; say('Тягнемо перший блок прямо на другий…'); await s.drag(a,2,5);
+     say('Кинули. <b>Текст ліг на текст</b> — прочитати неможливо.'); await sleep(1600);
+     say('Дамо блокам непрозору підкладку, як у стікерів, і тягнемо нижній…'); s.blocks.forEach(o=>o.el.classList.add('solid')); await sleep(600); await s.drag(b,5,5);
+     say('Верхній <b>ховає частину</b> нижнього. Порядок шарів тримає лише користувач.'); await sleep(1800); } },
+ { n:2, tag:['ok','рекомендую'], title:'Виштовхування сусідів',
+   desc:'OneNote, дашборди (Grafana, react-grid-layout). Блок, що потрапив на зайняте місце або підріс при наборі, зсуває сусідів униз на цілі ряди сітки. Накладання неможливе в принципі.',
+   opts:{width:'edge',collide:'push'},
+   setup:s=>{ s.add({col:1,row:1,text:T.a}); s.add({col:1,row:4,text:T.c}); s.add({col:1,row:5,text:T.d}); },
+   async play(s,say){ const [a,c,d]=s.blocks; say('Тягнемо верхній блок на місце третього…'); await s.drag(a,2,5);
+     say('Сусіди <b>зсунулись униз</b> на цілі ряди, ніхто нікого не перекриває.'); await sleep(1400);
+     say('Тепер дописуємо текст у середній блок…'); await s.type(c,' — молоко, хліб, кава, фрукти й щось до чаю');
+     say('Блок став на два рядки — те, що під ним, <b>зʼїхало ще на ряд</b>.'); await sleep(1800); } },
+ { n:3, tag:['ok','рекомендую'], title:'Заборона неможливого дропу',
+   desc:'Іконки на домашньому екрані iOS, фігури в настільних іграх. Під час перетягування видно контур майбутнього місця. Нема місця — контур червоний, блок повертається на попереднє місце.',
+   opts:{width:'neighbor',collide:'forbid'},
+   setup:s=>{ const c=s.C(.62); s.add({col:1,row:2,text:T.a}); s.add({col:c,row:4,text:'Права колонка'}); s.add({col:c,row:5,text:'ще один блок'}); s.add({col:c,row:6,text:'і ще один'}); },
+   async play(s,say){ const [a]=s.blocks; say('Тягнемо блок у вузьку щілину праворуч…'); const ok=await s.drag(a,s.C(.62)+2,5);
+     say(ok?'Стало.':'Місця менше за мінімальну ширину — <b>контур червоний</b>, блок повернувся назад.'); await sleep(1400);
+     say('А тепер у вільне місце ліворуч, де є простір до сусіда…'); await s.drag(a,2,6);
+     say('Контур синій, дроп дозволений. <b>Нічого не зрушилось</b> — передбачувано.'); await sleep(1800); } },
+ { n:4, tag:['ok','рекомендую'], title:'Ширина — до сусіда праворуч',
+   desc:'Дешеве «обтікання» прямокутниками: блок займає весь вільний простір не до краю екрана, а до найближчого сусіда в тих самих рядах. Текст переноситься сам і ніколи не заходить на сусіда.',
+   opts:{width:'neighbor',collide:'push'},
+   setup:s=>{ s.add({col:1,row:2,text:T.b+', обговорити бюджет і терміни'}); s.add({col:s.C(.58),row:1,text:'Права колонка з нотатками'}); },
+   async play(s,say){ const [a,b]=s.blocks; say('Лівий блок зараз тягнеться до правого краю…'); await sleep(900);
+     say('Тягнемо другий блок ліворуч, у ті самі ряди…'); await s.drag(b,s.C(.42),2);
+     say('Лівий <b>звузився до сусіда</b> й переніс текст на новий рядок. Жодного накладання.'); await sleep(1600);
+     say('Забираємо сусіда вниз…'); await s.drag(b,s.C(.3),7);
+     say('Лівий блок <b>знову розтягнувся</b> на весь вільний простір.'); await sleep(1800); } },
+ { n:5, tag:['so','той самий алгоритм'], title:'Звуження вікна: з колонок у стовпчик',
+   desc:'На десктопі блоки стоять поруч, на телефоні місця нема. Те саме виштовхування + ширина до сусіда складають їх у стовпчик, як Notion складає колонки на мобільному.',
+   opts:{width:'neighbor',collide:'push'},
+   setup:s=>{ const c=s.C(.52); s.add({col:1,row:1,text:T.a+' і перші кроки'}); s.add({col:c,row:1,text:T.c}); s.add({col:1,row:4,text:T.d}); s.add({col:c,row:5,text:'Права колонка'}); },
+   async play(s,say){ s.blocks.forEach(b=>{ b.col0=b.col; }); say('Ширина вікна — десктоп. Дві колонки поруч.'); await sleep(1000);
+     say('Звужуємо вікно до ширини телефона…'); await s.moveCur(s.W()-6, 100, 300);
+     for(let i=1;i<=8;i++){ const w=1-.5*(i/8); s.el.style.width=(w*100)+'%'; s.el.classList.add('narrow-frame');
+       // стовпчики зберігаються як частки ширини — так само, як у редакторі
+       s.blocks.forEach(b=>{ b.col=Math.max(1, Math.round(b.col0*w)); }); s.resolve(); s.cur.style.left=(s.W()-6)+'px'; await sleep(160); }
+     say('Права колонка не вміщується — блоки <b>стали в стовпчик</b>, кожен на своїх рядах.'); await sleep(1800);
+     say('Розширюємо назад…'); for(let i=7;i>=0;i--){ const w=1-.5*(i/8); s.el.style.width=(w*100)+'%'; s.blocks.forEach(b=>{ b.col=Math.max(1, Math.round(b.col0*w)); }); s.resolve(); s.cur.style.left=(s.W()-6)+'px'; await sleep(140); }
+     s.el.classList.remove('narrow-frame'); say('Колонки повернулись на свої місця.'); await sleep(1500); } },
+];
+
+/* ── побудова карток і цикл програвання ─────────────────────────────── */
+const grid=document.getElementById('grid');
+scenes.forEach(sc=>{
+  const card=document.createElement('article'); card.className='card';
+  card.innerHTML=`<div class="card-h"><div><h2><span class="num">${sc.n}</span>${sc.title}</h2><p>${sc.desc}</p></div><span class="tag ${sc.tag[0]}">${sc.tag[1]}</span></div>
+    <div class="stage"></div>
+    <div class="cap"><span class="say"></span><button class="rep" title="Програти ще раз"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>ще раз</button></div>`;
+  grid.appendChild(card);
+  const s=new Sheet(card.querySelector('.stage'), sc.opts), sayEl=card.querySelector('.say');
+  const say=t=>{ sayEl.innerHTML=t; };
+  let gen=0, running=false;
+  async function loop(){ const my=++gen; running=true;
+    while(my===gen){ s.clear(); s.el.style.width='100%'; s.cur.style.transition='none'; s.cur.style.left='40%'; s.cur.style.top='85%'; void s.cur.offsetWidth; s.cur.style.transition='';
+      sc.setup(s); s.resolve(); await sleep(600); if(my!==gen) break;
+      try{ await sc.play(s,say); }catch(e){ console.error(e); }
+      await sleep(2200); }
+    running=false; }
+  card.querySelector('.rep').addEventListener('click',()=>loop());
+  // стартуємо, коли картка в полі зору; поза екраном — не крутимо
+  const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ if(!running) loop(); } else { gen++; } }); },{threshold:.35});
+  io.observe(card);
+});
+})();
+</script>
+</body>
+</html>
