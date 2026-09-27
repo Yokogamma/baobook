@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Чистий аркуш</title>
+<meta name="description" content="Нотатки на чистому аркуші: клацніть у будь-якому місці й пишіть саме там. Працює без мережі, зберігає все на цьому пристрої.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Аркуш">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+/* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
+   бо на темному тлі тонка крапка з прозорістю «лінії» майже зникає ─────────────── */
+:root{
+  --page:#ffffff; --ink:#37352f; --ink-2:#787774; --ink-3:#b4b3b0;
+  --line:rgba(55,53,47,.09); --line-2:rgba(55,53,47,.16);
+  --hover:rgba(55,53,47,.06); --hover-2:rgba(55,53,47,.12);
+  --sel:rgba(35,131,226,.14); --sel-line:rgba(35,131,226,.55);
+  --dot:rgba(55,53,47,.18); --paper:none;
+  --shadow:0 4px 18px rgba(15,15,15,.14), 0 0 0 .5px rgba(15,15,15,.08);
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  /* ритм аркуша: крок сітки = висота рядка = 1.5 × кегль (16 → 24). Один токен --g тримає і точки, і рядки, і відступи */
+  --fs:16px; --g:24px; --pad:var(--g); --handle:22px;
+}
+/* без явного вибору — за системою */
+@media (prefers-color-scheme:dark){ :root:not([data-theme]){
+  --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --hover:rgba(255,255,255,.07); --hover-2:rgba(255,255,255,.13);
+  --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6);
+  --dot:rgba(255,255,255,.32);
+  --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
+} }
+:root[data-theme="dark"]{
+  --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --hover:rgba(255,255,255,.07); --hover-2:rgba(255,255,255,.13);
+  --sel:rgba(35,131,226,.22); --sel-line:rgba(89,164,240,.6);
+  --dot:rgba(255,255,255,.32);
+  --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
+}
+/* пісок / папірус: теплий бежевий аркуш із ледь помітним зерном і волокнами, чорнило — темно-коричневе, акцент — вохра */
+:root[data-theme="sand"]{
+  /* базовий #fbefd9 із зерном дає в середньому #f4e7d0 — саме цей відтінок і видно на аркуші */
+  --page:#fbefd9; --ink:#3a3020; --ink-2:#7a6a4c; --ink-3:#b0a083;
+  --line:rgba(80,58,25,.10); --line-2:rgba(80,58,25,.18);
+  --hover:rgba(80,58,25,.08); --hover-2:rgba(80,58,25,.15);
+  --sel:rgba(150,100,30,.15); --sel-line:rgba(150,100,30,.7);
+  --dot:rgba(80,58,25,.30);
+  --shadow:0 4px 18px rgba(60,40,10,.18), 0 0 0 .5px rgba(60,40,10,.10);
+  --paper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .40 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='l' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .92 0 0 0 .07 0'/%3E%3C/filter%3E%3Cfilter id='h' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .035 0'/%3E%3C/filter%3E%3Cfilter id='v' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5 .008' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E");
+}
+{ :root{ --pad:14px; --handle:20px; --fs:16px; } }
+@media (max-width:640px){ :root{ --pad:14px; --handle:20px; --fs:16px; } }
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper) var(--page);color:var(--ink);font-family:var(--sans);-webkit-text-size-adjust:100%;overscroll-behavior:none}
+button,input{font-family:inherit}
+.i{width:1em;height:1em;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1px}
+:root[data-theme="dark"] mark{background:rgba(245,190,60,.35)}
+
+/* ── каркас: панель нотаток + аркуш ─────────────────────────────────── */
+.app{display:flex;min-height:100dvh}
+.side{flex:0 0 280px;width:280px;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;border-right:.5px solid var(--line-2);background:var(--paper) var(--page);z-index:20}
+.app:not(.open) .side{display:none}
+.main{flex:1 1 auto;min-width:0;position:relative}
+.backdrop{display:none}
+@media (max-width:900px){
+  .side{position:fixed;left:0;top:0;bottom:0;height:100dvh;display:flex;transform:translateX(-100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);box-shadow:none;width:min(300px,86vw);flex-basis:auto}
+  .app:not(.open) .side{display:flex}
+  .app.open .side{transform:none;box-shadow:var(--shadow)}
+  .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:15;opacity:0;pointer-events:none;transition:opacity .25s}
+  .app.open .backdrop{opacity:1;pointer-events:auto}
+}
+
+/* панель */
+.side-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px 6px 14px}
+.brand{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink)}
+.brand .i{font-size:16px;color:var(--ink-2)}
+.new{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer;white-space:nowrap}
+.new:hover{background:var(--hover);color:var(--ink)}
+.search{display:flex;align-items:center;gap:6px;margin:4px 10px 6px;padding:0 8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:var(--hover);color:var(--ink-3)}
+.search:focus-within{border-color:var(--sel-line);background:transparent}
+.search input{flex:1;min-width:0;border:0;background:transparent;outline:0;font-size:13.5px;color:var(--ink);padding:0}
+.search input::placeholder{color:var(--ink-3)}
+.search input::-webkit-search-cancel-button{display:none}
+.qx{border:0;background:transparent;color:var(--ink-3);cursor:pointer;padding:2px;display:none;border-radius:4px}
+.search.has .qx{display:inline-flex}
+.qx:hover{background:var(--hover-2);color:var(--ink)}
+.list{flex:1 1 auto;overflow:auto;padding:2px 6px 8px;overscroll-behavior:contain}
+.item{position:relative;display:block;padding:8px 30px 8px 10px;border-radius:8px;cursor:pointer;color:var(--ink-2)}
+.item:hover{background:var(--hover)}
+.item.cur{background:var(--hover-2);color:var(--ink)}
+.item:focus-visible{outline:2px solid var(--sel-line);outline-offset:-2px}
+.it-t{font-size:13.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it-s{font-size:12px;line-height:1.4;margin-top:2px;max-height:2.8em;overflow:hidden}
+.it-s i{color:var(--ink-3)} .it-s:empty{display:none}
+.it-d{font-size:11px;color:var(--ink-3);margin-top:3px;font-variant-numeric:tabular-nums}
+.it-x{position:absolute;right:6px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center}
+.it-x .i{font-size:14px}
+.item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
+.it-x:hover{background:var(--hover-2);color:#c33}
+.none{padding:18px 12px;font-size:13px;color:var(--ink-3);text-align:center}
+.side-f{padding:8px 10px 10px;border-top:.5px solid var(--line);font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
+.side-f:not(:has(:not([hidden]))){display:none}
+.install{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink);font-size:13px;cursor:pointer}
+.install:hover{background:var(--hover)}
+.hint{line-height:1.45}
+[hidden]{display:none !important}
+
+/* ── шапка аркуша: липка, накриває верх аркуша ───────────────────────── */
+.top{position:sticky;top:0;z-index:5;height:44px;margin-bottom:-44px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px 0 6px;pointer-events:none;background:none}
+.top::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--paper) var(--page);-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.top>*{pointer-events:auto}
+.left{display:flex;align-items:center;gap:4px;min-width:0;flex:1 1 auto}
+.ttl{font-size:14px;font-weight:500;color:var(--ink);padding:4px 8px;border-radius:6px;outline:0;min-width:40px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl:hover{background:var(--hover)}
+.ttl:focus{background:var(--hover);text-overflow:clip}
+.ttl:empty::before{content:attr(data-ph);color:var(--ink-3)}
+.tools{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.tb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer}
+.tb:hover{background:var(--hover);color:var(--ink)}
+.tb .i{font-size:16px}
+.tb .th{display:none} .tb[data-th="light"] .th-light,.tb[data-th="dark"] .th-dark,.tb[data-th="sand"] .th-sand{display:block}
+.tb .off{display:none} .tb[aria-pressed="false"]{color:var(--ink-3)} .tb[aria-pressed="false"] .off{display:block}
+.cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px;padding:0 6px;white-space:nowrap}
+.saved{font-size:12px;color:var(--ink-3);padding:0 6px;white-space:nowrap;opacity:0;transition:opacity .3s}
+.saved.pend,.saved.ok{opacity:1} .saved.ok{color:var(--ink-2)} .saved.err{opacity:1;color:#c33}
+@media (max-width:640px){ .cnt,.saved{display:none} .top{padding-right:6px} }
+
+/* ── аркуш ───────────────────────────────────────────────────────────── */
+.sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
+.sheet::before{content:"";position:absolute;left:var(--g);top:calc(2*var(--g));width:var(--fw,calc(100% - 2*var(--g)));height:var(--fh,calc(100% - 3*var(--g)));pointer-events:none;
+  background-image:radial-gradient(var(--dot) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}
+.sheet.nogrid::before{display:none}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;color:var(--ink-3);text-align:center;padding:0 24px;transition:opacity .25s}
+.empty .big{font-size:20px;font-weight:500;color:var(--ink-2)}
+.empty .sm{font-size:13.5px;line-height:1.5;max-width:36ch}
+.empty kbd{font:inherit;font-size:12px;padding:1px 6px;border:.5px solid var(--line-2);border-bottom-width:1.5px;border-radius:4px;color:var(--ink-2)}
+.sheet.has .empty{opacity:0}
+
+.blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;pointer-events:none}
+.blk .grip,.blk .txt{pointer-events:auto}
+.blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
+.blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
+.grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
+.grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.grip:hover{background:var(--hover-2);color:var(--ink-2)}
+.blk:hover .grip,.blk.focus .grip,.blk.drag .grip{opacity:1}
+.blk:hover .txt{background:var(--hover)}
+.blk.focus .txt{background:transparent}
+.blk.drag{cursor:grabbing;z-index:10}
+.blk.drag .txt{background:var(--page);box-shadow:var(--shadow)}
+.blk.drag .grip{cursor:grabbing}
+.blk.drag .txt{pointer-events:none}
+@media (hover:none){ .grip{opacity:.45} }
+
+.gbox{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:6px;pointer-events:none;display:none;transition:left .15s,top .15s}
+.gbox.on{display:block} .gbox.bad{border-color:rgba(235,87,87,.8);background:rgba(235,87,87,.12)}
+.gbox .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
+.gbox.bad .lbl{display:block}
+.ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
+@media (hover:hover){ .sheet.hov .ghost{display:block} }
+.ghost.bad,.ping.bad{background:rgba(235,87,87,.8)}
+.ping{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
+@keyframes ping{0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(1.4)}}
+
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(8px);z-index:30;padding:8px 12px;border-radius:8px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font-size:12.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast b{font-weight:500;color:var(--ink)}
+@media (max-width:640px){ .toast{white-space:normal;max-width:calc(100vw - 32px);text-align:center} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side" id="side" aria-label="Нотатки">
+    <div class="side-h">
+      <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg>Чистий аркуш</b>
+      <button class="new" id="newBtn" title="Нова нотатка (Ctrl+Alt+N)"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Нова</button>
+    </div>
+    <label class="search" id="searchBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Пошук по назві й тексту" autocomplete="off" spellcheck="false">
+      <button class="qx" id="qClear" title="Очистити пошук"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </label>
+    <div class="list" id="list"></div>
+    <div class="side-f" id="sideFoot">
+      <button class="install" id="installBtn" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Встановити застосунок</button>
+      <div class="hint" id="iosHint" hidden>Щоб встановити на iPhone: «Поділитися» → «На Початковий екран».</div>
+    </div>
+  </aside>
+  <div class="backdrop" id="backdrop"></div>
+
+  <main class="main">
+    <header class="top">
+      <div class="left">
+        <button class="tb" id="sideBtn" title="Нотатки" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <span class="ttl" id="ttl" contenteditable="true" data-ph="Без назви" role="textbox" aria-label="Назва нотатки"></span>
+      </div>
+      <div class="tools">
+        <span class="saved" id="saved"></span>
+        <span class="cnt" id="cnt" title="Кількість блоків"></span>
+        <button class="tb" id="spellBtn" title="Перевірка правопису" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
+        <button class="tb" id="gridBtn" title="Сітка аркуша" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
+        <button class="tb" id="themeBtn" title="Тема" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
+        <button class="tb" id="clearBtn" title="Очистити аркуш"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+      </div>
+    </header>
+    <div class="sheet" id="sheet">
+      <div class="empty" id="empty">
+        <div class="big">Клацніть будь-де — і пишіть саме там</div>
+        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast">Зберігається саме. <b>Enter</b> — новий рядок, <b>Esc</b> — вийти, <b>Backspace</b> у порожньому блоці — видалити.</div>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
+      sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
+const MINW=140;
+const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
+const G=()=>cssN('--g')||24, PAD=()=>cssN('--pad'), OFF=()=>cssN('--handle')+2+6;   // ручка + gap + padding тексту
+function el(t,c,parent){ const e=document.createElement(t); e.className=c; (parent||sheet).appendChild(e); return e; }
+const ghost=el('div','ghost'), gbox=el('div','gbox'); gbox.innerHTML='<span class="lbl">замало місця</span>';
+
+/* ══ сховище ══════════════════════════════════════════════════════════════
+   Поки що — localStorage на цьому пристрої, по запису на нотатку. Це окремий шар:
+   щоб перейти на IndexedDB чи синхронізацію, досить замінити db.* — редактор не змінюється. */
+const store={
+  get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v); }catch(_){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(_){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); }catch(_){} },
+  raw(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } },
+  keys(p){ const r=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(p)) r.push(k); } }catch(_){} return r; }
+};
+const NK='sheet:note:', SK='sheet:settings';
+const db={
+  all(){ return store.keys(NK).map(k=>store.get(k)).filter(n=>n&&n.id&&Array.isArray(n.blocks)); },
+  save(n){ return store.set(NK+n.id,n); },
+  remove(id){ store.del(NK+id); },
+  settings(){ return store.get(SK,{})||{}; },
+  setSettings(s){ store.set(SK,s); }
+};
+
+/* ══ нотатки ══════════════════════════════════════════════════════════════ */
+let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
+const now=()=>Date.now();
+function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); db.save(n); return n; }
+function lines(n){ return [...n.blocks].sort((a,b)=>(a.row-b.row)||(a.fx-b.fx)).flatMap(b=>b.text.split('\n')).map(l=>l.trim()).filter(Boolean); }
+function noteText(n){ return lines(n).join('\n'); }
+function titleOf(n){ return n.title.trim()||(lines(n)[0]||'').slice(0,80)||'Без назви'; }
+function previewOf(n){ const L=lines(n); return (n.title.trim()? L[0]:L[1])||''; }
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm=s=>(s||'').toLocaleLowerCase('uk');
+const terms=()=>norm(q.value).split(/\s+/).filter(Boolean);
+function hl(s,T){ s=esc(s||''); if(!T.length) return s; const re=new RegExp('('+T.map(t=>esc(t).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')','giu'); return s.replace(re,'<mark>$1</mark>'); }
+function snip(text,T){ const low=norm(text); let i=-1; for(const t of T){ const j=low.indexOf(t); if(j>=0&&(i<0||j<i)) i=j; } if(i<0) return hl(text.slice(0,100),T);
+  const a=Math.max(0,i-36), b=Math.min(text.length,i+96); return (a>0?'…':'')+hl(text.slice(a,b).replace(/\n+/g,' '),T)+(b<text.length?'…':''); }
+function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateString()===n.toDateString();
+  return same? d.toLocaleTimeString('uk',{hour:'2-digit',minute:'2-digit'}) : d.toLocaleDateString('uk',{day:'numeric',month:'short'}+(d.getFullYear()!==n.getFullYear()?{year:'numeric'}:{})); }
+
+/* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
+function renderList(){
+  const T=terms(), query=norm(q.value).trim(); searchBox.classList.toggle('has',!!q.value);
+  let items;
+  if(!T.length) items=[...notes].sort((a,b)=>b.updated-a.updated).map(n=>({n}));
+  else{ items=[]; for(const n of notes){ const t=norm(titleOf(n)), x=norm(noteText(n));
+      if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
+    items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
+  list.innerHTML='';
+  if(!items.length){ el('div','none',list).textContent=T.length?'Нічого не знайдено':'Поки порожньо'; return; }
+  for(const it of items){ const n=it.n; const d=el('div','item'+(cur&&n.id===cur.id?' cur':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
+    d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div><button class="it-x" title="Видалити нотатку"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
+    fillItem(d,n,T,it.snip);
+    d.addEventListener('click',e=>{ if(e.target.closest('.it-x')){ e.stopPropagation(); delNote(n); } else openNote(n); });
+    d.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ delNote(n); } });
+  }
+}
+function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
+  const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>порожня</i>'); d.querySelector('.it-d').textContent=fmtDate(n.updated); }
+function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
+
+/* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
+function serialize(){ return blocks.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text})); }
+function markDirty(){ dirty=true; savedEl.textContent='●'; savedEl.className='saved pend'; clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
+function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); const ok=db.save(cur);
+  savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok) savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800);
+  updateItem(cur); }
+function openNote(n){ flushSave(); cur=n; S.current=n.id; db.setSettings(S);
+  blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.forEach(d=>make(d,false)); resolve(); update();
+  ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
+  list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
+function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id);
+  if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); }
+newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); });
+ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=titleOf(cur)+' · Чистий аркуш'; });
+ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
+ttl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
+ttl.addEventListener('blur',()=>{ if(cur&&ttl.textContent!==cur.title) ttl.textContent=cur.title; flushSave(); });
+let qT; q.addEventListener('input',()=>{ clearTimeout(qT); qT=setTimeout(renderList,120); });
+q.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; renderList(); q.blur(); } });
+qClear.addEventListener('click',()=>{ q.value=''; renderList(); q.focus(); });
+document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
+  if((e.ctrlKey||e.metaKey)&&e.altKey&&e.key.toLowerCase()==='n'){ e.preventDefault(); newBtn.click(); } });
+window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); });
+
+/* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
+const isMobile=()=>matchMedia('(max-width:900px)').matches;
+function setSide(open){ app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); if(!isMobile()){ S.side=open; db.setSettings(S); } }
+sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
+backdrop.addEventListener('click',()=>setSide(false));
+matchMedia('(max-width:900px)').addEventListener('change',e=>{ app.classList.toggle('open', e.matches? false : S.side!==false); });
+
+/* ══ аркуш ════════════════════════════════════════════════════════════════
+   Точки в G/2 + k·G. Початок тексту — на стовпчику точок (x), верх рядка — на ряду (y).
+   Блок = клітинка {col,row} + кількість рядків; ширина — до краю або до сусіда праворуч. */
+const W=()=>sheet.clientWidth;
+const xOf=col=>G()/2+col*G(), yOf=row=>G()/2+row*G();
+const maxCol=()=>Math.floor((W()-PAD()-MINW-G()/2)/G());
+const clampCol=c=>Math.max(1, Math.min(maxCol(), c)), clampRow=r=>Math.max(2, r);
+const colOfX=x=>clampCol(Math.round((x-G()/2)/G())), rowOfY=y=>clampRow(Math.round((y-G()/2)/G()));
+const live=()=>blocks.filter(b=>!b.hidden);
+function rect(b){ const x0=xOf(b.col), xl=x0-OFF(); return {x0, xl, y0:yOf(b.row), r0:b.row, r1:b.row+(b.lines||1), x1:xl+(b.w||MINW)}; }
+function rawWidth(b){ const r=rect(b); let right=W()-PAD();
+  for(const o of live()){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl-6); }
+  return right-r.xl; }
+function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-6-L.xl<MINW; }
+function tooTight(b){ const r=rect(b); return r.xl+MINW>W()-PAD()+1 || rawWidth(b)<MINW; }
+function fits(b){ return !tooTight(b) && !live().some(o=>o!==b && overlaps(b,o)); }
+function render(b){ const r=rect(b); b.w=Math.max(MINW, rawWidth(b));
+  b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
+  if(b.el===gbox) gbox.style.height=(b.lines*G())+'px'; else b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }
+function resolve(fixed){
+  for(let pass=0;pass<3;pass++){
+    live().forEach(render);
+    const order=live().sort((a,b)=>(a===fixed?-1:b===fixed?1:0)||(a.row-b.row)||(a.col-b.col)), placed=[];
+    for(const b of order){ let g=0; while(g++<60){ const hit=placed.find(p=>overlaps(b,p)); if(!hit) break; b.row=hit.row+hit.lines; } placed.push(b); }
+  }
+  live().forEach(render); growSheet();
+}
+function growSheet(){ let bottom=0; live().forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(window.innerHeight, bottom+5*G())+'px'; field(); }
+function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
+  sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
+
+function make(d, focus){
+  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, text:d.text||'', lines:1, w:MINW};
+  if(b.col===undefined) b.col=colOfX(b.fx*W()); if(b.fx===undefined) b.fx=xOf(b.col)/W();
+  b.el=el('div','blk'); b.el.innerHTML='<div class="grip" title="Перетягнути"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>';
+  b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text; blocks.push(b);
+  b.txt.addEventListener('focus',()=>b.el.classList.add('focus'));
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!b.txt.textContent.trim()) remove(b); else flushSave(); });
+  b.txt.addEventListener('input',()=>{ b.text=b.txt.textContent; const before=b.lines; render(b); if(b.lines!==before) resolve(b); else growSheet(); markDirty(); });
+  b.txt.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
+    if(e.key==='Backspace' && !b.txt.textContent){ e.preventDefault(); remove(b); }
+  });
+  b.txt.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text')); });
+  b.el.addEventListener('pointerdown',e=>e.stopPropagation());
+  drag(b, b.el.querySelector('.grip'));
+  resolve(b); update(); if(focus) b.txt.focus(); return b;
+}
+function remove(b){ blocks=blocks.filter(x=>x!==b); b.el.remove(); resolve(); update(); markDirty(); }
+function update(){ sheet.classList.toggle('has', blocks.length>0); cnt.textContent=blocks.length? blocks.length+(blocks.length===1?' блок':blocks.length<5?' блоки':' блоків') : ''; }
+
+function cellAt(e){ const r=sheet.getBoundingClientRect(); return {col:colOfX(e.clientX-r.left), row:rowOfY(e.clientY-r.top-G()/2)}; }
+sheet.addEventListener('pointerdown',e=>{
+  if(e.button!==0) return;
+  const c=cellAt(e), probe={col:c.col,row:c.row,lines:1,w:MINW}, ok=fits(probe);
+  const p=el('div','ping'+(ok?'':' bad')); p.style.left=(xOf(c.col)-1)+'px'; p.style.top=yOf(c.row)+'px'; setTimeout(()=>p.remove(),500);
+  e.preventDefault(); if(!ok) return;
+  const b=make({col:c.col,row:c.row}, false); markDirty();
+  b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0);
+  if(!toastShown){ toastShown=true; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),4500); }
+});
+sheet.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse') return;
+  if(e.target!==sheet && !e.target.closest('.empty')){ sheet.classList.remove('hov'); return; }
+  const c=cellAt(e); ghost.style.left=(xOf(c.col)-1)+'px'; ghost.style.top=yOf(c.row)+'px';
+  ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
+});
+sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
+
+function drag(b, grip){
+  let sx,sy,ox,oy,moved,from,others,probe;
+  grip.addEventListener('pointerdown',e=>{
+    e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId);
+    sx=e.clientX; sy=e.clientY; ox=b.el.offsetLeft; oy=b.el.offsetTop; moved=false; from={col:b.col,row:b.row};
+    others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
+    probe={col:b.col,row:b.row,lines:b.lines,w:b.w,el:gbox}; b.hidden=true; blocks.push(probe);
+    b.el.classList.add('drag'); gbox.className='gbox on';
+  });
+  grip.addEventListener('pointermove',e=>{
+    if(!probe) return; const dx=e.clientX-sx, dy=e.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>2) moved=true;
+    const left=ox+dx, top=oy+dy; b.el.style.left=left+'px'; b.el.style.top=top+'px';
+    probe.col=colOfX(left+OFF()); probe.row=rowOfY(top);
+    others.forEach(o=>o.row=o.row0);
+    const bad=tooTight(probe);
+    if(bad){ live().forEach(render); render(probe); } else resolve(probe);
+    gbox.className='gbox on'+(bad?' bad':'');
+  });
+  const end=()=>{
+    if(!probe) return;
+    const bad=gbox.classList.contains('bad'); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
+    b.el.classList.remove('drag'); gbox.className='gbox';
+    if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; }
+    else { b.col=probe.col; b.row=probe.row; }
+    b.fx=xOf(b.col)/W(); others.forEach(o=>delete o.row0); probe=null;
+    resolve(b); if(moved) markDirty(); if(!moved) b.txt.focus();
+  };
+  grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
+}
+/* ширина аркуша змінюється і від вікна, і від панелі — стежимо за самим аркушем */
+let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; blocks.forEach(b=>{ b.col=colOfX(b.fx*w); }); resolve(); } field(); }).observe(sheet);
+
+/* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
+clearBtn.addEventListener('click',()=>{ if(!blocks.length||confirm('Очистити аркуш? Текст цієї нотатки буде видалено.')){ blocks.slice().forEach(remove); } });
+function gridUI(){ const off=sheet.classList.contains('nogrid'); gridBtn.setAttribute('aria-pressed', off?'false':'true'); gridBtn.title=off?'Показати сітку':'Сховати сітку'; }
+gridBtn.addEventListener('click',()=>{ sheet.classList.toggle('nogrid'); gridUI(); S.grid=!sheet.classList.contains('nogrid'); db.setSettings(S); });
+let spell=false;
+function spellUI(){ sheet.spellcheck=spell; ttl.spellcheck=spell; spellBtn.setAttribute('aria-pressed', spell?'true':'false'); spellBtn.title=spell?'Перевірка правопису увімкнена — вимкнути':'Перевірка правопису вимкнена — увімкнути'; }
+spellBtn.addEventListener('click',()=>{ spell=!spell; spellUI(); S.spell=spell; db.setSettings(S); if(!spell) blocks.forEach(b=>{ b.txt.textContent=b.text; }); });
+const THEMES=['light','dark','sand'], NAMES={light:'Світла',dark:'Темна',sand:'Пісок / папірус'};
+const sysTheme=()=>matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+const curTheme=()=>document.documentElement.dataset.theme||sysTheme();
+function themeUI(){ const c=curTheme(), n=THEMES[(THEMES.indexOf(c)+1)%THEMES.length]; themeBtn.dataset.th=c; themeBtn.title='Тема: '+NAMES[c]+' · далі — '+NAMES[n];
+  requestAnimationFrame(()=>{ const m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=getComputedStyle(document.documentElement).getPropertyValue('--page').trim()||'#ffffff'; }); }
+themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme())+1)%THEMES.length]; document.documentElement.dataset.theme=n; S.theme=n; db.setSettings(S); themeUI(); });
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
+
+/* ══ старт ════════════════════════════════════════════════════════════════ */
+notes=db.all();
+// міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
+if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); db.save(n); } }
+if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) S.theme=store.raw('freeform-editor-v4:theme');
+if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') S.grid=false;
+if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') S.spell=true;
+if(!notes.length) newNote();
+notes.sort((a,b)=>b.updated-a.updated);
+if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
+if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
+spell=S.spell===true; spellUI();
+app.classList.toggle('open', isMobile()? false : S.side!==false); sideBtn.setAttribute('aria-expanded', app.classList.contains('open')?'true':'false');
+renderList(); openNote(notes.find(n=>n.id===S.current)||notes[0]); field();
+
+/* ══ PWA: офлайн-оболонка і встановлення ══════════════════════════════════ */
+if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+let deferredInstall=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferredInstall=e; installBtn.hidden=false; });
+installBtn.addEventListener('click',async()=>{ if(!deferredInstall) return; deferredInstall.prompt(); try{ await deferredInstall.userChoice; }catch(_){} deferredInstall=null; installBtn.hidden=true; });
+window.addEventListener('appinstalled',()=>{ installBtn.hidden=true; iosHint.hidden=true; });
+if(/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches) iosHint.hidden=false;
+})();
+</script>
+</body>
+</html>
