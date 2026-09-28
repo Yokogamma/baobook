@@ -118,6 +118,9 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .side-f:not(:has(:not([hidden]))){display:none}
 .install{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink);font-size:13px;cursor:pointer}
 .install:hover{background:var(--hover)}
+.side-f .frow{display:flex;gap:6px} .fbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer}
+.fbtn:hover{background:var(--hover);color:var(--ink)} .fbtn .i{font-size:14px}
+.stor{line-height:1.45}
 .hint{line-height:1.45}
 [hidden]{display:none !important}
 
@@ -327,6 +330,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     </label>
     <div class="list" id="list"></div>
     <div class="side-f" id="sideFoot">
+      <div class="stor" id="storInfo"></div>
+      <div class="frow"><button class="fbtn" id="exportBtn" title="Зберегти всі нотатки у файл JSON"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Експорт</button><button class="fbtn" id="importBtn" title="Додати нотатки з файлу експорту"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg>Імпорт</button><input type="file" id="importFile" accept=".json,application/json" hidden></div>
       <button class="install" id="installBtn" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Встановити застосунок</button>
       <div class="hint" id="iosHint" hidden>Щоб встановити на iPhone: «Поділитися» → «На Початковий екран».</div>
     </div>
@@ -366,6 +371,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
+const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const minw=b=>b&&(b.kind==='code'||b.kind==='area')?MINW_CODE:MINW;
@@ -454,10 +460,25 @@ const store={
   keys(p){ const r=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(p)) r.push(k); } }catch(_){} return r; }
 };
 const NK='sheet:note:', SK='sheet:settings';
-const db={
-  all(){ return store.keys(NK).map(k=>store.get(k)).filter(n=>n&&n.id&&Array.isArray(n.blocks)); },
-  save(n){ return store.set(NK+n.id,n); },
-  remove(id){ store.del(NK+id); },
+/* ══ сховище нотаток: IndexedDB (запас місця, асинхронно); localStorage — запасний варіант і місце для налаштувань ══ */
+const IDB_NAME='sheet';
+const idb={ db:null,
+  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB')); let r; try{ r=indexedDB.open(IDB_NAME,1); }catch(e){ return rej(e); }
+    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'}); };
+    r.onsuccess=()=>{ idb.db=r.result; idb.db.onversionchange=()=>{ idb.db.close(); idb.db=null; }; idb.db.onclose=()=>{ idb.db=null; }; res(); };
+    r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error('blocked')); }); },
+  async run(mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
+    t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
+  all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
+const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
+const db={ backend:'local',
+  // старт: відкриваємо IndexedDB; нотатки з localStorage (так зберігала перша версія) переносимо (новіша копія перемагає) і прибираємо, щоб не було двох сховищ
+  async init(){ try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; return; }
+    const keys=store.keys(NK); if(!keys.length) return; let have; try{ have=await idb.all(); }catch(_){ return; } const byId=new Map(have.map(n=>[n.id,n]));
+    for(const k of keys){ const n=store.get(k); if(validNote(n)){ const ex=byId.get(n.id); if(!ex || (n.updated||0)>(ex.updated||0)){ try{ await idb.put(n); }catch(_){ continue; } } } store.del(k); } },
+  async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return store.keys(NK).map(k=>store.get(k)).filter(validNote); },
+  async save(n){ if(db.backend==='idb'){ try{ await idb.put(n); return true; }catch(_){} } return store.set(NK+n.id,n); },   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
+  async remove(id){ store.del(NK+id); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
   settings(){ return store.get(SK,{})||{}; },
   setSettings(s){ store.set(SK,s); }
 };
@@ -508,16 +529,40 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
   return d; }
 function serialize(){ return blocks.filter(b=>b.id).map(serBlock); }
 function markDirty(){ dirty=true; savedEl.textContent='●'; savedEl.className='saved pend'; clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
-function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); const ok=db.save(cur);
-  savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok) savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800);
-  updateItem(cur); }
+let saveP=null;
+function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur);
+  const p=db.save(cur); saveP=p; p.then(ok=>{ if(saveP!==p) return;   // статус — від останнього запису
+    savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } storageUI(); }); }
 function openNote(n){ flushSave(); dropUndo(); cur=n; S.current=n.id; db.setSettings(S);
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; [...n.blocks].sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
 function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id);
-  if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); }
-newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); });
+  if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
+newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
+
+/* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
+const pl=(n,a,b,c)=>{ const d=n%10, h=n%100; return (d===1&&h!==11)? a : (d>=2&&d<=4&&(h<10||h>=20))? b : c; };
+function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return 'щойно'; if(m<60) return m+' хв тому'; const h=Math.round(m/60); if(h<24) return h+' год тому'; const d=Math.round(h/24); return d+' '+pl(d,'день','дні','днів')+' тому'; }
+function storageUI(){ storInfo.textContent=notes.length+' '+pl(notes.length,'нотатка','нотатки','нотаток')+' на цьому пристрої'+(db.backend==='idb'?'':' (резервне сховище)')+' · експорт: '+(S.lastExport? ago(S.lastExport) : 'ще не робили'); }
+let persistAsked=false;
+function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
+const HINT_HTML=toast.innerHTML;
+function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
+function exportAll(){ flushSave(); const data={app:'sheet',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
+  const name='chystyi-arkush-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ S.lastExport=now(); db.setSettings(S); storageUI(); };
+  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Чистий аркуш — експорт'}).then(done).catch(()=>{}); return; } }catch(_){}
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); }
+// імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
+async function importNotes(list){ flushSave(); let added=0,updated=0,skipped=0;
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
+    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await db.save(n); added++; } else if(n.updated>ex.updated){ Object.assign(ex,n); await db.save(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }
+  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped}; }
+exportBtn.addEventListener('click',exportAll);
+importBtn.addEventListener('click',()=>importFile.click());
+importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
+  const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say('Це не файл експорту «Чистого аркуша»'); return; }
+  const r=await importNotes(list); say('Імпортовано: '+r.added+' '+pl(r.added,'нова','нові','нових')+', '+r.updated+' оновлено, '+r.skipped+' без змін'); });
 ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=titleOf(cur)+' · Чистий аркуш'; });
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
 ttl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
@@ -850,7 +895,7 @@ function createAt(e){ const c=cellAt(e), probe={col:c.col,row:c.row,lines:1,w:MI
   if(!ok) return;
   const b=make({col:c.col,row:c.row}, false); markDirty();
   b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0);
-  if(!toastShown){ toastShown=true; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),4500); } }
+  if(!toastShown){ toastShown=true; toast.innerHTML=HINT_HTML; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),4500); } }
 function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw,ch:rows},false); markDirty(); if(focus) b.ttlEl.focus(); return b; }
 /* миша: клік → текстовий блок, протяжка → область. Тач: клік одразу створює блок (протяжка — прокрутка сторінки) */
 let md=null, marq=null;
@@ -939,19 +984,22 @@ themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme(
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
-notes=db.all();
-// міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); db.save(n); } }
-if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) S.theme=store.raw('freeform-editor-v4:theme');
-if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') S.grid=false;
-if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') S.spell=true;
-if(!notes.length) newNote();
-notes.sort((a,b)=>b.updated-a.updated);
+async function start(){
+  await db.init(); notes=await db.all();
+  // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
+  if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); db.save(n); } }
+  if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) S.theme=store.raw('freeform-editor-v4:theme');
+  if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') S.grid=false;
+  if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') S.spell=true;
+  if(!notes.length) newNote();
+  notes.sort((a,b)=>b.updated-a.updated);
+  renderList(); openNote(notes.find(n=>n.id===S.current)||notes[0]); field(); storageUI();
+}
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
 spell=S.spell===true; spellUI();
 app.classList.toggle('open', isMobile()? false : S.side!==false); sideBtn.setAttribute('aria-expanded', app.classList.contains('open')?'true':'false');
-renderList(); openNote(notes.find(n=>n.id===S.current)||notes[0]); field();
+start();
 
 /* ══ PWA: офлайн-оболонка і встановлення ══════════════════════════════════ */
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{});
