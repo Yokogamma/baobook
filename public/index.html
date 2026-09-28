@@ -153,19 +153,20 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .sheet.has .empty{opacity:0}
 
 .blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;pointer-events:none}
-.blk .grip,.blk .txt,.blk .cblk,.blk .ablk{pointer-events:auto}
+.blk .grip,.blk .txt,.blk .rz,.blk .cblk,.blk .ablk{pointer-events:auto}
 .blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
 .grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
 .grip:hover{background:var(--hover-2);color:var(--ink-2)}
-.blk:hover .grip,.blk.focus .grip,.blk.drag .grip{opacity:1}
-.blk:hover .txt{background:var(--hover)}
-.blk.focus .txt{background:transparent}
+/* наведення/фокус/перетягування підсвічують лише власні частини блока (не блоки всередині області) */
+.blk:hover>.grip,.blk.focus>.grip,.blk.drag>.grip{opacity:1}
+.blk:hover>.tcard>.txt{background:var(--hover)}
+.blk.focus>.tcard>.txt{background:transparent}
 .blk.drag{cursor:grabbing;z-index:10}
-.blk.drag .txt{background:var(--page);box-shadow:var(--shadow)}
-.blk.drag .grip{cursor:grabbing}
-.blk.drag .txt{pointer-events:none}
+.blk.drag>.tcard>.txt{background:var(--page);box-shadow:var(--shadow)}
+.blk.drag>.grip{cursor:grabbing}
+.blk.drag .txt,.blk.drag .tcard .rz{pointer-events:none}
 @media (hover:none){ .grip{opacity:.45} }
 
 /* ── блок коду: картка з шапкою, «тільки читання» за замовчуванням ─────── */
@@ -204,7 +205,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:12px;color:var(--ink-2);pointer-events:none}
 .hint b{color:var(--ink);font-weight:500}
 .cblk.pulse .cb.lock{animation:pulse .35s} @keyframes pulse{50%{transform:scale(1.25)}}
-.blk.drag .cblk{box-shadow:var(--shadow)}
+.blk.drag>.cblk{box-shadow:var(--shadow)}
 @media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:40px;min-width:44px;padding:0 12px;justify-content:center} }
 /* ручка розміру в правому нижньому куті: ширина й висота прилипають до сітки; подвійний клік — «авто» */
 .rz{position:absolute;right:1px;bottom:1px;width:18px;height:18px;display:flex;align-items:flex-end;justify-content:flex-end;padding:3px;cursor:nwse-resize;color:var(--ink-3);opacity:0;transition:opacity .12s;touch-action:none;z-index:2;border-radius:0 0 9px 0}
@@ -221,12 +222,25 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .ctitle{justify-self:center;min-width:0;max-width:100%;padding:0 8px;height:24px;line-height:24px;border-radius:6px;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:0;cursor:text;user-select:text;-webkit-user-select:text;text-align:center}
 .ctitle:hover,.ctitle:focus{background:var(--hover)} .ctitle:focus{text-overflow:clip}
 /* вузька картка (телефон, звужений блок): порожня назва — маленьке поле в рядку з мовою; заповнена або в редагуванні — окремим рядком під шапкою */
+/* вузька картка: назва власним рядком під шапкою (по центру). Код — до 560px; область (у шапці лише кнопки праворуч) — до 420px, на дотику — до 640px */
 @container (max-width:560px){
-  .cbar{display:flex;flex-wrap:wrap;height:auto;min-height:32px;row-gap:0}
-  .acts{margin-left:auto;flex:0 0 auto} .lang.auto::after{content:none}
-  .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:left}
-  .ctitle:focus,.ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
+  .cblk .cbar{display:flex;flex-wrap:wrap;height:auto;min-height:32px;row-gap:0}
+  .cblk .acts{margin-left:auto;flex:0 0 auto} .lang.auto::after{content:none}
+  .cblk .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:center}
+  .cblk .ctitle:focus,.cblk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
 }
+@container (max-width:420px){
+  .ablk .cbar{display:flex;flex-wrap:wrap;height:auto;min-height:32px;row-gap:0}
+  .ablk .acts{margin-left:auto;flex:0 0 auto}
+  .ablk .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:center}
+  .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
+}
+@media (hover:none){ @container (max-width:640px){
+  .ablk .cbar{display:flex;flex-wrap:wrap;height:auto;min-height:32px;row-gap:0}
+  .ablk .acts{margin-left:auto;flex:0 0 auto}
+  .ablk .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:center}
+  .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
+} }
 .ctitle:empty::before{content:attr(data-ph);color:var(--ink-3);font-weight:400;opacity:0;transition:opacity .12s}
 .cblk:hover .ctitle:empty::before,.ctitle:focus:empty::before,.cblk.touch .ctitle:empty::before{opacity:1}
 @media (hover:none){ .ctitle:empty::before{opacity:1} }
@@ -239,9 +253,18 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .opt.sel,.opt:hover{background:var(--hover);color:var(--ink)} .opt.cur{font-weight:500;color:var(--ink)} .opt.cur::after{content:" ✓";color:var(--accent)}
 .opt.auto{border-bottom:.5px solid var(--line);border-radius:6px 6px 0 0;margin-bottom:2px}
 @media (hover:none){ .rz{opacity:.6;width:26px;height:26px} }
+/* текстовий блок: обгортка з тією ж ручкою в куті; заданий розмір = фіксована ширина і мінімальна висота (вміст ніколи не ховається), подвійний клік — авто */
+.tcard{position:relative;flex:0 1 auto;width:fit-content;min-width:0;max-width:100%}
+.tcard.sized .txt{width:100%}
+.tcard .rz{right:-4px;bottom:-4px}
+.tcard:hover .rz,.tcard.resizing .rz,.blk.focus>.tcard .rz{opacity:1}
+.tcard.resizing .txt{background:var(--hover);box-shadow:inset 0 0 0 .5px var(--sel-line)}
+.tcard.settle{transition:width .16s ease} .tcard.settle .txt{transition:min-height .16s ease,background .12s}
+@media (hover:none){ .tcard .rz{opacity:0} .blk.focus>.tcard .rz{opacity:.6} }
 /* ── область: картка як у коду, всередині — звичайні блоки; висота росте за вмістом ─────── */
 .blk.is-area .ablk{position:relative;flex:1 1 auto;width:100%;max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--area-bg,var(--code-bg));color:var(--ink);transition:border-color .15s}
-.ablk .cbar{padding-right:6px} .akind{justify-self:start;font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-3);padding:0 8px;white-space:nowrap;flex:0 0 auto}
+.ablk .cbar{padding-right:6px} .ablk .ctitle{grid-column:2} .ablk .acts{grid-column:3}
+.ablk:hover .cb,.ablk:focus-within .cb{opacity:1}
 .abody{position:relative;min-height:24px;cursor:text}
 .ablk.collapsed .abody{display:none} .ablk.collapsed{height:calc(2*var(--g) - 2px)}
 .ablk .cb.fold{opacity:1} .ablk .cb.fold svg{transition:transform .15s} .ablk.collapsed .cb.fold svg{transform:rotate(-90deg)}
@@ -395,6 +418,7 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   ungroup:'<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 3"/><path d="M9 12h6"/></svg>',
   trash:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   chev:'<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>'};
+const RZ=t=>'<div class="rz" title="'+t+'"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div>';
 const GRIP='<div class="grip" title="Перетягнути"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
 const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
@@ -461,6 +485,7 @@ function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]');
 
 /* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
 function serialize(){ return blocks.filter(b=>b.id).map(b=>{ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.parent=b.parent; d.col=b.col; } else d.fx=b.fx;
+  if(!b.kind){ if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; }
   if(b.kind==='code'){ d.kind='code'; if(b.lang) d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.open) d.open=true; if(b.title) d.title=b.title; }
   if(b.kind==='area'){ d.kind='area'; d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.title) d.title=b.title; if(b.color&&b.color!=='neutral') d.color=b.color; if(b.collapsed) d.collapsed=true; }
   return d; }); }
@@ -526,18 +551,20 @@ function rect(b){ const a=ctn(b), xl=xlOf(b.col,a); return {x0:xl+OFF(), xl, y0:
 function rawWidth(b){ const a=ctn(b), r=rect(b); let right=cW(a)-cPadR(a);
   for(const o of solid(a)){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl-6); }
   return right-r.xl; }
-function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-6-L.xl<minw(left); }
+// ширина, яку блок «займає» по горизонталі: задана ручкою (cw) або мінімальна; сусід ближче за неї — накладання, його зсуваємо вниз
+const need=b=>b.cw? Math.max(minw(b), CL()+b.cw*G()) : minw(b);
+function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-6-L.xl<need(left); }
 function tooTight(b){ const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR(a)+1 || rawWidth(b)<minw(b); }
 function fits(b){ return !tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o)); }
 const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки (ручка + gap)
 function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));
-  if((b.kind==='code'||b.kind==='area') && b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
-  if(b.kind==='code' && b.card) b.card.classList.toggle('sized', !!b.cw);
+  if(b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
+  if(b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
   if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
   else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
   else if(b.kind==='area') areaMeasure(b);
-  else b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }
+  else { if(!b.resizing) b.txt.style.minHeight=b.ch? (b.ch*G())+'px' : ''; b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); } }   // текст: ch — мінімальна висота в рядах
 /* область: ширина внутрішньої сітки — з DOM; висота — шапка + вміст (+ мінімум із ручки), рівно в рядах */
 function areaMeasure(b){ b.innerW=b.abody.clientWidth || (b.w-CL()-1); const g=G(), barH=b.card.querySelector('.cbar').offsetHeight;
   b.at=(g-(barH+1)%g)%g;                                       // верхній відступ: рядки дітей — на рядах сітки аркуша
@@ -581,8 +608,8 @@ function relayout(b){ const before=b.lines; render(b); if(b.lines!==before) reso
 
 /* текстовий блок */
 function buildText(b){
-  b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="txt" contenteditable="true" data-ph="Пишіть…"></div>';
-  b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text;
+  b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="tcard"><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
+  b.txt=b.el.querySelector('.txt'); b.txt.textContent=b.text; b.card=b.el.querySelector('.tcard');
   b.txt.addEventListener('focus',()=>b.el.classList.add('focus'));
   b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.trim()) remove(b); else { b.text=readTxt(); flushSave(); } });
   const readTxt=()=>b.txt.innerText.replace(/\n$/,'');   // innerText зберігає переноси рядків (<br>, <div>), textContent їх губить
@@ -597,6 +624,19 @@ function buildText(b){
     if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,'Вставлено як код','Зробити текстом',()=>toText(nb)); return; }
     document.execCommand('insertText',false,t);
     b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text)); });
+  /* ручка розміру: фіксована ширина в клітинках (не ширша за вільне місце до сусіда) і мінімальна висота в рядах; текст завжди видно повністю */
+  const card=b.card, rz=b.el.querySelector('.rz');
+  rz.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); rz.setPointerCapture(e.pointerId);
+    const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
+    const cr=card.getBoundingClientRect(), sx=e.clientX, sy=e.clientY, w0=cr.width, h0=cr.height; card.classList.add('resizing'); card.classList.remove('settle'); b.resizing=true; card.style.maxWidth='none'; card.style.flex='0 0 auto';
+    const move=ev=>{ const g=G(), avail=Math.max(minw(b), rawWidth(b))-CL();
+      const wpx=Math.max(MINW, Math.min(avail, w0+(ev.clientX-sx))); b.cw=Math.max(Math.ceil(MINW/g), Math.round(wpx/g)); card.style.width=wpx+'px'; card.classList.add('sized');
+      b.txt.style.minHeight=''; const content=Math.max(1, Math.round(b.txt.offsetHeight/g)); const hpx=Math.max(g, h0+(ev.clientY-sy)), rows=Math.round(hpx/g);
+      b.ch = rows>content? rows : undefined; b.txt.style.minHeight=b.ch? hpx+'px' : ''; relayout(b); };
+    const up=()=>{ rz.removeEventListener('pointermove',move); rz.removeEventListener('pointerup',up); rz.removeEventListener('pointercancel',up); card.classList.remove('resizing'); b.resizing=false; card.style.maxWidth=''; card.style.flex='';
+      card.classList.add('settle'); relayout(b); setTimeout(()=>card.classList.remove('settle'),220); markDirty(); };
+    rz.addEventListener('pointermove',move); rz.addEventListener('pointerup',up); rz.addEventListener('pointercancel',up); });
+  rz.addEventListener('dblclick',e=>{ e.stopPropagation(); b.cw=undefined; b.ch=undefined; relayout(b); markDirty(); });
 }
 /* перетворення блоків: та сама клітинка, той самий id */
 function toCode(b, text){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,parent:b.parent,kind:'code',text:text.replace(/\r\n?/g,'\n').replace(/\n+$/,'')}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
@@ -611,7 +651,7 @@ function buildCode(b){
     +'<button class="cb num" title="Номери рядків" aria-pressed="false">#</button><button class="cb wrapb" title="Перенос довгих рядків" aria-pressed="false">'+ICO.wrap+'</button>'
     +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button></span></div>'
     +'<pre class="code" spellcheck="false" aria-readonly="true" tabindex="0"><code data-ph="Код…"></code></pre><div class="fade"></div><button class="more" hidden></button>'
-    +'<div class="rz" title="Тягніть, щоб змінити розмір · подвійний клік — авто"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div></div>';
+    +RZ('Тягніть, щоб змінити розмір · подвійний клік — авто')+'</div>';
   const card=b.el.querySelector('.cblk'), code=card.querySelector('code'), pre=card.querySelector('.code'), more=card.querySelector('.more'), lockB=card.querySelector('.lock'), copyB=card.querySelector('.copy'), langB=card.querySelector('.lang');
   b.card=card; b.code=code; b.pre=pre; b.editing=false;
   if(!LANGS[b.lang]) b.lang=null;                       // null = авто: визначаємо з тексту щоразу
@@ -716,9 +756,9 @@ function ungroup(a){ const sr=sheet.getBoundingClientRect(); const kids=blocks.f
 /* область */
 const AREA_COLORS=['neutral','yellow','green','blue','pink','purple'];
 function buildArea(b){
-  b.el=el('div','blk is-area'); b.el.innerHTML=GRIP+'<div class="ablk"><div class="cbar"><span class="akind">Область</span><span class="ctitle" spellcheck="false" data-ph="Назва області…" role="textbox" aria-label="Назва області"></span><span class="acts">'
+  b.el=el('div','blk is-area'); b.el.innerHTML=GRIP+'<div class="ablk"><div class="cbar"><span class="ctitle" spellcheck="false" data-ph="Назва області…" role="textbox" aria-label="Назва області"></span><span class="acts">'
     +'<button class="cb colorb" title="Колір тла">'+ICO.palette+'</button><button class="cb ungroup" title="Розгрупувати: прибрати область, блоки лишити на місці">'+ICO.ungroup+'</button><button class="cb del" title="Видалити область разом із вмістом">'+ICO.trash+'</button><button class="cb fold" title="Згорнути" aria-pressed="false">'+ICO.chev+'</button></span></div>'
-    +'<div class="abody"></div><div class="rz" title="Тягніть: ширина і мінімальна висота · подвійний клік — авто"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div></div>';
+    +'<div class="abody"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
   const card=b.el.querySelector('.ablk'); b.card=card; b.abody=card.querySelector('.abody'); b.cw=b.cw||12; if(!AREA_COLORS.includes(b.color)) b.color='neutral';
   card.dataset.color=b.color; card.classList.toggle('collapsed',b.collapsed); card.querySelector('.fold').setAttribute('aria-pressed',b.collapsed); card.querySelector('.fold').title=b.collapsed?'Розгорнути':'Згорнути';
   const ttlEl=card.querySelector('.ctitle'); b.ttlEl=ttlEl; ttlEl.textContent=b.title||''; ttlEl.contentEditable='plaintext-only'; if(!ttlEl.isContentEditable) ttlEl.contentEditable='true';
