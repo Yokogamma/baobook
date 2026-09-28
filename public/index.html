@@ -225,7 +225,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 /* ручка розміру в правому нижньому куті: ширина й висота прилипають до сітки; подвійний клік — «авто» */
 .rz{position:absolute;right:1px;bottom:1px;width:18px;height:18px;display:flex;align-items:flex-end;justify-content:flex-end;padding:3px;cursor:nwse-resize;color:var(--ink-3);opacity:0;transition:opacity .12s;touch-action:none;z-index:2;border-radius:0 0 9px 0}
 .rz svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round}
-.cblk:hover .rz,.cblk.editing .rz,.cblk.resizing .rz{opacity:1} .rz:hover{color:var(--ink-2)}
+.cblk:hover .rz,.cblk.resizing .rz{opacity:1} .rz:hover{color:var(--ink-2)}
+.cblk.editing .rz{opacity:0;pointer-events:none}   /* під час редагування коду ручка не заважає */
 .cblk.resizing{border-color:var(--sel-line)}
 .cblk.settle{transition:width .16s ease} .cblk.settle .code{transition:height .16s ease}
 .lang.auto::after{content:" · авто";font-weight:400;text-transform:none;letter-spacing:0;opacity:.7}
@@ -273,10 +274,11 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .tcard{position:relative;flex:0 1 auto;width:fit-content;min-width:0;max-width:100%}
 .tcard.sized .txt{width:100%}
 .tcard .rz{right:-4px;bottom:-4px}
-.tcard:hover .rz,.tcard.resizing .rz,.blk.focus>.tcard .rz{opacity:1}
+.tcard:hover .rz,.tcard.resizing .rz{opacity:1}
+.blk.focus>.tcard .rz{opacity:0;pointer-events:none}   /* поки в блоці курсор (набір тексту), ручку сховано; зʼявиться при наведенні після виходу з блока */
 .tcard.resizing .txt{background:var(--hover);box-shadow:inset 0 0 0 .5px var(--sel-line)}
 .tcard.settle{transition:width .16s ease} .tcard.settle .txt{transition:min-height .16s ease,background .12s}
-@media (hover:none){ .tcard .rz{opacity:0} .blk.focus>.tcard .rz{opacity:.6} }
+@media (hover:none){ .tcard .rz{opacity:0;pointer-events:none} }   /* на дотику текстовий блок без ручки: курсор у ньому — це вже набір */
 /* ── область: картка як у коду, всередині — звичайні блоки; висота росте за вмістом ─────── */
 .blk.is-area .ablk{position:relative;flex:1 1 auto;width:100%;max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--area-bg,var(--code-bg));color:var(--ink);transition:border-color .15s}
 .ablk .cbar{padding-right:6px} .ablk .ctitle{grid-column:2} .ablk .acts{grid-column:3}

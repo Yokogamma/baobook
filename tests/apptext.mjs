@@ -19,6 +19,9 @@ ok('1a одна лінія, картка по ширині тексту, без 
 await pg.mouse.move(100,100); await pg.waitForTimeout(200);
 const opHidden=await op(rz); await txt.hover(); await pg.waitForTimeout(200); const opShown=await op(rz);
 ok('1b ручка зʼявляється при наведенні на текст ('+opHidden+'→'+opShown+')', opHidden===0 && opShown===1);
+// 1c поки в блоці курсор — ручки немає навіть при наведенні; після виходу з блока знову є
+await txt.click(); await pg.waitForTimeout(200); const opFocused=await op(rz); await pg.keyboard.press('Escape'); await txt.hover(); await pg.waitForTimeout(200); const opAfter=await op(rz);
+ok('1c під час набору ручка схована ('+opFocused+'), після виходу з блока знову видно при наведенні ('+opAfter+')', opFocused===0 && opAfter===1);
 // 2 ширина: тягнемо ручку ліворуч на ~250px
 { const r=await box(rz); const cx=r.x+r.w/2, cy=r.y+r.h/2; await pg.mouse.move(cx,cy); await pg.mouse.down(); await pg.mouse.move(cx-100,cy,{steps:5}); await pg.waitForTimeout(50);
   const mid=await box(card); const resizing=await card.evaluate(e=>e.classList.contains('resizing'));
