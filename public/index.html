@@ -176,6 +176,9 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .bubble{position:fixed;z-index:28;display:flex;gap:2px;padding:4px;border-radius:8px;background:var(--ink);color:var(--page);box-shadow:var(--shadow)}
 .bubble button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
 .bubble button:hover{background:rgba(128,128,128,.35)} .bubble button[aria-pressed="true"]{background:rgba(128,128,128,.55)}
+.bubble .sep{width:1px;align-self:stretch;margin:4px 3px;background:rgba(128,128,128,.5)} .bubble button.act{width:auto;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font-size:13px} .bubble button.act .i{font-size:15px}
+.bubble button.act.done{color:#8fd3a5}
+.grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:14px;font-weight:700}
 @media (hover:none){ .bubble{left:0 !important;right:0;border-radius:0;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))} .bubble button{width:56px;height:40px;font-size:16px} }
 .grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
 .grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
@@ -386,7 +389,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button">Скасувати<kbd>Ctrl+Z</kbd></button></div>
 <button class="fab" id="fab" title="Новий блок" aria-label="Новий блок"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-<div class="bubble" id="bubble" hidden role="toolbar" aria-label="Форматування"><button type="button" data-cmd="bold" title="Жирний (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Підкреслення (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Перекреслення (Ctrl+Shift+S)"><s>S</s></button></div>
+<div class="bubble" id="bubble" hidden role="toolbar" aria-label="Форматування"><button type="button" data-cmd="bold" title="Жирний (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Підкреслення (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Перекреслення (Ctrl+Shift+S)"><s>S</s></button><span class="sep"></span><button type="button" class="act" data-act="copy" title="Копіювати виділене (Ctrl+C)"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Копіювати</span></button></div>
 <div class="toast" id="toast">Зберігається саме. <b>Enter</b> — новий рядок, <b>Esc</b> — вийти, <b>Backspace</b> у порожньому блоці — видалити.</div>
 
 <script>
@@ -467,7 +470,7 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   chev:'<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
   more:'<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>'};
 const RZ=t=>'<div class="rz" title="'+t+'"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div>';
-const GRIP='<div class="grip" title="Перетягнути"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
+const GRIP='<div class="grip" title="Перетягнути · клік — скопіювати текст блока"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
 const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
 const G=()=>cssN('--g')||24, PAD=()=>cssN('--pad'), OFF=()=>cssN('--handle')+2+6;   // ручка + gap + padding тексту
@@ -980,7 +983,15 @@ function placeBubble(){ const b=curTextBlock(); if(!b){ bubble.hidden=true; bubb
   bubbleState(); }
 document.addEventListener('selectionchange',()=>{ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); });
 bubble.addEventListener('pointerdown',e=>e.preventDefault());   // не втрачати виділення
-bubble.addEventListener('click',e=>{ const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
+/* копіювання: у буфер ідуть і чистий текст, і форматування (текст — у чат, жирний і курсив — у редактор) */
+async function copyBoth(text, html){ try{ if(navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([text],{type:'text/plain'}),'text/html':new Blob([html.replace(/\n/g,'<br>')],{type:'text/html'})})]); return true; } }catch(_){}
+  try{ await navigator.clipboard.writeText(text); return true; }catch(_){} try{ return document.execCommand('copy'); }catch(_){ return false; } }
+async function copySelection(){ const sel=getSelection(); if(!sel||sel.isCollapsed) return false; const tmp=document.createElement('div'); tmp.appendChild(sel.getRangeAt(0).cloneContents()); const h=richOf(tmp); return copyBoth(plainOf(h), h); }
+function blockText(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.text||'').filter(t=>t.trim()).join('\n\n'); return b.text||''; }
+function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.html||escHtml(o.text||'')).filter(t=>t.trim()).join('\n\n'); return b.html||escHtml(b.text||''); }
+async function copyBlock(b, grip){ const ok=await copyBoth(blockText(b), blockHtml(b)); if(!ok){ say('Не вдалося скопіювати'); return; } say('Скопійовано'); if(grip){ grip.classList.add('done'); setTimeout(()=>grip.classList.remove('done'),1200); } }
+bubble.addEventListener('click',async e=>{ const act=e.target.closest('button[data-act="copy"]'); if(act){ const ok=await copySelection(); const sp=act.querySelector('span'); sp.textContent=ok? 'Скопійовано' : 'Не вдалося'; act.classList.add('done'); setTimeout(()=>{ sp.textContent='Копіювати'; act.classList.remove('done'); },1200); return; }
+  const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
 window.addEventListener('scroll',()=>{ if(!bubble.hidden && !TOUCH) placeBubble(); },{passive:true});
 if(window.visualViewport) window.visualViewport.addEventListener('resize',()=>{ if(!bubble.hidden) placeBubble(); });
 /* дотик: одиночний дотик нічого не створює (аркуш можна гортати й читати); блок зʼявляється після утримання ~0,5 с без руху,
@@ -1064,7 +1075,7 @@ function drag(b, grip){
     if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
     else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; if(flow && !b.parent && probe.fx!=null) b.fx=probe.fx; }
     ctnEl(b).appendChild(b.el); if(!b.parent && !(flow && moved && !bad)) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
-    resolve(b); if(moved) markDirty(); if(!moved) focusBlock(b);
+    resolve(b); if(moved) markDirty(); if(!moved){ if(b.kind==='code') focusBlock(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока
   };
   grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
 }

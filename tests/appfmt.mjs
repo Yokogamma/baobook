@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+const ctx=await br.newContext({viewport:{width:1280,height:900},permissions:['clipboard-read','clipboard-write']}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
@@ -25,7 +25,7 @@ await pg.locator('.blk .txt').first().click(); await select(5,3); await pg.keybo
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const t=pg.locator('.blk .txt').first(); const b=await t.locator('i').boundingBox(); await pg.mouse.dblclick(b.x+b.width/2, b.y+b.height/2); await pg.waitForTimeout(250);
   const vis=await pg.locator('#bubble').isVisible(); const pressed=await pg.locator('#bubble button[data-cmd="italic"]').getAttribute('aria-pressed'); const bb=await pg.locator('#bubble').boundingBox();
-  ok('5a подвійний клік по слову: панель над виділенням, «I» підсвічена', vis && pressed==='true' && bb.y<b.y && (await pg.locator('#bubble button').count())===4);
+  ok('5a подвійний клік по слову: панель над виділенням, «I» підсвічена', vis && pressed==='true' && bb.y<b.y && (await pg.locator('#bubble button').count())===5);
   await pg.locator('#bubble button[data-cmd="underline"]').click(); await pg.waitForTimeout(450);
   const st=await stored(); ok('5b кнопка U додає підкреслення до «три», виділення й панель лишаються: '+(st&&st.html), st && /<i><u>три<\/u><\/i>|<u><i>три<\/i><\/u>/.test(st.html) && await pg.locator('#bubble').isVisible());
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); ok('5c після зняття виділення панель зникає', !(await pg.locator('#bubble').isVisible())); }
@@ -41,6 +41,16 @@ await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsu
 await pg.evaluate(()=>localStorage.clear()); await pg.reload(); await pg.waitForTimeout(500);
 { const h=await pg.locator('.blk .txt').first().evaluate(e=>e.innerHTML); const st=(await idbAll()).find(n=>n.id==='dirty');
   ok('9 сторонній html вичищено до b/i/u/s: «'+h+'»', h==='<b>ok</b><i>x</i> link' && !/script|img|span|href/.test(h)); }
+// 10 копіювання виділеного з панелі
+await pg.mouse.click(500,700); await pg.keyboard.type('Сервер: пароль Zx9vQ2m порт 2222'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+{ const t=pg.locator('.blk .txt').filter({hasText:'Сервер:'}).first(); const b=await t.boundingBox(); await pg.mouse.dblclick(b.x+b.width*0.55, b.y+b.height/2); await pg.waitForTimeout(250);
+  await pg.locator('#bubble button[data-act="copy"]').click(); await pg.waitForTimeout(200); const clip=await pg.evaluate(()=>navigator.clipboard.readText());
+  ok('10 кнопка «Копіювати» в панелі: у буфері виділене слово («'+clip+'»), панель лишилась і показує «Скопійовано»', /^Zx9vQ2m$/.test(clip.trim()) && await pg.locator('#bubble').isVisible() && /Скопійовано/.test(await pg.locator('#bubble button[data-act="copy"]').innerText())); }
+// 11 клік по ручці — копіювання всього блока
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+{ const blk=pg.locator('#sheet > .blk').filter({hasText:'Сервер:'}).first(); await blk.locator('.txt').hover(); await pg.waitForTimeout(150); const g=await blk.locator('.grip').boundingBox(); await pg.mouse.click(g.x+g.width/2, g.y+g.height/2); await pg.waitForTimeout(200);
+  const clip=await pg.evaluate(()=>navigator.clipboard.readText());
+  ok('11 клік по ручці копіює весь текст блока («'+clip+'»), ручка з галочкою, плашка «Скопійовано»', clip==='Сервер: пароль Zx9vQ2m порт 2222' && await blk.locator('.grip').evaluate(e=>e.classList.contains('done')) && /Скопійовано/.test(await pg.locator('#toast').innerText()) && !(await pg.evaluate(()=>document.activeElement.classList.contains('txt')))); }
 await pg.screenshot({path:OUT+'/appfmt-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
