@@ -1,7 +1,7 @@
 /* Чистий аркуш — service worker.
    Оболонка застосунку: мережа спершу, кеш як запасний варіант (щоб оновлення приходили одразу, а без мережі все відкривалось).
    Шрифти Google: з кешу, оновлення у фоні. Дані нотаток у localStorage — сюди не потрапляють. */
-const VERSION='v2';
+const VERSION='v3';
 const SHELL='sheet-shell-'+VERSION, FONTS='sheet-fonts';
 const PRECACHE=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
@@ -12,7 +12,8 @@ self.addEventListener('fetch',e=>{
   const req=e.request; if(req.method!=='GET') return;
   const url=new URL(req.url);
   if(url.origin===location.origin){
-    e.respondWith(fetch(req).then(r=>{ if(r.ok){ const c=r.clone(); caches.open(SHELL).then(cache=>cache.put(req,c)); } return r; })
+    // cache:'no-cache' — завжди звірятися із сервером (ETag), інакше HTTP-кеш GitHub Pages (max-age=600) віддає стару оболонку ще 10 хвилин після публікації
+    e.respondWith(fetch(req,{cache:'no-cache'}).then(r=>{ if(r.ok){ const c=r.clone(); caches.open(SHELL).then(cache=>cache.put(req,c)); } return r; })
       .catch(()=>caches.match(req,{ignoreSearch:true}).then(r=>r||(req.mode==='navigate'?caches.match('./index.html'):undefined))));
     return;
   }
