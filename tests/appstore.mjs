@@ -44,8 +44,14 @@ const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new P
   ok('5d старіша версія з файлу не замінила локальну', (await pg.locator('.blk .txt').filter({hasText:'перша нотатка в IndexedDB'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'СТАРА версія'}).count())===0);
   await pg.reload(); await pg.waitForTimeout(400);
   ok('5e після перезавантаження всі три нотатки на місці', (await pg.locator('#list .item').count())===3 && (await idbNotes(pg)).length===3);
+  // порожні текстові блоки зі старих версій не показуються і не зберігаються
+  await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put({id:'emp1',title:'',blocks:[{id:'e1',fx:0.2,row:2,text:''},{id:'e2',fx:0.2,row:4,text:'   '},{id:'e3',fx:0.2,row:6,text:'справжній'}],created:1,updated:Date.now()+30000}); t.oncomplete=()=>{ d.close(); res(); }; }; }));
+  await pg.reload(); await pg.waitForTimeout(500); await pg.locator('#list .item').filter({hasText:'справжній'}).click(); await pg.waitForTimeout(300);
+  await pg.mouse.click(700,700); await pg.keyboard.type('дописано'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500);
+  const emp=(await idbNotes(pg)).find(n=>n.id==='emp1');
+  ok('5g порожні блоки зі сховища не показуються ('+(await pg.locator('#sheet .blk').count())+' блоки на аркуші) і після збереження зникають зі сховища ('+emp.blocks.length+' блоки)', (await pg.locator('#sheet .blk').count())===2 && emp.blocks.length===2 && emp.blocks.every(b=>b.text.trim()));
   fs.writeFileSync(OUT+'/bad.json','{"hello":1}'); await pg.locator('#importFile').setInputFiles(OUT+'/bad.json'); await pg.waitForTimeout(300);
-  ok('5f чужий файл: зрозуміле повідомлення, нічого не змінилось', /не файл експорту/.test(await pg.locator('#toast').innerText()) && (await pg.locator('#list .item').count())===3);
+  ok('5f чужий файл: зрозуміле повідомлення, нічого не змінилось', /не файл експорту/.test(await pg.locator('#toast').innerText()) && (await pg.locator('#list .item').count())===4);
   console.log(errs.length? errs.join('\n') : '✓ без помилок (IndexedDB)'); if(errs.length) fails++; await ctx.close(); }
 
 /* ── запасний режим: без IndexedDB ──────────────────────────────────────── */
