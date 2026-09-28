@@ -63,13 +63,23 @@ await pg.mouse.click(500,800); await pg.keyboard.type('Доступ: парол�
 await pg.keyboard.press('Escape'); await pg.mouse.click(500,860); await pg.keyboard.type('Ключ: `sk-live-77x` далі текст'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(450);
 { const blk=pg.locator('#sheet > .blk').filter({hasText:'Ключ:'}).first(); const st=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
   ok('13a набір у зворотних лапках дає чип, текст після нього — звичайний: html «'+(st&&st.html)+'»', st && st.html==='Ключ: <code>sk-live-77x</code> далі текст' && st.text==='Ключ: sk-live-77x далі текст');
-  await pg.evaluate(()=>navigator.clipboard.writeText('')); const c=await blk.locator('code').boundingBox(); await pg.mouse.click(c.x+c.width/2, c.y+c.height/2); await pg.waitForTimeout(200);
-  ok('13b клік по чипу копіює лише його вміст, курсор у блок не ставиться, чип із позначкою', (await pg.evaluate(()=>navigator.clipboard.readText()))==='sk-live-77x' && !(await pg.evaluate(()=>document.activeElement.classList.contains('txt'))) && await blk.locator('code').evaluate(e=>e.classList.contains('done')));
-  await blk.locator('.txt').click({position:{x:10,y:12}}); await pg.waitForTimeout(100); const c2=await blk.locator('code').boundingBox(); await pg.mouse.click(c2.x+c2.width/2, c2.y+c2.height/2); await pg.waitForTimeout(100);
+  await pg.evaluate(()=>navigator.clipboard.writeText('')); const c=await blk.locator('code').boundingBox(); await pg.mouse.click(c.x+c.width-10, c.y+c.height/2); await pg.waitForTimeout(200);
+  ok('13b клік по іконці в краї чипа копіює лише його вміст, курсор у блок не ставиться, чип із позначкою', (await pg.evaluate(()=>navigator.clipboard.readText()))==='sk-live-77x' && !(await pg.evaluate(()=>document.activeElement.classList.contains('txt'))) && await blk.locator('code').evaluate(e=>e.classList.contains('done')));
+  await pg.keyboard.press('Escape'); await pg.evaluate(()=>navigator.clipboard.writeText('')); const c1=await blk.locator('code').boundingBox(); await pg.mouse.click(c1.x+12, c1.y+c1.height/2); await pg.waitForTimeout(150);
+  ok('13b2 клік по тексту чипу в нередагованому блоці ставить курсор усередину чипа, нічого не копіює', (await pg.evaluate(()=>document.activeElement.classList.contains('txt'))) && (await pg.evaluate(()=>{ const s=getSelection(); const n=s.anchorNode; const el=n.nodeType===1? n : n.parentElement; return !!el.closest('code'); })) && (await pg.evaluate(()=>navigator.clipboard.readText()))==='');
+  const c2=await blk.locator('code').boundingBox(); await pg.mouse.click(c2.x+12, c2.y+c2.height/2); await pg.waitForTimeout(100);
   await pg.keyboard.press('Control+e'); await pg.waitForTimeout(450); const st2=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
   ok('13c у режимі правки клік у чип ставить курсор, Ctrl+E знімає чип: «'+(st2&&(st2.html||st2.text))+'»', st2 && !st2.html && st2.text==='Ключ: sk-live-77x далі текст');
   await select(6,11); await pg.keyboard.press('Control+e'); await pg.waitForTimeout(450); const st3=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
   ok('13d Ctrl+E на виділенні знову робить чип: «'+(st3&&st3.html)+'»', st3 && st3.html==='Ключ: <code>sk-live-77x</code> далі текст'); }
+// 14 чип у кінці рядка: у режимі правки End + → виводить курсор із чипа, далі набір — звичайний текст; ← на початку — теж
+await pg.keyboard.press('Escape'); await pg.mouse.click(900,860); await pg.keyboard.type('Токен `abc`'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(450);
+{ const blk=pg.locator('#sheet > .blk').filter({hasText:'Токен'}).first(); await blk.locator('.txt').click({position:{x:10,y:12}}); await pg.keyboard.press('End'); await pg.keyboard.press('ArrowRight'); await pg.keyboard.type(' далі'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(450);
+  const st=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Токен/.test(b.text||''));
+  ok('14a після чипа в кінці рядка: End, →, набір — текст зовні чипа: «'+(st&&st.html)+'»', st && st.html==='Токен <code>abc</code> далі' && st.text==='Токен abc далі');
+  await blk.locator('.txt').click({position:{x:10,y:12}}); await pg.keyboard.press('End'); for(let i=0;i<5;i++) await pg.keyboard.press('ArrowLeft'); await pg.keyboard.press('ArrowLeft'); await pg.keyboard.type('X'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(450);
+  const st2=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Токен/.test(b.text||''));
+  ok('14b правка всередині чипа без його зняття: «'+(st2&&st2.html)+'»', st2 && /^Токен <code>ab(cX|Xc)<\/code> далі$/.test(st2.html)); }
 await pg.screenshot({path:OUT+'/appfmt-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
