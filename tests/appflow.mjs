@@ -53,13 +53,16 @@ await pg.locator('.blk .txt').filter({hasText:'Перший'}).tap(); await pg.k
   const kids=await area.locator('.abody > .blk').all(); const names=[]; for(const e of kids){ names.push({t:(await e.innerText()).trim(), y:(await box(e)).y}); } names.sort((p,q)=>p.y-q.y);
   const n=await idbNote(); const nb=n.blocks.find(b=>b.id==='b2');
   ok('7 блок з аркуша заїхав в область останнім ('+names.map(o=>o.t).join(' → ')+'); модель: parent, col 0, ряд '+(nb&&nb.row), names.length===3 && names[2].t==='Другий праворуч' && nb && nb.parent==='A' && nb.col===0 && nb.row===4); }
-// 8 огляд «як на компʼютері»: полотно 1024 у зменшенні, блоки в різних колонках; назад — стрічка
-{ await pg.locator('#viewBtn').tap(); await pg.waitForTimeout(400);
+// 8 огляд «як на компʼютері»: полотно 1024 у зменшенні, блоки в різних колонках; назад — стрічка. Кнопка показує стан (aria-pressed) і підказку, куди перемкне
+{ const vb=()=>pg.locator('#viewBtn').evaluate(e=>({p:e.getAttribute('aria-pressed'), t:e.title}));
+  await pg.locator('#viewBtn').tap(); await pg.waitForTimeout(400);
   const zoom=await pg.locator('#sheet').evaluate(e=>({z:getComputedStyle(e).zoom, w:e.clientWidth, ov:e.classList.contains('overview'), fl:e.classList.contains('flow')}));
   const t=await tops(); const xs=new Set(t.map(o=>o.x));
   ok('8a огляд: zoom '+zoom.z+', ширина полотна '+zoom.w+', блоки в різних колонках ('+xs.size+')', zoom.ov && !zoom.fl && parseFloat(zoom.z)<1 && zoom.w===1024 && xs.size>=2 && !(await pg.locator('#fab').isVisible()));
+  { const v=await vb(); ok('8b кнопка огляду натиснута (aria-pressed '+v.p+'), підказка «'+v.t+'»', v.p==='true' && v.t==='Показати стрічкою'); }
   await pg.locator('#viewBtn').tap(); await pg.waitForTimeout(400);
-  ok('8b назад у стрічку', await pg.locator('#sheet').evaluate(e=>e.classList.contains('flow') && !e.classList.contains('overview') && !e.style.zoom) && await pg.locator('#fab').isVisible()); }
+  ok('8c назад у стрічку', await pg.locator('#sheet').evaluate(e=>e.classList.contains('flow') && !e.classList.contains('overview') && !e.style.zoom) && await pg.locator('#fab').isVisible());
+  { const v=await vb(); ok('8d кнопка знову відпущена (aria-pressed '+v.p+'), підказка «'+v.t+'»', v.p==='false' && v.t==='Показати як на компʼютері'); } }
 // 9 широкий екран → полотно; вузький → стрічка
 { await pg.setViewportSize({width:900,height:844}); await pg.waitForTimeout(400); const wide=await pg.locator('#sheet').evaluate(e=>e.classList.contains('flow')); const t=await tops(); const xs=new Set(t.map(o=>o.x));
   await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(400); const narrow=await pg.locator('#sheet').evaluate(e=>e.classList.contains('flow'));

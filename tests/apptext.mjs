@@ -90,7 +90,11 @@ await pg.keyboard.type('Запуск: що зробити до пʼятниці'
 // 10 кнопки: приховані, при наведенні на область — видно; «⋯» замість окремих кнопок розгрупування/видалення
 { const more=area.locator('.cb.more'), col=area.locator('.cb.colorb'), fold=area.locator('.cb.fold'); const o0=[await op(more),await op(col),await op(fold)];
   await area.locator('.abody').hover({position:{x:200,y:60}}); await pg.waitForTimeout(200); const o1=[await op(more),await op(col)];
-  ok('10 «⋯» і колір приховані ('+o0.slice(0,2)+'), згортання видно ('+o0[2]+'); при наведенні на область — видно ('+o1+'); окремих кнопок видалення/розгрупування у шапці немає', o0[0]===0 && o0[1]===0 && o0[2]===1 && o1[0]===1 && o1[1]===1 && (await area.locator('.cbar .ungroup, .cbar .del').count())===0); }
+  ok('10 «⋯» і колір приховані ('+o0.slice(0,2)+'), згортання видно ('+o0[2]+'); при наведенні на область — видно ('+o1+'); окремих кнопок видалення/розгрупування у шапці немає', o0[0]===0 && o0[1]===0 && o0[2]===1 && o1[0]===1 && o1[1]===1 && (await area.locator('.cbar .ungroup, .cbar .del').count())===0);
+  // 10b «⋯» має клас more, як і «Розгорнути» блока коду, але виглядає як сусідні кнопки: та сама висота, рядок, колір, без рамки згори
+  const look=loc=>loc.evaluate(e=>{ const s=getComputedStyle(e), r=e.getBoundingClientRect(); return [s.display,s.height,s.borderTopWidth,s.borderRadius,s.fontSize,s.color,Math.round(r.top)].join(' '); });
+  const lm=await look(more), lc=await look(col), lf=await look(fold);
+  ok('10b «⋯» такий самий, як колір і згортання ('+lm+' / '+lc+')', lm===lc && lm===lf); }
 // 11 наведення на область не підсвічує блоки всередині
 { const a=await box(area.locator('.ablk')); await pg.mouse.click(a.x+60, a.y+70); await pg.keyboard.type('дитина'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
   const kid=area.locator('.abody .blk').first(); await area.locator('.abody').hover({position:{x:a.w-60,y:a.h-70}}); await pg.waitForTimeout(200); const b0=await bg(kid.locator('.txt')); const g0=await op(kid.locator('.grip'));
