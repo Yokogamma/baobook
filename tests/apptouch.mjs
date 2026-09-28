@@ -45,6 +45,8 @@ await pg.keyboard.type('в області'); await pg.keyboard.press('Escape'); 
 // 8 підказка показується не більше трьох разів
 await tap(300,300); await pg.waitForTimeout(100); await tap(300,300); await pg.waitForTimeout(100); await pg.evaluate(()=>document.getElementById('toast').classList.remove('show')); await tap(300,300); await pg.waitForTimeout(250);
 ok('8 підказка про утримання показується щонайбільше тричі', !(await pg.locator('#toast').evaluate(e=>e.classList.contains('show'))));
+// 8b довге натискання не запускає системне виділення: на аркуші user-select:none, текст блоків виділяється
+ok('8b на дотику аркуш не виділяється, текст блоків — виділяється', (await pg.locator('#sheet').evaluate(e=>getComputedStyle(e).userSelect))==='none' && (await pg.locator('.blk .txt').first().evaluate(e=>getComputedStyle(e).userSelect))!=='none');
 // 9 після перезавантаження все на місці
 await pg.reload(); await pg.waitForTimeout(500);
 ok('9 після перезавантаження блоки й область збережені', (await pg.locator('.blk .txt').filter({hasText:'перший на телефоні'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'через плюс'}).count())===1 && (await pg.locator('.blk.is-area .abody .txt').filter({hasText:'в області'}).count())===1);
