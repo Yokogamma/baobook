@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
@@ -68,7 +69,9 @@ ok('13 клік без протяжки → текстовий блок', (await
 await pg.mouse.move(10,10); await pg.evaluate(()=>window.scrollTo(0,0));
 // 14 тач: тап створює блок одразу
 const tctx=await br.newContext({viewport:{width:390,height:844},hasTouch:true}); const tp=await tctx.newPage(); await tp.goto(new URL('../index.html', import.meta.url).href); await tp.waitForTimeout(300);
-await tp.touchscreen.tap(150,400); await tp.waitForTimeout(100); ok('14 тач: тап створює текстовий блок у фокусі', await tp.evaluate(()=>document.activeElement.classList.contains('txt')));
+const tcdp=await tctx.newCDPSession(tp); await tp.touchscreen.tap(150,400); await tp.waitForTimeout(200); const tapMade=await tp.locator('#sheet .blk').count();
+await tcdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:150,y:400}]}); await tp.waitForTimeout(650); await tcdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]}); await tp.waitForTimeout(150);
+ok('14 тач: тап нічого не створює ('+tapMade+'), утримання створює текстовий блок у фокусі', tapMade===0 && (await tp.locator('#sheet .blk').count())===1 && await tp.evaluate(()=>document.activeElement.classList.contains('txt')));
 await tp.close(); await tctx.close();
 // скріншот сцени для користувача
 await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
@@ -76,6 +79,6 @@ await pg.mouse.move(440,180); await pg.mouse.down(); await pg.mouse.move(1000,47
 { const a=await box(pg.locator('.blk.is-area .ablk').first()); await pg.mouse.click(a.x+60,a.y+70); await pg.keyboard.type('Зібрати відгуки з тестування'); await pg.keyboard.press('Escape'); await pg.mouse.click(a.x+60,a.y+118); await pg.keyboard.type('Оновити скріншоти в описі'); await pg.keyboard.press('Escape'); await pg.mouse.click(a.x+330,a.y+70); await pg.keyboard.type('Дедлайн: пт, 16:00'); await pg.keyboard.press('Escape');
   await pg.locator('.blk.is-area .ablk').hover(); await pg.locator('.blk.is-area .colorb').click(); await pg.locator('.cpick button[data-c="blue"]').click(); }
 await pg.mouse.click(120,560); await pg.keyboard.type('Окрема думка поза областю'); await pg.keyboard.press('Escape'); await pg.mouse.move(700,700); await pg.waitForTimeout(200);
-await pg.screenshot({path:'app-area.png',clip:{x:280,y:0,width:1000,height:640}});
-await pg.locator('#themeBtn').click(); await pg.locator('#themeBtn').click(); await pg.waitForTimeout(200); await pg.screenshot({path:'app-area-sand.png',clip:{x:280,y:0,width:1000,height:640}});
+await pg.screenshot({path:OUT+'/app-area.png',clip:{x:280,y:0,width:1000,height:640}});
+await pg.locator('#themeBtn').click(); await pg.locator('#themeBtn').click(); await pg.waitForTimeout(200); await pg.screenshot({path:OUT+'/app-area-sand.png',clip:{x:280,y:0,width:1000,height:640}});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); await br.close(); process.exit(fails||errs.length?1:0);

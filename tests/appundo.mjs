@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); let dialogs=0; pg.on('dialog',d=>{ dialogs++; d.accept(); });
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const stored=async(re)=>(await idbAll()).some(n=>n.blocks.some(b=>new RegExp(re).test(b.text||'')||new RegExp(re).test(b.title||'')));
@@ -56,6 +57,6 @@ await pg.mouse.move(500,260); await pg.mouse.down(); await pg.mouse.move(1000,42
 await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await menu.locator('.del').click(); await pg.waitForTimeout(200);
 await pg.locator('#newBtn').click(); await pg.waitForTimeout(300);
 ok('6 нова нотатка: плашка сховалась, повернути не можна', !(await shown()) && (await pg.locator('.blk.is-area').count())===0);
-await pg.screenshot({path:'appundo-final.png'});
+await pg.screenshot({path:OUT+'/appundo-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

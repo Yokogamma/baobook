@@ -3,6 +3,7 @@ const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env
 const ctx=await br.newContext({viewport:{width:1280,height:900}, permissions:['clipboard-read','clipboard-write']});
 const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const paste=async(sel,text)=>pg.evaluate(([sel,text])=>{ const dt=new DataTransfer(); dt.setData('text/plain',text); (sel? document.querySelector(sel) : document.activeElement).dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); },[sel,text]);
 const JS=`// Дебаунс
 export function debounce(fn, wait = 300) {
@@ -67,7 +68,7 @@ ok('12b чіп перетворив його на блок коду', (await pg.
 // 14 друк у закритий блок → підказка, текст незмінний
 await cb.locator('.code').click(); await pg.keyboard.type('Ы'); await pg.waitForTimeout(80);
 ok('14 друк у закритий блок: підказка, текст не змінився', (await cb.locator('.hint').count())===1 && !(await cb.locator('code').textContent()).includes('Ы'));
-await pg.mouse.move(10,10); await pg.evaluate(()=>window.scrollTo(0,0)); await pg.waitForTimeout(200); await pg.screenshot({path:'app-code.png'});
-await pg.locator('#themeBtn').click(); await pg.locator('#themeBtn').click(); await pg.waitForTimeout(200); await pg.screenshot({path:'app-code-sand.png'});
-await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(400); await pg.screenshot({path:'app-code-mobile.png'});
+await pg.mouse.move(10,10); await pg.evaluate(()=>window.scrollTo(0,0)); await pg.waitForTimeout(200); await pg.screenshot({path:OUT+'/app-code.png'});
+await pg.locator('#themeBtn').click(); await pg.locator('#themeBtn').click(); await pg.waitForTimeout(200); await pg.screenshot({path:OUT+'/app-code-sand.png'});
+await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(400); await pg.screenshot({path:OUT+'/app-code-mobile.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); await br.close(); process.exit(fails||errs.length?1:0);

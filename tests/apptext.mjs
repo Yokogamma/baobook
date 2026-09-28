@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const op=async(loc)=>Number(await loc.evaluate(e=>getComputedStyle(e).opacity));
@@ -93,6 +94,6 @@ await pg.keyboard.type('Запуск: що зробити до пʼятниці'
   await kid.locator('.txt').hover(); await pg.waitForTimeout(200); const b1=await bg(kid.locator('.txt')); const g1=await op(kid.locator('.grip'));
   ok('11 наведення на область: дитина без фону й ручки ('+b0+', '+g0+'); наведення на дитину: фон і ручка є ('+g1+')', /rgba\(0, 0, 0, 0\)/.test(b0) && g0===0 && b1!==b0 && g1===1); }
 
-await pg.screenshot({path:'apptext-final.png',clip:{x:280,y:60,width:1000,height:840}});
+await pg.screenshot({path:OUT+'/apptext-final.png',clip:{x:280,y:60,width:1000,height:840}});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

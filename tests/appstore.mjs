@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const PAGE=new URL('../index.html', import.meta.url).href;
 const idbNotes=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const lsNotes=pg=>pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
@@ -31,8 +32,8 @@ const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new P
     {id:'imp1',title:'Імпортована',blocks:[{id:'i1',fx:0.2,row:4,text:'прийшла з файлу'}],created:1,updated:Date.now()+9000},
     {id:'mig1',title:'Мігрована',blocks:[{id:'m1',fx:0.3,row:3,text:'оновлений текст з файлу'}],created:1,updated:Date.now()+20000},
     {id:data.notes.find(n=>n.id!=='mig1').id,title:'',blocks:[{id:'x',fx:0.2,row:2,text:'СТАРА версія, не має замінити'}],created:1,updated:5}]};
-  fs.writeFileSync('import-test.json', JSON.stringify(imp));
-  await pg.locator('#importFile').setInputFiles('import-test.json'); await pg.waitForTimeout(600);
+  fs.writeFileSync(OUT+'/import-test.json', JSON.stringify(imp));
+  await pg.locator('#importFile').setInputFiles(OUT+'/import-test.json'); await pg.waitForTimeout(600);
   const toast=await pg.locator('#toast').innerText();
   ok('5a імпорт: повідомлення «1 нова, 1 оновлено, 1 без змін» ('+toast.trim()+')', /Імпортовано: 1 нова, 1 оновлено, 1 без змін/.test(toast));
   await pg.locator('#list .item').filter({hasText:'Імпортована'}).click(); await pg.waitForTimeout(200);
@@ -43,7 +44,7 @@ const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new P
   ok('5d старіша версія з файлу не замінила локальну', (await pg.locator('.blk .txt').filter({hasText:'перша нотатка в IndexedDB'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'СТАРА версія'}).count())===0);
   await pg.reload(); await pg.waitForTimeout(400);
   ok('5e після перезавантаження всі три нотатки на місці', (await pg.locator('#list .item').count())===3 && (await idbNotes(pg)).length===3);
-  fs.writeFileSync('bad.json','{"hello":1}'); await pg.locator('#importFile').setInputFiles('bad.json'); await pg.waitForTimeout(300);
+  fs.writeFileSync(OUT+'/bad.json','{"hello":1}'); await pg.locator('#importFile').setInputFiles(OUT+'/bad.json'); await pg.waitForTimeout(300);
   ok('5f чужий файл: зрозуміле повідомлення, нічого не змінилось', /не файл експорту/.test(await pg.locator('#toast').innerText()) && (await pg.locator('#list .item').count())===3);
   console.log(errs.length? errs.join('\n') : '✓ без помилок (IndexedDB)'); if(errs.length) fails++; await ctx.close(); }
 
