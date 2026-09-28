@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
+const pg=await br.newPage({viewport:{width:1280,height:900}}); const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
+await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+const paste=(text)=>pg.evaluate((text)=>{ const dt=new DataTransfer(); dt.setData('text/plain',text); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); },text);
+let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
+await pg.mouse.click(400,300); await pg.keyboard.type('перший'); await pg.keyboard.press('Enter'); await pg.keyboard.type('другий'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
+await pg.mouse.click(400,420); await pg.keyboard.type('нотатка: '); await paste('рядок A\r\nрядок B\r\nрядок C'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
+const saved=(await idbAll())[0].blocks.map(b=>b.text);
+ok('Enter у тексті зберігає перенос: '+JSON.stringify(saved[0]), saved[0]==='перший\nдругий');
+ok('вставка в непорожній блок зберігає переноси: '+JSON.stringify(saved[1]), saved[1]==='нотатка: рядок A\nрядок B\nрядок C');
+await pg.reload(); await pg.waitForTimeout(400);
+const shown=await pg.evaluate(()=>[...document.querySelectorAll('.blk .txt')].map(t=>({h:t.offsetHeight, text:t.textContent})));
+ok('після перезавантаження: два блоки, 2 і 3 рядки заввишки', shown.length===2 && shown[0].h===48 && shown[1].h===72);
+await pg.mouse.click(400,600); await paste('x = 1\r\ny = 2\r\nz = x + y\r\nprint(z)'); await pg.waitForTimeout(150);
+ok('вставка коду в порожній блок, як і раніше, дає блок коду', (await pg.locator('.blk.is-code').count())===1);
+console.log(errs.length?('PAGEERROR '+errs.join('|')):'✓ без помилок'); await br.close(); process.exit(fails||errs.length?1:0);
