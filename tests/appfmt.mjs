@@ -59,6 +59,11 @@ await pg.mouse.click(500,800); await pg.keyboard.type('Доступ: парол�
   const x2=await t.evaluate(e=>{ const r=document.createRange(); const n=[...e.childNodes].find(n=>n.nodeType===3&&/komax/.test(n.nodeValue)); const i=n.nodeValue.indexOf('komax'); r.setStart(n,i); r.setEnd(n,i+1); return r.getBoundingClientRect().left; });
   await pg.mouse.dblclick(x2+2, b.y+b.height/2); await pg.waitForTimeout(250); const s2=await pg.evaluate(()=>getSelection().toString());
   ok('12 подвійний клік: «'+s1+'» і «'+s2+'» (весь токен, без коми й крапки)', s1==='Zx9!vQ2m' && s2==='https://komax.top/admin'); }
+// 12b токен у кінці рядка не захоплює початок наступного рядка
+await pg.keyboard.press('Escape'); await pg.mouse.click(900,800); await pg.keyboard.type('ключ dev: asdfgasfgd1cabfb4fbb8ea1167'); await pg.keyboard.press('Enter'); await pg.keyboard.type('ключ ssh: qwerty'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+{ const t=pg.locator('.blk .txt').filter({hasText:'ключ dev'}).first(); const x=await t.evaluate(e=>{ const w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while((n=w.nextNode())){ if(/asdfg/.test(n.nodeValue)){ const r=document.createRange(); const i=n.nodeValue.indexOf('asdfg'); r.setStart(n,i+3); r.setEnd(n,i+4); const b=r.getBoundingClientRect(); return {x:b.left,y:b.top+b.height/2}; } } });
+  await pg.mouse.dblclick(x.x, x.y); await pg.waitForTimeout(250); const s1=await pg.evaluate(()=>getSelection().toString());
+  ok('12b токен наприкінці рядка: «'+s1+'» (без «ключ» із наступного рядка)', s1==='asdfgasfgd1cabfb4fbb8ea1167'); }
 // 13 Б: зворотні лапки → чип; клік по чипу в нередагованому блоці копіює; Ctrl+E знімає чип
 await pg.keyboard.press('Escape'); await pg.mouse.click(500,860); await pg.keyboard.type('Ключ: `sk-live-77x` далі текст'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(450);
 { const blk=pg.locator('#sheet > .blk').filter({hasText:'Ключ:'}).first(); const st=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
