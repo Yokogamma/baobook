@@ -153,7 +153,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .sheet.has .empty{opacity:0}
 
 .blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;pointer-events:none}
-.blk .grip,.blk .txt,.blk .cblk{pointer-events:auto}
+.blk .grip,.blk .txt,.blk .cblk,.blk .ablk{pointer-events:auto}
 .blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -215,7 +215,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .lang.auto::after{content:" · авто";font-weight:400;text-transform:none;letter-spacing:0;opacity:.7}
 /* назва блока: поруч із мовою, редагується на місці; порожня показує підказку лише при наведенні */
 /* назва по центру шапки (відносно картки, тож не стрибає, коли зʼявляються кнопки); на вузьких картках — зліва після мови */
-.cblk{container-type:inline-size}
+.cblk,.ablk{container-type:inline-size}
 .cbar{display:grid;grid-template-columns:minmax(max-content,1fr) minmax(0,auto) minmax(max-content,1fr);align-items:center}
 .lang{justify-self:start} .acts{display:flex;align-items:center;gap:2px;justify-self:end}
 .ctitle{justify-self:center;min-width:0;max-width:100%;padding:0 8px;height:24px;line-height:24px;border-radius:6px;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:0;cursor:text;user-select:text;-webkit-user-select:text;text-align:center}
@@ -239,6 +239,23 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .opt.sel,.opt:hover{background:var(--hover);color:var(--ink)} .opt.cur{font-weight:500;color:var(--ink)} .opt.cur::after{content:" ✓";color:var(--accent)}
 .opt.auto{border-bottom:.5px solid var(--line);border-radius:6px 6px 0 0;margin-bottom:2px}
 @media (hover:none){ .rz{opacity:.6;width:26px;height:26px} }
+/* ── область: картка як у коду, всередині — звичайні блоки; висота росте за вмістом ─────── */
+.blk.is-area .ablk{position:relative;flex:1 1 auto;width:100%;max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--area-bg,var(--code-bg));color:var(--ink);transition:border-color .15s}
+.ablk .cbar{padding-right:6px} .akind{justify-self:start;font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-3);padding:0 8px;white-space:nowrap;flex:0 0 auto}
+.abody{position:relative;min-height:24px;cursor:text}
+.ablk.collapsed .abody{display:none} .ablk.collapsed{height:calc(2*var(--g) - 2px)}
+.ablk .cb.fold{opacity:1} .ablk .cb.fold svg{transition:transform .15s} .ablk.collapsed .cb.fold svg{transform:rotate(-90deg)}
+.ablk .cb.del:hover{color:#c33}
+.ablk.resizing{border-color:var(--sel-line)} .ablk.settle{transition:width .16s ease}
+.ablk[data-color="yellow"]{--area-bg:#fbf1c7} .ablk[data-color="green"]{--area-bg:#e1f2e3} .ablk[data-color="blue"]{--area-bg:#dfecfb} .ablk[data-color="pink"]{--area-bg:#fbe3ea} .ablk[data-color="purple"]{--area-bg:#ebe4fb}
+:root[data-theme="dark"] .ablk[data-color="yellow"]{--area-bg:#3a3520} :root[data-theme="dark"] .ablk[data-color="green"]{--area-bg:#1f3628} :root[data-theme="dark"] .ablk[data-color="blue"]{--area-bg:#1e2d42} :root[data-theme="dark"] .ablk[data-color="pink"]{--area-bg:#3c2430} :root[data-theme="dark"] .ablk[data-color="purple"]{--area-bg:#2e2744}
+@media (prefers-color-scheme:dark){ :root:not([data-theme]) .ablk[data-color="yellow"]{--area-bg:#3a3520} :root:not([data-theme]) .ablk[data-color="green"]{--area-bg:#1f3628} :root:not([data-theme]) .ablk[data-color="blue"]{--area-bg:#1e2d42} :root:not([data-theme]) .ablk[data-color="pink"]{--area-bg:#3c2430} :root:not([data-theme]) .ablk[data-color="purple"]{--area-bg:#2e2744} }
+:root[data-theme="sand"] .ablk[data-color="yellow"]{--area-bg:#f3e3b0} :root[data-theme="sand"] .ablk[data-color="green"]{--area-bg:#dfe6c2} :root[data-theme="sand"] .ablk[data-color="blue"]{--area-bg:#d8e3e0} :root[data-theme="sand"] .ablk[data-color="pink"]{--area-bg:#f1d6cc} :root[data-theme="sand"] .ablk[data-color="purple"]{--area-bg:#e4d8d8}
+.cpick{position:absolute;right:8px;top:30px;z-index:8;display:flex;gap:6px;padding:6px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow)}
+.cpick button{width:22px;height:22px;border-radius:50%;border:.5px solid var(--line-2);cursor:pointer;background:var(--sw);padding:0}
+.cpick button.cur{outline:2px solid var(--accent);outline-offset:1px}
+/* рамка, яку тягнуть мишею по порожньому аркушу — майбутня область */
+.marq{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:10px;pointer-events:none;z-index:4}
 /* чіп після вставки: «Вставлено як код · Зробити текстом» */
 .chip{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);background:var(--page);border:.5px solid var(--line-2);border-radius:999px;padding:4px 6px 4px 10px;box-shadow:var(--shadow);white-space:nowrap}
 .chip button{border:0;background:var(--hover);color:var(--ink);font:inherit;font-size:12px;padding:2px 8px;border-radius:999px;cursor:pointer}
@@ -288,6 +305,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
       <div class="tools">
         <span class="saved" id="saved"></span>
         <span class="cnt" id="cnt" title="Кількість блоків"></span>
+        <button class="tb" id="areaBtn" title="Нова область (на десктопі — просто протягніть мишею по порожньому місцю)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 9.5h8"/></svg></button>
         <button class="tb" id="spellBtn" title="Перевірка правопису" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="gridBtn" title="Сітка аркуша" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="themeBtn" title="Тема" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
@@ -297,7 +315,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     <div class="sheet" id="sheet">
       <div class="empty" id="empty">
         <div class="big">Клацніть будь-де — і пишіть саме там</div>
-        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Вставлений код стає блоком коду під замком: скопіювати можна одразу, редагувати — знявши замок. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</div>
+        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Вставлений код стає блоком коду під замком. Протягніть мишею по порожньому місцю — зʼявиться область, куди можна складати блоки й переносити її цілком. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</div>
       </div>
     </div>
   </main>
@@ -311,7 +329,7 @@ const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
-const minw=b=>b&&b.kind==='code'?MINW_CODE:MINW;
+const minw=b=>b&&(b.kind==='code'||b.kind==='area')?MINW_CODE:MINW;
 const TOUCH=matchMedia('(hover:none)').matches;
 
 /* ══ код: мова, розпізнавання вставки, підсвітка ═══════════════════════ */
@@ -372,7 +390,11 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 7"/></svg>',
   wrap:'<svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-4M4 18h4"/><path d="M13 16l-2 2 2 2"/></svg>',
   lockC:'<svg class="i closed" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
-  lockO:'<svg class="i open" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>'};
+  lockO:'<svg class="i open" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>',
+  palette:'<svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.2 0 2-.8 2-1.8 0-.6-.3-1-.6-1.4-.3-.4-.4-.7-.4-1.1 0-.9.7-1.5 1.6-1.5H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10" cy="7.5" r="1.1"/><circle cx="14" cy="7.5" r="1.1"/></svg>',
+  ungroup:'<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 3"/><path d="M9 12h6"/></svg>',
+  trash:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  chev:'<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>'};
 const GRIP='<div class="grip" title="Перетягнути"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
 const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
@@ -403,7 +425,7 @@ const db={
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
 function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); db.save(n); return n; }
-function lines(n){ return [...n.blocks].sort((a,b)=>(a.row-b.row)||(a.fx-b.fx)).flatMap(b=>(b.kind==='code'&&b.title? [b.title] : []).concat(b.text.split('\n'))).map(l=>l.trim()).filter(Boolean); }
+function lines(n){ return [...n.blocks].sort((a,b)=>(a.row-b.row)||((a.fx||0)-(b.fx||0))).flatMap(b=>((b.kind==='code'||b.kind==='area')&&b.title? [b.title] : []).concat((b.text||'').split('\n'))).map(l=>l.trim()).filter(Boolean); }
 function noteText(n){ return lines(n).join('\n'); }
 function titleOf(n){ return n.title.trim()||(lines(n)[0]||'').slice(0,80)||'Без назви'; }
 function previewOf(n){ const L=lines(n); return (n.title.trim()? L[0]:L[1])||''; }
@@ -438,13 +460,16 @@ function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
 
 /* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
-function serialize(){ return blocks.filter(b=>b.id).map(b=>{ const d={id:b.id,fx:b.fx,row:b.row,text:b.text}; if(b.kind==='code'){ d.kind='code'; if(b.lang) d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.open) d.open=true; if(b.title) d.title=b.title; } return d; }); }
+function serialize(){ return blocks.filter(b=>b.id).map(b=>{ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.parent=b.parent; d.col=b.col; } else d.fx=b.fx;
+  if(b.kind==='code'){ d.kind='code'; if(b.lang) d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.open) d.open=true; if(b.title) d.title=b.title; }
+  if(b.kind==='area'){ d.kind='area'; d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.title) d.title=b.title; if(b.color&&b.color!=='neutral') d.color=b.color; if(b.collapsed) d.collapsed=true; }
+  return d; }); }
 function markDirty(){ dirty=true; savedEl.textContent='●'; savedEl.className='saved pend'; clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); const ok=db.save(cur);
   savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok) savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800);
   updateItem(cur); }
 function openNote(n){ flushSave(); cur=n; S.current=n.id; db.setSettings(S);
-  blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.forEach(d=>make(d,false)); resolve(); update();
+  blocks.slice().forEach(b=>b.el.remove()); blocks=[]; [...n.blocks].sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
 function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id);
@@ -471,50 +496,87 @@ matchMedia('(max-width:900px)').addEventListener('change',e=>{ app.classList.tog
 /* ══ аркуш ════════════════════════════════════════════════════════════════
    Точки в G/2 + k·G. Початок тексту — на стовпчику точок (x), верх рядка — на ряду (y).
    Блок = клітинка {col,row} + кількість рядків; ширина — до краю або до сусіда праворуч. */
+/* ══ контейнери ═══════════════════════════════════════════════════════════
+   Блок лежить або на аркуші (parent немає), або в області (parent = id області; col/row — відносно її внутрішньої сітки).
+   Уся геометрія рахується всередині контейнера; область на аркуші — звичайний блок, що виштовхує сусідів. */
+const byId=id=>blocks.find(b=>b.id===id);
+const ctn=b=>b&&b.parent? (byId(b.parent)||null) : null;
+const ctnEl=b=>{ const a=ctn(b); return a? a.abody : sheet; };
+/* внутрішня сітка області збігається з сіткою аркуша: лівий відступ і верхній (залежить від висоти шапки) добираються так,
+   щоб дочірній блок стояв на тих самих клітинках, що й на аркуші — тоді вхід, вихід і розгрупування нічого не зсувають */
+const APAD=()=>(G()-(CL()+1)%G())%G(), AT=15;
 const W=()=>sheet.clientWidth;
-const xOf=col=>G()/2+col*G(), yOf=row=>G()/2+row*G();
-const maxCol=()=>Math.floor((W()-PAD()-MINW-G()/2)/G());
-const clampCol=c=>Math.max(1, Math.min(maxCol(), c)), clampRow=r=>Math.max(2, r);
-const colOfX=x=>clampCol(Math.round((x-G()/2)/G())), rowOfY=y=>clampRow(Math.round((y-G()/2)/G()));
-const live=()=>blocks.filter(b=>!b.hidden);
+const cW=a=>a? (a.innerW||0) : W();
+const cOX=a=>a? APAD() : G()/2-OFF();                        // лівий край блока в col 0
+const cOY=a=>a? (a.at||AT) : G()/2;                          // верх блока в row 0
+const cPadR=a=>a? 6 : PAD();
+const cMinRow=a=>a? 0 : 2, cMinCol=a=>a? 0 : 1;
+const xlOf=(col,a)=>cOX(a)+col*G(), yOf=(row,a)=>cOY(a)+row*G();
+const xOf=(col,a)=>xlOf(col,a)+OFF();                        // початок тексту
+const maxColFor=(b,a)=>Math.floor((cW(a)-cPadR(a)-minw(b)-cOX(a))/G());
+const clampColFor=(c,b,a)=>Math.max(cMinCol(a), Math.min(maxColFor(b,a), c));
+const clampRowFor=(r,a)=>Math.max(cMinRow(a), r);
+const colOfX=(x,a,b)=>clampColFor(Math.round((x-cOX(a)-OFF())/G()), b||{}, a||null);   // x — початок тексту в координатах контейнера
+const rowOfY=(y,a)=>clampRowFor(Math.round((y-cOY(a))/G()), a||null);                   // y — верх блока
+const live=a=>blocks.filter(b=>!b.hidden && ctn(b)===(a||null));
 // порожній текстовий блок («Пишіть…», ще не набрано нічого) не є перешкодою: його не обтікають і він нікого не виштовхує
-const isSolid=o=>o.el===gbox || o.kind==='code' || !!(o.text||'').trim();
-const solid=()=>live().filter(isSolid);
-function rect(b){ const x0=xOf(b.col), xl=x0-OFF(); return {x0, xl, y0:yOf(b.row), r0:b.row, r1:b.row+(b.lines||1), x1:xl+(b.w||minw(b))}; }
-function rawWidth(b){ const r=rect(b); let right=W()-PAD();
-  for(const o of solid()){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl-6); }
+const isSolid=o=>o.el===gbox || o.kind==='code' || o.kind==='area' || !!(o.text||'').trim();
+const solid=a=>live(a).filter(isSolid);
+function rect(b){ const a=ctn(b), xl=xlOf(b.col,a); return {x0:xl+OFF(), xl, y0:yOf(b.row,a), r0:b.row, r1:b.row+(b.lines||1), x1:xl+(b.w||minw(b))}; }
+function rawWidth(b){ const a=ctn(b), r=rect(b); let right=cW(a)-cPadR(a);
+  for(const o of solid(a)){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl-6); }
   return right-r.xl; }
 function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-6-L.xl<minw(left); }
-function tooTight(b){ const r=rect(b); return r.xl+minw(b)>W()-PAD()+1 || rawWidth(b)<minw(b); }
-function fits(b){ return !tooTight(b) && !solid().some(o=>o!==b && overlaps(b,o)); }
-const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки коду (ручка + gap)
+function tooTight(b){ const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR(a)+1 || rawWidth(b)<minw(b); }
+function fits(b){ return !tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o)); }
+const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки (ручка + gap)
 function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));
-  if(b.kind==='code' && b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
+  if((b.kind==='code'||b.kind==='area') && b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
   if(b.kind==='code' && b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
   if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
   else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
+  else if(b.kind==='area') areaMeasure(b);
   else b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }
-function resolve(fixed){
+/* область: ширина внутрішньої сітки — з DOM; висота — шапка + вміст (+ мінімум із ручки), рівно в рядах */
+function areaMeasure(b){ b.innerW=b.abody.clientWidth || (b.w-CL()-1); const g=G(), barH=b.card.querySelector('.cbar').offsetHeight;
+  b.at=(g-(barH+1)%g)%g;                                       // верхній відступ: рядки дітей — на рядах сітки аркуша
+  if(b.collapsed){ b.lines=Math.ceil((barH+2)/g); b.card.style.height=(b.lines*g-2)+'px'; return; }
+  const kids=live(b); const content=Math.max(1, ...kids.map(o=>o.row+(o.lines||1)));
+  b.lines=Math.max(b.ch||0, Math.ceil((barH+1+b.at+content*g+12)/g)); b.card.style.height=''; b.abody.style.height=(b.lines*g-barH-2)+'px'; }
+function resolveIn(a, fixed){
   for(let pass=0;pass<3;pass++){
-    live().forEach(render);
-    const order=live().sort((a,b)=>(a===fixed?-1:b===fixed?1:0)||(a.row-b.row)||(a.col-b.col)), placed=[];
+    live(a).forEach(render);
+    const order=live(a).sort((x,y)=>(x===fixed?-1:y===fixed?1:0)||(x.row-y.row)||(x.col-y.col)), placed=[];
     for(const b of order){ let g=0; while(g++<60){ const hit=placed.find(p=>overlaps(b,p)); if(!hit) break; b.row=hit.row+hit.lines; } if(isSolid(b)) placed.push(b); }
   }
-  live().forEach(render); growSheet();
+  live(a).forEach(render);
 }
-function growSheet(){ let bottom=0; live().forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(window.innerHeight, bottom+5*G())+'px'; field(); }
+function resolve(fixed){
+  const a=fixed? ctn(fixed) : null;
+  if(a) resolveIn(a, fixed);
+  resolveIn(null, a||fixed);
+  live(null).filter(o=>o.kind==='area').forEach(ar=>{ resolveIn(ar, ar===a? fixed : undefined); render(ar); });   // ширини областей могли змінитись
+  resolveIn(null, a||fixed);
+  growSheet();
+}
+function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(window.innerHeight, bottom+5*G())+'px'; field(); }
 function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
 function make(d, focus){
-  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, text:d.text||'', lines:1, w:MINW, kind:d.kind==='code'?'code':undefined, lang:d.lang, wrap:d.wrap, num:d.num, cw:d.cw, ch:d.ch, open:!!d.open, title:d.title||''};
-  if(b.col===undefined) b.col=colOfX(b.fx*W()); if(b.fx===undefined) b.fx=xOf(b.col)/W();
-  if(b.kind==='code') buildCode(b); else buildText(b);
+  const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, parent:d.parent, text:d.text||'', lines:1, w:MINW,
+    kind:(d.kind==='code'||d.kind==='area')?d.kind:undefined, lang:d.lang, wrap:d.wrap, num:d.num, cw:d.cw, ch:d.ch, open:!!d.open, title:d.title||'', color:d.color, collapsed:!!d.collapsed};
+  if(b.kind==='area') b.parent=undefined;                                   // вкладеності немає
+  if(b.parent && !(byId(b.parent)||{}).abody) b.parent=undefined;          // осиротілий — на аркуш
+  const a=ctn(b);
+  if(b.col===undefined) b.col=colOfX((b.fx||0)*cW(a), a, b); if(b.fx===undefined && !a) b.fx=xOf(b.col,null)/W();
+  if(b.kind==='code') buildCode(b); else if(b.kind==='area') buildArea(b); else buildText(b);
+  (a? a.abody : sheet).appendChild(b.el);
   blocks.push(b); b.el.addEventListener('pointerdown',e=>e.stopPropagation()); drag(b, b.el.querySelector('.grip'));
   resolve(b); update(); if(focus) focusBlock(b); return b;
 }
-function focusBlock(b){ if(b.kind==='code') b.api.unlock(); else b.txt.focus(); }
+function focusBlock(b){ if(b.kind==='code') b.api.unlock(); else if(b.kind==='area') b.ttlEl.focus(); else b.txt.focus(); }
 function relayout(b){ const before=b.lines; render(b); if(b.lines!==before) resolve(b); else growSheet(); }
 
 /* текстовий блок */
@@ -537,10 +599,10 @@ function buildText(b){
     b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text)); });
 }
 /* перетворення блоків: та сама клітинка, той самий id */
-function toCode(b, text){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,kind:'code',text:text.replace(/\r\n?/g,'\n').replace(/\n+$/,'')}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
-function toText(b){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,text:b.text}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
+function toCode(b, text){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,parent:b.parent,kind:'code',text:text.replace(/\r\n?/g,'\n').replace(/\n+$/,'')}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
+function toText(b){ const d={id:b.id,fx:b.fx,col:b.col,row:b.row,parent:b.parent,text:b.text}; const i=blocks.indexOf(b); if(i>=0) blocks.splice(i,1); b.el.remove(); const nb=make(d,false); markDirty(); return nb; }
 function chip(b, label, btnLabel, onSwap){ sheet.querySelectorAll('.chip').forEach(c=>c.remove()); const c=el('div','chip'); c.innerHTML=label+' <button class="swap">'+btnLabel+'</button><button class="x" title="Сховати">✕</button>';
-  c.style.left=(b.el.offsetLeft+OFF())+'px'; c.style.top=(b.el.offsetTop+b.el.offsetHeight+4)+'px'; c.addEventListener('pointerdown',e=>e.stopPropagation());
+  const br=b.el.getBoundingClientRect(), sr=sheet.getBoundingClientRect(); c.style.left=(br.left-sr.left+OFF())+'px'; c.style.top=(br.bottom-sr.top+4)+'px'; c.addEventListener('pointerdown',e=>e.stopPropagation());
   const kill=()=>c.remove(); c.querySelector('.x').addEventListener('click',kill); c.querySelector('.swap').addEventListener('click',()=>{ kill(); onSwap(); }); setTimeout(kill,6000); }
 
 /* блок коду: замок («тільки читання») типово, копіювати можна завжди */
@@ -559,7 +621,8 @@ function buildCode(b){
   ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
   ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
   ttlEl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
-  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; flushSave(); });
+  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
+  ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
   if(b.wrap===undefined) b.wrap=true; b.wrap=!!b.wrap; b.num=!!b.num;   // перенос типово: без горизонтальної смуги
   card.classList.toggle('wrapped',b.wrap); card.querySelector('.wrapb').setAttribute('aria-pressed',b.wrap); card.classList.toggle('num',b.num); card.querySelector('.num').setAttribute('aria-pressed',b.num);
   /* довгий блок: згортаємо до b.ch рядків (типово 12, якщо понад 14), решта — за кнопкою; жодної внутрішньої прокрутки */
@@ -644,65 +707,133 @@ function buildCode(b){
   b.el.addEventListener('focusout',()=>{ setTimeout(()=>{ if(b.editing && !b.el.contains(document.activeElement)) lock(); },0); });
   b.api={lock,unlock,view,copy,closeMenu,applyCut}; view();
 }
-function remove(b){ if(b.api&&b.api.closeMenu) b.api.closeMenu(); blocks=blocks.filter(x=>x!==b); b.el.remove(); resolve(); update(); markDirty(); }
+function remove(b){ if(b.api&&b.api.closeMenu) b.api.closeMenu(); if(b.kind==='area') blocks.filter(o=>o.parent===b.id).forEach(o=>{ blocks=blocks.filter(x=>x!==o); o.el.remove(); });
+  blocks=blocks.filter(x=>x!==b); b.el.remove(); resolve(); update(); markDirty(); }
+/* розгрупувати: область зникає, блоки лишаються на своїх місцях на аркуші */
+function ungroup(a){ const sr=sheet.getBoundingClientRect(); const kids=blocks.filter(o=>o.parent===a.id);
+  kids.forEach(o=>{ const r=o.el.getBoundingClientRect(); o.parent=undefined; o.col=colOfX(r.left-sr.left+OFF(),null,o); o.row=rowOfY(r.top-sr.top,null); o.fx=xOf(o.col,null)/W(); sheet.appendChild(o.el); });
+  blocks=blocks.filter(x=>x!==a); a.el.remove(); resolve(); update(); markDirty(); }
+/* область */
+const AREA_COLORS=['neutral','yellow','green','blue','pink','purple'];
+function buildArea(b){
+  b.el=el('div','blk is-area'); b.el.innerHTML=GRIP+'<div class="ablk"><div class="cbar"><span class="akind">Область</span><span class="ctitle" spellcheck="false" data-ph="Назва області…" role="textbox" aria-label="Назва області"></span><span class="acts">'
+    +'<button class="cb colorb" title="Колір тла">'+ICO.palette+'</button><button class="cb ungroup" title="Розгрупувати: прибрати область, блоки лишити на місці">'+ICO.ungroup+'</button><button class="cb del" title="Видалити область разом із вмістом">'+ICO.trash+'</button><button class="cb fold" title="Згорнути" aria-pressed="false">'+ICO.chev+'</button></span></div>'
+    +'<div class="abody"></div><div class="rz" title="Тягніть: ширина і мінімальна висота · подвійний клік — авто"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div></div>';
+  const card=b.el.querySelector('.ablk'); b.card=card; b.abody=card.querySelector('.abody'); b.cw=b.cw||12; if(!AREA_COLORS.includes(b.color)) b.color='neutral';
+  card.dataset.color=b.color; card.classList.toggle('collapsed',b.collapsed); card.querySelector('.fold').setAttribute('aria-pressed',b.collapsed); card.querySelector('.fold').title=b.collapsed?'Розгорнути':'Згорнути';
+  const ttlEl=card.querySelector('.ctitle'); b.ttlEl=ttlEl; ttlEl.textContent=b.title||''; ttlEl.contentEditable='plaintext-only'; if(!ttlEl.isContentEditable) ttlEl.contentEditable='true';
+  ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
+  ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
+  ttlEl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
+  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
+  ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
+  // клік у порожнє місце області → текстовий блок усередині
+  b.abody.addEventListener('pointerdown',e=>{ if(e.button!==0 || e.target!==b.abody) return; e.stopPropagation(); e.preventDefault();
+    const r=b.abody.getBoundingClientRect(); const col=colOfX(e.clientX-r.left,b,{}), row=rowOfY(e.clientY-r.top-G()/2,b); const probe={col,row,lines:1,w:MINW,parent:b.id}; const ok=fits(probe);
+    const pg=document.createElement('div'); pg.className='ping'+(ok?'':' bad'); pg.style.left=(xOf(col,b)-1)+'px'; pg.style.top=yOf(row,b)+'px'; b.abody.appendChild(pg); setTimeout(()=>pg.remove(),500);
+    if(!ok) return; const nb=make({col,row,parent:b.id},false); markDirty(); nb.txt.focus(); setTimeout(()=>{ if(document.activeElement!==nb.txt) nb.txt.focus(); },0); });
+  card.querySelector('.fold').addEventListener('click',e=>{ b.collapsed=!b.collapsed; card.classList.toggle('collapsed',b.collapsed); e.currentTarget.setAttribute('aria-pressed',b.collapsed); e.currentTarget.title=b.collapsed?'Розгорнути':'Згорнути'; closePick(); resolve(b); markDirty(); });
+  card.querySelector('.del').addEventListener('click',()=>{ const n=blocks.filter(o=>o.parent===b.id).length; if(!n || confirm('Видалити область «'+(b.title||'без назви')+'» разом із '+n+' '+(n===1?'блоком':'блоками')+'?')) remove(b); });
+  card.querySelector('.ungroup').addEventListener('click',()=>ungroup(b));
+  let pick=null; const closePick=()=>{ if(pick){ document.removeEventListener('pointerdown',pick._onDoc,true); pick.remove(); pick=null; } };
+  card.querySelector('.colorb').addEventListener('click',()=>{ if(pick){ closePick(); return; } pick=document.createElement('div'); pick.className='cpick';
+    pick.innerHTML=AREA_COLORS.map(c=>'<button data-c="'+c+'" class="'+(c===b.color?'cur':'')+'" title="'+c+'"></button>').join(''); card.appendChild(pick);
+    // свотчі беруть колір із тієї самої CSS-змінної, що й картка
+    pick.querySelectorAll('button').forEach(bt=>{ const probeCard=document.createElement('div'); probeCard.className='ablk'; probeCard.dataset.color=bt.dataset.c; probeCard.style.cssText='position:absolute;visibility:hidden'; card.appendChild(probeCard); bt.style.setProperty('--sw', getComputedStyle(probeCard).backgroundColor); probeCard.remove();
+      bt.addEventListener('click',()=>{ b.color=bt.dataset.c; card.dataset.color=b.color; closePick(); markDirty(); }); });
+    pick.addEventListener('pointerdown',e=>e.stopPropagation()); const onDoc=e=>{ if(!pick.contains(e.target)) closePick(); }; document.addEventListener('pointerdown',onDoc,true); pick._onDoc=onDoc; });
+  // ручка: ширина і мінімальна висота; вміст ніколи не ховається (висота не менша за вміст)
+  const rz=card.querySelector('.rz');
+  rz.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); rz.setPointerCapture(e.pointerId);
+    const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
+    const cr=card.getBoundingClientRect(), sx=e.clientX, sy=e.clientY, w0=cr.width, h0=cr.height; card.classList.add('resizing'); card.classList.remove('settle'); b.resizing=true; card.style.maxWidth='none'; card.style.flex='0 0 auto';
+    const move=ev=>{ const g=G(), avail=Math.max(minw(b), rawWidth(b))-CL();
+      const wpx=Math.max(MINW_CODE, Math.min(avail, w0+(ev.clientX-sx))); b.cw=Math.max(Math.ceil(MINW_CODE/g), Math.round(wpx/g));
+      const barH=card.querySelector('.cbar').offsetHeight; const content=Math.ceil((barH+1+(b.at||AT)+Math.max(1, ...live(b).map(o=>o.row+(o.lines||1)))*g+12)/g); const rows=Math.max(3, Math.round((h0+(ev.clientY-sy))/g)); b.ch = rows>content? rows : undefined;
+      card.style.width=wpx+'px'; relayout(b); };
+    const up=()=>{ rz.removeEventListener('pointermove',move); rz.removeEventListener('pointerup',up); rz.removeEventListener('pointercancel',up); card.classList.remove('resizing'); b.resizing=false; card.style.maxWidth=''; card.style.flex='';
+      card.classList.add('settle'); relayout(b); setTimeout(()=>card.classList.remove('settle'),220); markDirty(); };
+    rz.addEventListener('pointermove',move); rz.addEventListener('pointerup',up); rz.addEventListener('pointercancel',up); });
+  rz.addEventListener('dblclick',e=>{ e.stopPropagation(); b.ch=undefined; relayout(b); markDirty(); });
+  b.api={closeMenu:closePick};
+}
 function update(){ sheet.classList.toggle('has', blocks.length>0); cnt.textContent=blocks.length? blocks.length+(blocks.length===1?' блок':blocks.length<5?' блоки':' блоків') : ''; }
 
-function cellAt(e){ const r=sheet.getBoundingClientRect(); return {col:colOfX(e.clientX-r.left), row:rowOfY(e.clientY-r.top-G()/2)}; }
-sheet.addEventListener('pointerdown',e=>{
-  if(e.button!==0) return;
-  const c=cellAt(e), probe={col:c.col,row:c.row,lines:1,w:MINW}, ok=fits(probe);
-  const p=el('div','ping'+(ok?'':' bad')); p.style.left=(xOf(c.col)-1)+'px'; p.style.top=yOf(c.row)+'px'; setTimeout(()=>p.remove(),500);
-  e.preventDefault(); if(!ok) return;
+function cellAt(e){ const r=sheet.getBoundingClientRect(); return {col:colOfX(e.clientX-r.left,null,{}), row:rowOfY(e.clientY-r.top-G()/2,null)}; }
+function createAt(e){ const c=cellAt(e), probe={col:c.col,row:c.row,lines:1,w:MINW}, ok=fits(probe);
+  const p=el('div','ping'+(ok?'':' bad')); p.style.left=(xOf(c.col,null)-1)+'px'; p.style.top=yOf(c.row,null)+'px'; setTimeout(()=>p.remove(),500);
+  if(!ok) return;
   const b=make({col:c.col,row:c.row}, false); markDirty();
   b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0);
-  if(!toastShown){ toastShown=true; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),4500); }
+  if(!toastShown){ toastShown=true; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),4500); } }
+function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw,ch:rows},false); markDirty(); if(focus) b.ttlEl.focus(); return b; }
+/* миша: клік → текстовий блок, протяжка → область. Тач: клік одразу створює блок (протяжка — прокрутка сторінки) */
+let md=null, marq=null;
+function marqCells(e,m){ const s=sheet.getBoundingClientRect(), x=e.clientX-s.left, y=e.clientY-s.top;
+  const c1={col:Math.max(1,Math.round((x-G()/2)/G())), row:rowOfY(y-G()/2,null)}, c0=m.cell;
+  return {col:Math.min(c0.col,c1.col), row:Math.min(c0.row,c1.row), cw:Math.abs(c1.col-c0.col)+1, rows:Math.abs(c1.row-c0.row)+1}; }
+function drawMarq(e){ const r=marqCells(e,md); marq.style.left=(xlOf(r.col,null)+CL())+'px'; marq.style.top=yOf(r.row,null)+'px'; marq.style.width=(r.cw*G())+'px'; marq.style.height=(r.rows*G())+'px'; }
+sheet.addEventListener('pointerdown',e=>{
+  if(e.button!==0) return;
+  if(e.pointerType!=='mouse'){ e.preventDefault(); createAt(e); return; }
+  md={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},cell:cellAt(e),id:e.pointerId}; try{ sheet.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault();
 });
+sheet.addEventListener('pointerup',e=>{ if(!md) return; const m=md; md=null; try{ sheet.releasePointerCapture(m.id); }catch(_){}
+  if(marq){ const r=marqCells(e,m); marq.remove(); marq=null; if(r.cw>=2 && r.rows>=2) createArea(r.col,r.row,Math.max(12,r.cw),Math.max(3,r.rows),true); else createAt(m.ev); }
+  else createAt(m.ev); });
+sheet.addEventListener('pointercancel',()=>{ md=null; if(marq){ marq.remove(); marq=null; } });
 sheet.addEventListener('pointermove',e=>{
+  if(md){ if(marq || Math.abs(e.clientX-md.x)+Math.abs(e.clientY-md.y)>6){ if(!marq){ marq=el('div','marq'); sheet.classList.remove('hov'); } drawMarq(e); } return; }
   if(e.pointerType!=='mouse') return;
   if(e.target!==sheet && !e.target.closest('.empty')){ sheet.classList.remove('hov'); return; }
-  const c=cellAt(e); ghost.style.left=(xOf(c.col)-1)+'px'; ghost.style.top=yOf(c.row)+'px';
+  const c=cellAt(e); ghost.style.left=(xOf(c.col,null)-1)+'px'; ghost.style.top=yOf(c.row,null)+'px';
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
+document.getElementById('areaBtn').addEventListener('click',()=>{ const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
 document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
-  const row=Math.max(2, ...live().map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
+  const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
   const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty();
   if(isCode) chip(b,'Вставлено як код','Зробити текстом',()=>toText(b)); else if(maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text));
   b.el.scrollIntoView({block:'nearest'}); });
 
 function drag(b, grip){
-  let sx,sy,ox,oy,moved,from,others,probe;
+  let gx,gy,moved,from,others,probe,host;
   grip.addEventListener('pointerdown',e=>{
     e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId);
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
-    sx=e.clientX; sy=e.clientY; ox=b.el.offsetLeft; oy=b.el.offsetTop; moved=false; from={col:b.col,row:b.row};
+    const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
-    probe={col:b.col,row:b.row,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,el:gbox}; b.hidden=true; blocks.push(probe);
+    probe={col:b.col,row:b.row,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,parent:b.parent,el:gbox}; b.hidden=true; blocks.push(probe); ctnEl(probe).appendChild(gbox);
     b.el.classList.add('drag'); gbox.className='gbox on';
   });
   grip.addEventListener('pointermove',e=>{
-    if(!probe) return; const dx=e.clientX-sx, dy=e.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>2) moved=true;
-    const left=ox+dx, top=oy+dy; b.el.style.left=left+'px'; b.el.style.top=top+'px';
-    probe.col=colOfX(left+OFF()); probe.row=rowOfY(top);
+    if(!probe) return; if(Math.abs(e.clientX-(gx+b.el.getBoundingClientRect().left))+Math.abs(e.clientY-(gy+b.el.getBoundingClientRect().top))>2) moved=true;
+    const hr=host.getBoundingClientRect(); b.el.style.left=(e.clientX-gx-hr.left)+'px'; b.el.style.top=(e.clientY-gy-hr.top)+'px';
+    // куди кладемо: область під курсором (крім самих областей — вкладеності немає) або аркуш
+    let target=null; if(b.kind!=='area'){ for(const ar of live(null)){ if(ar.kind!=='area'||ar.collapsed) continue; const cr=ar.card.getBoundingClientRect(); if(e.clientX>=cr.left&&e.clientX<=cr.right&&e.clientY>=cr.top&&e.clientY<=cr.bottom){ target=ar; break; } } }
+    const tid=target?target.id:undefined; if(tid!==probe.parent){ probe.parent=tid; ctnEl(probe).appendChild(gbox); }
+    const tr=ctnEl(probe).getBoundingClientRect(); const left=e.clientX-gx-tr.left, top=e.clientY-gy-tr.top;
+    probe.col=colOfX(left+OFF(),target,probe); probe.row=rowOfY(top,target);
     others.forEach(o=>o.row=o.row0);
     const bad=tooTight(probe);
-    if(bad){ live().forEach(render); render(probe); } else resolve(probe);
+    if(bad){ live(target).forEach(render); render(probe); } else resolve(probe);
     gbox.className='gbox on'+(bad?' bad':'');
   });
   const end=()=>{
     if(!probe) return;
     const bad=gbox.classList.contains('bad'); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
-    b.el.classList.remove('drag'); gbox.className='gbox';
-    if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; }
-    else { b.col=probe.col; b.row=probe.row; }
-    b.fx=xOf(b.col)/W(); others.forEach(o=>delete o.row0); probe=null;
+    b.el.classList.remove('drag'); gbox.className='gbox'; sheet.appendChild(gbox);
+    if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
+    else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; }
+    ctnEl(b).appendChild(b.el); if(!b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
     resolve(b); if(moved) markDirty(); if(!moved) focusBlock(b);
   };
   grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
 }
 /* ширина аркуша змінюється і від вікна, і від панелі — стежимо за самим аркушем */
-let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; blocks.forEach(b=>{ b.col=colOfX(b.fx*w); }); resolve(); } field(); }).observe(sheet);
+let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*w,null,b); }); resolve(); } field(); }).observe(sheet);
 
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
 clearBtn.addEventListener('click',()=>{ if(!blocks.length||confirm('Очистити аркуш? Текст цієї нотатки буде видалено.')){ blocks.slice().forEach(remove); } });
