@@ -25,7 +25,7 @@ await pg.locator('.blk .txt').first().click(); await select(5,3); await pg.keybo
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const t=pg.locator('.blk .txt').first(); const b=await t.locator('i').boundingBox(); await pg.mouse.dblclick(b.x+b.width/2, b.y+b.height/2); await pg.waitForTimeout(250);
   const vis=await pg.locator('#bubble').isVisible(); const pressed=await pg.locator('#bubble button[data-cmd="italic"]').getAttribute('aria-pressed'); const bb=await pg.locator('#bubble').boundingBox();
-  ok('5a подвійний клік по слову: панель над виділенням, «I» підсвічена', vis && pressed==='true' && bb.y<b.y && (await pg.locator('#bubble button').count())===5);
+  ok('5a подвійний клік по слову: панель над виділенням, «I» підсвічена', vis && pressed==='true' && bb.y<b.y && (await pg.locator('#bubble button').count())===6);
   await pg.locator('#bubble button[data-cmd="underline"]').click(); await pg.waitForTimeout(450);
   const st=await stored(); ok('5b кнопка U додає підкреслення до «три», виділення й панель лишаються: '+(st&&st.html), st && /<i><u>три<\/u><\/i>|<u><i>три<\/i><\/u>/.test(st.html) && await pg.locator('#bubble').isVisible());
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); ok('5c після зняття виділення панель зникає', !(await pg.locator('#bubble').isVisible())); }
@@ -51,6 +51,25 @@ await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 { const blk=pg.locator('#sheet > .blk').filter({hasText:'Сервер:'}).first(); await blk.locator('.txt').hover(); await pg.waitForTimeout(150); const g=await blk.locator('.grip').boundingBox(); await pg.mouse.click(g.x+g.width/2, g.y+g.height/2); await pg.waitForTimeout(200);
   const clip=await pg.evaluate(()=>navigator.clipboard.readText());
   ok('11 клік по ручці копіює весь текст блока («'+clip+'»), ручка з галочкою, плашка «Скопійовано»', clip==='Сервер: пароль Zx9vQ2m порт 2222' && await blk.locator('.grip').evaluate(e=>e.classList.contains('done')) && /Скопійовано/.test(await pg.locator('#toast').innerText()) && !(await pg.evaluate(()=>document.activeElement.classList.contains('txt')))); }
+// 12 А: подвійний клік виділяє весь токен до пробілів, без розділових знаків по краях
+await pg.mouse.click(500,800); await pg.keyboard.type('Доступ: пароль Zx9!vQ2m, адреса https://komax.top/admin.'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+{ const t=pg.locator('.blk .txt').filter({hasText:'Доступ:'}).first(); const b=await t.boundingBox();
+  const x1=await t.evaluate(e=>{ const r=document.createRange(); const n=[...e.childNodes].find(n=>n.nodeType===3&&/Zx9/.test(n.nodeValue)); const i=n.nodeValue.indexOf('vQ2m'); r.setStart(n,i); r.setEnd(n,i+1); return r.getBoundingClientRect().left; });
+  await pg.mouse.dblclick(x1+2, b.y+b.height/2); await pg.waitForTimeout(250); const s1=await pg.evaluate(()=>getSelection().toString());
+  const x2=await t.evaluate(e=>{ const r=document.createRange(); const n=[...e.childNodes].find(n=>n.nodeType===3&&/komax/.test(n.nodeValue)); const i=n.nodeValue.indexOf('komax'); r.setStart(n,i); r.setEnd(n,i+1); return r.getBoundingClientRect().left; });
+  await pg.mouse.dblclick(x2+2, b.y+b.height/2); await pg.waitForTimeout(250); const s2=await pg.evaluate(()=>getSelection().toString());
+  ok('12 подвійний клік: «'+s1+'» і «'+s2+'» (весь токен, без коми й крапки)', s1==='Zx9!vQ2m' && s2==='https://komax.top/admin'); }
+// 13 Б: зворотні лапки → чип; клік по чипу в нередагованому блоці копіює; Ctrl+E знімає чип
+await pg.keyboard.press('Escape'); await pg.mouse.click(500,860); await pg.keyboard.type('Ключ: `sk-live-77x` далі текст'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(450);
+{ const blk=pg.locator('#sheet > .blk').filter({hasText:'Ключ:'}).first(); const st=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
+  ok('13a набір у зворотних лапках дає чип, текст після нього — звичайний: html «'+(st&&st.html)+'»', st && st.html==='Ключ: <code>sk-live-77x</code> далі текст' && st.text==='Ключ: sk-live-77x далі текст');
+  await pg.evaluate(()=>navigator.clipboard.writeText('')); const c=await blk.locator('code').boundingBox(); await pg.mouse.click(c.x+c.width/2, c.y+c.height/2); await pg.waitForTimeout(200);
+  ok('13b клік по чипу копіює лише його вміст, курсор у блок не ставиться, чип із позначкою', (await pg.evaluate(()=>navigator.clipboard.readText()))==='sk-live-77x' && !(await pg.evaluate(()=>document.activeElement.classList.contains('txt'))) && await blk.locator('code').evaluate(e=>e.classList.contains('done')));
+  await blk.locator('.txt').click({position:{x:10,y:12}}); await pg.waitForTimeout(100); const c2=await blk.locator('code').boundingBox(); await pg.mouse.click(c2.x+c2.width/2, c2.y+c2.height/2); await pg.waitForTimeout(100);
+  await pg.keyboard.press('Control+e'); await pg.waitForTimeout(450); const st2=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
+  ok('13c у режимі правки клік у чип ставить курсор, Ctrl+E знімає чип: «'+(st2&&(st2.html||st2.text))+'»', st2 && !st2.html && st2.text==='Ключ: sk-live-77x далі текст');
+  await select(6,11); await pg.keyboard.press('Control+e'); await pg.waitForTimeout(450); const st3=(await idbAll()).flatMap(n=>n.blocks).find(b=>/Ключ:/.test(b.text||''));
+  ok('13d Ctrl+E на виділенні знову робить чип: «'+(st3&&st3.html)+'»', st3 && st3.html==='Ключ: <code>sk-live-77x</code> далі текст'); }
 await pg.screenshot({path:OUT+'/appfmt-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
