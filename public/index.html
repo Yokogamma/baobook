@@ -173,9 +173,11 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .txt b{font-weight:650} .txt u{text-underline-offset:2px} .txt s{text-decoration-thickness:1.5px}
 /* чип «код»: моноширинний, з підкладкою; поки блок не редагується, клік по чипу копіює його вміст */
-.txt code{font-family:var(--mono);font-size:.9em;padding:1px 6px;border-radius:5px;background:var(--code-bg);border:.5px solid var(--code-line);white-space:pre-wrap;transition:background .15s,color .15s}
-.blk:not(.focus)>.tcard>.txt code{cursor:copy} .blk:not(.focus)>.tcard>.txt code:hover{background:var(--hover-2)}
-.blk>.tcard>.txt code.done,.blk:not(.focus)>.tcard>.txt code.done:hover{background:var(--s);color:#fff;border-color:transparent}
+.txt code{position:relative;font-family:var(--mono);font-size:.9em;padding:1px 24px 1px 6px;border-radius:5px;background:var(--code-bg);border:.5px solid var(--code-line);white-space:pre-wrap;transition:background .15s,color .15s}
+/* іконка копіювання в правому краї чипа: клік по ній копіює вміст, клік по тексту ставить курсор як звичайно */
+.txt code::after{content:'';position:absolute;right:5px;top:50%;width:13px;height:13px;transform:translateY(-50%);background:currentColor;opacity:.45;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V6a2 2 0 0 1 2-2h9'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V6a2 2 0 0 1 2-2h9'/%3E%3C/svg%3E") center/contain no-repeat}
+.txt code:hover::after{opacity:1}
+.txt code.done{background:var(--s);color:#fff;border-color:transparent} .txt code.done::after{opacity:1;-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E")}
 /* панель форматування: на компʼютері над виділенням, на дотику — внизу видимої області (над клавіатурою) */
 .bubble{position:fixed;z-index:28;display:flex;gap:2px;padding:4px;border-radius:8px;background:var(--ink);color:var(--page);box-shadow:var(--shadow)}
 .bubble button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
@@ -567,7 +569,14 @@ function richOf(root){ let out=''; const walk=n=>{ for(const c of n.childNodes){
 const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
 const hasRich=h=>/<(b|i|u|s|code)>/.test(h);
 function cleanRich(h){ const t=document.createElement('template'); t.innerHTML=String(h||''); return richOf(t.content); }
-function showTxt(b){ if(b.html) b.txt.innerHTML=b.html; else b.txt.textContent=b.text; }
+function showTxt(b){ if(b.html) b.txt.innerHTML=b.html; else b.txt.textContent=b.text; padChips(b.txt); }
+// обабіч кожного чипа має бути текстовий вузол (нульовий пробіл, не зберігається) — інакше курсор не може стати зовні чипа на початку чи в кінці рядка
+function padChips(txt){ txt.querySelectorAll('code').forEach(c=>{ if(!c.previousSibling || c.previousSibling.nodeType!==3) c.parentNode.insertBefore(document.createTextNode('\u200b'),c); if(!c.nextSibling || c.nextSibling.nodeType!==3) c.parentNode.insertBefore(document.createTextNode('\u200b'),c.nextSibling); }); }
+// стрілка вправо в кінці чипа / вліво на його початку — курсор виходить із чипа, далі набір іде звичайним текстом
+function exitChip(txt, dir){ const sel=getSelection(); if(!sel||!sel.rangeCount||!sel.isCollapsed) return false; const n=sel.anchorNode, code=codeAncestor(n,txt); if(!code) return false; const tn=textNodes(code); if(!tn.length) return false;
+  const atEnd=dir>0 && n===tn[tn.length-1] && sel.anchorOffset===n.nodeValue.length, atStart=dir<0 && n===tn[0] && sel.anchorOffset===0; if(!atEnd && !atStart) return false;
+  padChips(txt); const r=document.createRange(); if(atEnd){ const a=code.nextSibling; r.setStart(a, a.nodeValue.startsWith('\u200b')? 1 : 0); } else { const bft=code.previousSibling; r.setStart(bft, Math.max(0, bft.nodeValue.length-(bft.nodeValue.endsWith('\u200b')? 1 : 0))); }
+  r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return true; }
 /* А: подвійний клік виділяє весь «токен» до пробілів (пароль із символами, адреса, команда), без розділових знаків по краях */
 function textNodes(root){ const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT), out=[]; let n; while((n=w.nextNode())) out.push(n); return out; }
 function expandToken(txt){ const sel=getSelection(); if(!sel||!sel.rangeCount) return; const r=sel.getRangeAt(0); if(!txt.contains(r.startContainer)||!txt.contains(r.endContainer)) return;
@@ -583,7 +592,7 @@ function expandToken(txt){ const sel=getSelection(); if(!sel||!sel.rangeCount) r
 function codeAncestor(node, root){ let n=node&&(node.nodeType===1? node : node.parentElement); while(n && n!==root){ if(n.tagName==='CODE') return n; n=n.parentElement; } return null; }
 function toggleCode(txt){ const sel=getSelection(); if(!sel||!sel.rangeCount) return; const r=sel.getRangeAt(0); if(!txt.contains(r.commonAncestorContainer)) return;
   const inCode=codeAncestor(r.startContainer,txt); if(inCode){ const p=inCode.parentNode; const nr=document.createRange(); nr.selectNodeContents(inCode); const frag=nr.extractContents(); p.replaceChild(frag,inCode); sel.removeAllRanges(); sel.addRange(nr); return; }
-  if(r.collapsed) return; const code=document.createElement('code'); code.appendChild(r.extractContents()); code.querySelectorAll('code').forEach(c=>c.replaceWith(...c.childNodes)); r.insertNode(code); const nr=document.createRange(); nr.selectNodeContents(code); sel.removeAllRanges(); sel.addRange(nr); }
+  if(r.collapsed) return; const code=document.createElement('code'); code.appendChild(r.extractContents()); code.querySelectorAll('code').forEach(c=>c.replaceWith(...c.childNodes)); r.insertNode(code); padChips(txt); const nr=document.createRange(); nr.selectNodeContents(code); sel.removeAllRanges(); sel.addRange(nr); }
 // набір `текст` у зворотних лапках → чип
 function backtickChip(txt){ const sel=getSelection(); if(!sel||!sel.isCollapsed||!sel.anchorNode||sel.anchorNode.nodeType!==3||!txt.contains(sel.anchorNode)) return false; const node=sel.anchorNode, off=sel.anchorOffset; const before=node.nodeValue.slice(0,off); const m=before.match(/`([^`\n]+)`$/); if(!m) return false;
   if(codeAncestor(node,txt)) return false; const start=off-m[0].length; const after=node.splitText(off); node.nodeValue=node.nodeValue.slice(0,start); const code=document.createElement('code'); code.textContent=m[1]; node.parentNode.insertBefore(code,after);
@@ -753,17 +762,18 @@ function relayout(b){ const before=b.lines; render(b); if(b.lines!==before) reso
 function buildText(b){
   b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="tcard"><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
   b.txt=b.el.querySelector('.txt'); showTxt(b); b.card=b.el.querySelector('.tcard');
-  b.txt.addEventListener('focus',()=>b.el.classList.add('focus'));
-  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.trim()) remove(b); else { readTxt(); flushSave(); } });
+  b.txt.addEventListener('focus',()=>{ b.el.classList.add('focus'); padChips(b.txt); });
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) remove(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
   b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); readTxt(); relayout(b); markDirty(); });
   const fmt=cmd=>{ b.txt.focus(); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',()=>setTimeout(()=>{ expandToken(b.txt); placeBubble(); },0));
-  b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && document.activeElement!==b.txt && b.txt.contains(c)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // чип у нередагованому блоці: клік копіює, курсор не ставиться
+  b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && e.clientX>=c.getBoundingClientRect().right-26){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в правому краї чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
   b.api={fmt};
   b.txt.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=e.key.toLowerCase(); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
       if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; } }
+    if((e.key==='ArrowRight'||e.key==='ArrowLeft') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && exitChip(b.txt, e.key==='ArrowRight'? 1 : -1)){ e.preventDefault(); return; }
     if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
     if(e.key==='Backspace' && !b.txt.textContent){ e.preventDefault(); remove(b); }
   });
