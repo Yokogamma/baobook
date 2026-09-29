@@ -61,7 +61,6 @@
   --shadow:0 4px 18px rgba(60,40,10,.18), 0 0 0 .5px rgba(60,40,10,.10);
   --paper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .40 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='l' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .92 0 0 0 .07 0'/%3E%3C/filter%3E%3Cfilter id='h' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .035 0'/%3E%3C/filter%3E%3Cfilter id='v' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5 .008' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E");
 }
-{ :root{ --pad:14px; --handle:20px; --fs:16px; } }
 @media (max-width:640px){ :root{ --pad:16px; --handle:20px; --fs:16px; } }
 
 *{box-sizing:border-box}
@@ -226,14 +225,16 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .cblk.num .code{padding-left:8px}
 .cblk.num .ln::before{content:counter(l);counter-increment:l;display:inline-block;width:2.2em;margin-right:12px;text-align:right;color:var(--ink-3);user-select:none;-webkit-user-select:none;font-size:11.5px}
 .code .k{color:var(--k);font-weight:500} .code .s{color:var(--s)} .code .n{color:var(--n)} .code .c{color:var(--c);font-style:normal} .code .t{color:var(--t)} .code .v{color:var(--t)}
-.more{display:block;width:100%;border:0;border-top:.5px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-family:var(--sans);font-size:12.5px;height:32px;cursor:pointer;border-radius:0 0 10px 10px}
-.more:hover{background:var(--hover)} .more[hidden]{display:none}
+/* «Розгорнути / Згорнути» блока коду; лише в картці коду — кнопка «⋯» області теж має клас more */
+.cblk .more{display:block;width:100%;border:0;border-top:.5px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-family:var(--sans);font-size:12.5px;height:32px;cursor:pointer;border-radius:0 0 10px 10px}
+.cblk .more:hover{background:var(--hover)} .cblk .more[hidden]{display:none}
 .fade{position:absolute;left:1px;right:1px;bottom:32px;height:44px;pointer-events:none;display:none;background:linear-gradient(to bottom,transparent,var(--code-bg) 85%)}
 .cblk.cut .fade{display:block}
 .code{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
 .code::-webkit-scrollbar{height:8px;width:8px} .code::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px} .code::-webkit-scrollbar-track{background:transparent}
-.hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:12px;color:var(--ink-2);pointer-events:none}
-.hint b{color:var(--ink);font-weight:500}
+/* спливна підказка «Тільки читання» над кодом; лише в картці коду — підказка встановлення в панелі теж має клас hint */
+.cblk .hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:12px;color:var(--ink-2);pointer-events:none}
+.cblk .hint b{color:var(--ink);font-weight:500}
 .cblk.pulse .cb.lock{animation:pulse .35s} @keyframes pulse{50%{transform:scale(1.25)}}
 .blk.drag>.cblk{box-shadow:var(--shadow)}
 @media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:40px;min-width:44px;padding:0 12px;justify-content:center} }
@@ -533,7 +534,7 @@ function hl(s,T){ s=esc(s||''); if(!T.length) return s; const re=new RegExp('('+
 function snip(text,T){ const low=norm(text); let i=-1; for(const t of T){ const j=low.indexOf(t); if(j>=0&&(i<0||j<i)) i=j; } if(i<0) return hl(text.slice(0,100),T);
   const a=Math.max(0,i-36), b=Math.min(text.length,i+96); return (a>0?'…':'')+hl(text.slice(a,b).replace(/\n+/g,' '),T)+(b<text.length?'…':''); }
 function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateString()===n.toDateString();
-  return same? d.toLocaleTimeString('uk',{hour:'2-digit',minute:'2-digit'}) : d.toLocaleDateString('uk',{day:'numeric',month:'short'}+(d.getFullYear()!==n.getFullYear()?{year:'numeric'}:{})); }
+  return same? d.toLocaleTimeString('uk',{hour:'2-digit',minute:'2-digit'}) : d.toLocaleDateString('uk',{day:'numeric',month:'short',year:d.getFullYear()!==n.getFullYear()? 'numeric' : undefined}); }   // «28 вер.», з іншого року — «28 вер. 2025 р.»
 
 /* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
 function renderList(){
@@ -962,7 +963,7 @@ function snapshot(a){ return [serBlock(a), ...blocks.filter(o=>o.parent===a.id).
 function restoreArea(snap){ const [ad,...kds]=snap; const old=byId(ad.id); if(old) remove(old); const a=make(ad,false);
   kds.forEach(d=>{ const k=byId(d.id); if(k){ k.parent=a.id; k.col=d.col; k.row=d.row; k.fx=undefined; a.abody.appendChild(k.el); } else make(d,false); });
   resolve(a); update(); markDirty(); }
-const nBlocks=n=>n+' '+(n===1?'блоком':'блоками');
+const nBlocks=n=>n+' '+pl(n,'блоком','блоками','блоками');   // «разом із 21 блоком», «… 22 блоками»
 function remove(b){ if(b.api&&b.api.closeMenu) b.api.closeMenu(); if(b.kind==='area') blocks.filter(o=>o.parent===b.id).forEach(o=>{ blocks=blocks.filter(x=>x!==o); o.el.remove(); });
   blocks=blocks.filter(x=>x!==b); b.el.remove(); resolve(); update(); markDirty(); }
 /* розгрупувати: область зникає, блоки лишаються на своїх місцях на аркуші */
@@ -1028,7 +1029,7 @@ function buildArea(b){
   rz.addEventListener('dblclick',e=>{ e.stopPropagation(); b.ch=undefined; relayout(b); markDirty(); });
   b.api={closeMenu:closeAll};
 }
-function update(){ sheet.classList.toggle('has', blocks.length>0); cnt.textContent=blocks.length? blocks.length+(blocks.length===1?' блок':blocks.length<5?' блоки':' блоків') : ''; }
+function update(){ sheet.classList.toggle('has', blocks.length>0); cnt.textContent=blocks.length? blocks.length+' '+pl(blocks.length,'блок','блоки','блоків') : ''; }
 
 function cellAt(e){ const r=sheet.getBoundingClientRect(); return {col:colOfX(e.clientX-r.left,null,{}), row:rowOfY(e.clientY-r.top-G()/2,null)}; }
 /* стрічка: куди вставити новий або перенесений блок — між сусідами за вертикаллю; модельні координати підбираються так, щоб у порядку читання блок став між ними */
@@ -1163,7 +1164,8 @@ function drag(b, grip){
 /* ширина аркуша змінюється і від вікна, і від панелі — стежимо за самим аркушем */
 /* режим показу: вузький екран → стрічка; «як на компʼютері» → полотно шириною 1024, зменшене (лише перегляд). Повернення на полотно перераховує колонки з fx */
 function applyMode(){ const narrow=narrowQ.matches; flow=narrow && !overview; app.classList.toggle('narrow',narrow); sheet.classList.toggle('flow',flow); sheet.classList.toggle('overview',overview&&narrow);
-  const k=Math.min(1, sheet.parentElement.clientWidth/OVERVIEW_W); sheet.style.zoom=(overview&&narrow)? String(k) : ''; sheet.style.marginTop=(overview&&narrow)? Math.max(0, 52/k-60)+'px' : '';   // зменшене полотно: перший ряд не ховається під шапкою viewBtn.setAttribute('aria-pressed',String(overview)); viewBtn.title=overview? 'Показати стрічкою' : 'Показати як на компʼютері';
+  const k=Math.min(1, sheet.parentElement.clientWidth/OVERVIEW_W); sheet.style.zoom=(overview&&narrow)? String(k) : ''; sheet.style.marginTop=(overview&&narrow)? Math.max(0, 52/k-60)+'px' : '';   // зменшене полотно: перший ряд не ховається під шапкою
+  viewBtn.setAttribute('aria-pressed',String(overview)); viewBtn.title=overview? 'Показати стрічкою' : 'Показати як на компʼютері';
   fab.hidden=(overview&&narrow) || (app.classList.contains('open')&&isMobile());
   if(!flow) blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*W(),null,b); }); resolve(); }
 viewBtn.addEventListener('click',()=>{ overview=!overview; applyMode(); window.scrollTo(0,0); });
