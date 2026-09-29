@@ -411,6 +411,8 @@ const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.qu
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const minw=b=>b&&(b.kind==='code'||b.kind==='area')?MINW_CODE:MINW;
 const TOUCH=matchMedia('(hover:none)').matches;
+// літера гарячої клавіші за будь-якої розкладки: у кириличній Ctrl+Z приходить як «я» — тоді беремо фізичну клавішу
+const hotkey=e=>{ const k=(e.key||'').toLowerCase(); return /^[a-z]$/.test(k)? k : /^Key[A-Z]$/.test(e.code||'')? e.code.slice(3).toLowerCase() : k; };
 
 /* ══ код: мова, розпізнавання вставки, підсвітка ═══════════════════════ */
 const LANGS={javascript:{n:'JavaScript',a:'js'},typescript:{n:'TypeScript',a:'ts'},php:{n:'PHP',a:'laravel'},blade:{n:'Blade',a:'laravel template'},html:{n:'HTML'},vue:{n:'Vue'},css:{n:'CSS'},scss:{n:'SCSS',a:'sass'},json:{n:'JSON'},yaml:{n:'YAML',a:'yml'},markdown:{n:'Markdown',a:'md'},sql:{n:'SQL',a:'mysql postgres'},shell:{n:'Shell',a:'bash sh zsh термінал'},python:{n:'Python',a:'py'},go:{n:'Go',a:'golang'},java:{n:'Java'},csharp:{n:'C#',a:'csharp dotnet'},kotlin:{n:'Kotlin'},swift:{n:'Swift'},ruby:{n:'Ruby',a:'rb'},rust:{n:'Rust',a:'rs'},c:{n:'C / C++',a:'cpp'},text:{n:'Текст',a:'plain код'}};
@@ -650,7 +652,7 @@ let saveP=null;
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur);
   const p=db.save(cur); saveP=p; p.then(ok=>{ if(saveP!==p) return;   // статус — від останнього запису
     savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } storageUI(); }); }
-function openNote(n){ flushSave(); dropUndo(); cur=n; S.current=n.id; db.setSettings(S);
+function openNote(n){ flushSave(); dropUndo(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S);   // історія назви — своя в кожної нотатки
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
@@ -682,13 +684,13 @@ importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; imp
   const r=await importNotes(list); say('Імпортовано: '+r.added+' '+pl(r.added,'нова','нові','нових')+', '+r.updated+' оновлено, '+r.skipped+' без змін'); });
 ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=titleOf(cur)+' · Чистий аркуш'; });
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
-ttl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
+ttl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
 ttl.addEventListener('blur',()=>{ if(cur&&ttl.textContent!==cur.title) ttl.textContent=cur.title; flushSave(); });
 let qT; q.addEventListener('input',()=>{ clearTimeout(qT); qT=setTimeout(renderList,120); });
 q.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; renderList(); q.blur(); } });
 qClear.addEventListener('click',()=>{ q.value=''; renderList(); q.focus(); });
-document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
-  if((e.ctrlKey||e.metaKey)&&e.altKey&&e.key.toLowerCase()==='n'){ e.preventDefault(); newBtn.click(); } });
+document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&hotkey(e)==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
+  if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='n'){ e.preventDefault(); newBtn.click(); } });
 window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); });
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
@@ -802,30 +804,30 @@ function buildText(b){
   b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="tcard"><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
   b.txt=b.el.querySelector('.txt'); showTxt(b); b.card=b.el.querySelector('.tcard');
   b.txt.addEventListener('focus',()=>{ b.el.classList.add('focus'); padChips(b.txt); });
-  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) remove(b); else { readTxt(); flushSave(); } });
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
   b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); if(!e.isComposing) padChips(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
-  const fmt=cmd=>{ b.txt.focus(); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
+  const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && inCopyZone(c,e)) return; setTimeout(()=>{ expandToken(b.txt,e.clientX,e.clientY); placeBubble(); },0); });   // подвійний клік по іконці чипа — лише копіювання
   b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в кінці чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
   b.api={fmt};
   b.txt.addEventListener('keydown',e=>{
-    if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=e.key.toLowerCase(); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
+    if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=hotkey(e); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
       if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; } }
     if((e.key==='ArrowRight'||e.key==='ArrowLeft') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && exitChip(b.txt, e.key==='ArrowRight'? 1 : -1)){ e.preventDefault(); return; }
     if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
-    if(e.key==='Backspace' && !b.txt.textContent.replace(/\u200b/g,'')){ e.preventDefault(); remove(b); return; }
+    if(e.key==='Backspace' && !b.txt.textContent.replace(/\u200b/g,'')){ e.preventDefault(); dropText(b); return; }
     if((e.key==='Backspace'||e.key==='Delete') && !e.altKey && !e.metaKey) skipZw(b.txt, e.key==='Delete'? 1 : -1);
   });
   // копіювання й вирізання: у буфер — без службових нульових пробілів, інакше вони потрапляють у скопійований пароль чи команду
   const clip=e=>{ const s=getSelection(); if(!s||!s.rangeCount||s.isCollapsed) return; const tmp=document.createElement('div'); tmp.appendChild(s.getRangeAt(0).cloneContents()); const h=richOf(tmp);
-    e.clipboardData.setData('text/plain',plainOf(h)); e.clipboardData.setData('text/html',h.replace(/\n/g,'<br>')); e.preventDefault(); if(e.type==='cut') document.execCommand('delete'); };
+    e.clipboardData.setData('text/plain',plainOf(h)); e.clipboardData.setData('text/html',h.replace(/\n/g,'<br>')); e.preventDefault(); if(e.type==='cut'){ histRec(b.txt,'cmd'); document.execCommand('delete'); } };
   b.txt.addEventListener('copy',clip); b.txt.addEventListener('cut',clip);
   // вставка: у порожній блок код стає блоком коду; інакше — простий текст
   b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); e.preventDefault(); if(!t) return;
     const wasEmpty=!b.txt.textContent.trim();
     if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,'Вставлено як код','Зробити текстом',()=>toText(nb)); return; }
-    document.execCommand('insertText',false,t);
+    histRec(b.txt,'cmd'); document.execCommand('insertText',false,t);
     b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text)); });
   /* ручка розміру: фіксована ширина в клітинках (не ширша за вільне місце до сусіда) і мінімальна висота в рядах; текст завжди видно повністю */
   const card=b.card, rz=b.el.querySelector('.rz');
@@ -863,7 +865,7 @@ function buildCode(b){
   const ttlEl=card.querySelector('.ctitle'); ttlEl.textContent=b.title||''; ttlEl.contentEditable='plaintext-only'; if(!ttlEl.isContentEditable) ttlEl.contentEditable='true';
   ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
   ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
-  ttlEl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
+  ttlEl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttlEl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
   ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
   ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
   if(b.wrap===undefined) b.wrap=true; b.wrap=!!b.wrap; b.num=!!b.num;   // перенос типово: без горизонтальної смуги
@@ -940,12 +942,12 @@ function buildCode(b){
   pre.addEventListener('dblclick',e=>{ if(!b.editing){ const o=offsetFromPoint(e.clientX,e.clientY); unlock(true, o==null? undefined : {a:o,b:o}); } });
   pre.addEventListener('click',()=>{ if(!b.editing && getSelection().isCollapsed) pre.focus(); });
   pre.addEventListener('keydown',e=>{ if(!b.editing){ if(e.key.length===1 && !e.ctrlKey && !e.metaKey){ e.preventDefault(); hint(HINT); } return; }
-    if(e.key==='Escape'){ e.preventDefault(); lock(); } else if(e.key==='Tab'){ e.preventDefault(); document.execCommand('insertText',false,'  '); } });
+    if(e.key==='Escape'){ e.preventDefault(); lock(); } else if(e.key==='Tab'){ e.preventDefault(); histRec(code,'type'); document.execCommand('insertText',false,'  '); } });
   pre.addEventListener('beforeinput',e=>{ if(!b.editing){ e.preventDefault(); hint(HINT); } });
   code.addEventListener('input',()=>{ b.text=code.innerText.replace(/\n+$/,''); relayout(b); markDirty(); });
-  code.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text')); });
-  b.el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='e'){ e.preventDefault(); b.editing? lock() : unlock(); }
-    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='c'){ e.preventDefault(); copy(); } });
+  code.addEventListener('paste',e=>{ e.preventDefault(); histRec(code,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text')); });
+  b.el.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&hotkey(e)==='e'){ e.preventDefault(); b.editing? lock() : unlock(); }
+    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&hotkey(e)==='c'){ e.preventDefault(); copy(); } });
   // вийшли з блока (клік поза ним, Tab, інший блок) → замок повертається сам
   b.el.addEventListener('focusout',()=>{ setTimeout(()=>{ if(b.editing && !b.el.contains(document.activeElement)) lock(); },0); });
   b.api={lock,unlock,view,copy,closeMenu,applyCut}; view();
@@ -956,8 +958,38 @@ function offerUndo(msg, restore){ dropUndo(true); pendingUndo=restore; undoMsg.t
 function dropUndo(keepOpen){ clearTimeout(undoT); undoT=null; pendingUndo=null; if(keepOpen) return; undoEl.classList.remove('show'); setTimeout(()=>{ if(!pendingUndo) undoEl.hidden=true; },220); }
 function doUndo(){ const r=pendingUndo; if(!r) return; dropUndo(); r(); }
 undoBtn.addEventListener('click',doUndo);
-const isEditing=()=>{ const a=document.activeElement; return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
-document.addEventListener('keydown',e=>{ if(pendingUndo && (e.ctrlKey||e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase()==='z' && !isEditing()){ e.preventDefault(); doUndo(); } });
+/* ══ історія правок у полях — текстовий блок, код у редагуванні, назви: Ctrl+Z, Ctrl+Shift+Z або Ctrl+Y. Власна, бо браузерна одна на всю сторінку,
+   дробиться до букви від будь-якої зміни DOM (автозбереження, список нотаток) і не знає про службові правки (чипи, нульові пробіли).
+   Знімок — html поля й виділення. Набір поспіль — один крок; новий крок — після паузи понад секунду, переходу курсора, зміни роду правки
+   (набір / стирання) і перед кожною командою (формат, чип, вставка, вирізання) ══ */
+const HIST=new WeakMap(), HIST_MAX=100, HIST_GAP=1000; let lastField=null, histBusy=false;
+const fieldOf=n=>{ const e=n&&(n.nodeType===1? n : n.parentElement), f=e&&e.closest&&e.closest('.txt,.code code,#ttl,.ctitle'); return f&&f.isContentEditable? f : null; };
+const pathOf=(root,n)=>{ const p=[]; for(;n&&n!==root;n=n.parentNode){ if(!n.parentNode) return null; p.unshift([].indexOf.call(n.parentNode.childNodes,n)); } return n? p : null; };
+function snapOf(f){ const s=getSelection(), r=s&&s.rangeCount? s.getRangeAt(0) : null, a=r&&pathOf(f,r.startContainer), z=r&&pathOf(f,r.endContainer); return {html:f.innerHTML, sel:a&&z? [a,r.startOffset,z,r.endOffset] : null}; }
+function histRec(f, kind){ if(!f||histBusy) return; let h=HIST.get(f); if(!h) HIST.set(f, h={undo:[],redo:[],kind:'',t:0}); const t=Date.now(), s=getSelection();
+  if(kind==='cmd' || kind!==h.kind || t-h.t>HIST_GAP || (s&&!s.isCollapsed)){ const top=h.undo[h.undo.length-1]; if(!top || top.html!==f.innerHTML){ h.undo.push(snapOf(f)); if(h.undo.length>HIST_MAX) h.undo.shift(); } }
+  h.redo.length=0; h.kind=kind==='cmd'? '' : kind; h.t=t; lastField=f; }
+function histSel(f, p){ const at=q=>q.reduce((n,i)=>n&&n.childNodes[i],f), len=n=>n.nodeType===3? n.length : n.childNodes.length, r=document.createRange(), a=p&&at(p[0]), z=p&&at(p[2]);
+  try{ r.setStart(a,Math.min(p[1],len(a))); r.setEnd(z,Math.min(p[3],len(z))); }catch(_){ r.selectNodeContents(f); r.collapse(false); }   // шлях не знайшовся — курсор у кінець поля
+  const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
+// крок назад (або вперед): поточний стан іде в протилежний стос; модель оновлюють звичайні обробники input поля
+function histGo(f, redo){ const h=f&&HIST.get(f), from=h&&(redo? h.redo : h.undo); if(!from||!from.length) return false; const st=from.pop(); (redo? h.undo : h.redo).push(snapOf(f)); h.kind='';
+  histBusy=true; try{ f.innerHTML=st.html; if(document.activeElement!==f) f.focus(); histSel(f,st.sel); f.dispatchEvent(new Event('input',{bubbles:true})); } finally{ histBusy=false; }
+  lastField=f; return true; }
+const histBreak=f=>{ const h=f&&HIST.get(f); if(h) h.kind=''; };
+document.addEventListener('beforeinput',e=>{ const f=fieldOf(e.target); if(!f) return; const it=e.inputType||'';
+  if(/^history(Undo|Redo)$/.test(it)){ if(e.cancelable){ e.preventDefault(); histGo(f, it==='historyRedo'); } return; }   // «Скасувати» з контекстного меню, струс на iPhone
+  histRec(f, /^insert(Text|CompositionText|Paragraph|LineBreak)$/.test(it)? 'type' : /^delete(Content|Word|SoftLine|HardLine)/.test(it)? 'del' : 'cmd'); },true);
+document.addEventListener('keydown',e=>{ if(/^(Arrow|Home|End|Page)/.test(e.key)) histBreak(fieldOf(e.target)); },true);
+['pointerdown','focusout'].forEach(t=>document.addEventListener(t,e=>histBreak(fieldOf(e.target)),true));
+// Ctrl+Z у полі — його історія; поза полями — спершу плашка «Скасувати», інакше остання правка в полі, з якого щойно вийшли. Пошук і меню мови — зі своєю браузерною історією
+document.addEventListener('keydown',e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey) return; const k=hotkey(e), redo=(k==='z'&&e.shiftKey)||(k==='y'&&!e.shiftKey); if(k!=='z'&&!redo) return;
+  const a=document.activeElement; if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; e.preventDefault(); const f=fieldOf(a);
+  if(f){ histGo(f,redo); return; } if(redo) return; if(pendingUndo){ doUndo(); return; } if(lastField && lastField.isConnected && lastField.isContentEditable) histGo(lastField,false); },true);
+// порожній текстовий блок прибирається; якщо текст у ньому щойно стерли (або скасували) — з плашкою «Скасувати», що повертає блок із цим текстом
+function dropText(b){ const h=HIST.get(b.txt), full=a=>a&&a.slice().reverse().find(s=>plainOf(cleanRich(s.html)).trim()), prev=h&&(full(h.redo)||full(h.undo)); remove(b); if(!prev) return;
+  const d=serBlock(b); d.html=cleanRich(prev.html); d.text=plainOf(d.html); if(!hasRich(d.html)) delete d.html; const line=d.text.trim().split('\n')[0];
+  offerUndo('Блок «'+(line.length>28? line.slice(0,28)+'…' : line)+'» видалено', ()=>{ make(d,false); markDirty(); }); }
 // знімок області з дітьми (спершу область) і відновлення: живі діти лише повертаються всередину (їхні правки лишаються), зниклі створюються зі знімка
 function snapshot(a){ return [serBlock(a), ...blocks.filter(o=>o.parent===a.id).map(serBlock)]; }
 function restoreArea(snap){ const [ad,...kds]=snap; const old=byId(ad.id); if(old) remove(old); const a=make(ad,false);
@@ -981,7 +1013,7 @@ function buildArea(b){
   const ttlEl=card.querySelector('.ctitle'); b.ttlEl=ttlEl; ttlEl.textContent=b.title||''; ttlEl.contentEditable='plaintext-only'; if(!ttlEl.isContentEditable) ttlEl.contentEditable='true';
   ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
   ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
-  ttlEl.addEventListener('paste',e=>{ e.preventDefault(); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
+  ttlEl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttlEl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
   ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
   ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
   // клік у порожнє місце області → текстовий блок усередині

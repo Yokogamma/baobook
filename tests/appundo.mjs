@@ -44,8 +44,9 @@ await pg.mouse.click(400,820); await pg.keyboard.press('Escape'); await pg.waitF
   ok('3c Ctrl+Z поза редагуванням повертає область із обома блоками на ті самі місця', (await a.count())===1 && nb.x===ab.x && nb.y===ab.y && (await a.locator('.abody .blk').count())===2 && (await box(kid('komax-backups'))).y===k1.y && (await box(kid('komax-orders 2024'))).y===k2.y && await stored('komax-backups') && !(await shown())); }
 // 4 Ctrl+Z під час редагування тексту — не чіпає плашку
 await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await menu.locator('.del').click(); await pg.waitForTimeout(300);
-await kid('окремий блок').click(); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(200);
-ok('4 Ctrl+Z у текстовому блоці не повертає область (плашка ще висить)', (await pg.locator('.blk.is-area').count())===0 && await shown());
+await kid('окремий блок').click(); await pg.keyboard.press('End'); await pg.keyboard.type(' +'); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(200);
+{ const t=(await kid('окремий блок').innerText()).split(String.fromCharCode(0x200b)).join('');
+  ok('4 Ctrl+Z у текстовому блоці скасовує правку в ньому («'+t+'») і не повертає область (плашка ще висить)', t==='окремий блок' && (await pg.locator('.blk.is-area').count())===0 && await shown()); }
 await pg.keyboard.press('Escape'); await undo.locator('.ubtn').click(); await pg.waitForTimeout(300);
 ok('4b «Скасувати» з плашки після цього все ж повертає', (await pg.locator('.blk.is-area').count())===1 && (await area().locator('.abody .blk').count())===2);
 // 5 плашка зникає сама, після цього повернути вже не можна
