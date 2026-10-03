@@ -149,7 +149,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px;padding:0 6px;white-space:nowrap}
 .saved{font-size:12px;color:var(--ink-3);padding:0 6px;white-space:nowrap;opacity:0;transition:opacity .3s}
 .saved.pend,.saved.ok{opacity:1} .saved.ok{color:var(--ink-2)} .saved.err{opacity:1;color:#c33}
-@media (max-width:640px){ .cnt,.saved{display:none} .top{padding-right:6px} }
+@media (max-width:640px){ .cnt,.saved{display:none} .top{padding-right:4px} }
+@media (hover:none){ .tb{height:40px;min-width:40px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} }   /* дотик: цілі 40px з проміжками, щоб не влучати в сусідню кнопку */
 
 /* ── аркуш ───────────────────────────────────────────────────────────── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
@@ -373,12 +374,12 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     <header class="top">
       <div class="left">
         <button class="tb" id="sideBtn" title="Нотатки" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <button class="tb narrow-only" id="viewBtn" title="Показати як на компʼютері" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
         <span class="ttl" id="ttl" contenteditable="true" data-ph="Без назви" role="textbox" aria-label="Назва нотатки"></span>
       </div>
       <div class="tools">
         <span class="saved" id="saved"></span>
         <span class="cnt" id="cnt" title="Кількість блоків"></span>
-        <button class="tb narrow-only" id="viewBtn" title="Показати як на компʼютері" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
         <button class="tb" id="areaBtn" title="Нова область (на десктопі — просто протягніть мишею по порожньому місцю)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 9.5h8"/></svg></button>
         <button class="tb" id="spellBtn" title="Перевірка правопису" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="gridBtn" title="Сітка аркуша" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
