@@ -542,7 +542,7 @@ Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUnd
 /* ══ нотатки ══════════════════════════════════════════════════════════════ */
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
-function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); db.save(n); return n; }
+function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); writeNote(n); return n; }
 function lines(n){ const rowOf=b=>{ if(!b.parent) return b.row; const p=n.blocks.find(x=>x.id===b.parent); return (p? p.row : 0)+0.5+b.row*1e-3; };   // діти області — одразу після неї
   return [...n.blocks].sort((a,b)=>(rowOf(a)-rowOf(b))||((a.fx||0)-(b.fx||0))).flatMap(b=>((b.kind==='code'||b.kind==='area')&&b.title? [b.title] : []).concat((b.text||'').split('\n'))).map(l=>l.trim()).filter(Boolean); }
 function noteText(n){ return lines(n).join('\n'); }
@@ -671,8 +671,11 @@ function savedShow(cls, long, short){ savedL.textContent=long; savedS.textConten
 function markDirty(){ dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
-let saveP=null; const unsaved=new Map();   // id → {reason, since}
-function writeNote(n){ const p=db.save(n); if(n===cur) saveP=p; p.then(r=>{ if(r.ok) unsaved.delete(n.id); else unsaved.set(n.id,{reason:r.reason,since:now()});
+let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
+/* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
+   старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено» */
+function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const p=db.save(n); if(n===cur) saveP=p;
+  p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id); if(r.ok) unsaved.delete(n.id); else unsaved.set(n.id,{reason:r.reason,since:now()});
     if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok?'Збережено':'Не збережено: '+r.reason, r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
     saveUI(); storageUI(); }); return p; }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }
@@ -682,7 +685,7 @@ function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; 
   saveErrMsg.innerHTML='<b>Не збережено: '+escHtml(first.reason)+'.</b> '+(k===1? 'Нотатка '+escHtml(names[0]) : k+' '+pl(k,'нотатка','нотатки','нотаток')+': '+escHtml(names.join(', ')))+' — лише в памʼяті цієї вкладки, до перезавантаження.'; }
 saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('click',()=>exportAll()); saveWarn.addEventListener('click',()=>{ setSide(true); saveErr.scrollIntoView({block:'nearest'}); });
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
-window.addEventListener('beforeunload',e=>{ flushSave(); if(unsaved.size){ e.preventDefault(); e.returnValue=''; } });
+window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
 function openNote(n){ flushSave(); dropUndo(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
@@ -707,7 +710,7 @@ function exportAll(){ flushSave(); const data={app:'sheet',format:1,exported:new
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list){ flushSave(); let added=0,updated=0,skipped=0;
   for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
-    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await db.save(n); added++; } else if(n.updated>ex.updated){ Object.assign(ex,n); await db.save(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }
+    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await writeNote(n); added++; } else if(n.updated>ex.updated){ Object.assign(ex,n); await writeNote(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }
   notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped}; }
 exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
@@ -986,7 +989,7 @@ function buildCode(b){
 }
 /* «Скасувати»: видалення і розгрупування області виконуються одразу, але кілька секунд їх можна повернути (плашка або Ctrl+Z поза редагуванням) */
 const UNDO_MS=7000; let pendingUndo=null, undoT=null;
-function offerUndo(msg, restore){ dropUndo(true); pendingUndo=restore; undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); requestAnimationFrame(()=>undoEl.classList.add('show')); undoT=setTimeout(()=>dropUndo(),UNDO_MS); }
+function offerUndo(msg, restore){ dropUndo(true); pendingUndo=restore; undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); requestAnimationFrame(()=>undoEl.classList.add('show')); undoT=setTimeout(()=>dropUndo(),UNDO_MS); }
 function dropUndo(keepOpen){ clearTimeout(undoT); undoT=null; pendingUndo=null; if(keepOpen) return; undoEl.classList.remove('show'); setTimeout(()=>{ if(!pendingUndo){ undoEl.hidden=true; fabSync(); } },220); }
 function doUndo(){ const r=pendingUndo; if(!r) return; dropUndo(); r(); }
 undoBtn.addEventListener('click',doUndo);
@@ -1151,8 +1154,10 @@ function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.for
   if(width()<=avail) return; more.hidden=false;
   const items=BUBBLE_ORDER.filter(e=>e.tagName==='BUTTON' && e.dataset.act!=='copy' && e!==more).sort((a,b)=>(PRI[b.dataset.cmd||b.dataset.act]??0)-(PRI[a.dataset.cmd||a.dataset.act]??0));   // наймолодші першими
   for(const b of items){ if(width()<=avail) break; bubbleMore.appendChild(b); } }
-function revealCaret(){ const sel=getSelection(); if(!sel||!sel.rangeCount) return; let r=sel.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=sel.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); if(!el) return; r=el.getBoundingClientRect(); }
-  const vv=window.visualViewport, vb=vv? vv.offsetTop+vv.height : window.innerHeight, limit=vb-bubble.offsetHeight-(bubbleMore.hidden? 0 : bubbleMore.offsetHeight)-8; if(r.bottom>limit) window.scrollBy(0, r.bottom-limit); }
+/* курсор не ховається під нижні панелі: межа — верх найвищої з них (панель + ряд «⋯» + плашка «Скасувати»); викликається при появі панелі, відкритті «⋯», плашці та зміні visualViewport */
+function bottomStack(){ const bar=(TOUCH && !bubble.hidden)? bubble.offsetHeight+(bubbleMore.hidden? 0 : bubbleMore.offsetHeight) : 0; return bar+(undoEl.hidden? 0 : undoEl.offsetHeight+18); }
+function revealCaret(){ if(!TOUCH || !fieldOf(document.activeElement)) return; const sel=getSelection(); if(!sel||!sel.rangeCount) return; let r=sel.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=sel.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); if(!el) return; r=el.getBoundingClientRect(); }
+  const vv=window.visualViewport, vb=vv? vv.offsetTop+vv.height : window.innerHeight, limit=vb-bottomStack()-8; if(r.bottom>limit) window.scrollBy(0, r.bottom-limit); }
 /* копіювання: у буфер ідуть і чистий текст, і форматування (текст — у чат, жирний і курсив — у редактор) */
 async function copyBoth(text, html){ try{ if(navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([text],{type:'text/plain'}),'text/html':new Blob([html.replace(/\n/g,'<br>')],{type:'text/html'})})]); return true; } }catch(_){}
   try{ await navigator.clipboard.writeText(text); return true; }catch(_){} try{ return document.execCommand('copy'); }catch(_){ return false; } }
@@ -1161,15 +1166,15 @@ function blockText(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.text||''
 function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.html||escHtml(o.text||'')).filter(t=>t.trim()).join('\n\n'); return b.html||escHtml(b.text||''); }
 async function copyBlock(b, grip){ const ok=await copyBoth(blockText(b), blockHtml(b)); if(!ok){ say('Не вдалося скопіювати'); return; } say('Скопійовано'); if(grip){ grip.classList.add('done'); setTimeout(()=>grip.classList.remove('done'),1200); } }
 const bubbleAct=async e=>{ const a=e.target.closest('button[data-act]'); if(!a) return false; const act=a.dataset.act;
-  if(act==='more'){ bubbleMore.hidden=!bubbleMore.hidden; a.setAttribute('aria-expanded',String(!bubbleMore.hidden)); layoutBottom(); return true; }
+  if(act==='more'){ bubbleMore.hidden=!bubbleMore.hidden; a.setAttribute('aria-expanded',String(!bubbleMore.hidden)); layoutBottom(); revealCaret(); return true; }
   if(act==='done'){ const f=document.activeElement; if(f&&f.blur) f.blur(); const sl=getSelection(); if(sl) sl.removeAllRanges(); placeBubble(); return true; }
   if(act==='new'){ if(bubbleBlk) createAfter(bubbleBlk); return true; } return false; };
 bubbleMore.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
 bubble.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const act=e.target.closest('button[data-act="copy"]'); if(act){ const ok=await copySelection(); const sp=act.querySelector('span'); sp.textContent=ok? 'Скопійовано' : 'Не вдалося'; act.classList.add('done'); setTimeout(()=>{ sp.textContent='Копіювати'; act.classList.remove('done'); },1200); return; }
   const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
 window.addEventListener('scroll',()=>{ if(!bubble.hidden && !TOUCH) placeBubble(); },{passive:true});
-if(window.visualViewport) ['resize','scroll'].forEach(t=>window.visualViewport.addEventListener(t,()=>{ layoutBottom(); if(!bubble.hidden && TOUCH) fitBubble(); if(!bubble.hidden) placeBubble(); }));
-window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUCH){ fitBubble(); layoutBottom(); } }); layoutBottom();
+if(window.visualViewport) ['resize','scroll'].forEach(t=>window.visualViewport.addEventListener(t,()=>{ layoutBottom(); if(!bubble.hidden && TOUCH) fitBubble(); if(!bubble.hidden) placeBubble(); if(t==='resize') revealCaret(); }));
+window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUCH){ fitBubble(); layoutBottom(); revealCaret(); } }); layoutBottom();
 /* дотик: одиночний дотик нічого не створює (аркуш можна гортати й читати); блок зʼявляється після утримання ~0,5 с без руху,
    а фокус (клавіатура) — при відпусканні, бо iOS відкриває клавіатуру лише всередині жесту. Зрушили палець після появи блока — порожній блок прибирається */
 const HOLD_MS=450, HOLD_SLOP=8; let hold=null;
@@ -1284,7 +1289,7 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 async function start(){
   await db.init(); notes=await db.all();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-  if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); db.save(n); } }
+  if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) S.theme=store.raw('freeform-editor-v4:theme');
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') S.grid=false;
   if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') S.spell=true;

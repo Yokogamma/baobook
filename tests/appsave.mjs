@@ -58,13 +58,37 @@ await pg.locator('#dbgFail').check(); const on=await pg.evaluate(()=>window.shee
 ok('9 ?debug=1: перемикач «Імітувати відмову сховища» видно, вмикає й вимикає без перезавантаження', await vis(pg.locator('#dbgRow')) && on===true && off===false);
 await pg.goto(PAGE); await pg.waitForTimeout(400);
 ok('9b без параметра перемикача немає', !(await vis(pg.locator('#dbgRow'))));
-// 10 причина: переповнення сховища названо, інша помилка — з назвою
+// 11 beforeunload рахує і незавершений запис: правка → одразу закриття, ще до 300 мс автозбереження
+const unload=()=>pg.evaluate(()=>{ const e=new Event('beforeunload',{cancelable:true}); window.dispatchEvent(e); return e.defaultPrevented; });
+await pg.locator('.blk .txt').filter({hasText:'не записалось'}).tap(); await pg.keyboard.press('End'); await fail(true); await pg.keyboard.type(' ще'); const immediate=await unload(); await pg.waitForTimeout(700);
+ok('11a відмова: закриття одразу після правки попереджає ще до того, як запис завершився', immediate && await vis(pg.locator('#saveWarn')));
+{ const w=await box(pg.locator('#saveWarn')); await tap(w.x+w.w/2, w.y+w.h/2); await pg.waitForTimeout(400); } await fail(false); await pg.locator('#saveRetry').tap(); await pg.waitForTimeout(700); await tap(350,700); await pg.waitForTimeout(400);   // ⚠ відкриває панель; «Повторити»; закрити панель
+await pg.locator('.blk .txt').filter({hasText:'не записалось'}).tap(); await pg.keyboard.press('End'); await pg.keyboard.type(' і ще'); const inflight=await unload(); await pg.waitForTimeout(700); const settled=await unload();
+ok('11b справне сховище: під час запису попередження є, після підтвердження запису — немає', inflight && !settled && !(await vis(pg.locator('#saveWarn'))));
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+// 12 старіший успішний запис не знімає новішу помилку: порядок завершення керований
+await pg.evaluate(()=>{ const q=[]; window.__q=q; const i=sheetDebug.idb; i._put=i._put||i.put; i.put=()=>new Promise((res,rej)=>q.push({res,rej})); window.__si=Storage.prototype.setItem; Storage.prototype.setItem=function(){ throw new DOMException('full','QuotaExceededError'); }; });
+await pg.locator('.blk .txt').filter({hasText:'не записалось'}).tap(); await pg.keyboard.press('End'); await pg.keyboard.type('A'); await pg.waitForTimeout(450); const q1=await pg.evaluate(()=>window.__q.length);
+await pg.keyboard.type('B'); await pg.waitForTimeout(450); const q2=await pg.evaluate(()=>window.__q.length);
+await pg.evaluate(()=>window.__q[1].rej(new DOMException('full','QuotaExceededError'))); await pg.waitForTimeout(200); const afterNewFail=await vis(pg.locator('#saveWarn'));
+await pg.evaluate(()=>window.__q[0].res()); await pg.waitForTimeout(200); const afterOldOk=await vis(pg.locator('#saveWarn'));
+ok('12 два записи в польоті ('+q1+' → '+q2+'): новіший відмовив — ⚠ є; старіший потім вдався — ⚠ лишається', q1===1 && q2===2 && afterNewFail && afterOldOk && /err/.test(await pg.locator('#saved').getAttribute('class')));
+await pg.evaluate(()=>{ const i=sheetDebug.idb; i.put=i._put; Storage.prototype.setItem=window.__si; }); await pg.keyboard.press('Escape'); await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(300); await pg.locator('#saveRetry').tap(); await pg.waitForTimeout(700);
+{ const n=await idbNotes(); ok('12b після відновлення сховища «Повторити» записує останню версію (…AB)', !(await vis(pg.locator('#saveWarn'))) && n.some(x=>x.blocks.some(b=>/не записалось ще і щеAB/.test(b.text)))); } await tap(350,700); await pg.waitForTimeout(400);
+// 13 імпорт іде тим самим шляхом: відмова при імпорті → нотатка в памʼяті, ⚠ і повтор
+await fail(true); fs.writeFileSync(OUT+'/import-fail.json', JSON.stringify({app:'sheet',format:1,notes:[{id:'impF',title:'Імпортована при відмові',blocks:[{id:'f1',fx:0.2,row:2,text:'з файлу'}],created:1,updated:Date.now()+90000}]}));
+await pg.locator('#importFile').setInputFiles(OUT+'/import-fail.json'); await pg.waitForTimeout(700);
+ok('13a імпорт при відмові: нотатка є в списку, ⚠ видно, у рядку помилки її назва', (await pg.locator('#list .item').filter({hasText:'Імпортована при відмові'}).count())===1 && await vis(pg.locator('#saveWarn')) && /Імпортована при відмові/.test(await pg.locator('#saveErrMsg').innerText()));
+await fail(false); await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(400); await pg.locator('#saveRetry').tap(); await pg.waitForTimeout(700);
+{ const n=await idbNotes(); ok('13b «Повторити» дописує імпортовану нотатку в сховище', n.some(x=>x.id==='impF') && !(await vis(pg.locator('#saveWarn')))); }
+await tap(350,700); await pg.waitForTimeout(300);
+// 14 причина: переповнення сховища названо, інша помилка — з назвою
 await pg.evaluate(()=>{ sheetDebug.idb.put=()=>Promise.reject(new DOMException('full','QuotaExceededError')); Storage.prototype.setItem=function(){ throw new DOMException('full','QuotaExceededError'); }; });
 await hold(150,650); await pg.waitForTimeout(250); await pg.keyboard.type('переповнення'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
-ok('10a переповнення: «'+(await pg.locator('#saved .sl').textContent())+'»', /Не збережено: сховище переповнене/.test(await pg.locator('#saved .sl').textContent()));
+ok('14a переповнення: «'+(await pg.locator('#saved .sl').textContent())+'»', /Не збережено: сховище переповнене/.test(await pg.locator('#saved .sl').textContent()));
 await pg.evaluate(()=>{ sheetDebug.idb.put=()=>Promise.reject(new DOMException('ro','ReadOnlyError')); Storage.prototype.setItem=function(){ throw new DOMException('sec','SecurityError'); }; });
 await pg.locator('.blk .txt').filter({hasText:'переповнення'}).tap(); await pg.keyboard.press('End'); await pg.keyboard.type(' ще'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
-ok('10b інша помилка: «'+(await pg.locator('#saved .sl').textContent())+'»', /Не збережено: помилка сховища \(SecurityError\)/.test(await pg.locator('#saved .sl').textContent()));
+ok('14b інша помилка: «'+(await pg.locator('#saved .sl').textContent())+'»', /Не збережено: помилка сховища \(SecurityError\)/.test(await pg.locator('#saved .sl').textContent()));
 await pg.screenshot({path:OUT+'/appsave-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

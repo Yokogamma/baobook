@@ -55,6 +55,21 @@ await pg.setViewportSize({width:390,height:844}); await pg.keyboard.press('Escap
 // 9 збережено
 await pg.reload(); await pg.waitForTimeout(500);
 ok('9 після перезавантаження обидва блоки на місці', (await pg.locator('.blk .txt').filter({hasText:'перший далі'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'другий'}).count())===1);
+// 10 довга нотатка: курсор не ховається під ряд «⋯», плашку «Скасувати» і «клавіатуру»
+const SEED={id:'tall1',title:'',created:1,updated:Date.now()+60000,blocks:Array.from({length:30},(_,i)=>({id:'t'+i,fx:0.05,row:2+i*2,text:'Рядок '+(i+1)}))};
+await pg.evaluate(seed=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put(seed); t.oncomplete=()=>{ d.close(); res(); }; }; }), SEED);
+await pg.evaluate(()=>localStorage.clear()); await pg.setViewportSize({width:320,height:568}); await pg.reload(); await pg.waitForTimeout(600);
+const caretBottom=()=>pg.evaluate(()=>{ const s=getSelection(); if(!s||!s.rangeCount) return null; let r=s.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=s.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); r=el.getBoundingClientRect(); } return Math.round(r.bottom); });
+const pinAboveBar=()=>pg.evaluate(()=>{ const r=document.activeElement.getBoundingClientRect(), bar=document.getElementById('bubble').getBoundingClientRect(); window.scrollBy(0, r.bottom-(bar.top-2)); });
+await pg.locator('.blk .txt').filter({hasText:'Рядок 30'}).tap(); await pg.waitForTimeout(300); await pinAboveBar(); await pg.waitForTimeout(100);
+{ const before=await caretBottom(), barTop=(await box(pg.locator('#bubble'))).y; await tapEl(pg.locator('#bubble .more')); await pg.waitForTimeout(300); const after=await caretBottom(), mb=await box(pg.locator('#bubbleMore'));
+  ok('10a відкрили «⋯»: курсор був над панеллю ('+before+' ≤ '+barTop+'), після появи ряду лишився над ним ('+after+' ≤ '+mb.y+')', await focusedTxt() && before<=barTop && mb && after<=mb.y);
+  await tapEl(pg.locator('#bubble .more')); await pg.waitForTimeout(200); }
+await pinAboveBar(); await pg.waitForTimeout(100);
+{ await pg.evaluate(()=>sheetDebug.offerUndo('довга плашка')); await pg.waitForTimeout(350); const after=await caretBottom(), u=await box(pg.locator('#undo'));
+  ok('10b плашка «Скасувати»: курсор над нею ('+after+' ≤ '+u.y+')', u && after<=u.y); await pg.evaluate(()=>sheetDebug.dropUndo()); await pg.waitForTimeout(300); }
+await pinAboveBar(); await pg.waitForTimeout(100); await pg.setViewportSize({width:320,height:300}); await pg.waitForTimeout(400);
+{ const after=await caretBottom(), bb=await box(pg.locator('#bubble')); ok('10c «клавіатура» (вікно 300): курсор підкрутило над панель ('+after+' ≤ '+bb.y+')', await focusedTxt() && bb && after<=bb.y && Math.abs(bb.y+bb.h-300)<=1); }
 await pg.screenshot({path:OUT+'/appkb-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
