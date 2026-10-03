@@ -25,7 +25,7 @@ await pg.locator('.blk .txt').first().click(); await select(5,3); await pg.keybo
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const t=pg.locator('.blk .txt').first(); const b=await t.locator('i').boundingBox(); await pg.mouse.dblclick(b.x+b.width/2, b.y+b.height/2); await pg.waitForTimeout(250);
   const vis=await pg.locator('#bubble').isVisible(); const pressed=await pg.locator('#bubble button[data-cmd="italic"]').getAttribute('aria-pressed'); const bb=await pg.locator('#bubble').boundingBox();
-  ok('5a подвійний клік по слову: панель над виділенням, «I» підсвічена', vis && pressed==='true' && bb.y<b.y && (await pg.locator('#bubble button').count())===6);
+  ok('5a подвійний клік по слову: панель над виділенням, «I» підсвічена', vis && pressed==='true' && bb.y<b.y && (await pg.locator('#bubble button:visible').count())===6);   // «Блок», «Готово» і «⋯» — лише на дотику
   await pg.locator('#bubble button[data-cmd="underline"]').click(); await pg.waitForTimeout(450);
   const st=await stored(); ok('5b кнопка U додає підкреслення до «три», виділення й панель лишаються: '+(st&&st.html), st && /<i><u>три<\/u><\/i>|<u><i>три<\/i><\/u>/.test(st.html) && await pg.locator('#bubble').isVisible());
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); ok('5c після зняття виділення панель зникає', !(await pg.locator('#bubble').isVisible())); }

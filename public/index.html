@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Чистий аркуш</title>
 <meta name="description" content="Нотатки на чистому аркуші: клацніть у будь-якому місці й пишіть саме там. Працює без мережі, зберігає все на цьому пристрої.">
 <link rel="manifest" href="manifest.webmanifest">
@@ -120,10 +120,13 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .side-f .frow{display:flex;gap:6px} .fbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer}
 .fbtn:hover{background:var(--hover);color:var(--ink)} .fbtn .i{font-size:14px}
 .stor{line-height:1.45}
+/* незаписані нотатки: помилка лишається, поки запис не вдасться; «Повторити» пише останню версію з памʼяті, «Експортувати» — у файл */
+.serr{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:8px;background:rgba(204,51,51,.1);color:var(--ink)} .serr b{color:#c33} .serr .frow .fbtn{height:34px}
+.dbg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);cursor:pointer} .dbg input{margin:0}
 /* дотик: плаваюча кнопка «+» (новий блок у наступному вільному ряду); ховається, поки видно плашку «Скасувати» або відкрито панель */
-.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;border:0;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:29;transition:transform .15s,opacity .15s}
+.fab{position:fixed;right:16px;bottom:calc(16px + var(--kb,0px) + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;border:0;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:29;transition:transform .15s,opacity .15s}
 .fab .i{font-size:26px;stroke-width:2.2} .fab[hidden]{display:none !important}
-@media (hover:none){ .fab{display:flex} #undo.show ~ .fab{opacity:0;transform:scale(.6);pointer-events:none}
+@media (hover:none){ .fab{display:flex}
   /* довге натискання на порожньому місці не має запускати системне виділення (сині маркери в Android); текст блоків лишається виділюваним */
   .sheet{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} .blk .txt,.code,.ctitle{-webkit-user-select:text;user-select:text} }
 .empty .touch{display:none} @media (hover:none){ .empty .mouse{display:none} .empty .touch{display:inline} }
@@ -149,7 +152,10 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px;padding:0 6px;white-space:nowrap}
 .saved{font-size:12px;color:var(--ink-3);padding:0 6px;white-space:nowrap;opacity:0;transition:opacity .3s}
 .saved.pend,.saved.ok{opacity:1} .saved.ok{color:var(--ink-2)} .saved.err{opacity:1;color:#c33}
-@media (max-width:640px){ .cnt,.saved{display:none} .top{padding-right:4px} }
+.saved .ss{display:none}
+/* ⚠ у шапці: є незаписані нотатки; видно на будь-якій ширині, відкриває панель із поясненням і «Повторити» */
+.tb.warn{color:#c33;font-weight:700;font-size:16px} .tb.warn:hover{color:#c33} .tb.warn[hidden]{display:none}
+@media (max-width:640px){ .cnt,.saved .sl{display:none} .saved{padding:0 2px} .saved .ss{display:inline;font-size:14px} .saved.err{display:none} .top{padding-right:4px} }   /* телефон: лише ● і ✓, помилка — кнопкою ⚠ */
 @media (hover:none){ .tb{height:40px;min-width:40px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} }   /* дотик: цілі 40px з проміжками, щоб не влучати в сусідню кнопку */
 
 /* ── аркуш ───────────────────────────────────────────────────────────── */
@@ -180,12 +186,16 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .txt code.done{background:var(--s);color:#fff;border-color:transparent} .txt code.done::after{opacity:1;-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E")}
 /* панель форматування: на компʼютері над виділенням, на дотику — внизу видимої області (над клавіатурою) */
 .bubble{position:fixed;z-index:28;display:flex;gap:2px;padding:4px;border-radius:8px;background:var(--ink);color:var(--page);box-shadow:var(--shadow)}
-.bubble button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
-.bubble button:hover{background:rgba(128,128,128,.35)} .bubble button[aria-pressed="true"]{background:rgba(128,128,128,.55)}
+.bubble button,.bmore button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
+.bubble button:hover,.bmore button:hover{background:rgba(128,128,128,.35)} .bubble button[aria-pressed="true"],.bmore button[aria-pressed="true"]{background:rgba(128,128,128,.55)}
 .bubble .sep{width:1px;align-self:stretch;margin:4px 3px;background:rgba(128,128,128,.5)} .bubble button.act{width:auto;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font-size:13px} .bubble button.act .i{font-size:15px}
 .bubble button.act.done{color:#8fd3a5}
 .grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:14px;font-weight:700}
-@media (hover:none){ .bubble{left:0 !important;right:0;border-radius:0;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))} .bubble button{width:56px;height:40px;font-size:16px} }
+.bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:none}   /* лише на дотику */
+.bmore{position:fixed;left:0;right:0;bottom:calc(var(--kb,0px) + var(--bubbleH,0px));z-index:28;display:flex;gap:2px;justify-content:center;padding:6px;background:var(--ink);color:var(--page);border-top:.5px solid rgba(128,128,128,.4)} .bmore[hidden]{display:none}
+@media (hover:none){ .bubble{left:0 !important;right:0;bottom:var(--kb,0px);top:auto !important;border-radius:0;justify-content:center;min-height:48px;padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px))}
+  .bubble button,.bmore button{flex:0 0 auto;width:44px;min-width:44px;height:44px;font-size:16px} .bubble button.act,.bmore button.act{width:auto;padding:0 10px;font-size:14px} .bubble button.act[data-act="new"]{width:44px;padding:0} .bubble [data-act="new"] span{display:none}
+  .bubble button.act[data-act="copy"]{display:none} .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:inline-flex;align-items:center;justify-content:center} .bubble button.act[data-act="done"]{font-weight:600} .bubble .more{font-size:20px;letter-spacing:1px} }
 .grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
 .grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
 .grip:hover{background:var(--hover-2);color:var(--ink-2)}
@@ -340,7 +350,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .toast b{font-weight:500;color:var(--ink)}
 @media (max-width:640px){ .toast{white-space:normal;max-width:calc(100vw - 32px);text-align:center} }
 /* плашка «Скасувати»: дія вже виконана, кілька секунд її можна повернути */
-.undo{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(8px);z-index:31;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;background:var(--ink);color:var(--page);font-family:var(--sans);font-size:13px;box-shadow:var(--shadow);opacity:0;transition:opacity .2s,transform .2s}
+.undo{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:31;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;background:var(--ink);color:var(--page);font-family:var(--sans);font-size:13px;box-shadow:var(--shadow);opacity:0;transition:opacity .2s,transform .2s}
 .undo.show{opacity:1;transform:translateX(-50%)}
 .undo .umsg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .undo .ubtn{flex:0 0 auto;border:0;border-radius:6px;padding:6px 10px;background:rgba(128,128,128,.28);color:inherit;font:inherit;font-weight:600;cursor:pointer}
@@ -362,6 +372,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     </label>
     <div class="list" id="list"></div>
     <div class="side-f" id="sideFoot">
+      <div class="serr" id="saveErr" hidden role="alert"><span id="saveErrMsg"></span><div class="frow"><button class="fbtn" id="saveRetry" type="button">Повторити</button><button class="fbtn" id="saveExport" type="button">Експортувати</button></div></div>
+      <label class="dbg" id="dbgRow" hidden><input type="checkbox" id="dbgFail">Імітувати відмову сховища</label>
       <div class="stor" id="storInfo"></div>
       <div class="frow"><button class="fbtn" id="exportBtn" title="Зберегти всі нотатки у файл JSON"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Експорт</button><button class="fbtn" id="importBtn" title="Додати нотатки з файлу експорту"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg>Імпорт</button><input type="file" id="importFile" accept=".json,application/json" hidden></div>
       <button class="install" id="installBtn" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Встановити застосунок</button>
@@ -378,7 +390,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
         <span class="ttl" id="ttl" contenteditable="true" data-ph="Без назви" role="textbox" aria-label="Назва нотатки"></span>
       </div>
       <div class="tools">
-        <span class="saved" id="saved"></span>
+        <span class="saved" id="saved" role="status"><span class="sl"></span><span class="ss"></span></span><button class="tb warn" id="saveWarn" hidden title="Не збережено" aria-label="Не збережено: відкрити панель">⚠</button>
         <span class="cnt" id="cnt" title="Кількість блоків"></span>
         <button class="tb" id="areaBtn" title="Нова область (на десктопі — просто протягніть мишею по порожньому місцю)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 9.5h8"/></svg></button>
         <button class="tb" id="spellBtn" title="Перевірка правопису" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
@@ -397,7 +409,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button">Скасувати<kbd>Ctrl+Z</kbd></button></div>
 <button class="fab" id="fab" title="Новий блок" aria-label="Новий блок"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-<div class="bubble" id="bubble" hidden role="toolbar" aria-label="Форматування"><button type="button" data-cmd="bold" title="Жирний (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Підкреслення (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Перекреслення (Ctrl+Shift+S)"><s>S</s></button><button type="button" data-cmd="code" title="Код: моноширинний чип, копіюється кліком (Ctrl+E)" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep"></span><button type="button" class="act" data-act="copy" title="Копіювати виділене (Ctrl+C)"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Копіювати</span></button></div>
+<div class="bubble" id="bubble" hidden role="toolbar" aria-label="Форматування"><button type="button" data-cmd="bold" title="Жирний (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Підкреслення (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Перекреслення (Ctrl+Shift+S)"><s>S</s></button><button type="button" data-cmd="code" title="Код: моноширинний чип, копіюється кліком (Ctrl+E)" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep"></span><button type="button" class="act" data-act="copy" title="Копіювати виділене (Ctrl+C)"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Копіювати</span></button><button type="button" class="act" data-act="new" title="Новий блок під цим" aria-label="Новий блок під цим"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Блок</span></button><button type="button" class="act" data-act="done" title="Завершити редагування">Готово</button><button type="button" class="more" data-act="more" title="Ще кнопки" aria-label="Ще кнопки" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
+<div class="bmore" id="bubbleMore" hidden role="toolbar" aria-label="Ще форматування"></div>
 <div class="toast" id="toast">Зберігається саме. <b>Enter</b> — новий рядок, <b>Esc</b> — вийти, <b>Backspace</b> у порожньому блоці — видалити.</div>
 
 <script>
@@ -406,7 +419,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
-const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble');
+const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
+const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
@@ -493,6 +507,7 @@ const ghost=el('div','ghost'), gbox=el('div','gbox'); gbox.innerHTML='<span clas
 const store={
   get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v); }catch(_){ return d; } },
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(_){ return false; } },
+  put(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return null; }catch(e){ return e||new Error('localStorage'); } },   // null — записано, інакше помилка
   del(k){ try{ localStorage.removeItem(k); }catch(_){} },
   raw(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } },
   keys(p){ const r=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(p)) r.push(k); } }catch(_){} return r; }
@@ -509,17 +524,20 @@ const idb={ db:null,
     t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
+const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? 'сховище переповнене' : 'помилка сховища ('+(n||'невідома')+')'; };
 const db={ backend:'local',
   // старт: відкриваємо IndexedDB; нотатки з localStorage (так зберігала перша версія) переносимо (новіша копія перемагає) і прибираємо, щоб не було двох сховищ
   async init(){ try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; return; }
     const keys=store.keys(NK); if(!keys.length) return; let have; try{ have=await idb.all(); }catch(_){ return; } const byId=new Map(have.map(n=>[n.id,n]));
     for(const k of keys){ const n=store.get(k); if(validNote(n)){ const ex=byId.get(n.id); if(!ex || (n.updated||0)>(ex.updated||0)){ try{ await idb.put(n); }catch(_){ continue; } } } store.del(k); } },
   async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return store.keys(NK).map(k=>store.get(k)).filter(validNote); },
-  async save(n){ if(db.backend==='idb'){ try{ await idb.put(n); return true; }catch(_){} } return store.set(NK+n.id,n); },   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
+  async save(n){ if(DEBUG.failSave) return {ok:false,reason:'тест'}; let err=null; if(db.backend==='idb'){ try{ await idb.put(n); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
+    const e2=store.put(NK+n.id,n); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; },
   async remove(id){ store.del(NK+id); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
   settings(){ return store.get(SK,{})||{}; },
   setSettings(s){ store.set(SK,s); }
 };
+Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo()});   // гачки для тестів: скрипт не глобальний
 
 /* ══ нотатки ══════════════════════════════════════════════════════════════ */
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
@@ -648,16 +666,29 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
   if(b.kind==='area'){ d.kind='area'; d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.title) d.title=b.title; if(b.color&&b.color!=='neutral') d.color=b.color; if(b.collapsed) d.collapsed=true; }
   return d; }
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
-function markDirty(){ dirty=true; savedEl.textContent='●'; savedEl.className='saved pend'; clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
-let saveP=null;
-function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur);
-  const p=db.save(cur); saveP=p; p.then(ok=>{ if(saveP!==p) return;   // статус — від останнього запису
-    savedEl.textContent=ok?'Збережено':'Не збереглося: сховище переповнене'; savedEl.className='saved '+(ok?'ok':'err'); clearTimeout(savedEl._t); if(ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } storageUI(); }); }
-function openNote(n){ flushSave(); dropUndo(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S);   // історія назви — своя в кожної нотатки
+const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
+function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
+function markDirty(){ dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
+/* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
+   втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
+let saveP=null; const unsaved=new Map();   // id → {reason, since}
+function writeNote(n){ const p=db.save(n); if(n===cur) saveP=p; p.then(r=>{ if(r.ok) unsaved.delete(n.id); else unsaved.set(n.id,{reason:r.reason,since:now()});
+    if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok?'Збережено':'Не збережено: '+r.reason, r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
+    saveUI(); storageUI(); }); return p; }
+function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }
+function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n); } saveUI(); }
+function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(!k) return;
+  const names=[...unsaved.keys()].map(id=>{ const x=notes.find(y=>y.id===id); return x? '«'+titleOf(x)+'»' : ''; }).filter(Boolean), first=unsaved.get(cur&&unsaved.has(cur.id)? cur.id : [...unsaved.keys()][0]);
+  saveErrMsg.innerHTML='<b>Не збережено: '+escHtml(first.reason)+'.</b> '+(k===1? 'Нотатка '+escHtml(names[0]) : k+' '+pl(k,'нотатка','нотатки','нотаток')+': '+escHtml(names.join(', ')))+' — лише в памʼяті цієї вкладки, до перезавантаження.'; }
+saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('click',()=>exportAll()); saveWarn.addEventListener('click',()=>{ setSide(true); saveErr.scrollIntoView({block:'nearest'}); });
+if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
+window.addEventListener('beforeunload',e=>{ flushSave(); if(unsaved.size){ e.preventDefault(); e.returnValue=''; } });
+window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
+function openNote(n){ flushSave(); dropUndo(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
-function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id);
+function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id); unsaved.delete(n.id); saveUI();
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
 newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
@@ -692,11 +723,11 @@ q.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; renderList()
 qClear.addEventListener('click',()=>{ q.value=''; renderList(); q.focus(); });
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&hotkey(e)==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
   if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='n'){ e.preventDefault(); newBtn.click(); } });
-window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); });
+window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else if(unsaved.size) retrySave(); });
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
-function setSide(open){ app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fab.hidden=(open&&isMobile()) || (overview&&narrowQ.matches); if(!isMobile()){ S.side=open; db.setSettings(S); } }
+function setSide(open){ app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()){ S.side=open; db.setSettings(S); } }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
 backdrop.addEventListener('click',()=>setSide(false));
 matchMedia('(max-width:900px)').addEventListener('change',e=>{ app.classList.toggle('open', e.matches? false : S.side!==false); });
@@ -955,8 +986,8 @@ function buildCode(b){
 }
 /* «Скасувати»: видалення і розгрупування області виконуються одразу, але кілька секунд їх можна повернути (плашка або Ctrl+Z поза редагуванням) */
 const UNDO_MS=7000; let pendingUndo=null, undoT=null;
-function offerUndo(msg, restore){ dropUndo(true); pendingUndo=restore; undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); requestAnimationFrame(()=>undoEl.classList.add('show')); undoT=setTimeout(()=>dropUndo(),UNDO_MS); }
-function dropUndo(keepOpen){ clearTimeout(undoT); undoT=null; pendingUndo=null; if(keepOpen) return; undoEl.classList.remove('show'); setTimeout(()=>{ if(!pendingUndo) undoEl.hidden=true; },220); }
+function offerUndo(msg, restore){ dropUndo(true); pendingUndo=restore; undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); requestAnimationFrame(()=>undoEl.classList.add('show')); undoT=setTimeout(()=>dropUndo(),UNDO_MS); }
+function dropUndo(keepOpen){ clearTimeout(undoT); undoT=null; pendingUndo=null; if(keepOpen) return; undoEl.classList.remove('show'); setTimeout(()=>{ if(!pendingUndo){ undoEl.hidden=true; fabSync(); } },220); }
 function doUndo(){ const r=pendingUndo; if(!r) return; dropUndo(); r(); }
 undoBtn.addEventListener('click',doUndo);
 /* ══ історія правок у полях — текстовий блок, код у редагуванні, назви: Ctrl+Z, Ctrl+Shift+Z або Ctrl+Y. Власна, бо браузерна одна на всю сторінку,
@@ -1088,16 +1119,40 @@ function createAt(e, focus=true){
 // «+» на дотику: новий блок у наступному вільному ряду, у фокусі (клік — жест, тож клавіатура відкриється)
 function createNext(){ const row=Math.max(cMinRow(null), ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=make({col:cMinCol(null),row},false); markDirty(); b.el.scrollIntoView({block:'center'}); b.txt.focus(); return b; }
 fab.addEventListener('click',createNext);
+// «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
+function createAfter(b){ const a=ctn(b); let d; if(flow){ const ord=flowOrder(a), i=ord.indexOf(b); d=slotModel(a, b, ord[i+1]||null); } else { d={row:b.row+(b.lines||1)+1, col:b.col}; if(!a) d.fx=b.fx; }
+  if(a) d.parent=a.id; const nb=make(d,false); markDirty(); nb.el.scrollIntoView({block:'center'}); nb.txt.focus(); return nb; }
+/* «+» ховається, поки курсор у будь-якому полі, видно панель форматування чи плашку, відкрито панель нотаток або огляд; повертається через 150 мс після втрати фокуса */
+let fabT=null;
+function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElement) || !bubble.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches);
+  if(busy){ fab.hidden=true; return; } fabT=setTimeout(()=>{ fab.hidden=false; },150); }
+document.addEventListener('focusin',fabSync); document.addEventListener('focusout',fabSync);
+/* нижні елементи: --kb — висота клавіатури за visualViewport, --bar — висота панелі форматування (плашка стоїть над нею), safe area лише в найнижчого */
+function layoutBottom(){ const vv=window.visualViewport, root=document.documentElement.style; const kb=vv? Math.max(0, Math.round(window.innerHeight-(vv.offsetTop+vv.height))) : 0;
+  const bh=(TOUCH && !bubble.hidden)? bubble.offsetHeight : 0, bar=bh+((TOUCH && !bubbleMore.hidden)? bubbleMore.offsetHeight : 0);
+  root.setProperty('--kb',kb+'px'); root.setProperty('--bubbleH',bh+'px'); root.setProperty('--bar',bar+'px'); root.setProperty('--sa', bar? '0px' : 'env(safe-area-inset-bottom,0px)'); }
 /* панель форматування при виділенні тексту в текстовому блоці */
 let bubbleBlk=null;
-function curTextBlock(){ const sel=getSelection(); if(!sel||sel.rangeCount===0||sel.isCollapsed) return null; const el=n=>n&&(n.nodeType===1? n : n.parentElement); const t=el(sel.anchorNode)&&el(sel.anchorNode).closest('.txt'); if(!t) return null; const f=el(sel.focusNode); if(!f||f.closest('.txt')!==t) return null; return blocks.find(b=>b.txt===t)||null; }
+function curTextBlock(){ const sel=getSelection(); if(!sel||sel.rangeCount===0) return null; const el=n=>n&&(n.nodeType===1? n : n.parentElement); const t=el(sel.anchorNode)&&el(sel.anchorNode).closest('.txt'); if(!t) return null;
+  if(sel.isCollapsed && !(TOUCH && document.activeElement===t)) return null;   // на дотику панель видно й з самим курсором: там «Готово» і «Блок»
+  const f=el(sel.focusNode); if(!f||f.closest('.txt')!==t) return null; return blocks.find(b=>b.txt===t)||null; }
 function bubbleState(){ if(bubble.hidden) return; bubble.querySelectorAll('button[data-cmd]').forEach(bt=>{ let on=false; if(bt.dataset.cmd==='code'){ const sel=getSelection(); on=!!(sel&&sel.rangeCount&&bubbleBlk&&codeAncestor(sel.getRangeAt(0).startContainer,bubbleBlk.txt)); } else { try{ on=document.queryCommandState(bt.dataset.cmd); }catch(_){} } bt.setAttribute('aria-pressed',String(!!on)); }); }
-function placeBubble(){ const b=curTextBlock(); if(!b){ bubble.hidden=true; bubbleBlk=null; return; } bubbleBlk=b; bubble.hidden=false;
-  if(TOUCH){ const vv=window.visualViewport; const bottom=vv? Math.max(0, window.innerHeight-(vv.offsetTop+vv.height)) : 0; bubble.style.top=''; bubble.style.bottom=bottom+'px'; }
+function placeBubble(){ const b=curTextBlock(); if(!b){ if(!bubble.hidden){ bubble.hidden=true; bubbleMore.hidden=true; layoutBottom(); fabSync(); } bubbleBlk=null; return; } const fresh=bubble.hidden||bubbleBlk!==b; bubbleBlk=b; bubble.hidden=false;
+  if(TOUCH){ bubble.style.top=''; bubble.style.bottom=''; fitBubble(); layoutBottom(); if(fresh){ fabSync(); revealCaret(); } }
   else { const r=getSelection().getRangeAt(0).getBoundingClientRect(); const w=bubble.offsetWidth||150, h=bubble.offsetHeight||38; bubble.style.bottom=''; bubble.style.left=Math.max(8, Math.min(window.innerWidth-w-8, r.left+r.width/2-w/2))+'px'; bubble.style.top=(r.top-h-8>=8? r.top-h-8 : r.bottom+8)+'px'; }
   bubbleState(); }
 document.addEventListener('selectionchange',()=>{ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); });
-bubble.addEventListener('pointerdown',e=>e.preventDefault());   // не втрачати виділення
+document.addEventListener('focusin',()=>{ if(TOUCH){ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); } });
+bubble.addEventListener('pointerdown',e=>e.preventDefault()); bubbleMore.addEventListener('pointerdown',e=>e.preventDefault());   // не втрачати виділення
+/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю */
+const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,underline:4,strikeThrough:5,code:6};
+function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.forEach(el=>bubble.appendChild(el)); bubbleMore.hidden=true; more.hidden=true; more.setAttribute('aria-expanded','false');
+  const vis=()=>[...bubble.children].filter(e=>!e.hidden && getComputedStyle(e).display!=='none'), width=()=>{ const v=vis(); return v.length? v[v.length-1].getBoundingClientRect().right-v[0].getBoundingClientRect().left : 0; }, avail=window.innerWidth-12;
+  if(width()<=avail) return; more.hidden=false;
+  const items=BUBBLE_ORDER.filter(e=>e.tagName==='BUTTON' && e.dataset.act!=='copy' && e!==more).sort((a,b)=>(PRI[b.dataset.cmd||b.dataset.act]??0)-(PRI[a.dataset.cmd||a.dataset.act]??0));   // наймолодші першими
+  for(const b of items){ if(width()<=avail) break; bubbleMore.appendChild(b); } }
+function revealCaret(){ const sel=getSelection(); if(!sel||!sel.rangeCount) return; let r=sel.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=sel.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); if(!el) return; r=el.getBoundingClientRect(); }
+  const vv=window.visualViewport, vb=vv? vv.offsetTop+vv.height : window.innerHeight, limit=vb-bubble.offsetHeight-(bubbleMore.hidden? 0 : bubbleMore.offsetHeight)-8; if(r.bottom>limit) window.scrollBy(0, r.bottom-limit); }
 /* копіювання: у буфер ідуть і чистий текст, і форматування (текст — у чат, жирний і курсив — у редактор) */
 async function copyBoth(text, html){ try{ if(navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([text],{type:'text/plain'}),'text/html':new Blob([html.replace(/\n/g,'<br>')],{type:'text/html'})})]); return true; } }catch(_){}
   try{ await navigator.clipboard.writeText(text); return true; }catch(_){} try{ return document.execCommand('copy'); }catch(_){ return false; } }
@@ -1105,10 +1160,16 @@ async function copySelection(){ const sel=getSelection(); if(!sel||sel.isCollaps
 function blockText(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.text||'').filter(t=>t.trim()).join('\n\n'); return b.text||''; }
 function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.html||escHtml(o.text||'')).filter(t=>t.trim()).join('\n\n'); return b.html||escHtml(b.text||''); }
 async function copyBlock(b, grip){ const ok=await copyBoth(blockText(b), blockHtml(b)); if(!ok){ say('Не вдалося скопіювати'); return; } say('Скопійовано'); if(grip){ grip.classList.add('done'); setTimeout(()=>grip.classList.remove('done'),1200); } }
-bubble.addEventListener('click',async e=>{ const act=e.target.closest('button[data-act="copy"]'); if(act){ const ok=await copySelection(); const sp=act.querySelector('span'); sp.textContent=ok? 'Скопійовано' : 'Не вдалося'; act.classList.add('done'); setTimeout(()=>{ sp.textContent='Копіювати'; act.classList.remove('done'); },1200); return; }
+const bubbleAct=async e=>{ const a=e.target.closest('button[data-act]'); if(!a) return false; const act=a.dataset.act;
+  if(act==='more'){ bubbleMore.hidden=!bubbleMore.hidden; a.setAttribute('aria-expanded',String(!bubbleMore.hidden)); layoutBottom(); return true; }
+  if(act==='done'){ const f=document.activeElement; if(f&&f.blur) f.blur(); const sl=getSelection(); if(sl) sl.removeAllRanges(); placeBubble(); return true; }
+  if(act==='new'){ if(bubbleBlk) createAfter(bubbleBlk); return true; } return false; };
+bubbleMore.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
+bubble.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const act=e.target.closest('button[data-act="copy"]'); if(act){ const ok=await copySelection(); const sp=act.querySelector('span'); sp.textContent=ok? 'Скопійовано' : 'Не вдалося'; act.classList.add('done'); setTimeout(()=>{ sp.textContent='Копіювати'; act.classList.remove('done'); },1200); return; }
   const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
 window.addEventListener('scroll',()=>{ if(!bubble.hidden && !TOUCH) placeBubble(); },{passive:true});
-if(window.visualViewport) window.visualViewport.addEventListener('resize',()=>{ if(!bubble.hidden) placeBubble(); });
+if(window.visualViewport) ['resize','scroll'].forEach(t=>window.visualViewport.addEventListener(t,()=>{ layoutBottom(); if(!bubble.hidden && TOUCH) fitBubble(); if(!bubble.hidden) placeBubble(); }));
+window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUCH){ fitBubble(); layoutBottom(); } }); layoutBottom();
 /* дотик: одиночний дотик нічого не створює (аркуш можна гортати й читати); блок зʼявляється після утримання ~0,5 с без руху,
    а фокус (клавіатура) — при відпусканні, бо iOS відкриває клавіатуру лише всередині жесту. Зрушили палець після появи блока — порожній блок прибирається */
 const HOLD_MS=450, HOLD_SLOP=8; let hold=null;
@@ -1199,7 +1260,7 @@ function drag(b, grip){
 function applyMode(){ const narrow=narrowQ.matches; flow=narrow && !overview; app.classList.toggle('narrow',narrow); sheet.classList.toggle('flow',flow); sheet.classList.toggle('overview',overview&&narrow);
   const k=Math.min(1, sheet.parentElement.clientWidth/OVERVIEW_W); sheet.style.zoom=(overview&&narrow)? String(k) : ''; sheet.style.marginTop=(overview&&narrow)? Math.max(0, 52/k-60)+'px' : '';   // зменшене полотно: перший ряд не ховається під шапкою
   viewBtn.setAttribute('aria-pressed',String(overview)); viewBtn.title=overview? 'Показати стрічкою' : 'Показати як на компʼютері';
-  fab.hidden=(overview&&narrow) || (app.classList.contains('open')&&isMobile());
+  fabSync();
   if(!flow) blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*W(),null,b); }); resolve(); }
 viewBtn.addEventListener('click',()=>{ overview=!overview; applyMode(); window.scrollTo(0,0); });
 let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); }).observe(sheet);
