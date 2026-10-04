@@ -47,6 +47,13 @@ await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(4
 ok('7a «Готово»: рамки й панелі немає, «+» повернувся', (await pg.locator('.blk.sel').count())===0 && !(await pg.locator('#blockbar').isVisible()) && await pg.locator('#fab').isVisible());
 { const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(300);
   ok('7b короткий дотик по тексту ставить курсор без режиму положення', await focusedTxt() && (await pg.locator('.blk.sel').count())===0); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300); }
+// 7c текст неактивного блока для системи невиділюваний (довге натискання — наш жест), з курсором — виділюваний; дотик по ручці — теж режим положення
+{ const us=await blk('Правий').locator('.txt').evaluate(e=>getComputedStyle(e).userSelect); const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(250); const usF=await blk('Правий').locator('.txt').evaluate(e=>getComputedStyle(e).userSelect);
+  const caretIn=await pg.evaluate(()=>{ const s=getSelection(); const n=s.anchorNode; return !!(n && (n.nodeType===1? n : n.parentElement).closest('.txt')); });
+  ok('7c без курсора user-select='+us+', з курсором '+usF+', курсор поставлено в блок', us==='none' && usF==='text' && caretIn); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300);
+  ok('7d дотик по ручці ⋮⋮ вмикає режим положення, нічого не копіює', await blk('Правий').evaluate(e=>e.classList.contains('sel')) && await pg.locator('#blockbar').isVisible() && !/Скопійовано/.test(await pg.locator('#toast').innerText()));
+  await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
 // 8 дотик по аркушу в режимі положення лише знімає його, блок не створюється
 { const b=await box(blk('Третій').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250); const n=await pg.locator('#sheet > .blk').count(); await tap(300,600); await pg.waitForTimeout(300);
   ok('8 дотик по аркушу знімає режим, блоків стільки ж ('+n+')', (await pg.locator('.blk.sel').count())===0 && (await pg.locator('#sheet > .blk').count())===n); }
