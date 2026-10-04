@@ -42,6 +42,10 @@ await hold(60,700); await pg.waitForTimeout(250); await pg.keyboard.type('Тре
 { const b=await box(blk('Лівий внизу').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250); await tapEl(pg.locator('#blockbar [data-mv="down"]')); await pg.waitForTimeout(400);
   const t=await box(blk('Лівий внизу').locator('.txt')), c=await box(blk('Третій').locator('.txt')); const m=await model();
   ok('6b «↓»: блок впритул над «Третій» ('+(t.y+t.h)+' = '+c.y+'), ряд '+m['Лівий внизу'].row, near(t.y+t.h, c.y, 4) && m['Лівий внизу'].row===m['Третій'].row-1); }
+// 6c «↓» без сусіда по горизонталі — під найнижчий блок
+{ const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300); await tapEl(pg.locator('#blockbar [data-mv="down"]')); await pg.waitForTimeout(400);
+  const t=await box(blk('Правий').locator('.txt')), c=await box(blk('Третій').locator('.txt')); const m=await model();
+  ok('6c «↓» без сусіда: «Правий» під найнижчим «Третій» ('+t.y+' = '+(c.y+c.h)+'), ряд '+m['Правий'].row, near(t.y, c.y+c.h, 4) && m['Правий'].row===m['Третій'].row+1); }
 // 7 «Готово» знімає режим; дотик по тексту ставить курсор, як і раніше
 await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(400);
 ok('7a «Готово»: рамки й панелі немає, «+» повернувся', (await pg.locator('.blk.sel').count())===0 && !(await pg.locator('#blockbar').isVisible()) && await pg.locator('#fab').isVisible());
@@ -54,6 +58,14 @@ ok('7a «Готово»: рамки й панелі немає, «+» повер
   const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300);
   ok('7d дотик по ручці ⋮⋮ вмикає режим положення, нічого не копіює', await blk('Правий').evaluate(e=>e.classList.contains('sel')) && await pg.locator('#blockbar').isVisible() && !/Скопійовано/.test(await pg.locator('#toast').innerText()));
   await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
+// 7e короткий блок «→»: сторінка не стає ширшою за екран; 7f дотик по аркушу знімає системне виділення слова
+{ await hold(60,420); await pg.waitForTimeout(250); await pg.keyboard.type('Ок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
+  const g=await box(blk('Ок').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300); await tapEl(pg.locator('#blockbar [data-mv="right"]')); await pg.waitForTimeout(400);
+  const bb=await box(blk('Ок')); const sw=await pg.evaluate(()=>document.documentElement.scrollWidth), sheetW=await pg.locator('#sheet').evaluate(e=>e.clientWidth);
+  ok('7e короткий блок «→»: правий край блока '+(bb.x+bb.w)+' ≤ '+sheetW+', сторінка не ширша за екран ('+sw+')', bb.x+bb.w<=sheetW && sw<=390); await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
+{ const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(300); await pg.keyboard.press('Shift+Home'); await pg.waitForTimeout(200); const selBefore=await pg.evaluate(()=>getSelection().toString());
+  await tap(300,600); await pg.waitForTimeout(400);
+  ok('7f виділили слово («'+selBefore+'»), дотик по порожньому місцю: виділення знято, панелі немає, курсора немає', selBefore.length>0 && (await pg.evaluate(()=>getSelection().toString()))==='' && !(await pg.locator('#bubble').isVisible()) && !(await focusedTxt())); }
 // 8 дотик по аркушу в режимі положення лише знімає його, блок не створюється
 { const b=await box(blk('Третій').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250); const n=await pg.locator('#sheet > .blk').count(); await tap(300,600); await pg.waitForTimeout(300);
   ok('8 дотик по аркушу знімає режим, блоків стільки ж ('+n+')', (await pg.locator('.blk.sel').count())===0 && (await pg.locator('#sheet > .blk').count())===n); }
@@ -63,7 +75,7 @@ ok('7a «Готово»: рамки й панелі немає, «+» повер
 // 10 після перезавантаження позиції ті самі
 await pg.reload(); await pg.waitForTimeout(500);
 { const a=await box(blk('Правий').locator('.txt')), b=await box(blk('Лівий внизу').locator('.txt'));
-  ok('10 після перезавантаження: «Правий» '+a.x+','+a.y+', «Лівий внизу» '+b.x+','+b.y, near(a.x,198) && near(a.y,300) && near(b.x,30) && near(b.y,660)); }
+  ok('10 після перезавантаження: «Правий» '+a.x+','+a.y+', «Лівий внизу» '+b.x+','+b.y, near(a.x,198) && near(a.y,708) && near(b.x,30) && near(b.y,660)); }
 await pg.screenshot({path:OUT+'/appsel-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

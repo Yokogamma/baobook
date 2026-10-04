@@ -844,7 +844,8 @@ function buildText(b){
   b.txt=b.el.querySelector('.txt'); showTxt(b); b.card=b.el.querySelector('.tcard');
   b.txt.addEventListener('focus',()=>{ b.el.classList.add('focus'); padChips(b.txt); });
   selHoldOn(b);
-  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
+    if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
   b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); if(!e.isComposing) padChips(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
   const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
@@ -1123,9 +1124,10 @@ function exitSel(){ if(!selBlk) return; selBlk.el.classList.remove('sel'); selBl
 function xConflict(b,o){ const A=rect(b),B=rect(o); const [L,R,left]=A.x0<=B.x0? [A,B,b] : [B,A,o]; return R.xl-L.xl<need(left); }
 function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.lines||1;
   if(dir==='left') col=cMinCol(a);
-  else if(dir==='right'){ const w=b.card? b.card.offsetWidth : minw(b)-CL(); col=Math.max(cMinCol(a), Math.floor((cW(a)-cPadR(a)-CL()-w-cOX(a))/G())); }
+  else if(dir==='right'){ const w=b.card? b.card.offsetWidth : minw(b)-CL(); col=clampColFor(Math.floor((cW(a)-cPadR(a)-CL()-w-cOX(a))/G()), b, a); }   // не далі, ніж дозволяє мінімальна ширина блока — інакше блок вилазить за аркуш
   else if(dir==='up'){ let r=cMinRow(a); for(const o of solid(a)){ if(o===b) continue; const R=rect(o); if(R.r1<=b.row && xConflict(b,o)) r=Math.max(r,R.r1); } row=r; }
-  else if(dir==='down'){ let r=null; for(const o of solid(a)){ if(o===b) continue; const R=rect(o); if(R.r0>=b.row+lines && xConflict(b,o) && (r===null||R.r0<r)) r=R.r0; } if(r===null) return false; row=r-lines; }
+  else if(dir==='down'){ let r=null, bottom=null; for(const o of solid(a)){ if(o===b) continue; const R=rect(o); if(R.r0>=b.row+lines && xConflict(b,o) && (r===null||R.r0<r)) r=R.r0; if(bottom===null||R.r1>bottom) bottom=R.r1; }
+    if(r!==null) row=r-lines; else if(bottom!==null && bottom>b.row) row=bottom; else return false; }   // над найближчий блок нижче; немає такого — під найнижчий блок
   if(col===b.col && row===b.row) return false; b.col=col; b.row=row; if(!a) b.fx=xOf(b.col,null)/W(); resolve(b); markDirty(); b.el.scrollIntoView({block:'nearest'}); return true; }
 blockbar.addEventListener('pointerdown',e=>e.preventDefault());
 blockbar.addEventListener('click',e=>{ const bt=e.target.closest('button[data-mv]'); if(!bt) return; if(bt.dataset.mv==='done'){ exitSel(); return; } if(selBlk) snapBlock(selBlk, bt.dataset.mv); });
@@ -1205,7 +1207,7 @@ function holdStart(e, makeAt){ holdEnd(); const h=hold={x:e.clientX,y:e.clientY,
 function holdMove(e){ const h=hold; if(!h||h.moved) return; if(Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; if(!h.made){ clearTimeout(h.timer); hold=null; } } }
 function holdEnd(e, cancelled){ const h=hold; if(!h) return; hold=null; clearTimeout(h.timer);
   if(h.made){ h.made.el.classList.remove('held'); if(h.moved){ if(!(h.made.text||'').trim()) remove(h.made); } else focusBlock(h.made); }   // браузер скасував жест (pointercancel) — блок не втрачаємо
-  else if(e && !h.moved && !cancelled){ const ae=document.activeElement; if(ae && ae!==document.body) ae.blur(); tapHint(); } }   // простий дотик: закрити клавіатуру, підказати
+  else if(e && !h.moved && !cancelled){ const ae=document.activeElement; if(ae && ae!==document.body) ae.blur(); const s=getSelection(); if(s) s.removeAllRanges(); tapHint(); } }   // простий дотик по аркушу: закрити клавіатуру і зняти системне виділення слова   // простий дотик: закрити клавіатуру, підказати
 function tapHint(){ if((S.tapHint||0)>=3) return; S.tapHint=(S.tapHint||0)+1; db.setSettings(S); say('Утримуйте палець, щоб писати тут, або натисніть «+»'); }
 document.addEventListener('pointermove',holdMove,true); document.addEventListener('pointerup',e=>holdEnd(e),true); document.addEventListener('pointercancel',()=>holdEnd(null,true),true);
 sheet.addEventListener('contextmenu',e=>{ if(hold || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню
