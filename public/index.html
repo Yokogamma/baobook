@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Чистий аркуш</title>
 <meta name="description" content="Нотатки на чистому аркуші: клацніть у будь-якому місці й пишіть саме там. Працює без мережі, зберігає все на цьому пристрої.">
 <link rel="manifest" href="manifest.webmanifest">
@@ -814,7 +814,9 @@ function resolve(fixed){
   resolveIn(null, a||fixed);
   growSheet();
 }
-function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(window.innerHeight, bottom+5*G())+'px'; field(); }
+/* аркуш не нижчий за вікно без клавіатури: fullH — висота вікна, виміряна, коли курсор не в полі (з клавіатурою innerHeight може бути меншим, і аркуш не має ужиматися до неї) */
+let fullH=0;
+function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(fullH, window.innerHeight, bottom+5*G())+'px'; field(); }
 function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
@@ -1174,7 +1176,8 @@ bubble.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const 
   const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
 window.addEventListener('scroll',()=>{ if(!bubble.hidden && !TOUCH) placeBubble(); },{passive:true});
 if(window.visualViewport) ['resize','scroll'].forEach(t=>window.visualViewport.addEventListener(t,()=>{ layoutBottom(); if(!bubble.hidden && TOUCH) fitBubble(); if(!bubble.hidden) placeBubble(); if(t==='resize') revealCaret(); }));
-window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUCH){ fitBubble(); layoutBottom(); revealCaret(); } }); layoutBottom();
+let growT=null;
+window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUCH){ fitBubble(); layoutBottom(); revealCaret(); } const h=window.innerHeight; if(h>=fullH || !fieldOf(document.activeElement)) fullH=h; clearTimeout(growT); growT=setTimeout(growSheet,80); }); fullH=window.innerHeight;   // більше — завжди; менше — лише без курсора в полі (інакше це клавіатура) layoutBottom();   // поворот, зникнення адресного рядка, закриття клавіатури: аркуш знову на все вікно
 /* дотик: одиночний дотик нічого не створює (аркуш можна гортати й читати); блок зʼявляється після утримання ~0,5 с без руху,
    а фокус (клавіатура) — при відпусканні, бо iOS відкриває клавіатуру лише всередині жесту. Зрушили палець після появи блока — порожній блок прибирається */
 const HOLD_MS=450, HOLD_SLOP=8; let hold=null;
