@@ -15,7 +15,7 @@ const vis=loc=>loc.isVisible();
 const bubbleBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubble button')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.dataset.cmd||b.dataset.act));
 const moreBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubbleMore button')].map(b=>b.dataset.cmd||b.dataset.act));
 await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
-ok('0 viewport: interactive-widget=resizes-content', /interactive-widget=resizes-content/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')));
+ok('0 viewport без interactive-widget: клавіатура не стискає сторінку, нижні панелі — від visualViewport', !/interactive-widget/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')) && /viewport-fit=cover/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')));
 // 1 курсор у блоці: «+» схований, панель видно з самим курсором — «Готово», «Блок», без «Копіювати»; кнопки 44 px; панель при низу вікна
 await hold(150,400); await pg.waitForTimeout(250); await pg.keyboard.type('перший'); await pg.waitForTimeout(200);
 { const btns=await bubbleBtns(); const bb=await box(pg.locator('#bubble')); const sizes=[]; for(const sel of ['[data-cmd="bold"]','[data-act="done"]','[data-act="new"]']){ sizes.push(await box(pg.locator('#bubble '+sel))); }
@@ -51,10 +51,15 @@ await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(300);
 await pg.setViewportSize({width:390,height:420}); await pg.waitForTimeout(300); await pg.evaluate(()=>sheetDebug.offerUndo('ще плашка')); await pg.waitForTimeout(350);
 { const bb=await box(pg.locator('#bubble')), u=await box(pg.locator('#undo'));
   ok('8 низьке вікно 420: панель при низу ('+(bb.y+bb.h)+'), плашка над нею ('+(u.y+u.h)+' ≤ '+bb.y+')', await focusedTxt() && Math.abs(bb.y+bb.h-420)<=1 && u.y+u.h<=bb.y); await pg.evaluate(()=>sheetDebug.dropUndo()); }
-await pg.setViewportSize({width:390,height:844}); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500);
+// 8b аркуш не ужимається до вікна з «клавіатурою» під час набору і знову на все вікно після її зникнення
+await pg.keyboard.press('End'); await pg.keyboard.type(' ще'); await pg.waitForTimeout(300); const hKb=await pg.locator('#sheet').evaluate(e=>e.offsetHeight);
+await pg.setViewportSize({width:390,height:844}); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500); const hBack=await pg.locator('#sheet').evaluate(e=>e.offsetHeight);
+await pg.setViewportSize({width:390,height:420}); await pg.waitForTimeout(400); const hNoFocus=await pg.locator('#sheet').evaluate(e=>e.offsetHeight);
+await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(400); const hFull=await pg.locator('#sheet').evaluate(e=>e.offsetHeight);
+ok('8b висота аркуша: з курсором у вікні 420 — '+hKb+' (не менше 844), після повернення — '+hBack+'; без курсора у 420 — '+hNoFocus+', знову 844 — '+hFull, hKb>=844 && hBack>=844 && hNoFocus>=420 && hFull>=844);
 // 9 збережено
 await pg.reload(); await pg.waitForTimeout(500);
-ok('9 після перезавантаження обидва блоки на місці', (await pg.locator('.blk .txt').filter({hasText:'перший далі'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'другий'}).count())===1);
+{ const texts=await pg.locator('.blk .txt').allInnerTexts(); ok('9 після перезавантаження обидва блоки на місці ('+texts.map(t=>t.replace(/\u200b/g,'')).join(' | ')+')', (await pg.locator('.blk .txt').filter({hasText:'перший далі'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'другий'}).count())===1); }
 // 10 довга нотатка: курсор не ховається під ряд «⋯», плашку «Скасувати» і «клавіатуру»
 const SEED={id:'tall1',title:'',created:1,updated:Date.now()+60000,blocks:Array.from({length:30},(_,i)=>({id:'t'+i,fx:0.05,row:2+i*2,text:'Рядок '+(i+1)}))};
 await pg.evaluate(seed=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put(seed); t.oncomplete=()=>{ d.close(); res(); }; }; }), SEED);
