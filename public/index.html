@@ -164,7 +164,6 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
   background-image:radial-gradient(var(--dot) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}
 .sheet.nogrid::before{display:none}
 /* стрічка (вузький екран): блоки однією колонкою в порядку читання, ручок розміру немає; огляд — полотно як на компʼютері, зменшене */
-.sheet.flow .rz{display:none}
 .sheet.overview{width:1024px !important;max-width:none;pointer-events:none}
 .narrow-only{display:none} .app.narrow .narrow-only{display:inline-flex}
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;color:var(--ink-3);text-align:center;padding:0 24px;transition:opacity .25s}
@@ -192,6 +191,10 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .bubble button.act.done{color:#8fd3a5}
 .grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:14px;font-weight:700}
 .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:none}   /* лише на дотику */
+/* дотик: панель положення вибраного блока (стрілки притискають до краю чи сусіда); лише на сенсорних екранах */
+.bbar{display:none} .blk.sel>.tcard>.txt{outline:2px solid var(--sel-line);outline-offset:3px;border-radius:4px} .blk.sel>.grip{opacity:.9 !important}
+@media (hover:none){ .bbar{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:28;display:flex;gap:2px;justify-content:center;min-height:48px;padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--page);box-shadow:var(--shadow)} .bbar[hidden]{display:none}
+  .bbar button{flex:0 0 auto;width:44px;min-width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:20px;cursor:pointer} .bbar button.act{width:auto;padding:0 10px;font-size:14px;font-weight:600} .bbar button:disabled{opacity:.35} }
 .bmore{position:fixed;left:0;right:0;bottom:calc(var(--kb,0px) + var(--bubbleH,0px));z-index:28;display:flex;gap:2px;justify-content:center;padding:6px;background:var(--ink);color:var(--page);border-top:.5px solid rgba(128,128,128,.4)} .bmore[hidden]{display:none}
 @media (hover:none){ .bubble{left:0 !important;right:0;bottom:var(--kb,0px);top:auto !important;border-radius:0;justify-content:center;min-height:48px;padding:4px 6px calc(4px + env(safe-area-inset-bottom,0px))}
   .bubble button,.bmore button{flex:0 0 auto;width:44px;min-width:44px;height:44px;font-size:16px} .bubble button.act,.bmore button.act{width:auto;padding:0 10px;font-size:14px} .bubble button.act[data-act="new"]{width:44px;padding:0} .bubble [data-act="new"] span{display:none}
@@ -345,7 +348,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .ping{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
 @keyframes ping{0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(1.4)}}
 
-.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(8px);z-index:30;padding:8px 12px;border-radius:8px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font-size:12.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.toast{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:30;padding:8px 12px;border-radius:8px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font-size:12.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast b{font-weight:500;color:var(--ink)}
 @media (max-width:640px){ .toast{white-space:normal;max-width:calc(100vw - 32px);text-align:center} }
@@ -411,6 +414,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 <button class="fab" id="fab" title="Новий блок" aria-label="Новий блок"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 <div class="bubble" id="bubble" hidden role="toolbar" aria-label="Форматування"><button type="button" data-cmd="bold" title="Жирний (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Підкреслення (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Перекреслення (Ctrl+Shift+S)"><s>S</s></button><button type="button" data-cmd="code" title="Код: моноширинний чип, копіюється кліком (Ctrl+E)" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep"></span><button type="button" class="act" data-act="copy" title="Копіювати виділене (Ctrl+C)"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Копіювати</span></button><button type="button" class="act" data-act="new" title="Новий блок під цим" aria-label="Новий блок під цим"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Блок</span></button><button type="button" class="act" data-act="done" title="Завершити редагування">Готово</button><button type="button" class="more" data-act="more" title="Ще кнопки" aria-label="Ще кнопки" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
 <div class="bmore" id="bubbleMore" hidden role="toolbar" aria-label="Ще форматування"></div>
+<div class="bbar" id="blockbar" hidden role="toolbar" aria-label="Положення блока"><button type="button" data-mv="left" title="До лівого краю" aria-label="До лівого краю">←</button><button type="button" data-mv="up" title="Під блок вище" aria-label="Під блок вище">↑</button><button type="button" data-mv="down" title="Над блок нижче" aria-label="Над блок нижче">↓</button><button type="button" data-mv="right" title="До правого краю" aria-label="До правого краю">→</button><button type="button" class="act" data-mv="done" title="Завершити">Готово</button></div>
 <div class="toast" id="toast">Зберігається саме. <b>Enter</b> — новий рядок, <b>Esc</b> — вийти, <b>Backspace</b> у порожньому блоці — видалити.</div>
 
 <script>
@@ -419,7 +423,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
-const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
+const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
@@ -687,7 +691,7 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n){ flushSave(); dropUndo(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
+function openNote(n){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
@@ -765,11 +769,10 @@ const live=a=>blocks.filter(b=>!b.hidden && ctn(b)===(a||null));
 // порожній текстовий блок («Пишіть…», ще не набрано нічого) не є перешкодою: його не обтікають і він нікого не виштовхує
 const isSolid=o=>o.el===gbox || o.kind==='code' || o.kind==='area' || !!(o.text||'').trim();
 const solid=a=>live(a).filter(isSolid);
-/* стрічка: на вузькому екрані блоки показуються однією колонкою в порядку читання (ряд, потім позиція зліва направо); модель (row, fx/col) не змінюється.
-   vrow — ряд у стрічці, призначається layoutFlow; у режимі полотна vr(b)=row, vc(b)=col */
-let flow=false, overview=false; const narrowQ=matchMedia('(max-width:640px)'); const OVERVIEW_W=1024;
-const vr=b=>(flow && b.vrow!=null)? b.vrow : b.row;
-const vc=b=>flow? cMinCol(ctn(b)) : b.col;
+/* на вузькому екрані — те саме полотно (fx — частка ширини, тож блоки стоять там, де їх поставили, і по горизонталі, і по вертикалі);
+   «як на компʼютері» (overview) — зменшене полотно 1024px лише для перегляду нотаток, зроблених на великому екрані */
+let overview=false; const narrowQ=matchMedia('(max-width:640px)'); const OVERVIEW_W=1024;
+const vr=b=>b.row, vc=b=>b.col;
 function rect(b){ const a=ctn(b), xl=xlOf(vc(b),a), r0=vr(b); return {x0:xl+OFF(), xl, y0:yOf(r0,a), r0, r1:r0+(b.lines||1), x1:xl+(b.w||minw(b))}; }
 function rawWidth(b){ const a=ctn(b), r=rect(b); let right=cW(a)-cPadR(a);
   for(const o of solid(a)){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl); }   // картка сусіда закінчується там, де починається ручка наступного: між текстами рівно клітинка
@@ -777,12 +780,12 @@ function rawWidth(b){ const a=ctn(b), r=rect(b); let right=cW(a)-cPadR(a);
 // ширина, яку блок «займає» по горизонталі: задана ручкою (cw) або мінімальна; сусід ближче за неї — накладання, його зсуваємо вниз
 const need=b=>b.cw? Math.max(minw(b), CL()+b.cw*G()) : minw(b);
 function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-L.xl<need(left); }
-function tooTight(b){ if(flow) return false; const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR(a)+1 || rawWidth(b)<minw(b); }
-function fits(b){ return flow || (!tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o))); }
+function tooTight(b){ const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR(a)+1 || rawWidth(b)<minw(b); }
+function fits(b){ return !tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o)); }
 const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки (ручка + gap)
-function render(b){ const r=rect(b); const avail=flow? Math.max(minw(b), cW(ctn(b))-cPadR(ctn(b))-r.xl) : Math.max(minw(b), rawWidth(b));   // стрічка: завжди на всю ширину
-  if(b.cw && !flow){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
-  if(b.card) b.card.classList.toggle('sized', !!b.cw && !flow);
+function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));   // стрічка: завжди на всю ширину
+  if(b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
+  if(b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
   if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
   else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
@@ -804,9 +807,7 @@ function resolveIn(a, fixed){
 }
 const flowKey=b=>b.parent? b.col : (b.fx||0);
 const flowOrder=a=>live(a).sort((x,y)=>(x.row-y.row)||(flowKey(x)-flowKey(y)));
-function layoutFlow(a){ let cur=cMinRow(a); for(const b of flowOrder(a)){ b.vrow=cur; if(b.kind==='area'){ render(b); layoutFlow(b); } render(b); cur+=(b.lines||1)+1; } }   // між блоками один порожній ряд
 function resolve(fixed){
-  if(flow){ layoutFlow(null); growSheet(); return; }
   const a=fixed? ctn(fixed) : null;
   if(a) resolveIn(a, fixed);
   resolveIn(null, a||fixed);
@@ -841,6 +842,7 @@ function buildText(b){
   b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="tcard"><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
   b.txt=b.el.querySelector('.txt'); showTxt(b); b.card=b.el.querySelector('.tcard');
   b.txt.addEventListener('focus',()=>{ b.el.classList.add('focus'); padChips(b.txt); });
+  selHoldOn(b);
   b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
   b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); if(!e.isComposing) padChips(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
@@ -1033,10 +1035,10 @@ function restoreArea(snap){ const [ad,...kds]=snap; const old=byId(ad.id); if(ol
   kds.forEach(d=>{ const k=byId(d.id); if(k){ k.parent=a.id; k.col=d.col; k.row=d.row; k.fx=undefined; a.abody.appendChild(k.el); } else make(d,false); });
   resolve(a); update(); markDirty(); }
 const nBlocks=n=>n+' '+pl(n,'блоком','блоками','блоками');   // «разом із 21 блоком», «… 22 блоками»
-function remove(b){ if(b.api&&b.api.closeMenu) b.api.closeMenu(); if(b.kind==='area') blocks.filter(o=>o.parent===b.id).forEach(o=>{ blocks=blocks.filter(x=>x!==o); o.el.remove(); });
+function remove(b){ if(b.api&&b.api.closeMenu) b.api.closeMenu(); if(selBlk===b) exitSel(); if(b.kind==='area') blocks.filter(o=>o.parent===b.id).forEach(o=>{ blocks=blocks.filter(x=>x!==o); o.el.remove(); });
   blocks=blocks.filter(x=>x!==b); b.el.remove(); resolve(); update(); markDirty(); }
 /* розгрупувати: область зникає, блоки лишаються на своїх місцях на аркуші */
-function ungroup(a){ const kids=blocks.filter(o=>o.parent===a.id); const barH=a.card.querySelector('.cbar').offsetHeight, rowOff=Math.round((barH+1+(a.at||AT))/G()), ax=flow? (a.fx||0)*W() : xOf(a.col,null);
+function ungroup(a){ const kids=blocks.filter(o=>o.parent===a.id); const barH=a.card.querySelector('.cbar').offsetHeight, rowOff=Math.round((barH+1+(a.at||AT))/G()), ax=xOf(a.col,null);
   kids.forEach(o=>{ o.parent=undefined; o.row=a.row+rowOff+o.row; o.fx=Math.max(0,(ax+CL()+1+APAD()+o.col*G())/W()); o.col=colOfX(o.fx*W(),null,o); sheet.appendChild(o.el); });   // ті самі клітинки, що були всередині
   blocks=blocks.filter(x=>x!==a); a.el.remove(); resolve(); update(); markDirty(); }
 /* область */
@@ -1054,12 +1056,11 @@ function buildArea(b){
   ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
   ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
   // клік у порожнє місце області → текстовий блок усередині
-  const createIn=(e,focus)=>{ if(flow){ const sl=slotAt(b,e.clientY), m=slotModel(b,sl.prev,sl.next); const nb=make({col:m.col,row:m.row,parent:b.id},false); markDirty(); flowPing(nb); if(focus) focusBlock(nb); return nb; }
-    const r=b.abody.getBoundingClientRect(); const col=colOfX(e.clientX-r.left,b,{}), row=rowOfY(e.clientY-r.top-G()/2,b); const probe={col,row,lines:1,w:MINW,parent:b.id}; const ok=fits(probe);
+  const createIn=(e,focus)=>{ const r=b.abody.getBoundingClientRect(); const col=colOfX(e.clientX-r.left,b,{}), row=rowOfY(e.clientY-r.top-G()/2,b); const probe={col,row,lines:1,w:MINW,parent:b.id}; const ok=fits(probe);
     const pg=document.createElement('div'); pg.className='ping'+(ok?'':' bad'); pg.style.left=(xOf(col,b)-1)+'px'; pg.style.top=yOf(row,b)+'px'; b.abody.appendChild(pg); setTimeout(()=>pg.remove(),500);
     if(!ok) return null; const nb=make({col,row,parent:b.id},false); markDirty(); if(focus){ nb.txt.focus(); setTimeout(()=>{ if(document.activeElement!==nb.txt) nb.txt.focus(); },0); } return nb; };
-  b.abody.addEventListener('pointerdown',e=>{ if(e.button!==0 || e.target!==b.abody) return; e.stopPropagation();
-    if(e.pointerType!=='mouse'){ e.preventDefault(); holdStart(e, ev=>createIn(ev,false)); return; }   // дотик: утримання, як на аркуші
+  b.abody.addEventListener('pointerdown',e=>{ if(e.button!==0 || e.target!==b.abody) return; e.stopPropagation(); const wasSel=!!selBlk; exitSel();
+    if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; holdStart(e, ev=>createIn(ev,false)); return; }   // дотик: утримання, як на аркуші
     e.preventDefault(); createIn(e,true); });
   card.querySelector('.fold').addEventListener('click',e=>{ b.collapsed=!b.collapsed; card.classList.toggle('collapsed',b.collapsed); e.currentTarget.setAttribute('aria-pressed',b.collapsed); e.currentTarget.title=b.collapsed?'Розгорнути':'Згорнути'; closeAll(); resolve(b); markDirty(); });
   // меню «⋯»: розгрупувати / видалити — без підтвердження, зате з плашкою «Скасувати»
@@ -1102,19 +1103,7 @@ function update(){ sheet.classList.toggle('has', blocks.length>0); cnt.textConte
 
 function cellAt(e){ const r=sheet.getBoundingClientRect(); return {col:colOfX(e.clientX-r.left,null,{}), row:rowOfY(e.clientY-r.top-G()/2,null)}; }
 /* стрічка: куди вставити новий або перенесений блок — між сусідами за вертикаллю; модельні координати підбираються так, щоб у порядку читання блок став між ними */
-function slotAt(a, clientY){ const ord=flowOrder(a).filter(o=>o.el!==gbox); const top=(a? a.abody : sheet).getBoundingClientRect().top; const y=clientY-top; let cur=cMinRow(a), i=0;
-  for(;i<ord.length;i++){ const mid=yOf(cur,a)+(ord[i].lines||1)*G()/2; if(y<mid) break; cur+=(ord[i].lines||1)+1; }
-  return {ord, index:i, prev:ord[i-1]||null, next:ord[i]||null, vrow:cur}; }
-function slotModel(a, prev, next){ const key=b=>a? b.col : (b.fx||0); const o={};
-  const setKey=k=>{ if(a) o.col=Math.max(0,Math.floor(k)); else { o.fx=Math.max(0,Math.min(0.95,k)); o.col=colOfX(o.fx*W(),null,o); } };
-  if(!prev && !next){ o.row=cMinRow(a); setKey(a? 0 : xOf(cMinCol(null),null)/W()); }
-  else if(!prev){ o.row=next.row; setKey(a? Math.max(0,next.col-1) : Math.max(0,key(next)-0.001)); }
-  else if(!next){ o.row=prev.row+(prev.lines||1)+1; setKey(key(prev)); }
-  else { let row=prev.row+(prev.lines||1); if(row>=next.row){ row=next.row; setKey(prev.row===next.row? (key(prev)+key(next))/2 : (a? Math.max(0,next.col-1) : Math.max(0,key(next)-0.001))); } else setKey(key(prev)); o.row=row; }
-  return o; }
-function flowPing(b){ const a=ctn(b); const p=document.createElement('div'); p.className='ping'; p.style.left=(xOf(cMinCol(a),a)-1)+'px'; p.style.top=yOf(vr(b),a)+'px'; (a? a.abody : sheet).appendChild(p); setTimeout(()=>p.remove(),500); }
 function createAt(e, focus=true){
-  if(flow){ const sl=slotAt(null,e.clientY), m=slotModel(null,sl.prev,sl.next); const b=make({col:m.col,row:m.row,fx:m.fx},false); markDirty(); flowPing(b); if(focus){ b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0); } return b; }
   const c=cellAt(e), probe={col:c.col,row:c.row,lines:1,w:MINW}, ok=fits(probe);
   const p=el('div','ping'+(ok?'':' bad')); p.style.left=(xOf(c.col,null)-1)+'px'; p.style.top=yOf(c.row,null)+'px'; setTimeout(()=>p.remove(),500);
   if(!ok) return null;
@@ -1124,17 +1113,41 @@ function createAt(e, focus=true){
 // «+» на дотику: новий блок у наступному вільному ряду, у фокусі (клік — жест, тож клавіатура відкриється)
 function createNext(){ const row=Math.max(cMinRow(null), ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=make({col:cMinCol(null),row},false); markDirty(); b.el.scrollIntoView({block:'center'}); b.txt.focus(); return b; }
 fab.addEventListener('click',createNext);
+/* дотик: утримання ~0,45 с на тексті блока (не під час набору) — режим положення: рамка, стрілки ← ↑ ↓ → і «Готово». Стрілки притискають блок до лівого чи правого
+   поля, під найближчий блок вище (чи в перший ряд) або над найближчий блок нижче; сусід «на тому ж ряду» — за тим самим правилом накладання, що й у виштовхування.
+   Перенос за ручку лишається вільним. Під час утримання текст тимчасово невиділюваний, щоб Android не починав системне виділення; короткий дотик ставить курсор, як і раніше */
+let selBlk=null, selHold=null;
+function enterSel(b){ if(selBlk===b) return; exitSel(); selBlk=b; b.el.classList.add('sel'); blockbar.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); }
+function exitSel(){ if(!selBlk) return; selBlk.el.classList.remove('sel'); selBlk=null; blockbar.hidden=true; layoutBottom(); fabSync(); }
+function xConflict(b,o){ const A=rect(b),B=rect(o); const [L,R,left]=A.x0<=B.x0? [A,B,b] : [B,A,o]; return R.xl-L.xl<need(left); }
+function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.lines||1;
+  if(dir==='left') col=cMinCol(a);
+  else if(dir==='right'){ const w=b.card? b.card.offsetWidth : minw(b)-CL(); col=Math.max(cMinCol(a), Math.floor((cW(a)-cPadR(a)-CL()-w-cOX(a))/G())); }
+  else if(dir==='up'){ let r=cMinRow(a); for(const o of solid(a)){ if(o===b) continue; const R=rect(o); if(R.r1<=b.row && xConflict(b,o)) r=Math.max(r,R.r1); } row=r; }
+  else if(dir==='down'){ let r=null; for(const o of solid(a)){ if(o===b) continue; const R=rect(o); if(R.r0>=b.row+lines && xConflict(b,o) && (r===null||R.r0<r)) r=R.r0; } if(r===null) return false; row=r-lines; }
+  if(col===b.col && row===b.row) return false; b.col=col; b.row=row; if(!a) b.fx=xOf(b.col,null)/W(); resolve(b); markDirty(); b.el.scrollIntoView({block:'nearest'}); return true; }
+blockbar.addEventListener('pointerdown',e=>e.preventDefault());
+blockbar.addEventListener('click',e=>{ const bt=e.target.closest('button[data-mv]'); if(!bt) return; if(bt.dataset.mv==='done'){ exitSel(); return; } if(selBlk) snapBlock(selBlk, bt.dataset.mv); });
+function selHoldOn(b){ b.txt.addEventListener('pointerdown',e=>{ if(e.pointerType==='mouse' || e.button!==0 || document.activeElement===b.txt) return;
+    const h=selHold={b, x:e.clientX, y:e.clientY, done:false}; b.txt.style.webkitUserSelect='none'; b.txt.style.userSelect='none';
+    h.t=setTimeout(()=>{ if(selHold!==h) return; h.done=true; enterSel(b); },HOLD_MS); });
+  b.txt.addEventListener('touchend',e=>{ if(selHold && selHold.b===b && selHold.done) e.preventDefault(); },{passive:false});   // після утримання — без «мишачих» подій: курсор не ставимо, клавіатуру не відкриваємо
+  b.txt.addEventListener('contextmenu',e=>{ if(selHold && selHold.b===b) e.preventDefault(); }); }
+function selHoldEnd(){ const h=selHold; if(!h) return; clearTimeout(h.t); h.b.txt.style.webkitUserSelect=''; h.b.txt.style.userSelect=''; setTimeout(()=>{ if(selHold===h) selHold=null; },0); }
+document.addEventListener('pointermove',e=>{ const h=selHold; if(h && !h.done && Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ clearTimeout(h.t); selHoldEnd(); } },true);
+document.addEventListener('pointerup',selHoldEnd,true); document.addEventListener('pointercancel',selHoldEnd,true);
+document.addEventListener('focusin',()=>{ if(selBlk) exitSel(); });
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
-function createAfter(b){ const a=ctn(b); let d; if(flow){ const ord=flowOrder(a), i=ord.indexOf(b); d=slotModel(a, b, ord[i+1]||null); } else { d={row:b.row+(b.lines||1)+1, col:b.col}; if(!a) d.fx=b.fx; }
+function createAfter(b){ const a=ctn(b); const d={row:b.row+(b.lines||1)+1, col:b.col}; if(!a) d.fx=b.fx;
   if(a) d.parent=a.id; const nb=make(d,false); markDirty(); nb.el.scrollIntoView({block:'center'}); nb.txt.focus(); return nb; }
 /* «+» ховається, поки курсор у будь-якому полі, видно панель форматування чи плашку, відкрито панель нотаток або огляд; повертається через 150 мс після втрати фокуса */
 let fabT=null;
-function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElement) || !bubble.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches);
+function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElement) || !bubble.hidden || !blockbar.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches);
   if(busy){ fab.hidden=true; return; } fabT=setTimeout(()=>{ fab.hidden=false; },150); }
 document.addEventListener('focusin',fabSync); document.addEventListener('focusout',fabSync);
 /* нижні елементи: --kb — висота клавіатури за visualViewport, --bar — висота панелі форматування (плашка стоїть над нею), safe area лише в найнижчого */
 function layoutBottom(){ const vv=window.visualViewport, root=document.documentElement.style; const kb=vv? Math.max(0, Math.round(window.innerHeight-(vv.offsetTop+vv.height))) : 0;
-  const bh=(TOUCH && !bubble.hidden)? bubble.offsetHeight : 0, bar=bh+((TOUCH && !bubbleMore.hidden)? bubbleMore.offsetHeight : 0);
+  const bh=(TOUCH && !bubble.hidden)? bubble.offsetHeight : 0, bar=bh+((TOUCH && !bubbleMore.hidden)? bubbleMore.offsetHeight : 0)+((TOUCH && !blockbar.hidden)? blockbar.offsetHeight : 0);
   root.setProperty('--kb',kb+'px'); root.setProperty('--bubbleH',bh+'px'); root.setProperty('--bar',bar+'px'); root.setProperty('--sa', bar? '0px' : 'env(safe-area-inset-bottom,0px)'); }
 /* панель форматування при виділенні тексту в текстовому блоці */
 let bubbleBlk=null;
@@ -1198,8 +1211,8 @@ function marqCells(e,m){ const s=sheet.getBoundingClientRect(), x=e.clientX-s.le
   return {col:Math.min(c0.col,c1.col), row:Math.min(c0.row,c1.row), cw:Math.abs(c1.col-c0.col)+1, rows:Math.abs(c1.row-c0.row)+1}; }
 function drawMarq(e){ const r=marqCells(e,md); marq.style.left=(xlOf(r.col,null)+CL())+'px'; marq.style.top=yOf(r.row,null)+'px'; marq.style.width=(r.cw*G())+'px'; marq.style.height=(r.rows*G())+'px'; }
 sheet.addEventListener('pointerdown',e=>{
-  if(e.button!==0) return;
-  if(e.pointerType!=='mouse'){ e.preventDefault(); holdStart(e, ev=>createAt(ev,false)); return; }   // preventDefault: без «мишачих» подій після відпускання, інакше вони знімають фокус зі створеного блока
+  if(e.button!==0) return; const wasSel=!!selBlk; exitSel();
+  if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; holdStart(e, ev=>createAt(ev,false)); return; }   // дотик по аркушу в режимі положення лише знімає його   // preventDefault: без «мишачих» подій після відпускання, інакше вони знімають фокус зі створеного блока
   md={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},cell:cellAt(e),id:e.pointerId}; try{ sheet.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault();
 });
 sheet.addEventListener('pointerup',e=>{ if(!md) return; const m=md; md=null; try{ sheet.releasePointerCapture(m.id); }catch(_){}
@@ -1225,7 +1238,7 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
 function drag(b, grip){
   let gx,gy,moved,from,others,probe,host;
   grip.addEventListener('pointerdown',e=>{
-    e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId);
+    e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId); if(selBlk && selBlk!==b) exitSel();
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
@@ -1236,10 +1249,6 @@ function drag(b, grip){
     if(!probe) return; if(Math.abs(e.clientX-(gx+b.el.getBoundingClientRect().left))+Math.abs(e.clientY-(gy+b.el.getBoundingClientRect().top))>2) moved=true;
     const hr=host.getBoundingClientRect(); b.el.style.left=(e.clientX-gx-hr.left)+'px'; b.el.style.top=(e.clientY-gy-hr.top)+'px';
     others.forEach(o=>o.row=o.row0);
-    if(flow){ // стрічка: блок стає між сусідами по вертикалі; в область — коли курсор у її картці
-      let target=null; if(b.kind!=='area') for(const ar of live(null)){ if(ar.kind!=='area'||ar.collapsed) continue; const cr=ar.card.getBoundingClientRect(); if(e.clientX>=cr.left&&e.clientX<=cr.right&&e.clientY>=cr.top&&e.clientY<=cr.bottom){ target=ar; break; } }
-      probe.parent=target? target.id : undefined; const sl=slotAt(target,e.clientY), m=slotModel(target,sl.prev,sl.next); probe.row=m.row; probe.col=m.col; probe.fx=m.fx;
-      if(gbox.parentNode!==ctnEl(probe)) ctnEl(probe).appendChild(gbox); resolve(probe); gbox.className='gbox on'; return; }
     // куди кладемо: спершу позиція на аркуші; щойно блок торкається області (за правилом накладання) або курсор у її картці — блок іде всередину.
     // Область блоком ніколи не виштовхується, інакше вона «тікала» б униз від блока, який заносять згори (самі області всередину не йдуть — вкладеності немає)
     const sr=sheet.getBoundingClientRect(); probe.parent=undefined; probe.col=colOfX(e.clientX-gx-sr.left+OFF(),null,probe); probe.row=rowOfY(e.clientY-gy-sr.top,null); render(probe);
@@ -1257,19 +1266,19 @@ function drag(b, grip){
     const bad=gbox.classList.contains('bad'); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
     b.el.classList.remove('drag'); gbox.className='gbox'; sheet.appendChild(gbox);
     if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
-    else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; if(flow && !b.parent && probe.fx!=null) b.fx=probe.fx; }
-    ctnEl(b).appendChild(b.el); if(!b.parent && !(flow && moved && !bad)) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
+    else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; }
+    ctnEl(b).appendChild(b.el); if(!b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
     resolve(b); if(moved) markDirty(); if(!moved){ if(b.kind==='code') focusBlock(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока
   };
   grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
 }
 /* ширина аркуша змінюється і від вікна, і від панелі — стежимо за самим аркушем */
 /* режим показу: вузький екран → стрічка; «як на компʼютері» → полотно шириною 1024, зменшене (лише перегляд). Повернення на полотно перераховує колонки з fx */
-function applyMode(){ const narrow=narrowQ.matches; flow=narrow && !overview; app.classList.toggle('narrow',narrow); sheet.classList.toggle('flow',flow); sheet.classList.toggle('overview',overview&&narrow);
+function applyMode(){ const narrow=narrowQ.matches; app.classList.toggle('narrow',narrow); sheet.classList.toggle('overview',overview&&narrow);
   const k=Math.min(1, sheet.parentElement.clientWidth/OVERVIEW_W); sheet.style.zoom=(overview&&narrow)? String(k) : ''; sheet.style.marginTop=(overview&&narrow)? Math.max(0, 52/k-60)+'px' : '';   // зменшене полотно: перший ряд не ховається під шапкою
-  viewBtn.setAttribute('aria-pressed',String(overview)); viewBtn.title=overview? 'Показати стрічкою' : 'Показати як на компʼютері';
+  viewBtn.setAttribute('aria-pressed',String(overview)); viewBtn.title=overview? 'Показати в ширину екрана' : 'Показати як на компʼютері';
   fabSync();
-  if(!flow) blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*W(),null,b); }); resolve(); }
+  blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*W(),null,b); }); resolve(); }
 viewBtn.addEventListener('click',()=>{ overview=!overview; applyMode(); window.scrollTo(0,0); });
 let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); }).observe(sheet);
 
