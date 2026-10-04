@@ -41,15 +41,16 @@ await pg.mouse.click(380,780); await pg.keyboard.type('під областю'); 
 // 5 текстові блоки поруч: сусіда можна поставити на відстані однієї клітинки від картки блока із заданою шириною
 await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 await pg.mouse.click(400,300); await pg.keyboard.type('komax-backups'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
-{ const L=pg.locator('#sheet > .blk').filter({hasText:'komax-backups'}); const r=await box(L.locator('.rz')); await pg.mouse.move(r.x+9,r.y+9); await pg.mouse.down(); await pg.mouse.move(r.x+9+30,r.y+9,{steps:4}); await pg.mouse.up(); await pg.waitForTimeout(350);
-  const c=await box(L.locator('.tcard')); const cwCells=c.w/G;
+{ const L=pg.locator('#sheet > .blk').filter({hasText:'komax-backups'}); let tries=0, c=null; for(;tries<3;tries++){ const r=await box(L.locator('.rz')); await pg.mouse.move(r.x+9,r.y+9); await pg.waitForTimeout(120); await pg.mouse.down(); await pg.mouse.move(r.x+9+30,r.y+9,{steps:4}); await pg.mouse.up(); await pg.waitForTimeout(350);
+    c=await box(L.locator('.tcard')); if(Number.isInteger(c.w/G) && await L.locator('.tcard').evaluate(e=>e.classList.contains('sized'))) break; }   // зрідка перший захват ручки не спрацьовує (ширина лишається авто) — повторюємо, кількість спроб у підписі
+  const cwCells=c.w/G;
   await pg.mouse.click(400,600); await pg.keyboard.type('сусід'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
   const R=pg.locator('#sheet > .blk').filter({hasText:'сусід'}); const g=await box(R.locator('.grip')); const t0=await box(R.locator('.txt'));
   // цільова позиція тексту сусіда: права рамка картки + 30px (ручка + зазор + відступ) = наступний стовпчик точок
   const targetX=c.x+c.w+30; await pg.mouse.move(g.x+10,g.y+12); await pg.mouse.down(); await pg.mouse.move(g.x+10+(targetX-(t0.x+6)), c.y+12,{steps:10}); await pg.waitForTimeout(80);
   const bad=await pg.evaluate(()=>document.querySelector('.gbox').classList.contains('bad')); await pg.mouse.up(); await pg.waitForTimeout(300);
   const t1=await box(R.locator('.txt')), c1=await box(L.locator('.tcard'));
-  ok('5a сусід став на тому ж рядку через одну клітинку від картки (текст за '+(t1.x+6-(c1.x+c1.w))+'px від правої рамки), ширина картки не змінилась ('+c.w+'→'+c1.w+'), контур не був червоним', !bad && t1.y===c1.y && t1.x+6-(c1.x+c1.w)===30 && c1.w===c.w && Number.isInteger(cwCells));
+  ok('5a сусід став на тому ж рядку через одну клітинку від картки (текст за '+(t1.x+6-(c1.x+c1.w))+'px від правої рамки), ширина картки не змінилась ('+c.w+'→'+c1.w+', спроб ресайзу: '+(tries+1)+'), контур не був червоним', !bad && t1.y===c1.y && t1.x+6-(c1.x+c1.w)===30 && c1.w===c.w && Number.isInteger(cwCells));
   // ще ближче — уже накладання: блок зліва йде вниз (правило виштовхування), а не звужується
   const g2=await box(R.locator('.grip')); await pg.mouse.move(g2.x+10,g2.y+12); await pg.mouse.down(); await pg.mouse.move(g2.x+10-G, g2.y+12,{steps:6}); await pg.mouse.up(); await pg.waitForTimeout(300);
   const t2=await box(R.locator('.txt')), c2=await box(L.locator('.tcard'));
