@@ -128,7 +128,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .fab .i{font-size:26px;stroke-width:2.2} .fab[hidden]{display:none !important}
 @media (hover:none){ .fab{display:flex}
   /* довге натискання на порожньому місці не має запускати системне виділення (сині маркери в Android); текст блоків лишається виділюваним */
-  .sheet{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} .blk .txt,.code,.ctitle{-webkit-user-select:text;user-select:text} }
+  .sheet{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} .blk.focus>.tcard>.txt,.code,.ctitle{-webkit-user-select:text;user-select:text}   /* текст блока виділяється системою лише з курсором у ньому: довге натискання на неактивному блоці — наш жест (стрілки), курсор по дотику ставимо самі */
+  .tcard:hover .rz{opacity:0;pointer-events:none} }   /* залиплий :hover після дотику не показує ручку розміру */
 .empty .touch{display:none} @media (hover:none){ .empty .mouse{display:none} .empty .touch{display:inline} }
 .blk.held>.tcard>.txt{background:var(--hover)}
 .hint{line-height:1.45}
@@ -1117,7 +1118,7 @@ fab.addEventListener('click',createNext);
    поля, під найближчий блок вище (чи в перший ряд) або над найближчий блок нижче; сусід «на тому ж ряду» — за тим самим правилом накладання, що й у виштовхування.
    Перенос за ручку лишається вільним. Під час утримання текст тимчасово невиділюваний, щоб Android не починав системне виділення; короткий дотик ставить курсор, як і раніше */
 let selBlk=null, selHold=null;
-function enterSel(b){ if(selBlk===b) return; exitSel(); selBlk=b; b.el.classList.add('sel'); blockbar.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); }
+function enterSel(b){ if(selBlk===b) return; const ae=document.activeElement; if(ae && fieldOf(ae)) ae.blur(); if(!blocks.includes(b)) return; exitSel(); selBlk=b; b.el.classList.add('sel'); blockbar.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); }
 function exitSel(){ if(!selBlk) return; selBlk.el.classList.remove('sel'); selBlk=null; blockbar.hidden=true; layoutBottom(); fabSync(); }
 function xConflict(b,o){ const A=rect(b),B=rect(o); const [L,R,left]=A.x0<=B.x0? [A,B,b] : [B,A,o]; return R.xl-L.xl<need(left); }
 function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.lines||1;
@@ -1129,12 +1130,17 @@ function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.li
 blockbar.addEventListener('pointerdown',e=>e.preventDefault());
 blockbar.addEventListener('click',e=>{ const bt=e.target.closest('button[data-mv]'); if(!bt) return; if(bt.dataset.mv==='done'){ exitSel(); return; } if(selBlk) snapBlock(selBlk, bt.dataset.mv); });
 function selHoldOn(b){ b.txt.addEventListener('pointerdown',e=>{ if(e.pointerType==='mouse' || e.button!==0 || document.activeElement===b.txt) return;
-    const h=selHold={b, x:e.clientX, y:e.clientY, done:false}; b.txt.style.webkitUserSelect='none'; b.txt.style.userSelect='none';
+    const h=selHold={b, x:e.clientX, y:e.clientY, done:false, moved:false, skip:e.defaultPrevented};   // skip: дотик уже обробив чип (копіювання)
     h.t=setTimeout(()=>{ if(selHold!==h) return; h.done=true; enterSel(b); },HOLD_MS); });
-  b.txt.addEventListener('touchend',e=>{ if(selHold && selHold.b===b && selHold.done) e.preventDefault(); },{passive:false});   // після утримання — без «мишачих» подій: курсор не ставимо, клавіатуру не відкриваємо
-  b.txt.addEventListener('contextmenu',e=>{ if(selHold && selHold.b===b) e.preventDefault(); }); }
-function selHoldEnd(){ const h=selHold; if(!h) return; clearTimeout(h.t); h.b.txt.style.webkitUserSelect=''; h.b.txt.style.userSelect=''; setTimeout(()=>{ if(selHold===h) selHold=null; },0); }
-document.addEventListener('pointermove',e=>{ const h=selHold; if(h && !h.done && Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ clearTimeout(h.t); selHoldEnd(); } },true);
+  // дотик по неактивному блоку: «мишачі» події не потрібні (текст для системи невиділюваний, курсор вона не поставить) — ставимо курсор самі в точку дотику; після утримання — нічого
+  b.txt.addEventListener('touchend',e=>{ const h=selHold; if(!h || h.b!==b) return; e.preventDefault(); if(h.done || h.skip || h.moved) return; const t=e.changedTouches[0]; if(t) focusAt(b, t.clientX, t.clientY); },{passive:false});
+  b.txt.addEventListener('contextmenu',e=>{ if(document.activeElement!==b.txt) e.preventDefault(); }); }
+function focusAt(b, x, y){ b.txt.focus(); const sel=getSelection(); if(!sel) return; try{
+    const p=document.caretPositionFromPoint? document.caretPositionFromPoint(x,y) : null, r=(!p && document.caretRangeFromPoint)? document.caretRangeFromPoint(x,y) : null;
+    if(p && b.txt.contains(p.offsetNode)) sel.setPosition(p.offsetNode,p.offset); else if(r && b.txt.contains(r.startContainer)) sel.setPosition(r.startContainer,r.startOffset);
+    else { const rg=document.createRange(); rg.selectNodeContents(b.txt); rg.collapse(false); sel.removeAllRanges(); sel.addRange(rg); } }catch(_){} }
+function selHoldEnd(){ const h=selHold; if(!h) return; clearTimeout(h.t); setTimeout(()=>{ if(selHold===h) selHold=null; },0); }
+document.addEventListener('pointermove',e=>{ const h=selHold; if(h && !h.done && !h.moved && Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; clearTimeout(h.t); } },true);   // зрушили палець — це гортання, не утримання й не дотик
 document.addEventListener('pointerup',selHoldEnd,true); document.addEventListener('pointercancel',selHoldEnd,true);
 document.addEventListener('focusin',()=>{ if(selBlk) exitSel(); });
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
@@ -1236,9 +1242,9 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
   b.el.scrollIntoView({block:'nearest'}); });
 
 function drag(b, grip){
-  let gx,gy,moved,from,others,probe,host;
+  let gx,gy,moved,from,others,probe,host,ptype;
   grip.addEventListener('pointerdown',e=>{
-    e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId); if(selBlk && selBlk!==b) exitSel();
+    e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel();
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
@@ -1268,7 +1274,7 @@ function drag(b, grip){
     if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
     else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; }
     ctnEl(b).appendChild(b.el); if(!b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
-    resolve(b); if(moved) markDirty(); if(!moved){ if(b.kind==='code') focusBlock(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока
+    resolve(b); if(moved) markDirty(); if(!moved){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення
   };
   grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
 }
