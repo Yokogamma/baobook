@@ -160,7 +160,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 /* ⚠ у шапці: є незаписані нотатки; видно на будь-якій ширині, відкриває панель із поясненням і «Повторити» */
 .tb.warn{color:#c33;font-weight:700;font-size:16px} .tb.warn:hover{color:#c33} .tb.warn[hidden]{display:none}
 @media (max-width:640px){ .cnt,.saved .sl{display:none} .saved{padding:0 2px} .saved .ss{display:inline;font-size:14px} .saved.err{display:none} .top{padding-right:4px} }   /* телефон: лише ● і ✓, помилка — кнопкою ⚠ */
-@media (hover:none){ .tb{height:40px;min-width:40px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} }   /* дотик: цілі 40px з проміжками, щоб не влучати в сусідню кнопку */
+#moreBtn{display:none;font-size:18px;letter-spacing:1px}   /* кнопка «⋯» шапки є лише на дотику (правило нижче) */
+@media (hover:none){ .tb{height:44px;min-width:44px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} #spellBtn,#gridBtn,#themeBtn,#clearBtn{display:none} #moreBtn{display:inline-flex} }   /* дотик: цілі 44px; рідкісні дії шапки — у меню «⋯» */
 
 /* ── аркуш ───────────────────────────────────────────────────────────── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
@@ -177,7 +178,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .sheet.has .empty{opacity:0}
 
 .blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;pointer-events:none}
-.blk .grip,.blk .txt,.blk .rz,.blk .cblk,.blk .ablk{pointer-events:auto}
+.blk .grip,.blk .txt,.blk .rz,.blk .cblk,.blk .ablk,.blk .bact,.blk .tcard>.amenu{pointer-events:auto}
 .blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .txt b{font-weight:650} .txt u{text-underline-offset:2px} .txt s{text-decoration-thickness:1.5px}
@@ -214,7 +215,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .blk.drag>.tcard>.txt{background:var(--page);box-shadow:var(--shadow)}
 .blk.drag>.grip{cursor:grabbing}
 .blk.drag .txt,.blk.drag .tcard .rz{pointer-events:none}
-@media (hover:none){ .grip{opacity:.28} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9} }
+@media (hover:none){ .grip{opacity:.28;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9} }   /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
 
 /* ── блок коду: картка з шапкою, «тільки читання» за замовчуванням ─────── */
 .cblk{position:relative;flex:0 1 auto;width:fit-content;min-width:min(288px,100%);max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:13.5px;line-height:var(--g);color:var(--ink);transition:border-color .15s,box-shadow .15s}
@@ -255,7 +256,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .cblk .hint b{color:var(--ink);font-weight:500}
 .cblk.pulse .cb.lock{animation:pulse .35s} @keyframes pulse{50%{transform:scale(1.25)}}
 .blk.drag>.cblk{box-shadow:var(--shadow)}
-@media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:40px;min-width:44px;padding:0 12px;justify-content:center} }
+@media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:44px;min-width:44px;padding:0 12px;justify-content:center} }
 /* ручка розміру в правому нижньому куті: ширина й висота прилипають до сітки; подвійний клік — «авто» */
 .rz{position:absolute;right:1px;bottom:1px;width:18px;height:18px;display:flex;align-items:flex-end;justify-content:flex-end;padding:3px;cursor:nwse-resize;color:var(--ink-3);opacity:0;transition:opacity .12s;touch-action:none;z-index:2;border-radius:0 0 9px 0}
 .rz svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round}
@@ -323,10 +324,15 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 /* меню «⋯» області: небезпечні дії сховані за додатковим кроком */
 .amenu{position:absolute;right:8px;top:30px;z-index:8;min-width:210px;padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:13px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
 .amenu .mi{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}
+/* дотик: «⋯» у правому верхньому куті текстового блока — дії без прихованих жестів (зона 44px); на компʼютері не показується */
+.bact{display:none;position:absolute;right:-11px;top:-11px;width:22px;height:22px;border-radius:50%;border:.5px solid var(--line-2);background:var(--page);color:var(--ink-2);font-size:14px;line-height:1;padding:0;cursor:pointer;opacity:.5;z-index:3;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.bact::before{content:"";position:absolute;inset:-11px} .bact::after{content:"⋯"} .blk.focus>.tcard>.bact,.blk.sel>.tcard>.bact,.bact[aria-expanded="true"]{opacity:.9} .blk.drag>.tcard>.bact{display:none !important}
+@media (hover:none){ .blk>.tcard>.bact{display:flex} }
+.amenu.bm{right:-8px;top:14px;min-width:200px} .amenu.hm{right:6px;top:46px}
 .amenu .mi .i{font-size:15px} .amenu .mi small{margin-left:auto;padding-left:10px;color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .amenu .mi:hover,.amenu .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0} .amenu .mi.danger:hover,.amenu .mi.danger:focus-visible{color:#c33}
 .ablk .cb.more[aria-expanded="true"]{opacity:1;background:var(--hover-2);color:var(--ink)}
-@media (hover:none){ .amenu .mi{padding:11px 12px} }
+@media (hover:none){ .amenu .mi{padding:11px 12px;min-height:44px} }
 .ablk.resizing{border-color:var(--sel-line)} .ablk.settle{transition:width .16s ease}
 .ablk[data-color="yellow"]{--area-bg:#fbf1c7} .ablk[data-color="green"]{--area-bg:#e1f2e3} .ablk[data-color="blue"]{--area-bg:#dfecfb} .ablk[data-color="pink"]{--area-bg:#fbe3ea} .ablk[data-color="purple"]{--area-bg:#ebe4fb}
 :root[data-theme="dark"] .ablk[data-color="yellow"]{--area-bg:#3a3520} :root[data-theme="dark"] .ablk[data-color="green"]{--area-bg:#1f3628} :root[data-theme="dark"] .ablk[data-color="blue"]{--area-bg:#1e2d42} :root[data-theme="dark"] .ablk[data-color="pink"]{--area-bg:#3c2430} :root[data-theme="dark"] .ablk[data-color="purple"]{--area-bg:#2e2744}
@@ -405,6 +411,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
         <button class="tb" id="gridBtn" title="Сітка аркуша" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="themeBtn" title="Тема" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
         <button class="tb" id="clearBtn" title="Очистити аркуш"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        <button class="tb" id="moreBtn" title="Ще дії" aria-label="Ще дії" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
     </header>
     <div class="sheet" id="sheet">
@@ -429,7 +436,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
-const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
+const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
@@ -845,10 +852,15 @@ function relayout(b){ const before=b.lines; render(b); if(b.lines!==before) reso
 
 /* текстовий блок */
 function buildText(b){
-  b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="tcard"><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
+  b.el=el('div','blk'); b.el.innerHTML=GRIP+'<div class="tcard"><div class="txt" contenteditable="true" data-ph="Пишіть…"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'<button class="bact" type="button" title="Дії блока" aria-label="Дії блока" aria-haspopup="menu" aria-expanded="false"></button></div>';
   b.txt=b.el.querySelector('.txt'); showTxt(b); b.card=b.el.querySelector('.tcard');
   b.txt.addEventListener('focus',()=>{ b.el.classList.add('focus'); padChips(b.txt); });
   selHoldOn(b);
+  const bm=b.el.querySelector('.bact'); bm.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); });   // ні курсора в текст, ні утримання
+  bm.addEventListener('click',()=>{ popMenu(bm, b.card, 'bm', [
+    {ico:ICO.copy, label:'Копіювати блок', act:()=>copyBlock(b)},
+    {ico:ICO_SEL, label:'Виділити', small:'стрілки, розмір', act:()=>enterSel(b)},
+    {ico:ICO.trash, label:'Видалити', danger:true, act:()=>removeWithUndo(b)} ]); });
   b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
     if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
@@ -1150,6 +1162,25 @@ function selHoldEnd(){ const h=selHold; if(!h) return; clearTimeout(h.t); setTim
 document.addEventListener('pointermove',e=>{ const h=selHold; if(h && !h.done && !h.moved && Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; clearTimeout(h.t); } },true);   // зрушили палець — це гортання, не утримання й не дотик
 document.addEventListener('pointerup',selHoldEnd,true); document.addEventListener('pointercancel',selHoldEnd,true);
 document.addEventListener('focusin',()=>{ if(selBlk) exitSel(); });
+/* спливне меню (дотик): «⋯» у текстового блока і «⋯» у шапці; одне відкрите водночас, закривається дотиком поза ним, Esc або вибором пункту */
+const ICO_SEL='<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 2"/></svg>';
+let popOpen=null;
+function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); p.anchor.setAttribute('aria-expanded','false'); }
+function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===anchor){ closePop(); return; } closePop();
+  const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
+  items.forEach(it=>{ const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+escHtml(it.label)+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
+  menu.addEventListener('pointerdown',e=>e.stopPropagation()); host.appendChild(menu); anchor.setAttribute('aria-expanded','true');
+  const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; }
+  const onDoc=e=>{ if(!menu.contains(e.target) && !anchor.contains(e.target)) closePop(); }; document.addEventListener('pointerdown',onDoc,true);
+  const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
+  popOpen={menu,anchor,onDoc,onKey}; if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
+function removeWithUndo(b){ const d=serBlock(b), line=(b.text||'').trim().split('\n')[0]||'без тексту'; remove(b); offerUndo('Блок «'+(line.length>28? line.slice(0,28)+'…' : line)+'» видалено', ()=>{ make(d,false); markDirty(); }); }
+const THEME_NAMES={light:'світла',dark:'темна',sand:'пісочна'};
+moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
+  {label:'Перевірка правопису', small: spell? 'увімк.' : 'вимк.', act:()=>spellBtn.click()},
+  {label:'Сітка аркуша', small: sheet.classList.contains('nogrid')? 'вимк.' : 'увімк.', act:()=>gridBtn.click()},
+  {ico:ICO.palette, label:'Тема', small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
+  {ico:ICO.trash, label:'Очистити аркуш', danger:true, act:()=>clearBtn.click()} ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
 function createAfter(b){ const a=ctn(b); const d={row:b.row+(b.lines||1)+1, col:b.col}; if(!a) d.fx=b.fx;
   if(a) d.parent=a.id; const nb=make(d,false); markDirty(); nb.el.scrollIntoView({block:'center'}); nb.txt.focus(); return nb; }
