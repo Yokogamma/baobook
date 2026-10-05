@@ -104,6 +104,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .item:hover{background:var(--hover)}
 .item.cur{background:var(--hover-2);color:var(--ink)}
 .item:focus-visible{outline:2px solid var(--sel-line);outline-offset:-2px}
+button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* видимий фокус з апаратної клавіатури у всіх кнопок; меню і плашка замість рамки підсвічують тло */
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important;scroll-behavior:auto !important} }
 .it-t{font-size:13.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .it-s{font-size:12px;line-height:1.4;margin-top:2px;max-height:2.8em;overflow:hidden}
 .it-s i{color:var(--ink-3)} .it-s:empty{display:none}
@@ -555,7 +557,7 @@ const db={ backend:'local',
   settings(){ return store.get(SK,{})||{}; },
   setSettings(s){ store.set(SK,s); }
 };
-Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo(), undoCount:()=>undoStack().length});   // гачки для тестів: скрипт не глобальний
+Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo(), undoCount:()=>undoStack().length, navDepth:()=>nav.stack.length, navTop:()=>nav.stack.length? nav.stack[nav.stack.length-1].tag : null});   // гачки для тестів: скрипт не глобальний
 
 /* ══ нотатки ══════════════════════════════════════════════════════════════ */
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
@@ -708,7 +710,7 @@ window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
 function openNote(n){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
-  list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile()) setSide(false); window.scrollTo(0,0); }
+  list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id); unsaved.delete(n.id); saveUI();
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
 newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
@@ -747,8 +749,24 @@ document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&h
 window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else if(unsaved.size) retrySave(); });
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
+/* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)
+   при відкритті кладе запис в історію; popstate закриває верхнє накладення. Закриття з інтерфейсу само відмотує історію і глушить власний popstate — порожніх кроків не лишається.
+   Відкриття нотатки з панелі на телефоні ховає панель, але лишає запис «панель із результатами» (+ запис «нотатка»): Back з нотатки знову показує панель із тим самим запитом і прокруткою,
+   другий Back ховає панель, третій іде браузеру. На компʼютері панель — не накладення, тож записів не робить. */
+const nav={ stack:[], skip:0, busy:false, queue:[], skipT:null,
+  open(tag, close){ const top=this.stack[this.stack.length-1]; if(top && top.tag===tag){ top.close=close; return; } const e={tag, close, pushed:false}; this.stack.push(e); if(this.skip>0) this.queue.push(e); else this.push(e); },   // поки свій popstate не прийшов, pushState відкладаємо: go(-1) браузер виконує пізніше й відносно поточного запису
+  push(e){ try{ history.pushState({nav:e.tag, d:this.stack.indexOf(e)+1}, ''); e.pushed=true; }catch(_){} },
+  close(tag){ const i=this.stack.map(e=>e.tag).lastIndexOf(tag); if(i<0) return; const gone=this.stack.splice(i); this.queue=this.queue.filter(e=>!gone.includes(e)); if(this.busy) return;   // закриваємо з popstate — історія вже відмотана
+    const n=gone.filter(e=>e.pushed).length; if(n>0){ this.skip++; history.go(-n); clearTimeout(this.skipT); this.skipT=setTimeout(()=>{ if(this.skip){ this.skip=0; this.flush(); } },600); } },   // закрито з інтерфейсу: знімаємо запис(и), свій popstate глушимо; якщо він не прийшов — не чекаємо вічно
+  flush(){ const q=this.queue; this.queue=[]; q.forEach(e=>{ if(this.stack.includes(e)) this.push(e); }); },
+  onPop(e){ if(this.skip>0){ this.skip--; if(!this.skip){ clearTimeout(this.skipT); this.flush(); } return; } const d=(e.state && e.state.d)||0; this.busy=true; try{ while(this.stack.length>d){ const top=this.stack[this.stack.length-1]; try{ top.close(); }catch(_){} if(this.stack[this.stack.length-1]===top) this.stack.pop(); } } finally{ this.busy=false; } } };
+try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточний запис — основа без накладень (і після перезавантаження з «застарілим» станом)
+window.addEventListener('popstate',e=>nav.onPop(e));
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
-function setSide(open){ app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()){ S.side=open; db.setSettings(S); } }
+const sideState={scroll:0};
+function setSide(open, o={}){ if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
+  app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()){ S.side=open; db.setSettings(S); }
+  if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
 backdrop.addEventListener('click',()=>setSide(false));
 matchMedia('(max-width:900px)').addEventListener('change',e=>{ app.classList.toggle('open', e.matches? false : S.side!==false); });
@@ -966,7 +984,7 @@ function buildCode(b){
   card.querySelector('.wrapb').addEventListener('click',e=>{ b.wrap=!b.wrap; card.classList.toggle('wrapped',b.wrap); e.currentTarget.setAttribute('aria-pressed',b.wrap); relayout(b); markDirty(); });
   card.querySelector('.num').addEventListener('click',e=>{ b.num=!b.num; card.classList.toggle('num',b.num); e.currentTarget.setAttribute('aria-pressed',b.num); relayout(b); markDirty(); });
   /* меню мови: пошук + список, перший рядок — «Авто» */
-  function closeMenu(){ if(b.menu){ document.removeEventListener('pointerdown',b.menu._onDoc,true); b.menu.remove(); b.menu=null; } }
+  function closeMenu(){ if(b.menu){ document.removeEventListener('pointerdown',b.menu._onDoc,true); b.menu.remove(); b.menu=null; nav.close('lmenu'); } }
   function openMenu(){ closeMenu(); const m=document.createElement('div'); m.className='lmenu'; m.innerHTML='<input type="search" placeholder="Мова…" spellcheck="false" autocomplete="off"><div class="opts"></div>'; card.appendChild(m);
     m.addEventListener('pointerdown',e=>e.stopPropagation()); const inp=m.querySelector('input'), opts=m.querySelector('.opts'); const auto=guessLang(b.text);
     const items=()=>[{k:null,n:'Авто · визначено: '+langName(auto),a:'auto авто'}].concat(Object.keys(LANGS).map(k=>({k,n:LANGS[k].n,a:LANGS[k].a||''})));
@@ -980,7 +998,7 @@ function buildCode(b){
       else if(e.key==='Enter'){ e.preventDefault(); if(list[sel]) choose(list[sel].k); } else if(e.key==='Escape'){ e.preventDefault(); closeMenu(); pre.focus(); } e.stopPropagation(); });
     opts.addEventListener('click',e=>{ const o=e.target.closest('.opt[data-k]'); if(o) choose(o.dataset.k||null); });
     draw(); setTimeout(()=>inp.focus(),0);
-    const onDoc=e=>{ if(!m.contains(e.target) && e.target!==langB && !langB.contains(e.target)) closeMenu(); }; document.addEventListener('pointerdown',onDoc,true); m._onDoc=onDoc; b.menu=m; }
+    const onDoc=e=>{ if(!m.contains(e.target) && e.target!==langB && !langB.contains(e.target)) closeMenu(); }; document.addEventListener('pointerdown',onDoc,true); m._onDoc=onDoc; b.menu=m; nav.open('lmenu', closeMenu); }
   langB.addEventListener('click',()=>{ b.menu? closeMenu() : openMenu(); });
   /* ручка розміру: ширина/висота в клітинках сітки; висота більша за вміст = авто */
   const rz=card.querySelector('.rz');
@@ -1093,7 +1111,7 @@ function buildArea(b){
   card.querySelector('.fold').addEventListener('click',e=>{ b.collapsed=!b.collapsed; card.classList.toggle('collapsed',b.collapsed); e.currentTarget.setAttribute('aria-pressed',b.collapsed); e.currentTarget.title=b.collapsed?'Розгорнути':'Згорнути'; closeAll(); resolve(b); markDirty(); });
   // меню «⋯»: розгрупувати / видалити — без підтвердження, зате з плашкою «Скасувати»
   const moreB=card.querySelector('.more'); let menu=null;
-  const closeMenu=()=>{ if(menu){ document.removeEventListener('pointerdown',menu._onDoc,true); document.removeEventListener('keydown',menu._onKey,true); menu.remove(); menu=null; moreB.setAttribute('aria-expanded','false'); } };
+  const closeMenu=()=>{ if(menu){ document.removeEventListener('pointerdown',menu._onDoc,true); document.removeEventListener('keydown',menu._onKey,true); menu.remove(); menu=null; moreB.setAttribute('aria-expanded','false'); nav.close('amenu'); } };
   const closeAll=()=>{ closeMenu(); closePick(); };
   moreB.addEventListener('click',()=>{ if(menu){ closeMenu(); return; } closePick(); const n=blocks.filter(o=>o.parent===b.id).length;
     menu=document.createElement('div'); menu.className='amenu'; menu.setAttribute('role','menu');
@@ -1104,7 +1122,7 @@ function buildArea(b){
     menu.querySelector('.del').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b), name=b.title||'без назви'; remove(b); offerUndo('Область «'+name+'» видалено'+(n? ' разом із '+nBlocks(n) : ''), ()=>restoreArea(snap), {big:n>0, size:JSON.stringify(snap).length}); });   // з блоками — плашка без таймера
     menu.addEventListener('pointerdown',e=>e.stopPropagation()); const onDoc=e=>{ if(!menu.contains(e.target) && e.target!==moreB && !moreB.contains(e.target)) closeMenu(); }; document.addEventListener('pointerdown',onDoc,true); menu._onDoc=onDoc;
     const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeMenu(); moreB.focus(); } }; document.addEventListener('keydown',onKey,true); menu._onKey=onKey;
-    setTimeout(()=>menu.querySelector('.mi').focus(),0); });
+    nav.open('amenu', closeMenu); setTimeout(()=>menu.querySelector('.mi').focus(),0); });
   let pick=null; const closePick=()=>{ if(pick){ document.removeEventListener('pointerdown',pick._onDoc,true); pick.remove(); pick=null; } };
   card.querySelector('.colorb').addEventListener('click',()=>{ if(pick){ closePick(); return; } closeMenu(); pick=document.createElement('div'); pick.className='cpick';
     pick.innerHTML=AREA_COLORS.map(c=>'<button data-c="'+c+'" class="'+(c===b.color?'cur':'')+'" title="'+c+'"></button>').join(''); card.appendChild(pick);
@@ -1145,8 +1163,13 @@ fab.addEventListener('click',createNext);
    поля, під найближчий блок вище (чи в перший ряд) або над найближчий блок нижче; сусід «на тому ж ряду» — за тим самим правилом накладання, що й у виштовхування.
    Перенос за ручку лишається вільним. Під час утримання текст тимчасово невиділюваний, щоб Android не починав системне виділення; короткий дотик ставить курсор, як і раніше */
 let selBlk=null, selHold=null;
-function enterSel(b){ if(selBlk===b) return; const ae=document.activeElement; if(ae && fieldOf(ae)) ae.blur(); if(!blocks.includes(b)) return; exitSel(); selBlk=b; b.el.classList.add('sel'); blockbar.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); }
-function exitSel(){ if(!selBlk) return; selBlk.el.classList.remove('sel'); selBlk=null; blockbar.hidden=true; layoutBottom(); fabSync(); }
+function enterSel(b){ if(selBlk===b) return; const ae=document.activeElement; if(ae && fieldOf(ae)) ae.blur(); if(!blocks.includes(b)) return; if(selBlk) selBlk.el.classList.remove('sel'); else nav.open('sel', ()=>exitSel()); selBlk=b; b.el.classList.add('sel'); blockbar.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); }
+function exitSel(){ if(!selBlk) return; selBlk.el.classList.remove('sel'); selBlk=null; blockbar.hidden=true; layoutBottom(); fabSync(); nav.close('sel'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && selBlk && !fieldOf(document.activeElement)) exitSel(); });   // апаратна клавіатура: Esc виходить із режиму положення
+/* панелі інструментів (APG Toolbar): ←/→ ходять по кнопках, Home/End — у початок і кінець, Tab іде далі */
+document.addEventListener('keydown',e=>{ const tb=e.target.closest && e.target.closest('[role="toolbar"]'); if(!tb || !['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+  const bs=[...tb.querySelectorAll('button')].filter(b=>!b.hidden && b.offsetParent!==null && !b.disabled); if(!bs.length) return; let i=bs.indexOf(e.target.closest('button'));
+  if(e.key==='Home') i=0; else if(e.key==='End') i=bs.length-1; else i=(i+(e.key==='ArrowRight'? 1 : -1)+bs.length)%bs.length; e.preventDefault(); bs[i].focus(); });
 function xConflict(b,o){ const A=rect(b),B=rect(o); const [L,R,left]=A.x0<=B.x0? [A,B,b] : [B,A,o]; return R.xl-L.xl<need(left); }
 function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.lines||1;
   if(dir==='left') col=cMinCol(a);
@@ -1171,11 +1194,11 @@ function focusAt(b, x, y){ b.txt.focus(); const sel=getSelection(); if(!sel) ret
 function selHoldEnd(){ const h=selHold; if(!h) return; clearTimeout(h.t); setTimeout(()=>{ if(selHold===h) selHold=null; },0); }
 document.addEventListener('pointermove',e=>{ const h=selHold; if(h && !h.done && !h.moved && Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; clearTimeout(h.t); } },true);   // зрушили палець — це гортання, не утримання й не дотик
 document.addEventListener('pointerup',selHoldEnd,true); document.addEventListener('pointercancel',selHoldEnd,true);
-document.addEventListener('focusin',()=>{ if(selBlk) exitSel(); });
+document.addEventListener('focusin',e=>{ if(selBlk && !blockbar.contains(e.target)) exitSel(); });   // фокус на кнопках панелі положення (клавіатура) режим не знімає
 /* спливне меню (дотик): «⋯» у текстового блока і «⋯» у шапці; одне відкрите водночас, закривається дотиком поза ним, Esc або вибором пункту */
 const ICO_SEL='<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 2"/></svg>';
 let popOpen=null;
-function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); p.anchor.setAttribute('aria-expanded','false'); }
+function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); p.anchor.setAttribute('aria-expanded','false'); nav.close('menu'); }
 function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===anchor){ closePop(); return; } closePop();
   const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
   items.forEach(it=>{ const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
@@ -1183,7 +1206,7 @@ function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===ancho
   const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; }
   const onDoc=e=>{ if(!menu.contains(e.target) && !anchor.contains(e.target)) closePop(); }; document.addEventListener('pointerdown',onDoc,true);
   const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
-  popOpen={menu,anchor,onDoc,onKey}; if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
+  popOpen={menu,anchor,onDoc,onKey}; nav.open('menu', closePop); if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
 function removeWithUndo(b){ const d=serBlock(b), label=blockLabel(b), big=(b.text||'').trim().includes('\n'); remove(b); offerUndo('Блок «'+label+'» видалено', ()=>{ if(byId(d.id)) return; make(d,false); markDirty(); }, {big, size:JSON.stringify(d).length}); }
 const THEME_NAMES={light:'світла',dark:'темна',sand:'пісочна'};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
@@ -1344,7 +1367,7 @@ function applyMode(){ const narrow=narrowQ.matches; app.classList.toggle('narrow
   viewBtn.setAttribute('aria-pressed',String(overview)); viewBtn.title=overview? 'Показати в ширину екрана' : 'Показати як на компʼютері';
   fabSync();
   blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*W(),null,b); }); resolve(); }
-viewBtn.addEventListener('click',()=>{ overview=!overview; applyMode(); window.scrollTo(0,0); });
+viewBtn.addEventListener('click',()=>{ overview=!overview; if(overview) nav.open('view', ()=>{ overview=false; applyMode(); nav.close('view'); }); else nav.close('view'); applyMode(); window.scrollTo(0,0); });
 let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); }).observe(sheet);
 
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
