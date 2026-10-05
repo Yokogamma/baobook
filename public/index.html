@@ -1159,10 +1159,13 @@ function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElem
   if(busy){ fab.hidden=true; return; } fabT=setTimeout(()=>{ fab.hidden=false; },150); }
 document.addEventListener('focusin',fabSync); document.addEventListener('focusout',fabSync);
 /* нижні елементи: --kb — висота клавіатури за visualViewport, --bar — висота панелі форматування (плашка стоїть над нею), safe area лише в найнижчого */
-function layoutBottom(){ const vv=window.visualViewport, root=document.documentElement.style; const kb=vv? Math.max(0, Math.round(window.innerHeight-(vv.offsetTop+vv.height))) : 0;
+let saIdle=0;   // safe area знизу, виміряна без клавіатури (на Android із краю до краю — смуга жестів, 16px)
+function layoutBottom(){ const vv=window.visualViewport, root=document.documentElement.style; let kb=vv? Math.max(0, Math.round(window.innerHeight-(vv.offsetTop+vv.height))) : 0;
+  const sa=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-probe'))||0;
+  if(kb===0) saIdle=sa; else if(sa===0 && saIdle>0) kb+=saIdle;   // Chrome Android: з клавіатурою env(safe-area-inset-bottom) стає 0, а visualViewport не вираховує смугу жестів під клавіатурою — панель ішла під неї на ці 16px
   const bh=(TOUCH && !bubble.hidden)? bubble.offsetHeight : 0, bar=bh+((TOUCH && !bubbleMore.hidden)? bubbleMore.offsetHeight : 0)+((TOUCH && !blockbar.hidden)? blockbar.offsetHeight : 0);
   root.setProperty('--kb',kb+'px'); root.setProperty('--bubbleH',bh+'px'); root.setProperty('--bar',bar+'px'); root.setProperty('--sa', bar? '0px' : 'env(safe-area-inset-bottom,0px)'); root.setProperty('--sab', kb? '0px' : 'env(safe-area-inset-bottom,0px)');   // під клавіатурою safe area не потрібна
-  if(!dbgGeo.hidden){ const txt='екран '+screen.height+' · вікно '+window.innerHeight+'/'+document.documentElement.clientHeight+' · видиме '+(vv? Math.round(vv.height) : '—')+' · зсув '+(vv? Math.round(vv.offsetTop) : '—')+' · клавіатура '+kb+' · safe '+(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-probe'))||0)+' · панель '+bar+(bubble.hidden? '' : ' (панель '+bubble.getBoundingClientRect().bottom.toFixed(0)+' низ)')+' · прокрутка '+Math.round(window.scrollY); dbgGeo.textContent=txt; dbgTop.textContent=txt; } }
+  if(!dbgGeo.hidden){ const txt='екран '+screen.height+' · вікно '+window.innerHeight+'/'+document.documentElement.clientHeight+' · видиме '+(vv? Math.round(vv.height) : '—')+' · зсув '+(vv? Math.round(vv.offsetTop) : '—')+' · клавіатура '+kb+' · safe '+sa+'/'+saIdle+' · панель '+bar+(bubble.hidden? '' : ' (панель '+bubble.getBoundingClientRect().bottom.toFixed(0)+' низ)')+' · прокрутка '+Math.round(window.scrollY); dbgGeo.textContent=txt; dbgTop.textContent=txt; } }
 /* панель форматування при виділенні тексту в текстовому блоці */
 let bubbleBlk=null;
 function curTextBlock(){ const sel=getSelection(); if(!sel||sel.rangeCount===0) return null; const el=n=>n&&(n.nodeType===1? n : n.parentElement); const t=el(sel.anchorNode)&&el(sel.anchorNode).closest('.txt'); if(!t) return null;
