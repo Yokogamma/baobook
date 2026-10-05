@@ -21,7 +21,7 @@ ok('0 область з двома блоками, все збережено', (
 // 1 меню «⋯»
 await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await pg.waitForTimeout(120);
 const menu=area().locator('.amenu');
-ok('1a «⋯» відкриває меню з двома пунктами: розгрупувати і видалити (з кількістю блоків)', (await menu.count())===1 && (await menu.locator('.mi').count())===2 && /Розгрупувати/.test(await menu.innerText()) && /Видалити область/.test(await menu.innerText()) && /2 блоками/.test(await menu.innerText()) && (await area().locator('.cb.more').getAttribute('aria-expanded'))==='true');
+ok('1a «⋯» відкриває меню з двома пунктами: розгрупувати і видалити (з кількістю блоків)', (await menu.count())===1 && (await menu.locator('.mi').count())===2 && /Розгрупувати/.test(await menu.innerText()) && /Видалити область і 2 блоки/.test(await menu.innerText()) && (await area().locator('.cb.more').getAttribute('aria-expanded'))==='true');
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(100);
 ok('1b Esc закриває меню', (await menu.count())===0 && (await area().locator('.cb.more').getAttribute('aria-expanded'))==='false');
 await area().locator('.cb.more').click(); await pg.waitForTimeout(100); await pg.mouse.click(400,820); await pg.waitForTimeout(100);
@@ -49,15 +49,25 @@ await kid('окремий блок').click(); await pg.keyboard.press('End'); aw
   ok('4 Ctrl+Z у текстовому блоці скасовує правку в ньому («'+t+'») і не повертає область (плашка ще висить)', t==='окремий блок' && (await pg.locator('.blk.is-area').count())===0 && await shown()); }
 await pg.keyboard.press('Escape'); await undo.locator('.ubtn').click(); await pg.waitForTimeout(300);
 ok('4b «Скасувати» з плашки після цього все ж повертає', (await pg.locator('.blk.is-area').count())===1 && (await area().locator('.abody .blk').count())===2);
-// 5 плашка зникає сама, після цього повернути вже не можна
-await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await menu.locator('.del').click(); await pg.waitForTimeout(7600);
-await pg.mouse.click(400,820); await pg.keyboard.press('Escape'); await pg.waitForTimeout(100); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(300);
-ok('5 через 7 с плашка зникла, Ctrl+Z нічого не повертає, у сховищі області немає', !(await shown()) && (await pg.locator('.blk.is-area').count())===0 && !(await stored('Паролі')));
-// 6 перехід на іншу нотатку ховає плашку
-await pg.mouse.move(500,260); await pg.mouse.down(); await pg.mouse.move(1000,420,{steps:8}); await pg.mouse.up(); await pg.waitForTimeout(200); await pg.keyboard.type('Тимчасова'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(100);
+// 5 область із блоками: плашка без таймера — через 8 с ще видно; ✕ ховає її, але стек лишається: Ctrl+Z поза полем повертає область
+await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await menu.locator('.del').click(); await pg.waitForTimeout(8000);
+const still5=await shown(); await undo.locator('.uclose').click(); await pg.waitForTimeout(300); const hid5=!(await shown());
+await pg.mouse.click(400,820); await pg.keyboard.press('Escape'); await pg.waitForTimeout(100); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(900);
+ok('5 область із блоками: плашка без таймера ('+still5+'), ✕ сховав ('+hid5+'), Ctrl+Z після цього повернув область ('+(await pg.locator('.blk.is-area').count())+') і її збережено', still5 && hid5 && (await pg.locator('.blk.is-area').count())===1 && (await area().locator('.abody .blk').count())===2 && await stored('Паролі'));
+// 6 перехід на іншу нотатку ховає плашку, стек нотатки лишається: у новій нотатці Ctrl+Z нічого не повертає, після повернення — повертає область
 await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await menu.locator('.del').click(); await pg.waitForTimeout(200);
-await pg.locator('#newBtn').click(); await pg.waitForTimeout(300);
-ok('6 нова нотатка: плашка сховалась, повернути не можна', !(await shown()) && (await pg.locator('.blk.is-area').count())===0);
+await pg.locator('#newBtn').click(); await pg.waitForTimeout(300); const hidden6=!(await shown()); await pg.keyboard.press('Escape'); await pg.waitForTimeout(50); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(300); const none6=(await pg.locator('.blk').count())===0;
+if(!(await pg.locator('.app').evaluate(e=>e.classList.contains('open')))) { await pg.locator('#sideBtn').click(); await pg.waitForTimeout(250); } await pg.locator('.item:not(.cur)').first().click(); await pg.waitForTimeout(400); const hidden6b=!(await shown()); await pg.keyboard.press('Escape'); await pg.waitForTimeout(50); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(600);   // на компʼютері панель нотаток зазвичай уже відкрита
+ok('6 нова нотатка: плашка сховалась ('+hidden6+'), Ctrl+Z там нічого не створює ('+none6+'); після повернення плашки немає ('+hidden6b+'), Ctrl+Z повертає область ('+(await pg.locator('.blk.is-area').count())+')', hidden6 && none6 && hidden6b && (await pg.locator('.blk.is-area').count())===1 && (await area().locator('.abody .blk').count())===2);
+// 7 два записи поспіль повертаються у зворотному порядку: спершу стертий блок, потім розгрупована область
+await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await menu.locator('.ungroup').click(); await pg.waitForTimeout(300);
+{ await kid('окремий блок').click(); await pg.keyboard.press('Control+a'); await pg.keyboard.press('Backspace'); await pg.waitForTimeout(150); await pg.keyboard.press('Backspace'); await pg.waitForTimeout(300);
+  const gone=(await pg.locator('.blk').filter({hasText:'окремий блок'}).count())===0, msg=await undo.locator('.umsg').innerText();
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(100); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(400); const back1=(await pg.locator('.blk').filter({hasText:'окремий блок'}).count())===1, noArea=(await pg.locator('.blk.is-area').count())===0;
+  await pg.keyboard.press('Control+z'); await pg.waitForTimeout(500); const back2=(await pg.locator('.blk.is-area').count())===1 && (await area().locator('.abody .blk').count())===2;
+  ok('7 стек: блок стерто ('+gone+', «'+msg+'»), перший Ctrl+Z повернув блок ('+back1+'; область ще розгрупована: '+noArea+'), другий — область із двома блоками ('+back2+')', gone && /окремий блок/.test(msg) && back1 && noArea && back2); }
+// 8 не більше 20 записів на нотатку
+{ const n=await pg.evaluate(()=>{ for(let i=0;i<25;i++) sheetDebug.offerUndo('запис '+i); return sheetDebug.undoCount(); }); await pg.evaluate(()=>sheetDebug.dropUndo()); ok('8 після 25 записів у стеку '+n+' (ліміт 20)', n===20); }
 await pg.screenshot({path:OUT+'/appundo-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

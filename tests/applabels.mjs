@@ -32,10 +32,10 @@ const Y=new Date().getFullYear(), jan15=new Date().getMonth()===0 && new Date().
   { const want={'Сьогоднішня':'1 блок','Цьогорічна':'2 блоки','Торішня':'5 блоків','Лічильник: 11':'11 блоків','Лічильник: 21':'21 блок','Лічильник: 25':'25 блоків','Область на 21':'22 блоки'}, got={};
     for(const t of Object.keys(want)){ await item(t).click(); await pg.waitForTimeout(150); got[t]=(await pg.locator('#cnt').innerText()).trim(); }
     ok('2 лічильник: '+Object.values(got).join(', '), Object.keys(want).every(t=>got[t]===want[t])); }
-  // 3 меню «⋯» області з 21 блоком: «разом із 21 блоком» (не «блоками»)
+  // 3 меню «⋯» області з 21 блоком: «Видалити область і 21 блок» (не «блоки»/«блоків»); число в основному підписі, плашка після видалення — «разом із 21 блоком»
   { const area=pg.locator('.blk.is-area').first(); await area.locator('.ablk').hover(); await area.locator('.cb.more').click(); await pg.waitForTimeout(120);
-    const s=(await area.locator('.amenu .del small').innerText()).trim(); await pg.keyboard.press('Escape');
-    ok('3 меню області: «'+s+'»', s==='разом із 21 блоком'); }
+    const s=await area.locator('.amenu .del').evaluate(e=>[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim()); await pg.keyboard.press('Escape');   // основний підпис — текстовий вузол між значком і <small>
+    ok('3 меню області: «'+s+'»', s==='Видалити область і 21 блок'); }
   // 4 стилі: правило без селектора браузер мовчки відкидає — таких немає; бокове поле аркуша на компʼютері — клітинка
   { const css=await pg.evaluate(()=>[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n')); const bare=css.replace(/\/\*[\s\S]*?\*\//g,'').match(/(^|[{};])\s*\{[^{}]{0,40}/g)||[];
     ok('4 у стилях немає правил без селектора'+(bare.length? ': '+bare.map(s=>s.replace(/\s+/g,' ').trim()).join(' | ') : '')+'; --pad '+(await pad(pg)), !bare.length && (await pad(pg))==='24px'); }
