@@ -54,7 +54,12 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   // 8 «Нова область» у меню «⋯» шапки створює область під найнижчим блоком (кнопки області в шапці на дотику немає)
   { const a0=await pg.locator('#sheet .blk.is-area').count(); await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const first=(await pg.locator('.amenu.hm .mi').first().innerText()).replace(/\s+/g,' '); await tapEl(pg.locator('.amenu.hm .mi').first()); await pg.waitForTimeout(400);
     const a1=await pg.locator('#sheet .blk.is-area').count(), ab=a1? await box(pg.locator('#sheet .blk.is-area').last().locator('.ablk')) : null, hidden=await pg.locator('#areaBtn').evaluate(e=>getComputedStyle(e).display);
-    ok('8 «'+first+'» у меню шапки: областей '+a0+' → '+a1+(ab? ', ширина '+ab.w+' у межах екрана' : '')+'; кнопка області в шапці '+hidden, /Нова область/.test(first) && a1===a0+1 && ab && ab.x+ab.w<=390 && hidden==='none'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); }
+    ok('8 «'+first+'» у меню шапки: областей '+a0+' → '+a1+(ab? ', ширина '+ab.w+' у межах екрана' : '')+'; кнопка області в шапці '+hidden, /Нова область/.test(first) && a1===a0+1 && ab && ab.x+ab.w<=390 && hidden==='none');
+    // 8b шапка області одним рядком: порожня назва-підказка і кнопки в одному ряду; після набору назва зліва в тому ж ряду, що й кнопки, шапка 48px
+    const area=pg.locator('#sheet .blk.is-area').last(), tt=area.locator('.ctitle'), acts=area.locator('.acts'), bar=area.locator('.cbar');
+    const e0={t:await box(tt), a:await box(acts), b:await box(bar)}; await pg.keyboard.type('Пюпитр'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300); const e1={t:await box(tt), a:await box(acts), b:await box(bar)};
+    const row=(t,a)=>Math.abs((t.y+t.h/2)-(a.y+a.h/2))<=4 && t.x+t.w<=a.x+1;
+    ok('8b шапка області одним рядком: порожня — назва '+e0.t.y+'/'+e0.t.h+' і кнопки '+e0.a.y+'/'+e0.a.h+' в одному ряду, шапка '+e0.b.h+'px; з назвою «Пюпитр» — назва зліва ('+e1.t.x+' < кнопки '+e1.a.x+'), ряд той самий ('+e1.t.y+'/'+e1.t.h+' і '+e1.a.y+'/'+e1.a.h+'), шапка '+e1.b.h+'px, ширина назви '+e1.t.w+' ≥ 40% ('+Math.round(e1.b.w*0.4)+')', row(e0.t,e0.a) && e0.b.h===48 && row(e1.t,e1.a) && e1.b.h===48 && e1.t.x<e1.b.x+16 && e1.t.w>=e1.b.w*0.4 && (await tt.innerText()).trim()==='Пюпитр'); }
   await pg.screenshot({path:OUT+'/appmenu-touch.png'});
   console.log(errs.length? errs.join('\n') : '✓ без помилок (дотик)'); if(errs.length) fails++; await ctx.close(); }
 /* ── компʼютер: нічого не змінилось ───────────────────────────────────── */
