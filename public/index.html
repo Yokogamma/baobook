@@ -214,10 +214,11 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk:hover>.tcard>.txt{background:var(--hover)}
 .blk.focus>.tcard>.txt{background:transparent}
 .blk.drag{cursor:grabbing;z-index:10}
+.blk.lift>.cblk,.blk.lift>.ablk{box-shadow:var(--shadow);transform:scale(1.02);transition:transform .12s,box-shadow .12s}   /* картку підняли утриманням за шапку */
 .blk.drag>.tcard>.txt{background:var(--page);box-shadow:var(--shadow)}
 .blk.drag>.grip{cursor:grabbing}
 .blk.drag .txt,.blk.drag .tcard .rz{pointer-events:none}
-@media (hover:none){ .grip{opacity:.28;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9} }   /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
+@media (hover:none){ .grip{opacity:.45;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9} }   /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
 
 /* ── блок коду: картка з шапкою, «тільки читання» за замовчуванням ─────── */
 .cblk{position:relative;flex:0 1 auto;width:fit-content;min-width:min(288px,100%);max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:13.5px;line-height:var(--g);color:var(--ink);transition:border-color .15s,box-shadow .15s}
@@ -288,7 +289,12 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .ablk .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:center}
   .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
 }
-@media (hover:none){ @container (max-width:560px){ .cblk .ctitle:focus,.cblk .ctitle:not(:empty){order:-1;margin:4px 6px 0} .cb.copy span{display:none} } }   /* телефон: назва коду першим рядком, кнопки другим, «Копіювати» — іконкою */
+@media (hover:none){ @container (max-width:560px){   /* телефон: шапка блока коду одним рядком 48px — мова, назва з трикрапкою, «Копіювати» іконкою, замок, «⋯» (перенос рядків і номери — у ньому) */
+  .cblk .cbar{flex-wrap:nowrap;height:48px;min-height:48px;align-items:center;gap:2px} .cblk .acts{margin-left:auto;flex:0 0 auto}
+  .cblk .ctitle,.cblk .ctitle:focus,.cblk .ctitle:not(:empty){order:0;flex:1 1 auto;min-width:0;max-width:none;margin:0 0 0 2px;text-align:left}
+  .cb.copy span{display:none} .cblk .cb.num,.cblk .cb.wrapb{display:none} .cblk .cb.cmore{display:inline-flex} } }
+@media (hover:none){ .ctitle:not(:focus){-webkit-user-select:none;user-select:none} }   /* дотик: назву в шапці система не виділяє (утримання піднімає картку), лише в правці */
+.cb.cmore{display:none;font-size:16px;letter-spacing:1px} .amenu.cm{right:6px;top:46px;min-width:220px}
 @media (hover:none){ @container (max-width:640px){   /* телефон: шапка області одним рядком 48px — назва зліва з трикрапкою (не менше 40% ширини), праворуч колір, «⋯», згорнути (рішення власника, план 3.5) */
   .ablk .cbar{display:flex;flex-wrap:nowrap;height:48px;min-height:48px;align-items:center;gap:2px}
   .ablk .acts{margin-left:auto;flex:0 0 auto}
@@ -864,6 +870,8 @@ function make(d, focus){
   if(b.kind==='code') buildCode(b); else if(b.kind==='area') buildArea(b); else buildText(b);
   (a? a.abody : sheet).appendChild(b.el);
   blocks.push(b); b.el.addEventListener('pointerdown',e=>e.stopPropagation()); drag(b, b.el.querySelector('.grip'));
+  const bar=b.el.querySelector('.cbar'); if(bar){ drag(b, bar, {hold:true, quiet:true, skip:e=>!!(e.target.closest('button,.lmenu,.cpick,.amenu') || (e.target.closest('.ctitle') && (e.pointerType==='mouse' || document.activeElement===e.target.closest('.ctitle'))))});   // шапка картки — ручка: мишею одразу (крім кнопок і назви), пальцем після утримання (назва теж, якщо не в правці)
+    bar.addEventListener('contextmenu',e=>{ const t=e.target.closest('.ctitle'); if(!(t && document.activeElement===t)) e.preventDefault(); }); }
   resolve(b); update(); if(focus) focusBlock(b); return b;
 }
 function focusBlock(b){ if(b.kind==='code') b.api.unlock(); else if(b.kind==='area') b.ttlEl.focus(); else b.txt.focus(); }
@@ -879,6 +887,8 @@ function buildText(b){
   bm.addEventListener('click',()=>{ popMenu(bm, b.card, 'bm', [
     {ico:ICO.copy, label:'Копіювати блок', act:()=>copyBlock(b)},
     ...(selBlk===b? [] : [{ico:ICO_SEL, label:'Виділити', small:'стрілки, розмір', act:()=>enterSel(b)}]),   // у режимі положення блок уже виділено
+    ...(b.parent? [{label:'З області', small:'на аркуш, під область', act:()=>pullOut(b)}] : (areas().length? [{label:'В область…', small:areas().length+' '+pl(areas().length,'область','області','областей'), act:()=>pickArea(b)}] : [])),   // альтернатива перетягуванню
+    {label:'Розмір', small:'висота блока', act:()=>sizeMenu(b)},
     {ico:ICO.trash, label:'Видалити', danger:true, act:()=>removeWithUndo(b)} ]); });
   b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
     if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
@@ -932,7 +942,7 @@ function chip(b, label, btnLabel, onSwap){ sheet.querySelectorAll('.chip').forEa
 function buildCode(b){
   b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked"><div class="cbar"><button class="lang" title="Мова коду — натисніть, щоб змінити"></button><span class="ctitle" spellcheck="false" data-ph="Назва блока…" role="textbox" aria-label="Назва блока"></span><span class="acts">'
     +'<button class="cb num" title="Номери рядків" aria-pressed="false">#</button><button class="cb wrapb" title="Перенос довгих рядків" aria-pressed="false">'+ICO.wrap+'</button>'
-    +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button></span></div>'
+    +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button><button class="cb cmore" title="Ще: перенос рядків, номери" aria-label="Ще: перенос рядків, номери" aria-haspopup="menu" aria-expanded="false">⋯</button></span></div>'
     +'<pre class="code" spellcheck="false" aria-readonly="true" tabindex="0"><code data-ph="Код…"></code></pre><div class="fade"></div><button class="more" hidden></button>'
     +RZ('Тягніть, щоб змінити розмір · подвійний клік — авто')+'</div>';
   const card=b.el.querySelector('.cblk'), code=card.querySelector('code'), pre=card.querySelector('.code'), more=card.querySelector('.more'), lockB=card.querySelector('.lock'), copyB=card.querySelector('.copy'), langB=card.querySelector('.lang');
@@ -983,6 +993,9 @@ function buildCode(b){
   copyB.addEventListener('click',copy);
   card.querySelector('.wrapb').addEventListener('click',e=>{ b.wrap=!b.wrap; card.classList.toggle('wrapped',b.wrap); e.currentTarget.setAttribute('aria-pressed',b.wrap); relayout(b); markDirty(); });
   card.querySelector('.num').addEventListener('click',e=>{ b.num=!b.num; card.classList.toggle('num',b.num); e.currentTarget.setAttribute('aria-pressed',b.num); relayout(b); markDirty(); });
+  const cmore=card.querySelector('.cmore'); cmore.addEventListener('pointerdown',e=>e.stopPropagation()); cmore.addEventListener('click',()=>popMenu(cmore, card, 'cm', [   // телефон: рідкісні перемикачі шапки коду
+    {ico:ICO.wrap, label:'Перенос довгих рядків', small: b.wrap? 'увімк.' : 'вимк.', act:()=>card.querySelector('.wrapb').click()},
+    {label:'Номери рядків', small: b.num? 'увімк.' : 'вимк.', act:()=>card.querySelector('.num').click()} ]));
   /* меню мови: пошук + список, перший рядок — «Авто» */
   function closeMenu(){ if(b.menu){ document.removeEventListener('pointerdown',b.menu._onDoc,true); b.menu.remove(); b.menu=null; nav.close('lmenu'); } }
   function openMenu(){ closeMenu(); const m=document.createElement('div'); m.className='lmenu'; m.innerHTML='<input type="search" placeholder="Мова…" spellcheck="false" autocomplete="off"><div class="opts"></div>'; card.appendChild(m);
@@ -1208,6 +1221,17 @@ function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===ancho
   const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
   popOpen={menu,anchor,onDoc,onKey}; nav.open('menu', closePop); if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
 function removeWithUndo(b){ const d=serBlock(b), label=blockLabel(b), big=(b.text||'').trim().includes('\n'); remove(b); offerUndo('Блок «'+label+'» видалено', ()=>{ if(byId(d.id)) return; make(d,false); markDirty(); }, {big, size:JSON.stringify(d).length}); }
+/* альтернативи перетягуванню з меню «⋯» блока (план 3.3/PR C): в область, з області, висота пресетом; усе скасовується зі стека */
+const areas=()=>blocks.filter(o=>o.kind==='area');
+function areaName(a){ if(a.title) return a.title; const all=areas(); return 'Область без назви'+(all.length>1? ' '+(all.indexOf(a)+1) : ''); }
+function placeUndo(b, msg, quiet){ const was={col:b.col,row:b.row,fx:b.fx,parent:b.parent,ch:b.ch}; return ()=>offerUndo(msg, ()=>{ if(!blocks.includes(b)) return; b.col=was.col; b.row=was.row; b.fx=was.fx; b.parent=was.parent; b.ch=was.ch; ctnEl(b).appendChild(b.el); render(b); resolve(); update(); markDirty(); }, {quiet}); }   // знімок положення до дії → запис у стек після неї
+function moveInto(b, a){ if(!blocks.includes(a) || b.parent===a.id) return; const done=placeUndo(b, 'Блок «'+blockLabel(b)+'» перенесено в область «'+areaName(a)+'»'); const kids=blocks.filter(o=>o.parent===a.id && o!==b);
+  b.parent=a.id; b.col=0; b.row=kids.length? Math.max(...kids.map(o=>o.row+(o.lines||1)+1)) : 0; ctnEl(b).appendChild(b.el); render(b); resolve(); update(); markDirty(); b.el.scrollIntoView({block:'nearest'}); done(); }   // під найнижчий блок області
+function pullOut(b){ const a=byId(b.parent); if(!a) return; const done=placeUndo(b, 'Блок «'+blockLabel(b)+'» винесено з області'); const barH=a.card.querySelector('.cbar').offsetHeight, rowOff=Math.round((barH+1+(a.at||AT))/G()), ax=xOf(a.col,null);
+  b.parent=undefined; b.row=a.row+rowOff+b.row; b.fx=Math.max(0,(ax+CL()+1+APAD()+b.col*G())/W()); b.col=colOfX(b.fx*W(),null,b); sheet.appendChild(b.el); render(b); resolve(); update(); markDirty(); done(); }   // та сама клітинка, що була всередині (як ungroup)
+function pickArea(b){ popMenu(b.el.querySelector('.bact'), b.card, 'bm', areas().map(a=>({label:areaName(a), act:()=>moveInto(b,a)}))); }
+function sizeMenu(b){ const cur=b.ch||b.lines||1; const set=ch=>{ const done=placeUndo(b, 'Висоту блока «'+blockLabel(b)+'» змінено', true); b.ch=ch; relayout(b); markDirty(); done(); };
+  popMenu(b.el.querySelector('.bact'), b.card, 'bm', [ {label:'Авто', small: b.ch? 'по тексту' : 'зараз', act:()=>set(undefined)}, {label:'Коротший', small:'−2 ряди', act:()=>set(Math.max(1,cur-2))}, {label:'Вищий', small:'+2 ряди', act:()=>set(cur+2)} ]); }
 const THEME_NAMES={light:'світла',dark:'темна',sand:'пісочна'};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
   {ico:areaBtn.querySelector('svg').outerHTML, label:'Нова область', small:'або утримайте палець і потягніть', act:()=>areaBtn.click()},
@@ -1323,17 +1347,20 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
   if(isCode) chip(b,'Вставлено як код','Зробити текстом',()=>toText(b)); else if(maybeCode(t)) chip(b,'Вставлено як текст','Зробити кодом',()=>toCode(b,b.text));
   b.el.scrollIntoView({block:'nearest'}); });
 
-function drag(b, grip){
-  let gx,gy,moved,from,others,probe,host,ptype;
-  grip.addEventListener('pointerdown',e=>{
-    e.stopPropagation(); e.preventDefault(); grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel();
+const HOLD_DRAG_MS=350;   // шапка картки на дотику: утримання без руху понад HOLD_SLOP піднімає картку (стартова гіпотеза плану, порівняти з 250)
+function drag(b, grip, o={}){   // o.hold — на дотику перенос лише після утримання (шапка картки); o.skip(e) — не починати (кнопки, назва в правці); o.quiet — натискання без руху нічого не робить
+  let gx,gy,moved,from,others,probe,host,ptype, arm=null, armT=null;
+  const start=e=>{ grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel();
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
     probe={col:b.col,row:b.row,fx:b.fx,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,parent:b.parent,el:gbox}; b.hidden=true; blocks.push(probe); ctnEl(probe).appendChild(gbox);
-    b.el.classList.add('drag'); gbox.className='gbox on';
-  });
+    b.el.classList.add('drag'); gbox.className='gbox on'; };
+  grip.addEventListener('pointerdown',e=>{ if(e.button!==0) return; if(o.skip && o.skip(e)) return; e.stopPropagation();
+    if(o.hold && e.pointerType!=='mouse'){ arm={x:e.clientX,y:e.clientY,ev:e}; clearTimeout(armT); armT=setTimeout(()=>{ if(!arm) return; const ev=arm.ev; arm=null; b.el.classList.add('lift'); start(ev); },HOLD_DRAG_MS); return; }   // до спрацювання палець гортає сторінку як звичайно
+    e.preventDefault(); start(e); });
   grip.addEventListener('pointermove',e=>{
+    if(arm){ if(Math.abs(e.clientX-arm.x)+Math.abs(e.clientY-arm.y)>HOLD_SLOP){ clearTimeout(armT); arm=null; } return; }   // зрушили до спрацювання — це гортання, не перенос
     if(!probe) return; if(Math.abs(e.clientX-(gx+b.el.getBoundingClientRect().left))+Math.abs(e.clientY-(gy+b.el.getBoundingClientRect().top))>2) moved=true;
     const hr=host.getBoundingClientRect(); b.el.style.left=(e.clientX-gx-hr.left)+'px'; b.el.style.top=(e.clientY-gy-hr.top)+'px';
     others.forEach(o=>o.row=o.row0);
@@ -1350,15 +1377,16 @@ function drag(b, grip){
     gbox.className='gbox on'+(bad?' bad':'');
   });
   const end=()=>{
-    if(!probe) return;
+    clearTimeout(armT); arm=null; if(!probe) return;
     const bad=gbox.classList.contains('bad'); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
-    b.el.classList.remove('drag'); gbox.className='gbox'; sheet.appendChild(gbox);
+    b.el.classList.remove('drag','lift'); gbox.className='gbox'; sheet.appendChild(gbox);
     if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
     else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; }
     ctnEl(b).appendChild(b.el); if(!b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
-    resolve(b); if(moved) markDirty(); if(!moved){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення
+    resolve(b); if(moved) markDirty(); if(!moved && !o.quiet){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення
   };
   grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
+  if(o.hold) grip.addEventListener('touchmove',e=>{ if(probe) e.preventDefault(); },{passive:false});   // після підняття палець тягне картку, а не гортає сторінку
 }
 /* ширина аркуша змінюється і від вікна, і від панелі — стежимо за самим аркушем */
 /* режим показу: вузький екран → стрічка; «як на компʼютері» → полотно шириною 1024, зменшене (лише перегляд). Повернення на полотно перераховує колонки з fx */
