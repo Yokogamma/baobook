@@ -294,7 +294,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 } }
 .ctitle:empty::before{content:attr(data-ph);color:var(--ink-3);font-weight:400;opacity:0;transition:opacity .12s}
 .cblk:hover .ctitle:empty::before,.ctitle:focus:empty::before,.cblk.touch .ctitle:empty::before{opacity:1}
-@media (hover:none){ .ctitle:empty::before{opacity:1} }
+@media (hover:none){ .cblk .ctitle:empty::before{opacity:1} }   /* на дотику підказка «Назва блока…» видима завжди; «Назва області…» — лише під час правки: немає назви — нічого не показуємо */
 /* меню мови з пошуком */
 .lmenu{position:absolute;left:4px;top:30px;z-index:8;width:230px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:13px;padding:6px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
 .lmenu input{width:100%;box-sizing:border-box;border:.5px solid var(--line-2);border-radius:6px;padding:5px 8px;font:inherit;background:transparent;color:var(--ink);outline:0}
@@ -315,7 +315,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 @media (hover:none){ .tcard .rz{opacity:0;pointer-events:none} }   /* на дотику текстовий блок без ручки: курсор у ньому — це вже набір */
 /* ── область: картка як у коду, всередині — звичайні блоки; висота росте за вмістом ─────── */
 .blk.is-area .ablk{position:relative;flex:1 1 auto;width:100%;max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--area-bg,var(--code-bg));color:var(--ink);transition:border-color .15s}
-.ablk .cbar{padding-right:6px} .ablk .ctitle{grid-column:2} .ablk .acts{grid-column:3}
+.ablk .cbar{padding-right:6px} .ablk .ctitle{grid-column:2;color:var(--ink-3)} .ablk .acts{grid-column:3}   /* назва області — як «Без назви» в шапці: та сама вага, приглушений колір (рішення власника) */
 .ablk:hover .cb,.ablk:focus-within .cb{opacity:1}
 .abody{position:relative;min-height:24px;cursor:text}
 .ablk.collapsed .abody{display:none} .ablk.collapsed{height:calc(2*var(--g) - 2px)}
