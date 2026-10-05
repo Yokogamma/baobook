@@ -130,12 +130,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 /* дотик: плаваюча кнопка «+» (новий блок у наступному вільному ряду); ховається, поки видно плашку «Скасувати» або відкрито панель */
 .fab{position:fixed;right:16px;bottom:calc(16px + var(--kb,0px) + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;border:0;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:29;transition:transform .15s,opacity .15s}
 .fab .i{font-size:26px;stroke-width:2.2} .fab[hidden]{display:none !important}
-@media (hover:none){ .fab{display:flex}
-  /* довге натискання на порожньому місці не має запускати системне виділення (сині маркери в Android); текст блоків лишається виділюваним */
-  .sheet{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} .blk.focus>.tcard>.txt,.code,.ctitle{-webkit-user-select:text;user-select:text}   /* текст блока виділяється системою лише з курсором у ньому: довге натискання на неактивному блоці — наш жест (стрілки), курсор по дотику ставимо самі */
-  .tcard:hover .rz{opacity:0;pointer-events:none}   /* залиплий :hover після дотику не показує ручку розміру */
-  .blk.sel>.tcard .rz{opacity:1;pointer-events:auto;width:28px;height:28px;right:-8px;bottom:-22px;padding:5px;color:var(--sel-line);background:var(--page);border:1.5px solid var(--sel-line);border-radius:8px} .blk.sel>.tcard .rz svg{width:14px;height:14px} .blk.sel>.tcard .rz::before{content:"";position:absolute;inset:-8px}   /* режим положення: ручка розміру видима, зона дотику 44px */ }
-.empty .touch{display:none} @media (hover:none){ .empty .mouse{display:none} .empty .touch{display:inline} }
+
+.empty .touch{display:none} 
 .blk.held>.tcard>.txt{background:var(--hover)}
 .hint{line-height:1.45}
 [hidden]{display:none !important}
@@ -163,7 +159,6 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .tb.warn{color:#c33;font-weight:700;font-size:16px} .tb.warn:hover{color:#c33} .tb.warn[hidden]{display:none}
 @media (max-width:640px){ .cnt,.saved .sl{display:none} .saved{padding:0 2px} .saved .ss{display:inline;font-size:14px} .saved.err{display:none} .top{padding-right:4px} }   /* телефон: лише ● і ✓, помилка — кнопкою ⚠ */
 #moreBtn{display:none;font-size:18px;letter-spacing:1px}   /* кнопка «⋯» шапки є лише на дотику (правило нижче) */
-@media (hover:none){ .tb{height:44px;min-width:44px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} #spellBtn,#gridBtn,#themeBtn,#clearBtn,#areaBtn{display:none} #moreBtn{display:inline-flex} }   /* дотик: цілі 44px; рідкісні дії шапки (і «Нова область» — її малюють пальцем) у меню «⋯» */
 
 /* ── аркуш ───────────────────────────────────────────────────────────── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
@@ -200,12 +195,9 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:none}   /* лише на дотику */
 /* дотик: панель положення вибраного блока (стрілки притискають до краю чи сусіда); лише на сенсорних екранах */
 .bbar{display:none} .blk.sel>.tcard>.txt{outline:2px solid var(--sel-line);outline-offset:3px;border-radius:4px} .blk.sel>.grip{opacity:.9 !important}
-@media (hover:none){ .bbar{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:28;display:flex;gap:2px;justify-content:center;min-height:48px;padding:4px 6px calc(4px + var(--sab,0px));background:var(--ink);color:var(--page);box-shadow:var(--shadow)} .bbar[hidden]{display:none}
-  .bbar button{flex:0 0 auto;width:44px;min-width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:20px;cursor:pointer} .bbar button.act{width:auto;padding:0 10px;font-size:14px;font-weight:600} .bbar button:disabled{opacity:.35} }
+
 .bmore{position:fixed;left:0;right:0;bottom:calc(var(--kb,0px) + var(--bubbleH,0px));z-index:28;display:flex;gap:2px;justify-content:center;padding:6px;background:var(--ink);color:var(--page);border-top:.5px solid rgba(128,128,128,.4)} .bmore[hidden]{display:none}
-@media (hover:none){ .bubble{left:0 !important;right:0;bottom:var(--kb,0px);top:auto !important;border-radius:0;justify-content:center;min-height:48px;padding:4px 6px calc(4px + var(--sab,0px))}
-  .bubble button,.bmore button{flex:0 0 auto;width:44px;min-width:44px;height:44px;font-size:16px} .bubble button.act,.bmore button.act{width:auto;padding:0 10px;font-size:14px} .bubble button.act[data-act="new"]{width:44px;padding:0} .bubble [data-act="new"] span{display:none}
-  .bubble button.act[data-act="copy"]{display:none} .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:inline-flex;align-items:center;justify-content:center} .bubble button.act[data-act="done"]{font-weight:600} .bubble .more{font-size:20px;letter-spacing:1px} }
+
 .grip{flex:0 0 var(--handle);width:var(--handle);height:var(--g);margin-top:0;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--ink-3);cursor:grab;opacity:0;transition:opacity .12s,background .12s;touch-action:none;user-select:none;-webkit-user-select:none}
 .grip svg{width:14px;height:14px;fill:currentColor;stroke:none}
 .grip:hover{background:var(--hover-2);color:var(--ink-2)}
@@ -218,7 +210,6 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk.drag>.tcard>.txt{background:var(--page);box-shadow:var(--shadow)}
 .blk.drag>.grip{cursor:grabbing}
 .blk.drag .txt,.blk.drag .tcard .rz{pointer-events:none}
-@media (hover:none){ .grip{opacity:.45;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9} }   /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
 
 /* ── блок коду: картка з шапкою, «тільки читання» за замовчуванням ─────── */
 .cblk{position:relative;flex:0 1 auto;width:fit-content;min-width:min(288px,100%);max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:13.5px;line-height:var(--g);color:var(--ink);transition:border-color .15s,box-shadow .15s}
@@ -259,7 +250,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .cblk .hint b{color:var(--ink);font-weight:500}
 .cblk.pulse .cb.lock{animation:pulse .35s} @keyframes pulse{50%{transform:scale(1.25)}}
 .blk.drag>.cblk{box-shadow:var(--shadow)}
-@media (hover:none){ .cb{opacity:1} .cbar{height:48px} .cb{height:44px;min-width:44px;padding:0 12px;justify-content:center} }
+
 /* ручка розміру в правому нижньому куті: ширина й висота прилипають до сітки; подвійний клік — «авто» */
 .rz{position:absolute;right:1px;bottom:1px;width:18px;height:18px;display:flex;align-items:flex-end;justify-content:flex-end;padding:3px;cursor:nwse-resize;color:var(--ink-3);opacity:0;transition:opacity .12s;touch-action:none;z-index:2;border-radius:0 0 9px 0}
 .rz svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round}
@@ -289,20 +280,12 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .ablk .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:center}
   .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
 }
-@media (hover:none){ @container (max-width:560px){   /* телефон: шапка блока коду одним рядком 48px — мова, назва з трикрапкою, «Копіювати» іконкою, замок, «⋯» (перенос рядків і номери — у ньому) */
-  .cblk .cbar{flex-wrap:nowrap;height:48px;min-height:48px;align-items:center;gap:2px} .cblk .acts{margin-left:auto;flex:0 0 auto}
-  .cblk .ctitle,.cblk .ctitle:focus,.cblk .ctitle:not(:empty){order:0;flex:1 1 auto;min-width:0;max-width:none;margin:0 0 0 2px;text-align:left}
-  .cb.copy span{display:none} .cblk .cb.num,.cblk .cb.wrapb{display:none} .cblk .cb.cmore{display:inline-flex} } }
-@media (hover:none){ .ctitle:not(:focus){-webkit-user-select:none;user-select:none} }   /* дотик: назву в шапці система не виділяє (утримання піднімає картку), лише в правці */
+
 .cb.cmore{display:none;font-size:16px;letter-spacing:1px} .amenu.cm{right:6px;top:46px;min-width:220px}
-@media (hover:none){ @container (max-width:640px){   /* телефон: шапка області одним рядком 48px — назва зліва з трикрапкою (не менше 40% ширини), праворуч колір, «⋯», згорнути (рішення власника, план 3.5) */
-  .ablk .cbar{display:flex;flex-wrap:nowrap;height:48px;min-height:48px;align-items:center;gap:2px}
-  .ablk .acts{margin-left:auto;flex:0 0 auto}
-  .ablk .ctitle,.ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:0;flex:1 1 auto;min-width:40%;max-width:none;margin:0 0 0 4px;text-align:left}
-} }
+
 .ctitle:empty::before{content:attr(data-ph);color:var(--ink-3);font-weight:400;opacity:0;transition:opacity .12s}
 .cblk:hover .ctitle:empty::before,.ctitle:focus:empty::before,.cblk.touch .ctitle:empty::before{opacity:1}
-@media (hover:none){ .cblk .ctitle:empty::before{opacity:1} }   /* на дотику підказка «Назва блока…» видима завжди; «Назва області…» — лише під час правки: немає назви — нічого не показуємо */
+
 /* меню мови з пошуком */
 .lmenu{position:absolute;left:4px;top:30px;z-index:8;width:230px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:13px;padding:6px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
 .lmenu input{width:100%;box-sizing:border-box;border:.5px solid var(--line-2);border-radius:6px;padding:5px 8px;font:inherit;background:transparent;color:var(--ink);outline:0}
@@ -311,7 +294,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .opt{padding:5px 8px;border-radius:6px;cursor:pointer;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .opt.sel,.opt:hover{background:var(--hover);color:var(--ink)} .opt.cur{font-weight:500;color:var(--ink)} .opt.cur::after{content:" ✓";color:var(--accent)}
 .opt.auto{border-bottom:.5px solid var(--line);border-radius:6px 6px 0 0;margin-bottom:2px}
-@media (hover:none){ .rz{opacity:.6;width:26px;height:26px} }
+
 /* текстовий блок: обгортка з тією ж ручкою в куті; заданий розмір = фіксована ширина і мінімальна висота (вміст ніколи не ховається), подвійний клік — авто */
 .tcard{position:relative;flex:0 1 auto;width:fit-content;min-width:0;max-width:100%}
 .tcard.sized .txt{width:100%}
@@ -320,7 +303,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk.focus>.tcard .rz{opacity:0;pointer-events:none}   /* поки в блоці курсор (набір тексту), ручку сховано; зʼявиться при наведенні після виходу з блока */
 .tcard.resizing .txt{background:var(--hover);box-shadow:inset 0 0 0 .5px var(--sel-line)}
 .tcard.settle{transition:width .16s ease} .tcard.settle .txt{transition:min-height .16s ease,background .12s}
-@media (hover:none){ .tcard .rz{opacity:0;pointer-events:none} }   /* на дотику текстовий блок без ручки: курсор у ньому — це вже набір */
+
 /* ── область: картка як у коду, всередині — звичайні блоки; висота росте за вмістом ─────── */
 .blk.is-area .ablk{position:relative;flex:1 1 auto;width:100%;max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--area-bg,var(--code-bg));color:var(--ink);transition:border-color .15s}
 .ablk .cbar{padding-right:6px} .ablk .ctitle{grid-column:2;color:var(--ink-3)} .ablk .acts{grid-column:3}   /* назва області — як «Без назви» в шапці: та сама вага, приглушений колір (рішення власника) */
@@ -334,13 +317,13 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 /* дотик: «⋯» у правому верхньому куті текстового блока, лише коли блок виділено (режим положення) або в ньому курсор — інакше на сторінці була б купа значків (рішення власника); зона 44px; на компʼютері не показується */
 .bact{display:none;position:absolute;right:-11px;top:-11px;width:22px;height:22px;border-radius:50%;border:.5px solid var(--line-2);background:var(--page);color:var(--ink-2);font-size:14px;line-height:1;padding:0;cursor:pointer;opacity:.9;z-index:3;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .bact::before{content:"";position:absolute;inset:-11px} .bact::after{content:"⋯"} .blk.drag>.tcard>.bact{display:none !important}
-@media (hover:none){ .blk.sel>.tcard>.bact,.blk.focus>.tcard>.bact,.blk>.tcard>.bact[aria-expanded="true"]{display:flex} }
+
 .amenu.bm{right:-8px;top:14px;min-width:200px} .amenu.hm{right:6px;top:46px}
 .amenu .mi .ml{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .amenu.hm{max-width:calc(100vw - 16px)}
 .amenu .mi .i{font-size:15px} .amenu .mi small{margin-left:auto;padding-left:10px;color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .amenu .mi:hover,.amenu .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0} .amenu .mi.danger:hover,.amenu .mi.danger:focus-visible{color:#c33}
 .ablk .cb.more[aria-expanded="true"]{opacity:1;background:var(--hover-2);color:var(--ink)}
-@media (hover:none){ .amenu .mi{padding:11px 12px;min-height:44px} }
+
 .ablk.resizing{border-color:var(--sel-line)} .ablk.settle{transition:width .16s ease}
 .ablk[data-color="yellow"]{--area-bg:#fbf1c7} .ablk[data-color="green"]{--area-bg:#e1f2e3} .ablk[data-color="blue"]{--area-bg:#dfecfb} .ablk[data-color="pink"]{--area-bg:#fbe3ea} .ablk[data-color="purple"]{--area-bg:#ebe4fb}
 :root[data-theme="dark"] .ablk[data-color="yellow"]{--area-bg:#3a3520} :root[data-theme="dark"] .ablk[data-color="green"]{--area-bg:#1f3628} :root[data-theme="dark"] .ablk[data-color="blue"]{--area-bg:#1e2d42} :root[data-theme="dark"] .ablk[data-color="pink"]{--area-bg:#3c2430} :root[data-theme="dark"] .ablk[data-color="purple"]{--area-bg:#2e2744}
@@ -378,7 +361,41 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .undo .ubtn:hover,.undo .ubtn:focus-visible{background:rgba(128,128,128,.45);outline:0}
 .undo kbd{font:inherit;font-size:11px;opacity:.6;margin-left:2px}
 .undo .uclose{flex:0 0 auto;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:inherit;font:inherit;font-size:13px;opacity:.7;cursor:pointer} .undo .uclose:hover,.undo .uclose:focus-visible{opacity:1;background:rgba(128,128,128,.28);outline:0}
-@media (hover:none){ .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none} }
+
+/* ══ дотик (hover:none): усі правила для сенсорних екранів зібрано в одному блоці (план 3.9); порядок — як був у файлі, бо пізніше правило перекриває раніше ══ */
+@media (hover:none){
+  .fab{display:flex}
+    /* довге натискання на порожньому місці не має запускати системне виділення (сині маркери в Android); текст блоків лишається виділюваним */
+    .sheet{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} .blk.focus>.tcard>.txt,.code,.ctitle{-webkit-user-select:text;user-select:text}   /* текст блока виділяється системою лише з курсором у ньому: довге натискання на неактивному блоці — наш жест (стрілки), курсор по дотику ставимо самі */
+    .tcard:hover .rz{opacity:0;pointer-events:none}   /* залиплий :hover після дотику не показує ручку розміру */
+    .blk.sel>.tcard .rz{opacity:1;pointer-events:auto;width:28px;height:28px;right:-8px;bottom:-22px;padding:5px;color:var(--sel-line);background:var(--page);border:1.5px solid var(--sel-line);border-radius:8px} .blk.sel>.tcard .rz svg{width:14px;height:14px} .blk.sel>.tcard .rz::before{content:"";position:absolute;inset:-8px}   /* режим положення: ручка розміру видима, зона дотику 44px */
+  .empty .mouse{display:none} .empty .touch{display:inline}
+  /* дотик: цілі 44px; рідкісні дії шапки (і «Нова область» — її малюють пальцем) у меню «⋯» */
+  .tb{height:44px;min-width:44px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} #spellBtn,#gridBtn,#themeBtn,#clearBtn,#areaBtn{display:none} #moreBtn{display:inline-flex}
+  .bbar{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:28;display:flex;gap:2px;justify-content:center;min-height:48px;padding:4px 6px calc(4px + var(--sab,0px));background:var(--ink);color:var(--page);box-shadow:var(--shadow)} .bbar[hidden]{display:none}
+    .bbar button{flex:0 0 auto;width:44px;min-width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:20px;cursor:pointer} .bbar button.act{width:auto;padding:0 10px;font-size:14px;font-weight:600} .bbar button:disabled{opacity:.35}
+  .bubble{left:0 !important;right:0;bottom:var(--kb,0px);top:auto !important;border-radius:0;justify-content:center;min-height:48px;padding:4px 6px calc(4px + var(--sab,0px))}
+    .bubble button,.bmore button{flex:0 0 auto;width:44px;min-width:44px;height:44px;font-size:16px} .bubble button.act,.bmore button.act{width:auto;padding:0 10px;font-size:14px} .bubble button.act[data-act="new"]{width:44px;padding:0} .bubble [data-act="new"] span{display:none}
+    .bubble button.act[data-act="copy"]{display:none} .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:inline-flex;align-items:center;justify-content:center} .bubble button.act[data-act="done"]{font-weight:600} .bubble .more{font-size:20px;letter-spacing:1px}
+  /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
+  .grip{opacity:.45;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9}
+  .cb{opacity:1} .cbar{height:48px} .cb{height:44px;min-width:44px;padding:0 12px;justify-content:center}
+  .ctitle:not(:focus){-webkit-user-select:none;user-select:none}   /* дотик: назву в шапці система не виділяє (утримання піднімає картку), лише в правці */
+  @container (max-width:640px){   /* телефон: шапка картки (код і область) одним рядком 48px — [мова], назва з трикрапкою, дії; дії з overflow (перенос рядків, номери) — за «⋯»; назва області не вужча за 40% (рішення власника, план 3.5) */
+    .cblk .cbar,.ablk .cbar{display:flex;flex-wrap:nowrap;height:48px;min-height:48px;align-items:center;gap:2px} .cblk .acts,.ablk .acts{margin-left:auto;flex:0 0 auto}
+    .cblk .ctitle,.cblk .ctitle:focus,.cblk .ctitle:not(:empty){order:0;flex:1 1 auto;min-width:0;max-width:none;margin:0 0 0 2px;text-align:left}
+    .ablk .ctitle,.ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:0;flex:1 1 auto;min-width:40%;max-width:none;margin:0 0 0 4px;text-align:left}
+    .cb.copy span{display:none} .cbar .cb.ov{display:none} .cbar .cb.cmore{display:inline-flex}
+  }
+  /* на дотику підказка «Назва блока…» видима завжди; «Назва області…» — лише під час правки: немає назви — нічого не показуємо */
+  .cblk .ctitle:empty::before{opacity:1}
+  .rz{opacity:.6;width:26px;height:26px}
+  /* на дотику текстовий блок без ручки: курсор у ньому — це вже набір */
+  .tcard .rz{opacity:0;pointer-events:none}
+  .blk.sel>.tcard>.bact,.blk.focus>.tcard>.bact,.blk>.tcard>.bact[aria-expanded="true"]{display:flex}
+  .amenu .mi{padding:11px 12px;min-height:44px}
+  .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none}
+}
 </style>
 </head>
 <body>
@@ -520,6 +537,15 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   chev:'<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
   more:'<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>'};
 const RZ=t=>'<div class="rz" title="'+t+'"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div>';
+/* шапка картки (код і область) збирається однією функцією: ліворуч необовʼязкова кнопка мови, назва, праворуч дії.
+   Дії з overflow на дотику у вузькій картці ховаються (.ov) за кнопкою «⋯» (.cmore), меню якої будує cardMore із тих самих кнопок (підпис — title, стан — aria-pressed) */
+function cardBar(o){ const btn=a=>'<button class="cb '+a.cls+'" title="'+a.title+'"'+(a.label? ' aria-label="'+a.label+'"' : '')+(a.pressed!==undefined? ' aria-pressed="'+a.pressed+'"' : '')+(a.popup? ' aria-haspopup="menu" aria-expanded="false"' : '')+'>'+a.html+'</button>';
+  const ov=o.overflow||[]; return '<div class="cbar">'+(o.lang? '<button class="lang" title="Мова коду — натисніть, щоб змінити"></button>' : '')
+    +'<span class="ctitle" spellcheck="false" data-ph="'+o.ph+'" role="textbox" aria-label="'+o.label+'"></span><span class="acts">'
+    +ov.map(a=>btn({...a, cls:a.cls+' ov'})).join('')+(o.actions||[]).map(btn).join('')
+    +(ov.length? btn({cls:'cmore', title:'Ще: '+ov.map(a=>a.title.toLowerCase()).join(', '), label:'Ще: '+ov.map(a=>a.title.toLowerCase()).join(', '), html:'⋯', popup:true}) : '')+'</span></div>'; }
+function cardMore(card){ const more=card.querySelector('.cmore'); if(!more) return; more.addEventListener('pointerdown',e=>e.stopPropagation());
+  more.addEventListener('click',()=>popMenu(more, card, 'cm', [...card.querySelectorAll('.cb.ov')].map(bt=>({label:bt.title, small: bt.getAttribute('aria-pressed')==='true'? 'увімк.' : 'вимк.', act:()=>bt.click()})))); }
 const GRIP='<div class="grip" title="Перетягнути · клік — скопіювати текст блока"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
 const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
@@ -940,9 +966,9 @@ function chip(b, label, btnLabel, onSwap){ sheet.querySelectorAll('.chip').forEa
 
 /* блок коду: замок («тільки читання») типово, копіювати можна завжди */
 function buildCode(b){
-  b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked"><div class="cbar"><button class="lang" title="Мова коду — натисніть, щоб змінити"></button><span class="ctitle" spellcheck="false" data-ph="Назва блока…" role="textbox" aria-label="Назва блока"></span><span class="acts">'
-    +'<button class="cb num" title="Номери рядків" aria-pressed="false">#</button><button class="cb wrapb" title="Перенос довгих рядків" aria-pressed="false">'+ICO.wrap+'</button>'
-    +'<button class="cb copy" title="Копіювати (Ctrl+Shift+C)">'+ICO.copy+'<span>Копіювати</span></button><button class="cb lock" title="Тільки читання · натисніть, щоб редагувати (Ctrl+E)" aria-pressed="true">'+ICO.lockC+ICO.lockO+'</button><button class="cb cmore" title="Ще: перенос рядків, номери" aria-label="Ще: перенос рядків, номери" aria-haspopup="menu" aria-expanded="false">⋯</button></span></div>'
+  b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked">'+cardBar({lang:true, ph:'Назва блока…', label:'Назва блока',
+      overflow:[{cls:'num',title:'Номери рядків',html:'#',pressed:false},{cls:'wrapb',title:'Перенос довгих рядків',html:ICO.wrap,pressed:false}],
+      actions:[{cls:'copy',title:'Копіювати (Ctrl+Shift+C)',html:ICO.copy+'<span>Копіювати</span>'},{cls:'lock',title:'Тільки читання · натисніть, щоб редагувати (Ctrl+E)',html:ICO.lockC+ICO.lockO,pressed:true}]})
     +'<pre class="code" spellcheck="false" aria-readonly="true" tabindex="0"><code data-ph="Код…"></code></pre><div class="fade"></div><button class="more" hidden></button>'
     +RZ('Тягніть, щоб змінити розмір · подвійний клік — авто')+'</div>';
   const card=b.el.querySelector('.cblk'), code=card.querySelector('code'), pre=card.querySelector('.code'), more=card.querySelector('.more'), lockB=card.querySelector('.lock'), copyB=card.querySelector('.copy'), langB=card.querySelector('.lang');
@@ -993,9 +1019,7 @@ function buildCode(b){
   copyB.addEventListener('click',copy);
   card.querySelector('.wrapb').addEventListener('click',e=>{ b.wrap=!b.wrap; card.classList.toggle('wrapped',b.wrap); e.currentTarget.setAttribute('aria-pressed',b.wrap); relayout(b); markDirty(); });
   card.querySelector('.num').addEventListener('click',e=>{ b.num=!b.num; card.classList.toggle('num',b.num); e.currentTarget.setAttribute('aria-pressed',b.num); relayout(b); markDirty(); });
-  const cmore=card.querySelector('.cmore'); cmore.addEventListener('pointerdown',e=>e.stopPropagation()); cmore.addEventListener('click',()=>popMenu(cmore, card, 'cm', [   // телефон: рідкісні перемикачі шапки коду
-    {ico:ICO.wrap, label:'Перенос довгих рядків', small: b.wrap? 'увімк.' : 'вимк.', act:()=>card.querySelector('.wrapb').click()},
-    {label:'Номери рядків', small: b.num? 'увімк.' : 'вимк.', act:()=>card.querySelector('.num').click()} ]));
+  cardMore(card);
   /* меню мови: пошук + список, перший рядок — «Авто» */
   function closeMenu(){ if(b.menu){ document.removeEventListener('pointerdown',b.menu._onDoc,true); b.menu.remove(); b.menu=null; nav.close('lmenu'); } }
   function openMenu(){ closeMenu(); const m=document.createElement('div'); m.className='lmenu'; m.innerHTML='<input type="search" placeholder="Мова…" spellcheck="false" autocomplete="off"><div class="opts"></div>'; card.appendChild(m);
@@ -1103,8 +1127,8 @@ function ungroup(a){ const kids=blocks.filter(o=>o.parent===a.id); const barH=a.
 /* область */
 const AREA_COLORS=['neutral','yellow','green','blue','pink','purple'];
 function buildArea(b){
-  b.el=el('div','blk is-area'); b.el.innerHTML=GRIP+'<div class="ablk"><div class="cbar"><span class="ctitle" spellcheck="false" data-ph="Назва області…" role="textbox" aria-label="Назва області"></span><span class="acts">'
-    +'<button class="cb colorb" title="Колір тла">'+ICO.palette+'</button><button class="cb more" title="Ще: розгрупувати, видалити" aria-haspopup="menu" aria-expanded="false">'+ICO.more+'</button><button class="cb fold" title="Згорнути" aria-pressed="false">'+ICO.chev+'</button></span></div>'
+  b.el=el('div','blk is-area'); b.el.innerHTML=GRIP+'<div class="ablk">'+cardBar({ph:'Назва області…', label:'Назва області',
+      actions:[{cls:'colorb',title:'Колір тла',html:ICO.palette},{cls:'more',title:'Ще: розгрупувати, видалити',html:ICO.more,popup:true},{cls:'fold',title:'Згорнути',html:ICO.chev,pressed:false}]})
     +'<div class="abody"></div>'+RZ('Тягніть: ширина і мінімальна висота · подвійний клік — авто')+'</div>';
   const card=b.el.querySelector('.ablk'); b.card=card; b.abody=card.querySelector('.abody'); b.cw=b.cw||12; if(!AREA_COLORS.includes(b.color)) b.color='neutral';
   card.dataset.color=b.color; card.classList.toggle('collapsed',b.collapsed); card.querySelector('.fold').setAttribute('aria-pressed',b.collapsed); card.querySelector('.fold').title=b.collapsed?'Розгорнути':'Згорнути';
@@ -1118,8 +1142,9 @@ function buildArea(b){
   const createIn=(e,focus)=>{ const r=b.abody.getBoundingClientRect(); const col=colOfX(e.clientX-r.left,b,{}), row=rowOfY(e.clientY-r.top-G()/2,b); const probe={col,row,lines:1,w:MINW,parent:b.id}; const ok=fits(probe);
     const pg=document.createElement('div'); pg.className='ping'+(ok?'':' bad'); pg.style.left=(xOf(col,b)-1)+'px'; pg.style.top=yOf(row,b)+'px'; b.abody.appendChild(pg); setTimeout(()=>pg.remove(),500);
     if(!ok) return null; const nb=make({col,row,parent:b.id},false); markDirty(); if(focus){ nb.txt.focus(); setTimeout(()=>{ if(document.activeElement!==nb.txt) nb.txt.focus(); },0); } return nb; };
+  b.hold=holdGesture(b.abody, ev=>createIn(ev,false), false);
   b.abody.addEventListener('pointerdown',e=>{ if(e.button!==0 || e.target!==b.abody) return; e.stopPropagation(); const wasSel=!!selBlk; exitSel();
-    if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; holdStart(e, ev=>createIn(ev,false)); return; }   // дотик: утримання, як на аркуші
+    if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; b.hold.start(e); return; }   // дотик: утримання, як на аркуші
     e.preventDefault(); createIn(e,true); });
   card.querySelector('.fold').addEventListener('click',e=>{ b.collapsed=!b.collapsed; card.classList.toggle('collapsed',b.collapsed); e.currentTarget.setAttribute('aria-pressed',b.collapsed); e.currentTarget.title=b.collapsed?'Розгорнути':'Згорнути'; closeAll(); resolve(b); markDirty(); });
   // меню «⋯»: розгрупувати / видалити — без підтвердження, зате з плашкою «Скасувати»
@@ -1175,7 +1200,7 @@ fab.addEventListener('click',createNext);
 /* дотик: утримання ~0,45 с на тексті блока (не під час набору) — режим положення: рамка, стрілки ← ↑ ↓ → і «Готово». Стрілки притискають блок до лівого чи правого
    поля, під найближчий блок вище (чи в перший ряд) або над найближчий блок нижче; сусід «на тому ж ряду» — за тим самим правилом накладання, що й у виштовхування.
    Перенос за ручку лишається вільним. Під час утримання текст тимчасово невиділюваний, щоб Android не починав системне виділення; короткий дотик ставить курсор, як і раніше */
-let selBlk=null, selHold=null;
+let selBlk=null;
 function enterSel(b){ if(selBlk===b) return; const ae=document.activeElement; if(ae && fieldOf(ae)) ae.blur(); if(!blocks.includes(b)) return; if(selBlk) selBlk.el.classList.remove('sel'); else nav.open('sel', ()=>exitSel()); selBlk=b; b.el.classList.add('sel'); blockbar.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); }
 function exitSel(){ if(!selBlk) return; selBlk.el.classList.remove('sel'); selBlk=null; blockbar.hidden=true; layoutBottom(); fabSync(); nav.close('sel'); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && selBlk && !fieldOf(document.activeElement)) exitSel(); });   // апаратна клавіатура: Esc виходить із режиму положення
@@ -1194,19 +1219,16 @@ function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.li
 blockbar.addEventListener('pointerdown',e=>e.preventDefault());
 blockbar.addEventListener('click',e=>{ const bt=e.target.closest('button[data-mv]'); if(!bt) return; if(bt.dataset.mv==='done'){ exitSel(); return; }
   if(selBlk){ const b=selBlk, was={col:b.col,row:b.row,fx:b.fx}; if(snapBlock(b, bt.dataset.mv)) offerUndo('Блок «'+blockLabel(b)+'» пересунуто', ()=>{ if(!blocks.includes(b)) return; b.col=was.col; b.row=was.row; b.fx=was.fx; resolve(b); markDirty(); b.el.scrollIntoView({block:'nearest'}); }, {quiet:true}); } });   // тихий запис: плашка на кожну стрілку заважала б
-function selHoldOn(b){ b.txt.addEventListener('pointerdown',e=>{ if(e.pointerType==='mouse' || e.button!==0 || document.activeElement===b.txt) return;
-    const h=selHold={b, x:e.clientX, y:e.clientY, done:false, moved:false, skip:e.defaultPrevented};   // skip: дотик уже обробив чип (копіювання)
-    h.t=setTimeout(()=>{ if(selHold!==h) return; h.done=true; enterSel(b); },HOLD_MS); });
+function selHoldOn(b){ const z=gesture(b.txt, {holdMs:HOLD_MS, slop:HOLD_SLOP, filter:e=>e.pointerType!=='mouse' && document.activeElement!==b.txt,
+    onDown:(e,g)=>{ g.data.skip=e.defaultPrevented; },   // skip: дотик уже обробив чип (копіювання)
+    onHold:()=>enterSel(b) });
   // дотик по неактивному блоку: «мишачі» події не потрібні (текст для системи невиділюваний, курсор вона не поставить) — ставимо курсор самі в точку дотику; після утримання — нічого
-  b.txt.addEventListener('touchend',e=>{ const h=selHold; if(!h || h.b!==b) return; e.preventDefault(); if(h.done || h.skip || h.moved) return; const t=e.changedTouches[0]; if(t) focusAt(b, t.clientX, t.clientY); },{passive:false});
+  b.txt.addEventListener('touchend',e=>{ const g=z.state||z.last; if(!g) return; e.preventDefault(); if(g.held || g.data.skip || g.moved) return; const t=e.changedTouches[0]; if(t) focusAt(b, t.clientX, t.clientY); },{passive:false});
   b.txt.addEventListener('contextmenu',e=>{ if(document.activeElement!==b.txt) e.preventDefault(); }); }
 function focusAt(b, x, y){ b.txt.focus(); const sel=getSelection(); if(!sel) return; try{
     const p=document.caretPositionFromPoint? document.caretPositionFromPoint(x,y) : null, r=(!p && document.caretRangeFromPoint)? document.caretRangeFromPoint(x,y) : null;
     if(p && b.txt.contains(p.offsetNode)) sel.setPosition(p.offsetNode,p.offset); else if(r && b.txt.contains(r.startContainer)) sel.setPosition(r.startContainer,r.startOffset);
     else { const rg=document.createRange(); rg.selectNodeContents(b.txt); rg.collapse(false); sel.removeAllRanges(); sel.addRange(rg); } }catch(_){} }
-function selHoldEnd(){ const h=selHold; if(!h) return; clearTimeout(h.t); setTimeout(()=>{ if(selHold===h) selHold=null; },0); }
-document.addEventListener('pointermove',e=>{ const h=selHold; if(h && !h.done && !h.moved && Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; clearTimeout(h.t); } },true);   // зрушили палець — це гортання, не утримання й не дотик
-document.addEventListener('pointerup',selHoldEnd,true); document.addEventListener('pointercancel',selHoldEnd,true);
 document.addEventListener('focusin',e=>{ if(selBlk && !blockbar.contains(e.target)) exitSel(); });   // фокус на кнопках панелі положення (клавіатура) режим не знімає
 /* спливне меню (дотик): «⋯» у текстового блока і «⋯» у шапці; одне відкрите водночас, закривається дотиком поза ним, Esc або вибором пункту */
 const ICO_SEL='<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 2"/></svg>';
@@ -1300,40 +1322,59 @@ let growT=null;
 window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUCH){ fitBubble(); layoutBottom(); revealCaret(); } const h=window.innerHeight; if(h>=fullH || !fieldOf(document.activeElement)) fullH=h; clearTimeout(growT); growT=setTimeout(growSheet,80); }); fullH=window.innerHeight;   // більше — завжди; менше — лише без курсора в полі (інакше це клавіатура) layoutBottom();   // поворот, зникнення адресного рядка, закриття клавіатури: аркуш знову на все вікно
 /* дотик: одиночний дотик нічого не створює (аркуш можна гортати й читати); блок зʼявляється після утримання ~0,5 с без руху,
    а фокус (клавіатура) — при відпусканні, бо iOS відкриває клавіатуру лише всередині жесту. Зрушили палець після появи блока — порожній блок прибирається */
-const HOLD_MS=450, HOLD_SLOP=8; let hold=null;
-function holdStart(e, makeAt, draw){ holdEnd(); const h=hold={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},moved:false,made:null,draw:!!draw,marq:null};   // draw: утримали й потягнули по аркушу — малюємо область
-  h.timer=setTimeout(()=>{ if(hold!==h||h.moved) return; h.made=makeAt(h.ev)||null; if(h.made) h.made.el.classList.add('held'); },HOLD_MS); }
-function holdMove(e){ const h=hold; if(!h) return; if(h.marq){ drawMarq(e,h.m,h.marq); return; } if(h.moved) return;
-  if(Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; if(!h.made){ clearTimeout(h.timer); hold=null; return; }
-    if(h.draw){ if(!(h.made.text||'').trim()) remove(h.made); h.made=null; h.m={cell:cellAt(h.ev)}; h.marq=el('div','marq'); drawMarq(e,h.m,h.marq); } } }   // після спрацювання утримання рух пальця — не гортання, а рамка майбутньої області (touchmove нижче)
-function holdEnd(e, cancelled){ const h=hold; if(!h) return; hold=null; clearTimeout(h.timer);
-  if(h.marq){ h.marq.remove(); if(!e||cancelled) return; const r=marqCells(e,h.m); if(r.cw>=2 && r.rows>=2) areaFromRect(r); else createAt(h.ev); return; }   // замала рамка — звичайний блок у точці утримання
-  if(h.made){ h.made.el.classList.remove('held'); if(h.moved){ if(!(h.made.text||'').trim()) remove(h.made); } else focusBlock(h.made); }   // браузер скасував жест (pointercancel) — блок не втрачаємо
-  else if(e && !h.moved && !cancelled){ const ae=document.activeElement; if(ae && ae!==document.body) ae.blur(); const s=getSelection(); if(s) s.removeAllRanges(); tapHint(); } }   // простий дотик по аркушу: закрити клавіатуру і зняти системне виділення слова   // простий дотик: закрити клавіатуру, підказати
+const HOLD_MS=450, HOLD_SLOP=8;
+/* ══ жести (план 3.9): один детектор на pointer-подіях — утримання, дотик, перетягування. Ним користуються створення блока утриманням (аркуш і область),
+   перенос за ручку ⋮⋮ і за шапку, режим положення утриманням на тексті, рамка області мишею.
+   gesture(el, {slop, holdMs | holdMs(e), filter(e), manual, onDown(e,g), onHold(e,g), onMove(e,g), onEnd(e,g), onCancel(e,g)}) → {start(e), state, last, cancel()}
+   g: {x,y,id,type,down,held,moved,data}. Рух понад slop до спрацювання утримання знімає його таймер (g.moved). Слухачі руху й відпускання спільні на document (фаза захоплення),
+   тож pointer capture, яке ставить сам перенос, їм не заважає. state — поточний жест, last — щойно завершений, до кінця такту (touchend приходить після pointerup). */
+const GESTS=new Set();
+document.addEventListener('pointermove',e=>{ for(const z of GESTS) z._move(e); },true);
+document.addEventListener('pointerup',e=>{ for(const z of GESTS) z._up(e); },true);
+document.addEventListener('pointercancel',e=>{ for(const z of GESTS) z._cancel(e); },true);
+function gesture(host, o){ const z={state:null, last:null};
+  const done=g=>{ z.state=null; GESTS.delete(z); clearTimeout(g.t); z.last=g; setTimeout(()=>{ if(z.last===g) z.last=null; },0); };
+  z.start=e=>{ if(e.button!==0) return; if(o.filter && !o.filter(e)) return; if(z.state) done(z.state);
+    const g=z.state={x:e.clientX,y:e.clientY,id:e.pointerId,type:e.pointerType,down:e,held:false,moved:false,t:null,data:{}}; GESTS.add(z);
+    if(o.onDown) o.onDown(e,g); const ms=typeof o.holdMs==='function'? o.holdMs(e) : o.holdMs; if(ms) g.t=setTimeout(()=>{ if(z.state!==g || g.moved) return; g.held=true; if(o.onHold) o.onHold(g.down,g); },ms); };
+  z._move=e=>{ const g=z.state; if(!g || e.pointerId!==g.id) return; if(!g.moved && Math.abs(e.clientX-g.x)+Math.abs(e.clientY-g.y)>(o.slop??HOLD_SLOP)){ g.moved=true; if(!g.held){ clearTimeout(g.t); g.t=null; } } if(o.onMove) o.onMove(e,g); };
+  z._up=e=>{ const g=z.state; if(!g || e.pointerId!==g.id) return; done(g); if(o.onEnd) o.onEnd(e,g); };
+  z._cancel=e=>{ const g=z.state; if(!g || e.pointerId!==g.id) return; done(g); if(o.onCancel) o.onCancel(e,g); };
+  z.cancel=()=>{ if(z.state) done(z.state); };
+  if(!o.manual) host.addEventListener('pointerdown',z.start); return z; }
+/* утримання на порожньому місці (аркуш, тіло області): після HOLD_MS зʼявляється блок під пальцем; відпустили без руху — курсор у ньому; зрушили після спрацювання на аркуші — рамка майбутньої області;
+   зрушили до спрацювання — це гортання; простий дотик — закрити клавіатуру, зняти системне виділення, підказати */
+function holdGesture(host, makeAt, draw){ return gesture(host, {manual:true, holdMs:HOLD_MS, slop:HOLD_SLOP,   // host: аркуш або тіло області
+  onHold:(e,g)=>{ g.data.made=makeAt(e)||null; if(g.data.made) g.data.made.el.classList.add('held'); },
+  onMove:(e,g)=>{ const d=g.data; if(d.marq){ drawMarq(e,d.m,d.marq); return; } if(!draw || !g.held || !g.moved || !d.made) return;
+    if(!(d.made.text||'').trim()) remove(d.made); d.made=null; d.m={cell:cellAt(g.down)}; d.marq=el('div','marq'); drawMarq(e,d.m,d.marq); },
+  onEnd:(e,g)=>{ const d=g.data; if(d.marq){ d.marq.remove(); const r=marqCells(e,d.m); if(r.cw>=2 && r.rows>=2) areaFromRect(r); else createAt(g.down); return; }   // замала рамка — звичайний блок у точці утримання
+    if(d.made){ d.made.el.classList.remove('held'); if(g.moved){ if(!(d.made.text||'').trim()) remove(d.made); } else focusBlock(d.made); return; }
+    if(!g.moved && !g.held){ const ae=document.activeElement; if(ae && ae!==document.body) ae.blur(); const sl=getSelection(); if(sl) sl.removeAllRanges(); tapHint(); } },
+  onCancel:(e,g)=>{ const d=g.data; if(d.marq){ d.marq.remove(); return; } if(d.made){ d.made.el.classList.remove('held'); if(g.moved){ if(!(d.made.text||'').trim()) remove(d.made); } else focusBlock(d.made); } } }); }   // браузер скасував жест (гортання) — блок із текстом не втрачаємо
+const sheetGest=holdGesture(sheet, ev=>createAt(ev,false), true);
 function tapHint(){ if((S.tapHint||0)>=3) return; S.tapHint=(S.tapHint||0)+1; db.setSettings(S); say('Утримуйте палець, щоб писати тут, або натисніть «+»'); }
-document.addEventListener('pointermove',holdMove,true); document.addEventListener('pointerup',e=>holdEnd(e),true); document.addEventListener('pointercancel',()=>holdEnd(null,true),true);
-sheet.addEventListener('touchmove',e=>{ if(hold && hold.draw && (hold.made||hold.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання
-sheet.addEventListener('contextmenu',e=>{ if(hold || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню
+sheet.addEventListener('touchmove',e=>{ const g=sheetGest.state; if(g && (g.data.made||g.data.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання
+sheet.addEventListener('contextmenu',e=>{ if(sheetGest.state || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню
 function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw,ch:rows},false); markDirty(); if(focus) b.ttlEl.focus(); return b; }
 /* миша: клік → текстовий блок, протяжка → область. Тач: клік одразу створює блок (протяжка — прокрутка сторінки) */
-let md=null, marq=null;
+/* рамка області мишею: протягнути по порожньому місцю (поріг 6px); клік без руху — блок у точці */
+const marqGest=gesture(sheet, {manual:true, slop:6,
+  onMove:(e,g)=>{ if(!g.moved) return; const d=g.data; if(!d.marq){ d.marq=el('div','marq'); sheet.classList.remove('hov'); } drawMarq(e,d.m,d.marq); },
+  onEnd:(e,g)=>{ try{ sheet.releasePointerCapture(g.id); }catch(_){} const d=g.data; if(!d.marq){ createAt(g.down); return; } const r=marqCells(e,d.m); d.marq.remove(); if(r.cw>=2 && r.rows>=2) createArea(r.col,r.row,Math.max(12,r.cw),Math.max(3,r.rows),true); else createAt(g.down); },
+  onCancel:(e,g)=>{ if(g.data.marq) g.data.marq.remove(); } });
 function marqCells(e,m){ const s=sheet.getBoundingClientRect(), x=e.clientX-s.left, y=e.clientY-s.top;
   const c1={col:Math.max(1,Math.round((x-G()/2)/G())), row:rowOfY(y-G()/2,null)}, c0=m.cell;
   return {col:Math.min(c0.col,c1.col), row:Math.min(c0.row,c1.row), cw:Math.abs(c1.col-c0.col)+1, rows:Math.abs(c1.row-c0.row)+1}; }
-function drawMarq(e,m=md,q=marq){ const r=marqCells(e,m); q.style.left=(xlOf(r.col,null)+CL())+'px'; q.style.top=yOf(r.row,null)+'px'; q.style.width=(r.cw*G())+'px'; q.style.height=(r.rows*G())+'px'; }
+function drawMarq(e,m,q){ const r=marqCells(e,m); q.style.left=(xlOf(r.col,null)+CL())+'px'; q.style.top=yOf(r.row,null)+'px'; q.style.width=(r.cw*G())+'px'; q.style.height=(r.rows*G())+'px'; }
 function areaFromRect(r){ const minC=cMinCol(null), maxC=maxColFor({kind:'area'},null); const cw=Math.min(Math.max(12,r.cw), 12+Math.max(0,maxC-minC)); const col=Math.max(minC, Math.min(r.col, maxC-(cw-12))); return createArea(col,r.row,cw,Math.max(3,r.rows),true); }   // намальована пальцем область не ширша за аркуш
 sheet.addEventListener('pointerdown',e=>{
   if(e.button!==0) return; const wasSel=!!selBlk; exitSel();
-  if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; holdStart(e, ev=>createAt(ev,false), true); return; }   // дотик по аркушу в режимі положення лише знімає його   // preventDefault: без «мишачих» подій після відпускання, інакше вони знімають фокус зі створеного блока
-  md={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},cell:cellAt(e),id:e.pointerId}; try{ sheet.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault();
+  if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; sheetGest.start(e); return; }   // дотик по аркушу в режимі положення лише знімає його   // preventDefault: без «мишачих» подій після відпускання, інакше вони знімають фокус зі створеного блока
+  marqGest.start(e); if(marqGest.state) marqGest.state.data.m={cell:cellAt(e)}; try{ sheet.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault();
 });
-sheet.addEventListener('pointerup',e=>{ if(!md) return; const m=md; md=null; try{ sheet.releasePointerCapture(m.id); }catch(_){}
-  if(marq){ const r=marqCells(e,m); marq.remove(); marq=null; if(r.cw>=2 && r.rows>=2) createArea(r.col,r.row,Math.max(12,r.cw),Math.max(3,r.rows),true); else createAt(m.ev); }
-  else createAt(m.ev); });
-sheet.addEventListener('pointercancel',()=>{ md=null; if(marq){ marq.remove(); marq=null; } });
 sheet.addEventListener('pointermove',e=>{
-  if(md){ if(marq || Math.abs(e.clientX-md.x)+Math.abs(e.clientY-md.y)>6){ if(!marq){ marq=el('div','marq'); sheet.classList.remove('hov'); } drawMarq(e); } return; }
-  if(e.pointerType!=='mouse') return;
+  if(marqGest.state) return; if(e.pointerType!=='mouse') return;
   if(e.target!==sheet && !e.target.closest('.empty')){ sheet.classList.remove('hov'); return; }
   const c=cellAt(e); ghost.style.left=(xOf(c.col,null)-1)+'px'; ghost.style.top=yOf(c.row,null)+'px';
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
@@ -1349,19 +1390,18 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
 
 const HOLD_DRAG_MS=350;   // шапка картки на дотику: утримання без руху понад HOLD_SLOP піднімає картку (стартова гіпотеза плану, порівняти з 250)
 function drag(b, grip, o={}){   // o.hold — на дотику перенос лише після утримання (шапка картки); o.skip(e) — не починати (кнопки, назва в правці); o.quiet — натискання без руху нічого не робить
-  let gx,gy,moved,from,others,probe,host,ptype, arm=null, armT=null;
+  let gx,gy,moved,from,others,probe,host,ptype;
   const start=e=>{ grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel();
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
     probe={col:b.col,row:b.row,fx:b.fx,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,parent:b.parent,el:gbox}; b.hidden=true; blocks.push(probe); ctnEl(probe).appendChild(gbox);
     b.el.classList.add('drag'); gbox.className='gbox on'; };
-  grip.addEventListener('pointerdown',e=>{ if(e.button!==0) return; if(o.skip && o.skip(e)) return; e.stopPropagation();
-    if(o.hold && e.pointerType!=='mouse'){ arm={x:e.clientX,y:e.clientY,ev:e}; clearTimeout(armT); armT=setTimeout(()=>{ if(!arm) return; const ev=arm.ev; arm=null; b.el.classList.add('lift'); start(ev); },HOLD_DRAG_MS); return; }   // до спрацювання палець гортає сторінку як звичайно
-    e.preventDefault(); start(e); });
-  grip.addEventListener('pointermove',e=>{
-    if(arm){ if(Math.abs(e.clientX-arm.x)+Math.abs(e.clientY-arm.y)>HOLD_SLOP){ clearTimeout(armT); arm=null; } return; }   // зрушили до спрацювання — це гортання, не перенос
-    if(!probe) return; if(Math.abs(e.clientX-(gx+b.el.getBoundingClientRect().left))+Math.abs(e.clientY-(gy+b.el.getBoundingClientRect().top))>2) moved=true;
+  const held=e=>o.hold && e.pointerType!=='mouse';   // за шапку пальцем — після утримання; мишею і за ручку — одразу
+  gesture(grip, { filter:e=>!(o.skip && o.skip(e)), holdMs:e=>held(e)? HOLD_DRAG_MS : 0, slop:HOLD_SLOP,
+    onDown:(e,g)=>{ e.stopPropagation(); if(!held(e)){ e.preventDefault(); start(e); } },   // до спрацювання утримання палець гортає сторінку як звичайно
+    onHold:(e,g)=>{ b.el.classList.add('lift'); start(e); },
+    onMove:(e,g)=>{ if(!probe) return; if(Math.abs(e.clientX-(gx+b.el.getBoundingClientRect().left))+Math.abs(e.clientY-(gy+b.el.getBoundingClientRect().top))>2) moved=true;
     const hr=host.getBoundingClientRect(); b.el.style.left=(e.clientX-gx-hr.left)+'px'; b.el.style.top=(e.clientY-gy-hr.top)+'px';
     others.forEach(o=>o.row=o.row0);
     // куди кладемо: спершу позиція на аркуші; щойно блок торкається області (за правилом накладання) або курсор у її картці — блок іде всередину.
@@ -1374,10 +1414,10 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     if(gbox.parentNode!==ctnEl(probe)) ctnEl(probe).appendChild(gbox);
     const bad=tooTight(probe);
     if(bad){ live(null).forEach(render); if(target) live(target).forEach(render); render(probe); } else resolve(probe);
-    gbox.className='gbox on'+(bad?' bad':'');
-  });
+    gbox.className='gbox on'+(bad?' bad':''); },
+    onEnd:()=>end(), onCancel:()=>end() });
   const end=()=>{
-    clearTimeout(armT); arm=null; if(!probe) return;
+    if(!probe) return;
     const bad=gbox.classList.contains('bad'); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
     b.el.classList.remove('drag','lift'); gbox.className='gbox'; sheet.appendChild(gbox);
     if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
@@ -1385,7 +1425,6 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     ctnEl(b).appendChild(b.el); if(!b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
     resolve(b); if(moved) markDirty(); if(!moved && !o.quiet){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення
   };
-  grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
   if(o.hold) grip.addEventListener('touchmove',e=>{ if(probe) e.preventDefault(); },{passive:false});   // після підняття палець тягне картку, а не гортає сторінку
 }
 /* ширина аркуша змінюється і від вікна, і від панелі — стежимо за самим аркушем */
