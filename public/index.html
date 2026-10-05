@@ -867,6 +867,7 @@ function buildText(b){
   const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && inCopyZone(c,e)) return; setTimeout(()=>{ expandToken(b.txt,e.clientX,e.clientY); placeBubble(); },0); });   // подвійний клік по іконці чипа — лише копіювання
   b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в кінці чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
+  ['mousedown','mouseup','click'].forEach(t=>b.txt.addEventListener(t,e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)) e.preventDefault(); }));   // якщо браузер усе ж надішле «мишачі» події після скасованого pointerdown — курсор у блок не ставиться і виділення не починається
   b.api={fmt};
   b.txt.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=hotkey(e); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
