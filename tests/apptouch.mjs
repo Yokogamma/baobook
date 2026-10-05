@@ -48,8 +48,9 @@ await tap(ab.x+40, ab.y+30); await pg.waitForTimeout(250); const afterTap=await 
 await hold(ab.x+40, ab.y+30); await pg.waitForTimeout(200);
 ok('7 в області: дотик нічого не створює ('+afterTap+'), утримання створює дочірній блок у фокусі', afterTap===inner0 && (await area.locator('.abody .blk').count())===inner0+1 && await focusedTxt());
 await pg.keyboard.type('в області'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
-// 8 підказка показується не більше трьох разів
-await tap(300,300); await pg.waitForTimeout(100); await tap(300,300); await pg.waitForTimeout(100); await pg.evaluate(()=>document.getElementById('toast').classList.remove('show')); await tap(300,300); await pg.waitForTimeout(250);
+// 8 підказка показується не більше трьох разів (точка — над першим блоком, де напевно порожньо: фіксована точка після прокрутки може опинитися впритул до картки, і Chrome «підтягує» дотик до поля)
+const e8=await box(pg.locator('.blk .txt').first()); const p8=[e8.x+e8.w/2, e8.y-80];
+await tap(...p8); await pg.waitForTimeout(100); await tap(...p8); await pg.waitForTimeout(100); await pg.evaluate(()=>document.getElementById('toast').classList.remove('show')); await tap(...p8); await pg.waitForTimeout(250);
 ok('8 підказка про утримання показується щонайбільше тричі', !(await pg.locator('#toast').evaluate(e=>e.classList.contains('show'))));
 // 8b довге натискання не запускає системне виділення: на аркуші user-select:none, текст блоків виділяється
 { const sheetUS=await pg.locator('#sheet').evaluate(e=>getComputedStyle(e).userSelect), idle=await pg.locator('.blk .txt').first().evaluate(e=>getComputedStyle(e).userSelect);

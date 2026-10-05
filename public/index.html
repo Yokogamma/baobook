@@ -287,11 +287,10 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
   .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
 }
 @media (hover:none){ @container (max-width:560px){ .cblk .ctitle:focus,.cblk .ctitle:not(:empty){order:-1;margin:4px 6px 0} .cb.copy span{display:none} } }   /* телефон: назва коду першим рядком, кнопки другим, «Копіювати» — іконкою */
-@media (hover:none){ @container (max-width:640px){
-  .ablk .cbar{display:flex;flex-wrap:wrap;height:auto;min-height:32px;row-gap:0}
+@media (hover:none){ @container (max-width:640px){   /* телефон: шапка області одним рядком 48px — назва зліва з трикрапкою (не менше 40% ширини), праворуч колір, «⋯», згорнути (рішення власника, план 3.5) */
+  .ablk .cbar{display:flex;flex-wrap:nowrap;height:48px;min-height:48px;align-items:center;gap:2px}
   .ablk .acts{margin-left:auto;flex:0 0 auto}
-  .ablk .ctitle{flex:1 1 40px;min-width:40px;max-width:none;margin-left:2px;text-align:center}
-  .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
+  .ablk .ctitle,.ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:0;flex:1 1 auto;min-width:40%;max-width:none;margin:0 0 0 4px;text-align:left}
 } }
 .ctitle:empty::before{content:attr(data-ph);color:var(--ink-3);font-weight:400;opacity:0;transition:opacity .12s}
 .cblk:hover .ctitle:empty::before,.ctitle:focus:empty::before,.cblk.touch .ctitle:empty::before{opacity:1}
@@ -868,6 +867,7 @@ function buildText(b){
   const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && inCopyZone(c,e)) return; setTimeout(()=>{ expandToken(b.txt,e.clientX,e.clientY); placeBubble(); },0); });   // подвійний клік по іконці чипа — лише копіювання
   b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в кінці чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
+  ['mousedown','mouseup','click'].forEach(t=>b.txt.addEventListener(t,e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)) e.preventDefault(); }));   // якщо браузер усе ж надішле «мишачі» події після скасованого pointerdown — курсор у блок не ставиться і виділення не починається
   b.api={fmt};
   b.txt.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=hotkey(e); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
