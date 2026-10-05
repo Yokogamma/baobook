@@ -328,6 +328,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .bact::before{content:"";position:absolute;inset:-11px} .bact::after{content:"⋯"} .blk.drag>.tcard>.bact{display:none !important}
 @media (hover:none){ .blk.sel>.tcard>.bact,.blk.focus>.tcard>.bact,.blk>.tcard>.bact[aria-expanded="true"]{display:flex} }
 .amenu.bm{right:-8px;top:14px;min-width:200px} .amenu.hm{right:6px;top:46px}
+.amenu .mi .ml{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .amenu.hm{max-width:calc(100vw - 16px)}
 .amenu .mi .i{font-size:15px} .amenu .mi small{margin-left:auto;padding-left:10px;color:var(--ink-3);font-size:11.5px;white-space:nowrap}
 .amenu .mi:hover,.amenu .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0} .amenu .mi.danger:hover,.amenu .mi.danger:focus-visible{color:#c33}
 .ablk .cb.more[aria-expanded="true"]{opacity:1;background:var(--hover-2);color:var(--ink)}
@@ -368,7 +369,8 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .undo .ubtn{flex:0 0 auto;border:0;border-radius:6px;padding:6px 10px;background:rgba(128,128,128,.28);color:inherit;font:inherit;font-weight:600;cursor:pointer}
 .undo .ubtn:hover,.undo .ubtn:focus-visible{background:rgba(128,128,128,.45);outline:0}
 .undo kbd{font:inherit;font-size:11px;opacity:.6;margin-left:2px}
-@media (hover:none){ .undo .ubtn{padding:10px 14px} .undo kbd{display:none} }
+.undo .uclose{flex:0 0 auto;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:inherit;font:inherit;font-size:13px;opacity:.7;cursor:pointer} .undo .uclose:hover,.undo .uclose:focus-visible{opacity:1;background:rgba(128,128,128,.28);outline:0}
+@media (hover:none){ .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none} }
 </style>
 </head>
 <body>
@@ -421,7 +423,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     </div>
   </main>
 </div>
-<div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button">Скасувати<kbd>Ctrl+Z</kbd></button></div>
+<div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button">Скасувати<kbd>Ctrl+Z</kbd></button><button class="uclose" type="button" aria-label="Сховати" title="Сховати">✕</button></div>
 <button class="fab" id="fab" title="Новий блок" aria-label="Новий блок"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 <div class="bubble" id="bubble" hidden role="toolbar" aria-label="Форматування"><button type="button" data-cmd="bold" title="Жирний (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Підкреслення (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Перекреслення (Ctrl+Shift+S)"><s>S</s></button><button type="button" data-cmd="code" title="Код: моноширинний чип, копіюється кліком (Ctrl+E)" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep"></span><button type="button" class="act" data-act="copy" title="Копіювати виділене (Ctrl+C)"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Копіювати</span></button><button type="button" class="act" data-act="new" title="Новий блок під цим" aria-label="Новий блок під цим"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Блок</span></button><button type="button" class="act" data-act="done" title="Завершити редагування">Готово</button><button type="button" class="more" data-act="more" title="Ще кнопки" aria-label="Ще кнопки" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
 <div class="bmore" id="bubbleMore" hidden role="toolbar" aria-label="Ще форматування"></div>
@@ -553,7 +555,7 @@ const db={ backend:'local',
   settings(){ return store.get(SK,{})||{}; },
   setSettings(s){ store.set(SK,s); }
 };
-Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo()});   // гачки для тестів: скрипт не глобальний
+Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo(), undoCount:()=>undoStack().length});   // гачки для тестів: скрипт не глобальний
 
 /* ══ нотатки ══════════════════════════════════════════════════════════════ */
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
@@ -1010,12 +1012,19 @@ function buildCode(b){
   b.el.addEventListener('focusout',()=>{ setTimeout(()=>{ if(b.editing && !b.el.contains(document.activeElement)) lock(); },0); });
   b.api={lock,unlock,view,copy,closeMenu,applyCut}; view();
 }
-/* «Скасувати»: видалення і розгрупування області виконуються одразу, але кілька секунд їх можна повернути (плашка або Ctrl+Z поза редагуванням) */
-const UNDO_MS=7000; let pendingUndo=null, undoT=null;
-function offerUndo(msg, restore){ dropUndo(true); pendingUndo=restore; undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); requestAnimationFrame(()=>undoEl.classList.add('show')); undoT=setTimeout(()=>dropUndo(),UNDO_MS); }
-function dropUndo(keepOpen){ clearTimeout(undoT); undoT=null; pendingUndo=null; if(keepOpen) return; undoEl.classList.remove('show'); setTimeout(()=>{ if(!pendingUndo){ undoEl.hidden=true; fabSync(); } },220); }
-function doUndo(){ const r=pendingUndo; if(!r) return; dropUndo(); r(); }
-undoBtn.addEventListener('click',doUndo);
+/* стек скасування структурних дій (план 3.6): на кожну нотатку до UNDO_MAX записів, разом не більше UNDO_TOTAL записів і ~UNDO_BYTES байтів знімків; живе до перезавантаження вкладки.
+   Плашка показує останній запис: дрібний (порожній чи однорядковий блок, розгрупування) — UNDO_MS, вагомий (область із блоками, багаторядковий текст) — без таймера, до ✕ чи наступної дії.
+   Повертають по одному: кнопка плашки, Ctrl+Z поза полями, «Скасувати: …» у меню «⋯» шапки. Перехід до іншої нотатки лише ховає плашку — стек нотатки лишається. Пересування стрілками — тихий запис, без плашки. */
+const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStacks=new Map(); let undoT=null, undoRaf=0;
+function undoStack(id){ id=id||(cur&&cur.id); if(!undoStacks.has(id)) undoStacks.set(id,[]); return undoStacks.get(id); }
+function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now()}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); }
+function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st) bytes+=e.size; if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES)) return; oldest.shift(); } }   // найстаріші записи витісняються першими, з будь-якої нотатки
+function showUndo(msg, big){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
+function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
+function dropUndo(){ hideUndo(); }   // ховає плашку; стек лишається (перехід між нотатками, тести)
+function doUndo(){ const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
+function blockLabel(b){ const line=(b.text||'').trim().split('\n')[0]||'без тексту'; return line.length>28? line.slice(0,28)+'…' : line; }
+undoBtn.addEventListener('click',()=>doUndo()); undoEl.querySelector('.uclose').addEventListener('click',()=>hideUndo());
 /* ══ історія правок у полях — текстовий блок, код у редагуванні, назви: Ctrl+Z, Ctrl+Shift+Z або Ctrl+Y. Власна, бо браузерна одна на всю сторінку,
    дробиться до букви від будь-якої зміни DOM (автозбереження, список нотаток) і не знає про службові правки (чипи, нульові пробіли).
    Знімок — html поля й виділення. Набір поспіль — один крок; новий крок — після паузи понад секунду, переходу курсора, зміни роду правки
@@ -1043,11 +1052,11 @@ document.addEventListener('keydown',e=>{ if(/^(Arrow|Home|End|Page)/.test(e.key)
 // Ctrl+Z у полі — його історія; поза полями — спершу плашка «Скасувати», інакше остання правка в полі, з якого щойно вийшли. Пошук і меню мови — зі своєю браузерною історією
 document.addEventListener('keydown',e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey) return; const k=hotkey(e), redo=(k==='z'&&e.shiftKey)||(k==='y'&&!e.shiftKey); if(k!=='z'&&!redo) return;
   const a=document.activeElement; if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; e.preventDefault(); const f=fieldOf(a);
-  if(f){ histGo(f,redo); return; } if(redo) return; if(pendingUndo){ doUndo(); return; } if(lastField && lastField.isConnected && lastField.isContentEditable) histGo(lastField,false); },true);
+  if(f){ histGo(f,redo); return; } if(redo) return; if(doUndo()) return; if(lastField && lastField.isConnected && lastField.isContentEditable) histGo(lastField,false); },true);
 // порожній текстовий блок прибирається; якщо текст у ньому щойно стерли (або скасували) — з плашкою «Скасувати», що повертає блок із цим текстом
 function dropText(b){ const h=HIST.get(b.txt), full=a=>a&&a.slice().reverse().find(s=>plainOf(cleanRich(s.html)).trim()), prev=h&&(full(h.redo)||full(h.undo)); remove(b); if(!prev) return;
   const d=serBlock(b); d.html=cleanRich(prev.html); d.text=plainOf(d.html); if(!hasRich(d.html)) delete d.html; const line=d.text.trim().split('\n')[0];
-  offerUndo('Блок «'+(line.length>28? line.slice(0,28)+'…' : line)+'» видалено', ()=>{ make(d,false); markDirty(); }); }
+  offerUndo('Блок «'+(line.length>28? line.slice(0,28)+'…' : line)+'» видалено', ()=>{ if(byId(d.id)) return; make(d,false); markDirty(); }, {big:d.text.trim().includes('\n'), size:JSON.stringify(d).length}); }
 // знімок області з дітьми (спершу область) і відновлення: живі діти лише повертаються всередину (їхні правки лишаються), зниклі створюються зі знімка
 function snapshot(a){ return [serBlock(a), ...blocks.filter(o=>o.parent===a.id).map(serBlock)]; }
 function restoreArea(snap){ const [ad,...kds]=snap; const old=byId(ad.id); if(old) remove(old); const a=make(ad,false);
@@ -1089,10 +1098,10 @@ function buildArea(b){
   moreB.addEventListener('click',()=>{ if(menu){ closeMenu(); return; } closePick(); const n=blocks.filter(o=>o.parent===b.id).length;
     menu=document.createElement('div'); menu.className='amenu'; menu.setAttribute('role','menu');
     menu.innerHTML='<button class="mi ungroup" role="menuitem" type="button">'+ICO.ungroup+'Розгрупувати<small>блоки лишаться</small></button>'
-      +'<button class="mi del danger" role="menuitem" type="button">'+ICO.trash+'Видалити область<small>'+(n? 'разом із '+nBlocks(n) : 'порожня')+'</small></button>';
+      +'<button class="mi del danger" role="menuitem" type="button">'+ICO.trash+'Видалити область'+(n? ' і '+n+' '+pl(n,'блок','блоки','блоків') : '')+'<small>'+(n? 'разом із вмістом' : 'порожня')+'</small></button>';   // кількість — в основному підписі (план 3.6)
     card.appendChild(menu); moreB.setAttribute('aria-expanded','true');
-    menu.querySelector('.ungroup').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b); ungroup(b); offerUndo('Область розгруповано, блоки лишились на аркуші', ()=>restoreArea(snap)); });
-    menu.querySelector('.del').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b), name=b.title||'без назви'; remove(b); offerUndo('Область «'+name+'» видалено'+(n? ' разом із '+nBlocks(n) : ''), ()=>restoreArea(snap)); });
+    menu.querySelector('.ungroup').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b); ungroup(b); offerUndo('Область розгруповано, блоки лишились на аркуші', ()=>restoreArea(snap), {size:JSON.stringify(snap).length}); });
+    menu.querySelector('.del').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b), name=b.title||'без назви'; remove(b); offerUndo('Область «'+name+'» видалено'+(n? ' разом із '+nBlocks(n) : ''), ()=>restoreArea(snap), {big:n>0, size:JSON.stringify(snap).length}); });   // з блоками — плашка без таймера
     menu.addEventListener('pointerdown',e=>e.stopPropagation()); const onDoc=e=>{ if(!menu.contains(e.target) && e.target!==moreB && !moreB.contains(e.target)) closeMenu(); }; document.addEventListener('pointerdown',onDoc,true); menu._onDoc=onDoc;
     const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeMenu(); moreB.focus(); } }; document.addEventListener('keydown',onKey,true); menu._onKey=onKey;
     setTimeout(()=>menu.querySelector('.mi').focus(),0); });
@@ -1147,7 +1156,8 @@ function snapBlock(b, dir){ const a=ctn(b); let col=b.col, row=b.row, lines=b.li
     if(r!==null) row=r-lines; else if(bottom!==null && bottom>b.row) row=bottom; else return false; }   // над найближчий блок нижче; немає такого — під найнижчий блок
   if(col===b.col && row===b.row) return false; b.col=col; b.row=row; if(!a) b.fx=xOf(b.col,null)/W(); resolve(b); markDirty(); b.el.scrollIntoView({block:'nearest'}); return true; }
 blockbar.addEventListener('pointerdown',e=>e.preventDefault());
-blockbar.addEventListener('click',e=>{ const bt=e.target.closest('button[data-mv]'); if(!bt) return; if(bt.dataset.mv==='done'){ exitSel(); return; } if(selBlk) snapBlock(selBlk, bt.dataset.mv); });
+blockbar.addEventListener('click',e=>{ const bt=e.target.closest('button[data-mv]'); if(!bt) return; if(bt.dataset.mv==='done'){ exitSel(); return; }
+  if(selBlk){ const b=selBlk, was={col:b.col,row:b.row,fx:b.fx}; if(snapBlock(b, bt.dataset.mv)) offerUndo('Блок «'+blockLabel(b)+'» пересунуто', ()=>{ if(!blocks.includes(b)) return; b.col=was.col; b.row=was.row; b.fx=was.fx; resolve(b); markDirty(); b.el.scrollIntoView({block:'nearest'}); }, {quiet:true}); } });   // тихий запис: плашка на кожну стрілку заважала б
 function selHoldOn(b){ b.txt.addEventListener('pointerdown',e=>{ if(e.pointerType==='mouse' || e.button!==0 || document.activeElement===b.txt) return;
     const h=selHold={b, x:e.clientX, y:e.clientY, done:false, moved:false, skip:e.defaultPrevented};   // skip: дотик уже обробив чип (копіювання)
     h.t=setTimeout(()=>{ if(selHold!==h) return; h.done=true; enterSel(b); },HOLD_MS); });
@@ -1168,16 +1178,17 @@ let popOpen=null;
 function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); p.anchor.setAttribute('aria-expanded','false'); }
 function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===anchor){ closePop(); return; } closePop();
   const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
-  items.forEach(it=>{ const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+escHtml(it.label)+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
+  items.forEach(it=>{ const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
   menu.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); }); host.appendChild(menu);   // дотик по пункту не переносить фокус: не знімає виділення блока і не ховає клавіатуру anchor.setAttribute('aria-expanded','true');
   const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; }
   const onDoc=e=>{ if(!menu.contains(e.target) && !anchor.contains(e.target)) closePop(); }; document.addEventListener('pointerdown',onDoc,true);
   const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
   popOpen={menu,anchor,onDoc,onKey}; if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
-function removeWithUndo(b){ const d=serBlock(b), line=(b.text||'').trim().split('\n')[0]||'без тексту'; remove(b); offerUndo('Блок «'+(line.length>28? line.slice(0,28)+'…' : line)+'» видалено', ()=>{ make(d,false); markDirty(); }); }
+function removeWithUndo(b){ const d=serBlock(b), label=blockLabel(b), big=(b.text||'').trim().includes('\n'); remove(b); offerUndo('Блок «'+label+'» видалено', ()=>{ if(byId(d.id)) return; make(d,false); markDirty(); }, {big, size:JSON.stringify(d).length}); }
 const THEME_NAMES={light:'світла',dark:'темна',sand:'пісочна'};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
   {ico:areaBtn.querySelector('svg').outerHTML, label:'Нова область', small:'або утримайте палець і потягніть', act:()=>areaBtn.click()},
+  ...(undoStack().length? [{label:'Скасувати: '+undoStack()[undoStack().length-1].msg, small:'до перезавантаження', act:()=>doUndo()}] : []),
   {label:'Перевірка правопису', small: spell? 'увімк.' : 'вимк.', act:()=>spellBtn.click()},
   {label:'Сітка аркуша', small: sheet.classList.contains('nogrid')? 'вимк.' : 'увімк.', act:()=>gridBtn.click()},
   {ico:ICO.palette, label:'Тема', small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
