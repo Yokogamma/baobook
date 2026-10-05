@@ -66,6 +66,14 @@ ok('7a «Готово»: рамки й панелі немає, «+» повер
 { const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(300); await pg.keyboard.press('Shift+Home'); await pg.waitForTimeout(200); const selBefore=await pg.evaluate(()=>getSelection().toString());
   await tap(300,600); await pg.waitForTimeout(400);
   ok('7f виділили слово («'+selBefore+'»), дотик по порожньому місцю: виділення знято, панелі немає, курсора немає', selBefore.length>0 && (await pg.evaluate(()=>getSelection().toString()))==='' && !(await pg.locator('#bubble').isVisible()) && !(await focusedTxt())); }
+// 7g у режимі положення видно ручку розміру, нею можна тягнути (ширина кратна клітинці), поза режимом ручки немає
+{ const rzIdle=await blk('Правий').locator('.rz').evaluate(e=>({op:getComputedStyle(e).opacity, pe:getComputedStyle(e).pointerEvents}));
+  const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300);
+  const rz=await blk('Правий').locator('.rz').evaluate(e=>{ const r=e.getBoundingClientRect(); return {op:getComputedStyle(e).opacity, pe:getComputedStyle(e).pointerEvents, x:r.left, y:r.top, w:r.width, h:r.height}; });
+  const w0=(await box(blk('Правий').locator('.tcard'))).w; await dragTo(rz.x+rz.w/2, rz.y+rz.h/2, rz.x+rz.w/2+40, rz.y+rz.h/2+30); await pg.waitForTimeout(500);   // ширина не менша за мінімальну (140px), тож тягнемо вправо
+  const c=await box(blk('Правий').locator('.tcard')); const m=await model(); const stillSel=await blk('Правий').evaluate(e=>e.classList.contains('sel'));
+  ok('7g без режиму ручки немає (opacity '+rzIdle.op+'), у режимі є ('+rz.w+'×'+rz.h+', pointer-events '+rz.pe+'); потягнули — ширина '+w0+'→'+c.w+' (кратна 24), режим лишився', rzIdle.op==='0' && rzIdle.pe==='none' && rz.op==='1' && rz.pe==='auto' && rz.w>=28 && c.w>w0 && c.w%24===0 && m['Правий'] && stillSel);
+  await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
 // 8 дотик по аркушу в режимі положення лише знімає його, блок не створюється
 { const b=await box(blk('Третій').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250); const n=await pg.locator('#sheet > .blk').count(); await tap(300,600); await pg.waitForTimeout(300);
   ok('8 дотик по аркушу знімає режим, блоків стільки ж ('+n+')', (await pg.locator('.blk.sel').count())===0 && (await pg.locator('#sheet > .blk').count())===n); }
