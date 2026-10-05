@@ -16,14 +16,14 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   // 1 шапка на дотику: чотири кнопки по 44px, рідкісні — у «⋯»; назва не зникає на 320px
   { const ids=await pg.evaluate(()=>[...document.querySelectorAll('.top .tb')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.id+':'+Math.round(b.getBoundingClientRect().width)+'x'+Math.round(b.getBoundingClientRect().height)));
     await pg.setViewportSize({width:320,height:568}); await pg.waitForTimeout(300); const ttl=await box(pg.locator('#ttl')); const tools=await box(pg.locator('.tools')); await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(300);
-    ok('1 шапка: видимі '+ids.join(', ')+'; на 320px назва '+ttl.w+'px, кнопки в межах екрана ('+(tools.x+tools.w)+')', ids.join(',')==='sideBtn:44x44,viewBtn:44x44,areaBtn:44x44,moreBtn:44x44' && ttl.w>=60 && tools.x+tools.w<=320); }
-  // 2 меню «⋯» шапки: чотири пункти ≥44px, «Тема» перемикає тему, «Сітка» — сітку, дотик поза меню закриває
+    ok('1 шапка: видимі '+ids.join(', ')+'; на 320px назва '+ttl.w+'px, кнопки в межах екрана ('+(tools.x+tools.w)+')', ids.join(',')==='sideBtn:44x44,viewBtn:44x44,moreBtn:44x44' && ttl.w>=60 && tools.x+tools.w<=320); }
+  // 2 меню «⋯» шапки: пʼять пунктів ≥44px (перший — «Нова область»), «Тема» перемикає тему, «Сітка» — сітку, дотик поза меню закриває
   { await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const items=await pg.locator('.amenu.hm .mi').allInnerTexts(); const hs=await pg.evaluate(()=>[...document.querySelectorAll('.amenu.hm .mi')].map(b=>Math.round(b.getBoundingClientRect().height)));
-    const th0=await pg.locator('#themeBtn').getAttribute('data-th'); await tapEl(pg.locator('.amenu.hm .mi').nth(2)); await pg.waitForTimeout(250); const th1=await pg.locator('#themeBtn').getAttribute('data-th');
-    ok('2a меню шапки: '+items.map(t=>t.replace(/\s+/g,' ')).join(' | ')+' (висоти '+hs.join('/')+'); «Тема» перемкнула '+th0+' → '+th1+', меню закрилось', items.length===4 && hs.every(h=>h>=44) && th0!==th1 && (await pg.locator('.amenu.hm').count())===0 && (await pg.locator('#moreBtn').getAttribute('aria-expanded'))==='false');
-    await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); await tapEl(pg.locator('.amenu.hm .mi').nth(1)); await pg.waitForTimeout(250); const nogrid=await pg.locator('#sheet').evaluate(e=>e.classList.contains('nogrid'));
+    const th0=await pg.locator('#themeBtn').getAttribute('data-th'); await tapEl(pg.locator('.amenu.hm .mi').nth(3)); await pg.waitForTimeout(250); const th1=await pg.locator('#themeBtn').getAttribute('data-th');
+    ok('2a меню шапки: '+items.map(t=>t.replace(/\s+/g,' ')).join(' | ')+' (висоти '+hs.join('/')+'); «Тема» перемкнула '+th0+' → '+th1+', меню закрилось', items.length===5 && hs.every(h=>h>=44) && th0!==th1 && (await pg.locator('.amenu.hm').count())===0 && (await pg.locator('#moreBtn').getAttribute('aria-expanded'))==='false');
+    await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); await tapEl(pg.locator('.amenu.hm .mi').nth(2)); await pg.waitForTimeout(250); const nogrid=await pg.locator('#sheet').evaluate(e=>e.classList.contains('nogrid'));
     await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); await tap(200,500); await pg.waitForTimeout(250);
-    ok('2b «Сітка» вимкнула сітку ('+nogrid+'); дотик поза меню закриває його', nogrid && (await pg.locator('.amenu.hm').count())===0); await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(200); await tapEl(pg.locator('.amenu.hm .mi').nth(1)); await pg.waitForTimeout(250); }
+    ok('2b «Сітка» вимкнула сітку ('+nogrid+'); дотик поза меню закриває його', nogrid && (await pg.locator('.amenu.hm').count())===0); await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(200); await tapEl(pg.locator('.amenu.hm .mi').nth(2)); await pg.waitForTimeout(250); }
   // 3 «⋯» у блока: без виділення його немає; дотик по ручці → режим положення → «⋯» видно, зона 44, меню з двох дій (без «Виділити», бо блок уже виділено)
   await hold(80,300); await pg.waitForTimeout(250); await pg.keyboard.type('Перший блок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
   await hold(80,420); await pg.waitForTimeout(250); await pg.keyboard.type('Другий блок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
@@ -51,6 +51,10 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   { await hold(80,600); await pg.waitForTimeout(250); await pg.evaluate(()=>{ const dt=new DataTransfer(); dt.setData('text/plain','function a(){\n  return 1;\n}\nfunction b(){\n  return 2;\n}'); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); }); await pg.waitForTimeout(300);
     await pg.keyboard.press('Escape'); await pg.waitForTimeout(400); const cbs=await pg.evaluate(()=>[...document.querySelectorAll('.cb')].map(b=>Math.round(b.getBoundingClientRect().height)).filter(h=>h>0));
     ok('6 кнопки шапки блока коду на дотику ≥44px ('+(cbs.length? cbs.join('/') : 'блок коду не створився')+')', cbs.length>0 && cbs.every(h=>h>=44)); }
+  // 8 «Нова область» у меню «⋯» шапки створює область під найнижчим блоком (кнопки області в шапці на дотику немає)
+  { const a0=await pg.locator('#sheet .blk.is-area').count(); await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const first=(await pg.locator('.amenu.hm .mi').first().innerText()).replace(/\s+/g,' '); await tapEl(pg.locator('.amenu.hm .mi').first()); await pg.waitForTimeout(400);
+    const a1=await pg.locator('#sheet .blk.is-area').count(), ab=a1? await box(pg.locator('#sheet .blk.is-area').last().locator('.ablk')) : null, hidden=await pg.locator('#areaBtn').evaluate(e=>getComputedStyle(e).display);
+    ok('8 «'+first+'» у меню шапки: областей '+a0+' → '+a1+(ab? ', ширина '+ab.w+' у межах екрана' : '')+'; кнопка області в шапці '+hidden, /Нова область/.test(first) && a1===a0+1 && ab && ab.x+ab.w<=390 && hidden==='none'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); }
   await pg.screenshot({path:OUT+'/appmenu-touch.png'});
   console.log(errs.length? errs.join('\n') : '✓ без помилок (дотик)'); if(errs.length) fails++; await ctx.close(); }
 /* ── компʼютер: нічого не змінилось ───────────────────────────────────── */

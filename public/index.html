@@ -161,7 +161,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .tb.warn{color:#c33;font-weight:700;font-size:16px} .tb.warn:hover{color:#c33} .tb.warn[hidden]{display:none}
 @media (max-width:640px){ .cnt,.saved .sl{display:none} .saved{padding:0 2px} .saved .ss{display:inline;font-size:14px} .saved.err{display:none} .top{padding-right:4px} }   /* телефон: лише ● і ✓, помилка — кнопкою ⚠ */
 #moreBtn{display:none;font-size:18px;letter-spacing:1px}   /* кнопка «⋯» шапки є лише на дотику (правило нижче) */
-@media (hover:none){ .tb{height:44px;min-width:44px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} #spellBtn,#gridBtn,#themeBtn,#clearBtn{display:none} #moreBtn{display:inline-flex} }   /* дотик: цілі 44px; рідкісні дії шапки — у меню «⋯» */
+@media (hover:none){ .tb{height:44px;min-width:44px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} #spellBtn,#gridBtn,#themeBtn,#clearBtn,#areaBtn{display:none} #moreBtn{display:inline-flex} }   /* дотик: цілі 44px; рідкісні дії шапки (і «Нова область» — її малюють пальцем) у меню «⋯» */
 
 /* ── аркуш ───────────────────────────────────────────────────────────── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
@@ -417,7 +417,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
     <div class="sheet" id="sheet">
       <div class="empty" id="empty">
         <div class="big"><span class="mouse">Клацніть будь-де — і пишіть саме там</span><span class="touch">Утримуйте палець будь-де — і пишіть саме там</span></div>
-        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Вставлений код стає блоком коду під замком. <span class="mouse">Протягніть мишею по порожньому місцю — зʼявиться область, куди можна складати блоки й переносити її цілком. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</span><span class="touch">Кнопка «+» внизу додає блок у кінець, кнопка області в шапці — область, куди можна складати блоки. За ручку <kbd>⋮⋮</kbd> біля фрази її можна перетягнути.</span></div>
+        <div class="sm">Аркуш порожній і займає весь екран. Текст прилипає до сітки, блоки не накладаються. Вставлений код стає блоком коду під замком. <span class="mouse">Протягніть мишею по порожньому місцю — зʼявиться область, куди можна складати блоки й переносити її цілком. Наведіть на фразу, щоб зʼявилася ручка <kbd>⋮⋮</kbd> — за неї фразу можна перетягнути.</span><span class="touch">Кнопка «+» внизу додає блок у кінець. Утримайте палець і потягніть по порожньому місцю — зʼявиться область, куди можна складати блоки (вона є і в меню «⋯» шапки). За ручку <kbd>⋮⋮</kbd> біля фрази її можна перетягнути.</span></div>
       </div>
     </div>
   </main>
@@ -436,7 +436,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
-const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
+const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), areaBtn=$('areaBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
@@ -1177,6 +1177,7 @@ function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===ancho
 function removeWithUndo(b){ const d=serBlock(b), line=(b.text||'').trim().split('\n')[0]||'без тексту'; remove(b); offerUndo('Блок «'+(line.length>28? line.slice(0,28)+'…' : line)+'» видалено', ()=>{ make(d,false); markDirty(); }); }
 const THEME_NAMES={light:'світла',dark:'темна',sand:'пісочна'};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
+  {ico:areaBtn.querySelector('svg').outerHTML, label:'Нова область', small:'або утримайте палець і потягніть', act:()=>areaBtn.click()},
   {label:'Перевірка правопису', small: spell? 'увімк.' : 'вимк.', act:()=>spellBtn.click()},
   {label:'Сітка аркуша', small: sheet.classList.contains('nogrid')? 'вимк.' : 'увімк.', act:()=>gridBtn.click()},
   {ico:ICO.palette, label:'Тема', small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
@@ -1242,14 +1243,18 @@ window.addEventListener('resize',()=>{ layoutBottom(); if(!bubble.hidden && TOUC
 /* дотик: одиночний дотик нічого не створює (аркуш можна гортати й читати); блок зʼявляється після утримання ~0,5 с без руху,
    а фокус (клавіатура) — при відпусканні, бо iOS відкриває клавіатуру лише всередині жесту. Зрушили палець після появи блока — порожній блок прибирається */
 const HOLD_MS=450, HOLD_SLOP=8; let hold=null;
-function holdStart(e, makeAt){ holdEnd(); const h=hold={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},moved:false,made:null};
+function holdStart(e, makeAt, draw){ holdEnd(); const h=hold={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},moved:false,made:null,draw:!!draw,marq:null};   // draw: утримали й потягнули по аркушу — малюємо область
   h.timer=setTimeout(()=>{ if(hold!==h||h.moved) return; h.made=makeAt(h.ev)||null; if(h.made) h.made.el.classList.add('held'); },HOLD_MS); }
-function holdMove(e){ const h=hold; if(!h||h.moved) return; if(Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; if(!h.made){ clearTimeout(h.timer); hold=null; } } }
+function holdMove(e){ const h=hold; if(!h) return; if(h.marq){ drawMarq(e,h.m,h.marq); return; } if(h.moved) return;
+  if(Math.abs(e.clientX-h.x)+Math.abs(e.clientY-h.y)>HOLD_SLOP){ h.moved=true; if(!h.made){ clearTimeout(h.timer); hold=null; return; }
+    if(h.draw){ if(!(h.made.text||'').trim()) remove(h.made); h.made=null; h.m={cell:cellAt(h.ev)}; h.marq=el('div','marq'); drawMarq(e,h.m,h.marq); } } }   // після спрацювання утримання рух пальця — не гортання, а рамка майбутньої області (touchmove нижче)
 function holdEnd(e, cancelled){ const h=hold; if(!h) return; hold=null; clearTimeout(h.timer);
+  if(h.marq){ h.marq.remove(); if(!e||cancelled) return; const r=marqCells(e,h.m); if(r.cw>=2 && r.rows>=2) areaFromRect(r); else createAt(h.ev); return; }   // замала рамка — звичайний блок у точці утримання
   if(h.made){ h.made.el.classList.remove('held'); if(h.moved){ if(!(h.made.text||'').trim()) remove(h.made); } else focusBlock(h.made); }   // браузер скасував жест (pointercancel) — блок не втрачаємо
   else if(e && !h.moved && !cancelled){ const ae=document.activeElement; if(ae && ae!==document.body) ae.blur(); const s=getSelection(); if(s) s.removeAllRanges(); tapHint(); } }   // простий дотик по аркушу: закрити клавіатуру і зняти системне виділення слова   // простий дотик: закрити клавіатуру, підказати
 function tapHint(){ if((S.tapHint||0)>=3) return; S.tapHint=(S.tapHint||0)+1; db.setSettings(S); say('Утримуйте палець, щоб писати тут, або натисніть «+»'); }
 document.addEventListener('pointermove',holdMove,true); document.addEventListener('pointerup',e=>holdEnd(e),true); document.addEventListener('pointercancel',()=>holdEnd(null,true),true);
+sheet.addEventListener('touchmove',e=>{ if(hold && hold.draw && (hold.made||hold.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання
 sheet.addEventListener('contextmenu',e=>{ if(hold || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню
 function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw,ch:rows},false); markDirty(); if(focus) b.ttlEl.focus(); return b; }
 /* миша: клік → текстовий блок, протяжка → область. Тач: клік одразу створює блок (протяжка — прокрутка сторінки) */
@@ -1257,10 +1262,11 @@ let md=null, marq=null;
 function marqCells(e,m){ const s=sheet.getBoundingClientRect(), x=e.clientX-s.left, y=e.clientY-s.top;
   const c1={col:Math.max(1,Math.round((x-G()/2)/G())), row:rowOfY(y-G()/2,null)}, c0=m.cell;
   return {col:Math.min(c0.col,c1.col), row:Math.min(c0.row,c1.row), cw:Math.abs(c1.col-c0.col)+1, rows:Math.abs(c1.row-c0.row)+1}; }
-function drawMarq(e){ const r=marqCells(e,md); marq.style.left=(xlOf(r.col,null)+CL())+'px'; marq.style.top=yOf(r.row,null)+'px'; marq.style.width=(r.cw*G())+'px'; marq.style.height=(r.rows*G())+'px'; }
+function drawMarq(e,m=md,q=marq){ const r=marqCells(e,m); q.style.left=(xlOf(r.col,null)+CL())+'px'; q.style.top=yOf(r.row,null)+'px'; q.style.width=(r.cw*G())+'px'; q.style.height=(r.rows*G())+'px'; }
+function areaFromRect(r){ const minC=cMinCol(null), maxC=maxColFor({kind:'area'},null); const cw=Math.min(Math.max(12,r.cw), 12+Math.max(0,maxC-minC)); const col=Math.max(minC, Math.min(r.col, maxC-(cw-12))); return createArea(col,r.row,cw,Math.max(3,r.rows),true); }   // намальована пальцем область не ширша за аркуш
 sheet.addEventListener('pointerdown',e=>{
   if(e.button!==0) return; const wasSel=!!selBlk; exitSel();
-  if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; holdStart(e, ev=>createAt(ev,false)); return; }   // дотик по аркушу в режимі положення лише знімає його   // preventDefault: без «мишачих» подій після відпускання, інакше вони знімають фокус зі створеного блока
+  if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; holdStart(e, ev=>createAt(ev,false), true); return; }   // дотик по аркушу в режимі положення лише знімає його   // preventDefault: без «мишачих» подій після відпускання, інакше вони знімають фокус зі створеного блока
   md={x:e.clientX,y:e.clientY,ev:{clientX:e.clientX,clientY:e.clientY},cell:cellAt(e),id:e.pointerId}; try{ sheet.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault();
 });
 sheet.addEventListener('pointerup',e=>{ if(!md) return; const m=md; md=null; try{ sheet.releasePointerCapture(m.id); }catch(_){}
@@ -1275,7 +1281,7 @@ sheet.addEventListener('pointermove',e=>{
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
-document.getElementById('areaBtn').addEventListener('click',()=>{ const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
+areaBtn.addEventListener('click',()=>{ const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
 document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);

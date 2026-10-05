@@ -23,20 +23,26 @@ await pg.keyboard.type('перший на телефоні'); await pg.keyboard.
 // 3 гортання не створює блоків
 const before=await nBlocks(); await swipe(200,600,-120); await pg.waitForTimeout(700);
 ok('3 жест гортання не створює блок', (await nBlocks())===before && !(await focusedTxt()));
-// 4 утримали, але зрушили палець перед відпусканням — порожній блок прибирається
-await touch('touchStart',[{x:150,y:560}]); await pg.waitForTimeout(650); const mid=await nBlocks(); for(let i=1;i<=4;i++){ await pg.waitForTimeout(40); await touch('touchMove',[{x:150,y:560+20*i}]); } await touch('touchEnd',[]); await pg.waitForTimeout(300);
-ok('4 після утримання блок зʼявився ('+mid+'), але палець зрушили → порожній блок прибрано ('+(await nBlocks())+')', mid===before+1 && (await nBlocks())===before && !(await focusedTxt()));
+// 4 утримали, потім зрушили палець лише вниз (рамка вужча за дві клітинки) — звичайний блок у точці утримання
+await touch('touchStart',[{x:150,y:560}]); await pg.waitForTimeout(650); const mid=await nBlocks(); for(let i=1;i<=4;i++){ await pg.waitForTimeout(40); await touch('touchMove',[{x:150,y:560+20*i}]); } const marq1=await pg.locator('#sheet .marq').count(); await touch('touchEnd',[]); await pg.waitForTimeout(300);
+ok('4 після утримання блок зʼявився ('+mid+'); палець зрушили лише вниз — рамка була ('+marq1+'), але замала → блок у точці утримання, з курсором ('+(await nBlocks())+')', mid===before+1 && marq1===1 && (await nBlocks())===before+1 && await focusedTxt() && (await pg.locator('#sheet .marq').count())===0 && (await pg.locator('#sheet .blk.is-area').count())===0);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
+// 4b утримали й потягнули по діагоналі — намальована область: не ширша за екран, курсор у назві, зайвого текстового блока немає
+{ const n0=await nBlocks(), t0=await pg.locator('#sheet .blk .txt').count(); await touch('touchStart',[{x:60,y:640}]); await pg.waitForTimeout(650); for(let i=1;i<=8;i++){ await pg.waitForTimeout(30); await touch('touchMove',[{x:60+30*i,y:640+15*i}]); } const mq=await box(pg.locator('#sheet .marq')); await touch('touchEnd',[]); await pg.waitForTimeout(400);
+  const ar=pg.locator('#sheet .blk.is-area'); const ab=(await ar.count())? await box(ar.first().locator('.ablk')) : null; const ttlFocus=await pg.evaluate(()=>!!document.activeElement && document.activeElement.classList.contains('ctitle'));
+  ok('4b утримання + протяжка малює область: рамка '+(mq? mq.w+'×'+mq.h : 'немає')+', область '+(ab? ab.w+'×'+ab.h+' @'+ab.x+','+ab.y : 'немає')+', курсор у назві ('+ttlFocus+'), текстових блоків '+t0+' → '+(await pg.locator('#sheet .blk .txt').count()), mq && mq.w>=200 && ab && (await ar.count())===1 && (await nBlocks())===n0+1 && ab.w>=240 && ab.h>=100 && ab.x+ab.w<=390 && ab.y>=600 && ab.y<=660 && ttlFocus && (await pg.locator('#sheet .blk .txt').count())===t0);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300); }
 // 5 кнопка «+»
-const f=await box(pg.locator('#fab')); await tap(f.x+f.w/2, f.y+f.h/2); await pg.waitForTimeout(250);
+const n5=await nBlocks(); const f=await box(pg.locator('#fab')); await tap(f.x+f.w/2, f.y+f.h/2); await pg.waitForTimeout(250);
 { const first=await box(pg.locator('#sheet .blk').first()); const last=await box(pg.locator('#sheet .blk').last());
-  ok('5 «+» додає блок у наступний вільний ряд і ставить курсор', (await nBlocks())===before+1 && await focusedTxt() && last.y>first.y); }
+  ok('5 «+» додає блок у наступний вільний ряд і ставить курсор', (await nBlocks())===n5+1 && await focusedTxt() && last.y>first.y); }
 await pg.keyboard.type('через плюс'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
 // 6 панель відкрита — «+» схований; закрили — знову є
 await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(250); const hiddenWhenOpen=!(await pg.locator('#fab').isVisible());
 await tap(350,600); await pg.waitForTimeout(300);   // дотик по підкладці праворуч від панелі
 ok('6 «+» ховається, поки відкрита панель нотаток, і повертається', hiddenWhenOpen && await pg.locator('#fab').isVisible());
 // 7 область: дотик усередині — нічого, утримання — блок
-await pg.locator('#areaBtn').tap(); await pg.waitForTimeout(300); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+await pg.locator('#moreBtn').tap(); await pg.waitForTimeout(250); await pg.locator('.amenu.hm .mi').first().tap(); await pg.waitForTimeout(300); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);   // «Нова область» у меню «⋯» шапки
 const area=pg.locator('.blk.is-area').first(); const ab=await box(area.locator('.abody')); const inner0=await area.locator('.abody .blk').count();
 await tap(ab.x+40, ab.y+30); await pg.waitForTimeout(250); const afterTap=await area.locator('.abody .blk').count();
 await hold(ab.x+40, ab.y+30); await pg.waitForTimeout(200);
