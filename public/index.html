@@ -568,12 +568,16 @@ const NK='sheet:note:', SK='sheet:settings';
 /* ══ сховище нотаток: IndexedDB (запас місця, асинхронно); localStorage — запасний варіант і місце для налаштувань ══ */
 const IDB_NAME='sheet';
 const idb={ db:null,
-  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB')); let r; try{ r=indexedDB.open(IDB_NAME,1); }catch(e){ return rej(e); }
-    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'}); };
+  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB')); let r; try{ r=indexedDB.open(IDB_NAME,2); }catch(e){ return rej(e); }
+    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
+      if(!d.objectStoreNames.contains('versions')){ const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
+      if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']}); };   // тіла блоків за хешем вмісту
     r.onsuccess=()=>{ idb.db=r.result; idb.db.onversionchange=()=>{ idb.db.close(); idb.db=null; }; idb.db.onclose=()=>{ idb.db=null; }; res(); };
     r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error('blocked')); }); },
   async run(mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
+  async tx(stores,mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
+    t.oncomplete=()=>res(q&&q.result!==undefined? q.result : q); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? 'сховище переповнене' : 'помилка сховища ('+(n||'невідома')+')'; };
@@ -589,7 +593,67 @@ const db={ backend:'local',
   settings(){ return store.get(SK,{})||{}; },
   setSettings(s){ store.set(SK,s); }
 };
-Object.assign(DEBUG,{idb, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo(), undoCount:()=>undoStack().length, navDepth:()=>nav.stack.length, navTop:()=>nav.stack.length? nav.stack[nav.stack.length-1].tag : null});   // гачки для тестів: скрипт не глобальний
+/* ══ версії нотаток (VERSIONS-PLAN, PR 1: лише сховище, без інтерфейсу) ═══════════════════════════════════════
+   versions: {id, note, t (час вмісту), w (час запису), reason: base|auto|import|manual|restore, name?, title, sig, from?, size, sum:{ch,add,del,mv,ttl}, blocks:[запис маніфесту…]}
+   blobs: {note, h, s (тіло: html з форматуванням, інакше text; код — код), r (1 = html), z (байти)}; тіло з тим самим хешем пишеться один раз; колізія → ключ h~1.
+   Коли пишеться версія: R1 перед першою правкою стану, що «відлежався» ≥ V_GAP або коли версій ще немає (інакше кожна пауза в наборі плодила б версії);
+   R2 перед перезаписом імпортом; R3 після запису, якщо від останньої версії минуло ≥ V_GAP; R5 після відновлення (PR 2). Записи однієї нотатки — чергою VQ.
+   Прорідження за віком (до 24 год усе, до 7 днів по одній на годину, до 90 днів по одній на добу, старше — геть; іменовані й найновіша лишаються), ліміт V_MAX_NOTE,
+   загальний бюджет min(V_BUDGET_MAX, 5% квоти) — найстаріші без імені, крім найновішої кожної нотатки; GC тіл після видалень. Помилка запису версії ковтається: статус збереження не чіпає. */
+const V_GAP=5*60000, V_MAX_NOTE=300, V_BODY_MAX=256*1024, V_BUDGET_MAX=20*1024*1024;
+const SAVED=new Map(), VLAST=new Map(), VQ=new Map();   // SAVED: id → {title,blocks,updated} останній скинутий у нотатку стан; VLAST: id → {id,t,w,sig,reason} | null; VQ: id → ланцюжок обіцянок
+DEBUG.vers={clock:0, estimate:null, fail:false, errors:0, size:0, view:null};
+const vnow=()=>Date.now()+(DEBUG.vers.clock||0);
+const hashOf=s=>{ let a=2166136261, b=5381; for(let i=0;i<s.length;i++){ const c=s.charCodeAt(i); a=Math.imul(a^c,16777619); b=(Math.imul(b,33)^c)|0; } return (a>>>0).toString(36)+(b>>>0).toString(36)+s.length.toString(36); };   // FNV-1a + djb2 + довжина
+const bodyOf=d=>d.kind? (d.text||'') : (d.html||d.text||'');
+const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; const b=bodyOf(d); e.h=b.length>V_BODY_MAX? null : hashOf(b); return e; };   // завелике тіло в історію не йде (h:null)
+function manifestOf(title, blocks){ const m=(blocks||[]).filter(d=>d&&d.id).map(entryOf).sort((x,y)=>x.id<y.id?-1:1); return {title:title||'', blocks:m, sig:hashOf((title||'')+'\n'+JSON.stringify(m))}; }
+function sumOf(m, prev){ const s={ch:0,add:0,del:0,mv:0,ttl:0}; if(!prev){ s.add=m.blocks.length; return s; } const P=new Map(prev.blocks.map(e=>[e.id,e])), seen=new Set();
+  for(const e of m.blocks){ const p=P.get(e.id); seen.add(e.id); if(!p){ s.add++; continue; }
+    if(p.h!==e.h || (p.title||'')!==(e.title||'') || (p.kind||'')!==(e.kind||'') || (p.lang||'')!==(e.lang||'')) s.ch++; else if(p.row!==e.row || p.fx!==e.fx || p.parent!==e.parent || p.col!==e.col) s.mv++; }
+  for(const id of P.keys()) if(!seen.has(id)) s.del++; if((prev.title||'')!==(m.title||'')) s.ttl=1; return s; }
+const vid=()=>'v'+vnow().toString(36)+Math.random().toString(36).slice(2,6);
+function vlast(note){ return idb.tx(['versions'],'readonly',t=>{ const q={result:null}; const c=t.objectStore('versions').index('note_t').openCursor(IDBKeyRange.bound([note,-Infinity],[note,Infinity]),'prev'); c.onsuccess=()=>{ const r=c.result; if(r) q.result=r.value; }; return q; }); }
+function vload(note){ return vqueue(note, async()=>{ if(VLAST.has(note)) return; const r=await vlast(note); VLAST.set(note, r? {id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason} : null); }); }   // остання версія нотатки — перш ніж щось писати
+function vqueue(note, fn){ const p=(VQ.get(note)||Promise.resolve()).then(fn).catch(e=>{ DEBUG.vers.errors++; if(/[?&]debug=1/.test(location.search)) console.warn('версії:',e); if(/Quota/i.test((e&&e.name)||'')) vsweep(); }); VQ.set(note,p); return p; }
+function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); let size=0, rec=null;
+  return idb.tx(['versions','blobs'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
+    const finish=()=>{ if(--pending) return; const prev=prevQ&&prevQ.result? prevQ.result : null; const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks));
+      rec={id:vid(), note, t:meta.t, w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name) rec.name=meta.name; if(meta.from) rec.from=meta.from; V.put(rec); };
+    m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); pending++;
+      const tryKey=(h,k)=>{ const g=B.get([note,h]); g.onsuccess=()=>{ const ex=g.result; if(!ex){ const z=new Blob([body]).size; B.put({note,h,s:body,r:(!d.kind&&d.html)?1:0,z}); e.h=h; size+=z; finish(); } else if(ex.s!==body) tryKey(e.h+'~'+(k+1),k+1); else { e.h=h; finish(); } }; };   // колізія хешу — сусідній ключ
+      tryKey(e.h,0); });
+    finish(); return {get result(){ return rec; }}; }).then(r=>{ VLAST.set(note,{id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason}); DEBUG.vers.size+=r.size; return r; }); }
+function vcapture(note, st, reason, name, from, o={}){ if(!st) return Promise.resolve(); vload(note); return vqueue(note, async()=>{ const m=manifestOf(st.title, st.blocks); const L=VLAST.get(note);
+  if(!o.force){ if(reason!=='manual' && L && L.sig===m.sig) return; if(reason==='base'){ if(!m.blocks.length && !m.title) return; if(L && vnow()-(st.at||st.updated||0)<V_GAP) return; } }   // R1: порожній новий стан не версія; стан, що не відлежався, захищає R3
+  const r=await vwrite(note, m, st.blocks, {t:o.force? vnow() : (st.updated||vnow()), w:vnow(), reason, name, from}); await vthin(note); return r; }); }   // R1, R2, R4, R5
+function vafter(n){ vload(n.id); return vqueue(n.id, async()=>{ const m=manifestOf(n.title, n.blocks), L=VLAST.get(n.id); if(L && L.sig===m.sig) return; if(vnow()-(L? L.w : (n.created||0))<V_GAP) return;
+  await vwrite(n.id, m, n.blocks, {t:n.updated, w:vnow(), reason:'auto'}); await vthin(n.id); }); }   // R3: після запису нотатки, не частіше ніж раз на V_GAP
+function vlist(note){ return idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('note_t').getAll(IDBKeyRange.bound([note,-Infinity],[note,Infinity]))); }
+function vbodies(note){ return idb.tx(['blobs'],'readonly',t=>t.objectStore('blobs').getAll(IDBKeyRange.bound([note,''],[note,'\uffff']))); }
+function vkeep(list, tMax){ const sorted=[...list].sort((a,b)=>b.t-a.t); const keep=new Set(), buckets=new Map();   // лестница: <24 год усе; <7 днів — година; <90 днів — доба; старше — геть
+  sorted.forEach((v,i)=>{ if(i===0 || v.name){ keep.add(v.id); return; } const a=tMax-v.t; if(a<864e5){ keep.add(v.id); return; } if(a>=90*864e5) return; const key=a<7*864e5? 'h'+Math.floor(v.t/36e5) : 'd'+Math.floor(v.t/864e5); if(!buckets.has(key)){ buckets.set(key,v.id); keep.add(v.id); } });
+  let n=0; for(const v of sorted){ if(!keep.has(v.id)) continue; if(v.name || n<V_MAX_NOTE) n++; else keep.delete(v.id); } return keep; }   // понад V_MAX_NOTE — найстаріші без імені
+async function vthin(note, list){ list=list||await vlist(note); if(!list.length) return 0; const tMax=Math.max(vnow(), ...list.map(v=>v.t)); const keep=vkeep(list,tMax); const gone=list.filter(v=>!keep.has(v.id)); if(!gone.length) return 0; await vdelete(note, gone, list.filter(v=>keep.has(v.id))); return gone.length; }
+function vdelete(note, gone, rest){ const keepH=new Set(); rest.forEach(v=>v.blocks.forEach(e=>{ if(e.h) keepH.add(e.h); }));   // GC тіл: лишаються ті, на які ще посилається якась версія нотатки
+  return idb.tx(['versions','blobs'],'readwrite',t=>{ const V=t.objectStore('versions'), B=t.objectStore('blobs'); gone.forEach(v=>{ V.delete(v.id); DEBUG.vers.size-=v.size||0; });
+    const c=B.openCursor(IDBKeyRange.bound([note,''],[note,'\uffff'])); c.onsuccess=()=>{ const r=c.result; if(!r) return; if(!keepH.has(r.value.h)) r.delete(); r.continue(); }; })
+    .then(()=>{ const L=VLAST.get(note); if(L && gone.some(v=>v.id===L.id)){ const top=rest.sort((a,b)=>b.t-a.t)[0]; VLAST.set(note, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); } }); }
+function vdrop(note){ VLAST.set(note,null); SAVED.delete(note); return vqueue(note, async()=>{ const list=await vlist(note); await vdelete(note, list, []); }); }   // видалення нотатки — разом із версіями й тілами
+async function vbudget(){ let q=null; try{ q=DEBUG.vers.estimate || (navigator.storage&&navigator.storage.estimate? await navigator.storage.estimate() : null); }catch(_){} return Math.min(V_BUDGET_MAX, q&&q.quota? q.quota*0.05 : V_BUDGET_MAX); }
+let vsweeping=null;
+function vsweep(){ if(vsweeping) return vsweeping; vsweeping=(async()=>{ try{ const all=await idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()); const byNote=new Map(); all.forEach(v=>{ if(!byNote.has(v.note)) byNote.set(v.note,[]); byNote.get(v.note).push(v); });
+    for(const [note,list] of byNote) await vthin(note, list);   // спершу лестниця кожної нотатки
+    const left=await idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()); DEBUG.vers.size=left.reduce((a,v)=>a+(v.size||0),0); const budget=await vbudget(); if(DEBUG.vers.size<=budget) return;
+    const newest=new Map(); left.forEach(v=>{ const c=newest.get(v.note); if(!c || v.t>c.t) newest.set(v.note,v); }); const goneBy=new Map(); let size=DEBUG.vers.size;
+    for(const v of left){ if(size<=budget*0.9) break; if(v.name || newest.get(v.note)===v) continue; if(!goneBy.has(v.note)) goneBy.set(v.note,[]); goneBy.get(v.note).push(v); size-=v.size||0; }   // найстаріші без імені, крім найновішої кожної нотатки
+    for(const [note,gone] of goneBy){ const ids=new Set(gone.map(v=>v.id)); await vdelete(note, gone, left.filter(v=>v.note===note && !ids.has(v.id))); } }
+  catch(e){ DEBUG.vers.errors++; } finally{ vsweeping=null; } })(); return vsweeping; }
+function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb') return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due){ S.versSwept=now(); db.setSettings(S); } }).catch(()=>{}); };
+  if(window.requestIdleCallback) requestIdleCallback(go,{timeout:3000}); else setTimeout(go,3000); }   // на старті: раз на добу прорідження й бюджет, інакше лише підрахунок розміру
+Object.assign(DEBUG.vers,{ force:(reason,name)=>{ if(!cur) return Promise.resolve(); flushSave(); return vcapture(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated},reason||'manual',name,undefined,{force:true}); },
+  list:note=>vlist(note||(cur&&cur.id)), bodies:note=>vbodies(note||(cur&&cur.id)), thin:note=>vthin(note||(cur&&cur.id)), sweep:()=>vsweep(), last:note=>VLAST.get(note||(cur&&cur.id)), queue:note=>VQ.get(note||(cur&&cur.id))||Promise.resolve(), budget:()=>vbudget() });
+Object.assign(DEBUG,{idb, cur:()=>cur&&cur.id, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo(), undoCount:()=>undoStack().length, navDepth:()=>nav.stack.length, navTop:()=>nav.stack.length? nav.stack[nav.stack.length-1].tag : null});   // гачки для тестів: скрипт не глобальний
 
 /* ══ нотатки ══════════════════════════════════════════════════════════════ */
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
@@ -720,7 +784,7 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); }
+function markDirty(){ const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
@@ -729,8 +793,8 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
 function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const p=db.save(n); if(n===cur) saveP=p;
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id); if(r.ok) unsaved.delete(n.id); else unsaved.set(n.id,{reason:r.reason,since:now()});
     if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok?'Збережено':'Не збережено: '+r.reason, r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
-    saveUI(); storageUI(); }); return p; }
-function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }
+    saveUI(); storageUI(); if(r.ok && db.backend==='idb') vafter(n); }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
+function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
 function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n); } saveUI(); }
 function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(!k) return;
   const names=[...unsaved.keys()].map(id=>{ const x=notes.find(y=>y.id===id); return x? '«'+titleOf(x)+'»' : ''; }).filter(Boolean), first=unsaved.get(cur&&unsaved.has(cur.id)? cur.id : [...unsaved.keys()][0]);
@@ -739,11 +803,12 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
+function openNote(n){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
+  if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
-function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id); unsaved.delete(n.id); saveUI();
+function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI();
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
 newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
@@ -762,7 +827,7 @@ function exportAll(){ flushSave(); const data={app:'sheet',format:1,exported:new
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list){ flushSave(); let added=0,updated=0,skipped=0;
   for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
-    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await writeNote(n); added++; } else if(n.updated>ex.updated){ Object.assign(ex,n); await writeNote(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }
+    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await writeNote(n); added++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); await writeNote(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
   notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped}; }
 exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
@@ -1454,7 +1519,7 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
 async function start(){
-  await db.init(); notes=await db.all();
+  await db.init(); notes=await db.all(); vstart();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
   if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) S.theme=store.raw('freeform-editor-v4:theme');
