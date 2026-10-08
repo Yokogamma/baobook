@@ -1,18 +1,19 @@
-/* Чистий аркуш — service worker.
-   Оболонка застосунку: мережа спершу, кеш як запасний варіант (щоб оновлення приходили одразу, а без мережі все відкривалось).
-   Шрифти Google: з кешу, оновлення у фоні. Дані нотаток у localStorage — сюди не потрапляють. */
-const VERSION='v3';
-const SHELL='sheet-shell-'+VERSION, FONTS='sheet-fonts';
+/* Baobook service worker.
+   App shell: network first, cache as the fallback, so updates arrive at once and the app still opens offline.
+   Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
+   Cache names carry the app prefix; activate deletes only this app's old caches, because other apps may share the origin. */
+const VERSION='v4', PREFIX='baobook-';
+const SHELL=PREFIX+'shell-'+VERSION, FONTS=PREFIX+'fonts';
 const PRECACHE=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(SHELL).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting())); });
-self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==SHELL&&k!==FONTS).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
+self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==SHELL&&k!==FONTS).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 
 self.addEventListener('fetch',e=>{
   const req=e.request; if(req.method!=='GET') return;
   const url=new URL(req.url);
   if(url.origin===location.origin){
-    // cache:'no-cache' — завжди звірятися із сервером (ETag), інакше HTTP-кеш GitHub Pages (max-age=600) віддає стару оболонку ще 10 хвилин після публікації
+    // cache:'no-cache': always revalidate with the server (ETag); otherwise a host's HTTP cache can serve the old shell for minutes after a deploy
     e.respondWith(fetch(req,{cache:'no-cache'}).then(r=>{ if(r.ok){ const c=r.clone(); caches.open(SHELL).then(cache=>cache.put(req,c)); } return r; })
       .catch(()=>caches.match(req,{ignoreSearch:true}).then(r=>r||(req.mode==='navigate'?caches.match('./index.html'):undefined))));
     return;

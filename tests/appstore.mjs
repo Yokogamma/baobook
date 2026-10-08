@@ -26,7 +26,8 @@ const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new P
   ok('3 нотатка з localStorage переїхала в IndexedDB і відкрилась, старий ключ прибрано', a2.some(n=>n.id==='mig1') && l2.length===0 && (await pg.locator('#list .item').filter({hasText:'Мігрована'}).count())===1 && (await pg.locator('.blk .txt').filter({hasText:'зі старого сховища'}).count())===1);
   // експорт
   const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#exportBtn').click()]); const path=await dl.path(); const data=JSON.parse(fs.readFileSync(path,'utf8'));
-  ok('4 експорт: файл '+dl.suggestedFilename()+' з '+data.notes.length+' нотатками, формат 1', /^chystyi-arkush-\d{4}-\d{2}-\d{2}\.json$/.test(dl.suggestedFilename()) && data.format===1 && data.notes.length===2 && data.notes.some(n=>n.id==='mig1') && /експорт: щойно/.test(await pg.locator('#storInfo').innerText()));
+  ok('4 export: file '+dl.suggestedFilename()+' with '+data.notes.length+' notes, format 1, app '+data.app, /^baobook-\d{4}-\d{2}-\d{2}\.json$/.test(dl.suggestedFilename()) && data.format===1 && data.app==='baobook' && data.notes.length===2 && data.notes.some(n=>n.id==='mig1') && /експорт: щойно/.test(await pg.locator('#storInfo').innerText()));
+  ok('4b name: tab title and panel brand say Baobook', /Baobook$/.test(await pg.title()) && /Baobook\s*твій чистий аркуш/.test(await pg.locator('.brand').innerText()));
   // імпорт: нова нотатка + новіша версія наявної + старіша версія (пропускається)
   const imp={app:'sheet',format:1,notes:[
     {id:'imp1',title:'Імпортована',blocks:[{id:'i1',fx:0.2,row:4,text:'прийшла з файлу'}],created:1,updated:Date.now()+9000},
