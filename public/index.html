@@ -826,15 +826,26 @@ function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:n
   try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Baobook — експорт'}).then(done).catch(()=>{}); return; } }catch(_){}
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
-async function importNotes(list){ flushSave(); let added=0,updated=0,skipped=0;
+async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
   for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
-    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await writeNote(n); added++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); await writeNote(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
-  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped}; }
+    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
+  // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
+  const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:'запис не підтвердився',since:now()}); }
+  if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
+  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
+async function storedNotes(){ const m=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) m.set(n.id,n); }   // localStorage fallback first, IndexedDB wins
+  if(db.backend==='idb'){ try{ for(const n of await idb.all()) if(validNote(n)) m.set(n.id,n); }catch(_){} } return m; }
+function applySettings(s){ if(!s || typeof s!=='object') return false; let any=false;   // theme, grid and spelling from an export file, by the same rules as at startup
+  if(THEMES.includes(s.theme)){ S.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); any=true; }
+  if(typeof s.grid==='boolean'){ S.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); any=true; }
+  if(typeof s.spell==='boolean'){ S.spell=spell=s.spell; spellUI(); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); any=true; }
+  if(any) db.setSettings(S); return any; }
 exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
 importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
   const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say('Це не файл експорту Baobook'); return; }
-  const r=await importNotes(list); say('Імпортовано: '+r.added+' '+pl(r.added,'нова','нові','нових')+', '+r.updated+' оновлено, '+r.skipped+' без змін'); });
+  const r=await importNotes(list, Array.isArray(data)? null : data.settings);
+  say('Імпортовано: '+r.added+' '+pl(r.added,'нова','нові','нових')+', '+r.updated+' оновлено, '+r.skipped+' без змін'+(r.failed? ', не збережено: '+r.failed : '')+(r.settings? '; налаштування — з файлу' : '')); });
 ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=titleOf(cur)+' · Baobook'; });
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
 ttl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
