@@ -13,7 +13,7 @@ export function debounce(fn, wait = 300) {
     timer = setTimeout(() => fn(...args), wait);
   };
 }`;
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400);
 await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 // 1 вставка коду в щойно створений блок
 await pg.mouse.click(400,300); await pg.waitForTimeout(50); await paste(null, JS); await pg.waitForTimeout(150);

@@ -13,7 +13,7 @@ const chipAt=(re,k)=>txt(re).evaluate((e,k)=>{ const t=e.querySelector('code').f
 const chipBox=re=>txt(re).evaluate(e=>{ const r=e.querySelector('code').getBoundingClientRect(); return {l:r.left,r:r.right,t:r.top,b:r.bottom,y:r.top+r.height/2}; });
 const sel=()=>pg.evaluate(()=>{ const s=getSelection(), el=n=>n&&(n.nodeType===1? n : n.parentElement); return {text:s.toString(), a:!!(s.anchorNode&&el(s.anchorNode).closest('code')), f:!!(s.focusNode&&el(s.focusNode).closest('code'))}; });
 const textAt=(re,word)=>txt(re).evaluate((e,word)=>{ const w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while((n=w.nextNode())) if(n.nodeValue.includes(word)) break; const i=n.nodeValue.indexOf(word), r=document.createRange(); r.setStart(n,i); r.setEnd(n,i+1); const b=r.getBoundingClientRect(); return {x:b.left+b.width/2, y:b.top+b.height/2}; },word);
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await reload();
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await reload();
 
 // 1 курсор усередині чипа видно: чип без position (позиціонований Chrome малює шаром поверх курсора), іконка — у потоці рядка
 await write(200,'Ключ: `sk-live-77x` далі'); await reload();

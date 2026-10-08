@@ -4,7 +4,7 @@ const pg=await br.newPage({viewport:{width:1280,height:900}}); const errs=[]; pg
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const paste=(text)=>pg.evaluate((text)=>{ const dt=new DataTransfer(); dt.setData('text/plain',text); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); },text);
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 const LONG=Array.from({length:30},(_,i)=>`line_${i} = compute(${i}, "довгий рядок, щоб перевірити перенос за замовчуванням і відсутність горизонтальної смуги прокрутки");`).join('\n');
 await pg.mouse.click(400,300); await paste(LONG); await pg.waitForTimeout(200);
 const cb=pg.locator('.blk.is-code').first();

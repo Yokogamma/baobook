@@ -11,7 +11,7 @@ const Z=async()=>{ await pg.keyboard.press('Control+z'); await pg.waitForTimeout
 // Ctrl+літера так, як її надсилає кирилична розкладка: e.key — «я» / «у», фізична клавіша — Z / E
 const cdp=await ctx.newCDPSession(pg);
 const cyr=async(key,code,vk)=>{ for(const type of ['rawKeyDown','keyUp']) await cdp.send('Input.dispatchKeyEvent',{type,key,code,windowsVirtualKeyCode:vk,nativeVirtualKeyCode:vk,modifiers:2}); await pg.waitForTimeout(120); };
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 const A=pg.locator('#sheet > .blk').first().locator('.txt');
 
 // 1 набір поспіль — один крок: Ctrl+Z прибирає всю фразу, Ctrl+Shift+Z повертає

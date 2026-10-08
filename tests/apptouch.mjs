@@ -11,7 +11,7 @@ const hold=async(x,y,ms=650)=>{ await touch('touchStart',[{x,y}]); await pg.wait
 const swipe=async(x,y,dy)=>{ await touch('touchStart',[{x,y}]); for(let i=1;i<=6;i++){ await pg.waitForTimeout(40); await touch('touchMove',[{x,y:y+dy*i/6}]); } await touch('touchEnd',[]); };
 const focusedTxt=()=>pg.evaluate(()=>!!document.activeElement && document.activeElement.classList.contains('txt'));
 const nBlocks=()=>pg.locator('#sheet .blk').count();
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 ok('0 на дотику підказка порожнього аркуша — про утримання, кнопка «+» видима', await pg.locator('.empty .big .touch').isVisible() && !(await pg.locator('.empty .big .mouse').isVisible()) && await pg.locator('#fab').isVisible());
 // 1 одиночний дотик — нічого, лише підказка
 await tap(150,400); await pg.waitForTimeout(250);

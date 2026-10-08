@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
-const PAGE=new URL('../index.html', import.meta.url).href;
+const PAGE=new URL('../public/index.html', import.meta.url).href;
 const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)} : null; };
 const JS='function a(){\n  return 1;\n}\nfunction b(){\n  return 2;\n}';
 /* ── телефон: перенос за шапку після утримання, шапка коду одним рядком, альтернативи в меню блока ── */

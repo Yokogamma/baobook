@@ -8,7 +8,7 @@ const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('shee
 const op=async(loc)=>Number(await loc.evaluate(e=>getComputedStyle(e).opacity));
 const bg=async(loc)=>loc.evaluate(e=>getComputedStyle(e).backgroundColor);
 const model=async(re)=>{ for(const n of await idbAll()){ const b=n.blocks.find(b=>new RegExp(re).test(b.text||'')||new RegExp(re).test(b.title||'')); if(b) return b; } return null; };
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 const CL=await pg.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle'))+2);
 
 /* ── текстовий блок: ручка розміру ─────────────────────────────────────── */

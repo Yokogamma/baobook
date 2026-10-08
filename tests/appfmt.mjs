@@ -6,7 +6,7 @@ const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'s
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const stored=async()=>(await idbAll()).flatMap(n=>n.blocks).find(b=>/Один/.test(b.text||''));
 const html=()=>pg.locator('.blk .txt').filter({hasText:'Один'}).first().evaluate(e=>e.innerHTML);
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 await pg.mouse.click(500,300); await pg.keyboard.type('Один два три чотири'); await pg.waitForTimeout(100);
 // виділяємо слово клавіатурою: Home, → n разів, Shift+→ m разів
 const select=async(skip,len)=>{ await pg.keyboard.press('Home'); for(let i=0;i<skip;i++) await pg.keyboard.press('ArrowRight'); for(let i=0;i<len;i++) await pg.keyboard.press('Shift+ArrowRight'); };
