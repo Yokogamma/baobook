@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:1280,height:900},permissions:['clipboard-read','clipboard-write']}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900},permissions:['clipboard-read','clipboard-write']}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const ZW=String.fromCharCode(0x200b), nl=s=>String(s||'').replace(/\n/g,'⏎');
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
@@ -13,7 +15,7 @@ const chipAt=(re,k)=>txt(re).evaluate((e,k)=>{ const t=e.querySelector('code').f
 const chipBox=re=>txt(re).evaluate(e=>{ const r=e.querySelector('code').getBoundingClientRect(); return {l:r.left,r:r.right,t:r.top,b:r.bottom,y:r.top+r.height/2}; });
 const sel=()=>pg.evaluate(()=>{ const s=getSelection(), el=n=>n&&(n.nodeType===1? n : n.parentElement); return {text:s.toString(), a:!!(s.anchorNode&&el(s.anchorNode).closest('code')), f:!!(s.focusNode&&el(s.focusNode).closest('code'))}; });
 const textAt=(re,word)=>txt(re).evaluate((e,word)=>{ const w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while((n=w.nextNode())) if(n.nodeValue.includes(word)) break; const i=n.nodeValue.indexOf(word), r=document.createRange(); r.setStart(n,i); r.setEnd(n,i+1); const b=r.getBoundingClientRect(); return {x:b.left+b.width/2, y:b.top+b.height/2}; },word);
-await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await reload();
+await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await reload();
 
 // 1 курсор усередині чипа видно: чип без position (позиціонований Chrome малює шаром поверх курсора), іконка — у потоці рядка
 await write(200,'Ключ: `sk-live-77x` далі'); await reload();

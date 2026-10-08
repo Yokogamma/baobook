@@ -1,14 +1,14 @@
 // Service worker over a real origin: it touches only its own caches, the app opens offline, a new deploy arrives on reload.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
-import { serve } from './lib/server.mjs';
+import { serve, CTX } from './lib/server.mjs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const keys=pg=>pg.evaluate(()=>caches.keys());
 const controlled=pg=>pg.evaluate(()=>!!navigator.serviceWorker.controller);
 
 const site=await serve();
-const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 
 // first visit without a service worker: another app on the same origin has a cache, and so does an older Baobook
 site.override.set('/sw.js',null);

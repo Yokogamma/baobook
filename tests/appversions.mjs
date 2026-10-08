@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:1280,height:900}, timezoneId:'Europe/Kyiv'}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, timezoneId:'Europe/Kyiv'}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const idbAll=(store)=>pg.evaluate(store=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction(store,'readonly').objectStore(store).getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }), store);
@@ -12,7 +14,7 @@ const settle=async()=>{ await pg.waitForTimeout(700); await pg.evaluate(()=>shee
 const clock=ms=>pg.evaluate(ms=>{ sheetDebug.vers.clock=ms; }, ms);
 const force=(reason,name)=>pg.evaluate(([r,n])=>sheetDebug.vers.force(r,n), [reason,name||null]);
 const paste=(text)=>pg.evaluate(t=>{ const dt=new DataTransfer(); dt.setData('text/plain',t); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); }, text);
-await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 // 0 база версії 2, нова нотатка з блоком: версій ще немає (порожній стан не версія, інтервал не минув)
 await pg.mouse.click(500,300); await pg.keyboard.type('пароль: Qw3rty!'); await pg.keyboard.press('Escape'); await settle();
 const id=await curId(); const dbv=await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const names=[...d.objectStoreNames]; const v=d.version; d.close(); res({v,names}); }; }));

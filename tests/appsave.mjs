@@ -1,13 +1,15 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 import fs from 'node:fs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+const ctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true,acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
 // Web Share stub: Chrome on Windows reports canShare for files (Chrome on Linux has no Web Share) and denies share under automation, so export on touch would not download there. By default sharing is off everywhere; step 5b switches the mode
 await ctx.addInitScript(()=>{ window.__share={mode:'off', calls:0}; navigator.canShare=()=>window.__share.mode!=='off'; navigator.share=()=>{ window.__share.calls++; const m=window.__share.mode; return m==='ok'? Promise.resolve() : Promise.reject(new DOMException('stub', m)); }; });
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
-const PAGE=new URL('../public/index.html', import.meta.url).href;
+const PAGE=SITE;
 const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)} : null; };
 const touch=async(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
 const tap=async(x,y)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(60); await touch('touchEnd',[]); };

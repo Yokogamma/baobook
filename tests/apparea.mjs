@@ -1,11 +1,13 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
-await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 // 1 протяжка мишею → область
 await pg.mouse.move(500,300); await pg.mouse.down(); await pg.mouse.move(980,460,{steps:8}); 
 ok('1a під час протяжки видно рамку', (await pg.locator('.marq').count())===1);
@@ -78,7 +80,7 @@ const raceEsc=(sel,x,y)=>pg.evaluate(async([sel,x,y])=>{ const host=[...document
   await pg.locator('#areaBtn').click(); await pg.keyboard.press('Escape'); await pg.waitForTimeout(100); const ab=await box(pg.locator('.blk.is-area .abody').last()); const inArea=await raceEsc('.blk.is-area .abody', ab.x+60, ab.y+40);
   ok('13b Esc right after a click-made block keeps the focus out of it even before the deferred refocus: sheet «'+onSheet+'», area «'+inArea+'»', onSheet==='ok' && inArea==='ok'); }
 // 14 тач: тап створює блок одразу
-const tctx=await br.newContext({viewport:{width:390,height:844},hasTouch:true}); const tp=await tctx.newPage(); await tp.goto(new URL('../public/index.html', import.meta.url).href); await tp.waitForTimeout(300);
+const tctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true}); const tp=await tctx.newPage(); await tp.goto(SITE); await tp.waitForTimeout(300);
 const tcdp=await tctx.newCDPSession(tp); await tp.touchscreen.tap(150,400); await tp.waitForTimeout(200); const tapMade=await tp.locator('#sheet .blk').count();
 await tcdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:150,y:400}]}); await tp.waitForTimeout(650); await tcdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]}); await tp.waitForTimeout(150);
 ok('14 тач: тап нічого не створює ('+tapMade+'), утримання створює текстовий блок у фокусі', tapMade===0 && (await tp.locator('#sheet .blk').count())===1 && await tp.evaluate(()=>document.activeElement.classList.contains('txt')));

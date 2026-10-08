@@ -1,11 +1,13 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
-const PAGE=new URL('../public/index.html', import.meta.url).href;
+const PAGE=SITE;
 const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)} : null; };
 /* ── телефон: системний Back ─────────────────────────────────────────── */
-{ const ctx=await br.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+{ const ctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
   const touch=async(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
   const tap=async(x,y)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(60); await touch('touchEnd',[]); };
@@ -53,7 +55,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
     ok('6 доступність: кнопок без імені '+noName.length+(noName.length? ' ('+noName.join(', ')+')' : '')+'; панель положення ('+inSel+'): → '+f1+', End '+f2+', Home '+f3+', ← '+f4+'; Esc вийшов ('+left+') '+JSON.stringify(s), noName.length===0 && inSel && f1==='up' && f2==='done' && f3==='left' && f4==='done' && left && s.d===0 && s.h===0); }
   console.log(errs.length? errs.join('\n') : '✓ без помилок (телефон)'); if(errs.length) fails++; await ctx.close(); }
 /* ── компʼютер: панель не накладення, меню — так ───────────────────── */
-{ const ctx=await br.newContext({viewport:{width:1280,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const st=()=>pg.evaluate(()=>({d:sheetDebug.navDepth(), top:sheetDebug.navTop(), h:(history.state&&history.state.d)||0}));
   await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   await pg.locator('#sideBtn').click(); await pg.waitForTimeout(200); const s1=await st(); await pg.locator('#sideBtn').click(); await pg.waitForTimeout(200);
