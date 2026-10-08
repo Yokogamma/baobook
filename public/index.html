@@ -633,7 +633,8 @@ function vafter(n){ vload(n.id); return vqueue(n.id, async()=>{ const m=manifest
 function vlist(note){ return idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('note_t').getAll(IDBKeyRange.bound([note,-Infinity],[note,Infinity]))); }
 function vbodies(note){ return idb.tx(['blobs'],'readonly',t=>t.objectStore('blobs').getAll(IDBKeyRange.bound([note,''],[note,'\uffff']))); }
 function vkeep(list, tMax){ const sorted=[...list].sort((a,b)=>b.t-a.t); const keep=new Set(), buckets=new Map();   // лестница: <24 год усе; <7 днів — година; <90 днів — доба; старше — геть
-  sorted.forEach((v,i)=>{ if(i===0 || v.name){ keep.add(v.id); return; } const a=tMax-v.t; if(a<864e5){ keep.add(v.id); return; } if(a>=90*864e5) return; const key=a<7*864e5? 'h'+Math.floor(v.t/36e5) : 'd'+Math.floor(v.t/864e5); if(!buckets.has(key)){ buckets.set(key,v.id); keep.add(v.id); } });
+  sorted.forEach((v,i)=>{ if(i===0 || v.name){ keep.add(v.id); return; } const a=tMax-v.t; if(a<864e5){ keep.add(v.id); return; } if(a>=90*864e5) return; const loc=v.t-new Date(v.t).getTimezoneOffset()*6e4;   // buckets are local hours and days, as the history shows them, not UTC ones
+    const key=a<7*864e5? 'h'+Math.floor(loc/36e5) : 'd'+Math.floor(loc/864e5); if(!buckets.has(key)){ buckets.set(key,v.id); keep.add(v.id); } });
   let n=0; for(const v of sorted){ if(!keep.has(v.id)) continue; if(v.name || n<V_MAX_NOTE) n++; else keep.delete(v.id); } return keep; }   // понад V_MAX_NOTE — найстаріші без імені
 async function vthin(note, list){ list=list||await vlist(note); if(!list.length) return 0; const tMax=Math.max(vnow(), ...list.map(v=>v.t)); const keep=vkeep(list,tMax); const gone=list.filter(v=>!keep.has(v.id)); if(!gone.length) return 0; await vdelete(note, gone, list.filter(v=>keep.has(v.id))); return gone.length; }
 function vdelete(note, gone, rest){ const keepH=new Set(); rest.forEach(v=>v.blocks.forEach(e=>{ if(e.h) keepH.add(e.h); }));   // GC тіл: лишаються ті, на які ще посилається якась версія нотатки
@@ -823,8 +824,9 @@ const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
 function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
   const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ S.lastExport=now(); db.setSettings(S); storageUI(); };
-  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Baobook — експорт'}).then(done).catch(()=>{}); return; } }catch(_){}
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); }
+  const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
+  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Baobook — експорт'}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
+  download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
   for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
@@ -958,7 +960,9 @@ function resolve(fixed){
 }
 /* аркуш не нижчий за вікно без клавіатури: fullH — висота вікна, виміряна, коли курсор не в полі (з клавіатурою innerHeight може бути меншим, і аркуш не має ужиматися до неї) */
 let fullH=0;
-function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(fullH, window.innerHeight, bottom+5*G())+'px'; field(); }
+/* room below the lowest block: 5 rows, and on touch no less than the bottom panels + 8px (bar, «⋯» row, «Скасувати» toast), or revealCaret cannot lift a caret in the last line above them; set by layoutBottom, it only grows while the caret is in a field, so the page does not jump when the toast hides */
+let sheetRoom=0;
+function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(fullH, window.innerHeight, bottom+Math.max(5*G(), sheetRoom))+'px'; field(); }
 function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
@@ -1269,7 +1273,8 @@ function createAt(e, focus=true){
   const p=el('div','ping'+(ok?'':' bad')); p.style.left=(xOf(c.col,null)-1)+'px'; p.style.top=yOf(c.row,null)+'px'; setTimeout(()=>p.remove(),500);
   if(!ok) return null;
   const b=make({col:c.col,row:c.row}, false); markDirty();
-  if(focus){ b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0); }
+  if(focus){ b.txt.focus(); let keyed=false; const k=()=>{ keyed=true; }; b.txt.addEventListener('keydown',k,{once:true});
+    setTimeout(()=>{ b.txt.removeEventListener('keydown',k); if(!keyed && document.activeElement!==b.txt) b.txt.focus(); },0); }   // the timer can run after queued input (typing and Esc): once a key went to the block, its focus was not stolen by the click, so do not take it back
   if(!toastShown){ toastShown=true; toast.innerHTML=HINT_HTML; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),4500); } return b; }
 // «+» на дотику: новий блок у наступному вільному ряду, у фокусі (клік — жест, тож клавіатура відкриється)
 function createNext(){ const row=Math.max(cMinRow(null), ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=make({col:cMinCol(null),row},false); markDirty(); b.el.scrollIntoView({block:'center'}); b.txt.focus(); return b; }
@@ -1354,6 +1359,7 @@ function layoutBottom(){ const vv=window.visualViewport, root=document.documentE
   if(kb===0) saIdle=sa; else if(sa===0 && saIdle>0) kb+=saIdle;   // Chrome Android: з клавіатурою env(safe-area-inset-bottom) стає 0, а visualViewport не вираховує смугу жестів під клавіатурою — панель ішла під неї на ці 16px
   const bh=(TOUCH && !bubble.hidden)? bubble.offsetHeight : 0, bar=bh+((TOUCH && !bubbleMore.hidden)? bubbleMore.offsetHeight : 0)+((TOUCH && !blockbar.hidden)? blockbar.offsetHeight : 0);
   root.setProperty('--kb',kb+'px'); root.setProperty('--bubbleH',bh+'px'); root.setProperty('--bar',bar+'px'); root.setProperty('--sa', bar? '0px' : 'env(safe-area-inset-bottom,0px)'); root.setProperty('--sab', kb? '0px' : 'env(safe-area-inset-bottom,0px)');   // під клавіатурою safe area не потрібна
+  const room=(TOUCH && !bubble.hidden)? Math.max(sheetRoom, bottomStack()+8) : 0; if(room!==sheetRoom){ sheetRoom=room; growSheet(); }   // same margin as revealCaret
   if(!dbgGeo.hidden){ const txt='екран '+screen.height+' · вікно '+window.innerHeight+'/'+document.documentElement.clientHeight+' · видиме '+(vv? Math.round(vv.height) : '—')+' · зсув '+(vv? Math.round(vv.offsetTop) : '—')+' · клавіатура '+kb+' · safe '+sa+'/'+saIdle+' · панель '+bar+(bubble.hidden? '' : ' (панель '+bubble.getBoundingClientRect().bottom.toFixed(0)+' низ)')+' · прокрутка '+Math.round(window.scrollY); dbgGeo.textContent=txt; dbgTop.textContent=txt; } }
 /* панель форматування при виділенні тексту в текстовому блоці */
 let bubbleBlk=null;
