@@ -1,4 +1,5 @@
-// Localization: UI strings come only from public/locales/*.json, every key the code asks for exists, plurals and parameters work.
+// Localization: UI strings come only from public/locales/*.json, every key exists in every language, plurals and parameters
+// work, English is the fallback, and the switcher in the panel changes the language.
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
 import fs from 'node:fs';
@@ -41,12 +42,20 @@ for(const m of script.matchAll(/\bloc(?:A)?\(/g)){ let d=0, j=m.index+m[0].lengt
 for(const m of markup.matchAll(/data-i18n(?:-html)?="([^"]+)"/g)) used.add(m[1]);
 for(const m of markup.matchAll(/data-i18n-attr="([^"]+)"/g)) for(const pair of m[1].split(';')) used.add(pair.split(':')[1]);
 used.add('code.lang.autoMark');   // set as a CSS variable by localize()
+for(const l of LOCALES) used.add('lang.'+l);   // the language switcher names every language
 for(const l of LOCALES){
   const keys=new Set(Object.keys(dict[l]).filter(k=>!k.startsWith('_')));
   const missing=[...used].filter(k=>!keys.has(k)), unused=[...keys].filter(k=>!used.has(k));
   ok('2 '+l+'.json has all '+used.size+' keys the app uses'+(missing.length? ' — missing: '+missing.join(', ') : ''), !missing.length);
   ok('2b '+l+'.json has no unused keys'+(unused.length? ' — unused: '+unused.join(', ') : ''), !unused.length);
 }
+// the same parameters in every language, and every plural form a language needs
+const params=v=>[...new Set((typeof v==='object'? Object.values(v) : [v]).join(' ').match(/\{\w+\}/g)||[])].sort().join(',');
+const badParams=[], badPlurals=[];
+for(const k of Object.keys(dict.uk)) for(const l of LOCALES){ if(params(dict[l][k])!==params(dict.uk[k])) badParams.push(l+':'+k);
+  const v=dict[l][k]; if(typeof v==='object'){ const need=new Intl.PluralRules(l).resolvedOptions().pluralCategories; if(need.some(c=>!(c in v))) badPlurals.push(l+':'+k); } }
+ok('2c every language uses the same {parameters}'+(badParams.length? ' — differ: '+badParams.join(', ') : ''), !badParams.length);
+ok('2d every plural value has all the forms its language needs'+(badPlurals.length? ' — incomplete: '+badPlurals.join(', ') : ''), !badPlurals.length);
 
 // 3. in the browser: Ukrainian UI exactly as before, plurals by Intl.PluralRules, parameters, fallback
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const warns=[], errs=[];
@@ -62,9 +71,25 @@ for(const l of LOCALES){
   ok('3c parameters and a missing key ('+p.join(' | ')+')', p[0]==='Блок «a» перенесено в область «b»' && p[1]==='Імпортовано: 3 нові, 1 оновлено, 0 без змін' && p[2]==='no.such.key');
   ok('3d only the deliberate missing key warned ('+warns.length+')', warns.length===1 && /no\.such\.key/.test(warns[0]) && !errs.length);
   await ctx.close(); }
+// UI text of the chrome: text nodes and the attributes people read; the switcher names languages in their own language
+const chromeCyr=pg=>pg.evaluate(()=>{ const bad=[], CY=/[\u0400-\u04FF]/; /* the Cyrillic block */ const skip=e=>e.closest('#langSel, .blk, script, style');
+  for(const e of document.querySelectorAll('body *')){ if(skip(e)) continue; for(const n of e.childNodes) if(n.nodeType===3 && CY.test(n.data)) bad.push(n.data.trim());
+    for(const a of ['title','aria-label','placeholder','data-ph']) if(CY.test(e.getAttribute(a)||'')) bad.push(a+'='+e.getAttribute(a)); }
+  const auto=getComputedStyle(document.documentElement).getPropertyValue('--t-lang-auto'); if(CY.test(auto)) bad.push('--t-lang-auto'); return bad; });
 { const ctx=await br.newContext({...CTX, locale:'de-DE'}); const pg=await ctx.newPage(); await pg.goto(SITE); await pg.waitForTimeout(500);
-  const lang=await pg.evaluate(()=>document.documentElement.lang);
-  ok('4 a browser in an unsupported language gets the fallback ('+lang+')', lang===(await pg.evaluate(()=>I18N.fallback)) && await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')));
+  const lang=await pg.evaluate(()=>document.documentElement.lang), bad=await chromeCyr(pg);
+  ok('4 a browser in an unsupported language gets English ('+lang+'), with no Cyrillic left in the UI'+(bad.length? ' — '+bad.slice(0,4).join(' | ') : ''), lang==='en' && !bad.length && await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')));
+  await ctx.close(); }
+{ const ctx=await br.newContext({...CTX, locale:'en-US'}); const pg=await ctx.newPage(); await pg.goto(SITE); await pg.waitForTimeout(500);
+  const st=await pg.evaluate(()=>({lang:document.documentElement.lang, newBtn:document.getElementById('newBtn').textContent.trim(), ph:document.getElementById('q').placeholder, pl:[1,2,21].map(n=>loc('blocks.count',{n})).join(', '), sel:document.getElementById('langSel').value, opts:[...document.querySelectorAll('#langSel option')].map(o=>o.textContent).join(', ')}));
+  ok('6 en-US browser: English UI ('+st.newBtn+' · '+st.ph+' · '+st.pl+'), switcher shows '+st.opts, st.lang==='en' && st.newBtn==='New' && st.ph==='Search titles and text' && st.pl==='1 block, 2 blocks, 21 blocks' && st.sel==='en' && st.opts==='Українська, English');
+  await Promise.all([pg.waitForEvent('load'), pg.selectOption('#langSel','uk')]); await pg.waitForTimeout(500);
+  const uk=await pg.evaluate(()=>({lang:document.documentElement.lang, newBtn:document.getElementById('newBtn').textContent.trim(), saved:JSON.parse(localStorage.getItem('sheet:settings')||'{}').lang}));
+  ok('7 the switcher saves the choice and reloads in Ukrainian ('+uk.newBtn+')', uk.lang==='uk' && uk.newBtn==='Нова' && uk.saved==='uk');
+  await pg.reload(); await pg.waitForTimeout(500);
+  ok('7b the choice beats the browser language after a reload', await pg.evaluate(()=>document.documentElement.lang)==='uk');
+  await Promise.all([pg.waitForEvent('load'), pg.selectOption('#langSel','en')]); await pg.waitForTimeout(500);
+  ok('7c and back to English', await pg.evaluate(()=>document.documentElement.lang)==='en' && (await chromeCyr(pg)).length===0);
   await ctx.close(); }
 { const site2=await serve(); site2.override.set('/locales/uk.json', null);
   const ctx=await br.newContext(CTX); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push(e.message));

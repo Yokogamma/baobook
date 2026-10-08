@@ -1,8 +1,8 @@
 {
   "name": "Baobook",
   "short_name": "Baobook",
-  "description": "Baobook — твій чистий аркуш: пишіть там, де клацнули. Працює без мережі.",
-  "lang": "uk",
+  "description": "Baobook — notes on a blank sheet: click anywhere and type right there. Works offline.",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
