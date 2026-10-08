@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+const ctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
@@ -14,7 +16,7 @@ const focusedText=()=>pg.evaluate(()=>document.activeElement && document.activeE
 const vis=loc=>loc.isVisible();
 const bubbleBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubble button')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.dataset.cmd||b.dataset.act));
 const moreBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubbleMore button')].map(b=>b.dataset.cmd||b.dataset.act));
-await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 ok('0 viewport без interactive-widget: клавіатура не стискає сторінку, нижні панелі — від visualViewport', !/interactive-widget/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')) && /viewport-fit=cover/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')));
 // 1 курсор у блоці: «+» схований, панель видно з самим курсором — «Готово», «Блок», без «Копіювати»; кнопки 44 px; панель при низу вікна
 await hold(150,400); await pg.waitForTimeout(250); await pg.keyboard.type('перший'); await pg.waitForTimeout(200);

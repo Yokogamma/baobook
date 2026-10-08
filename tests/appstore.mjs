@@ -1,15 +1,17 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 import fs from 'node:fs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
-const PAGE=new URL('../public/index.html', import.meta.url).href;
+const PAGE=SITE;
 const idbNotes=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const lsNotes=pg=>pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
 const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
 
 /* ── звичайний режим: IndexedDB ─────────────────────────────────────────── */
-{ const ctx=await br.newContext({viewport:{width:1280,height:900},acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900},acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await pg.addInitScript(()=>{ window.__persist=0; const st=navigator.storage; if(st&&st.persist){ const o=st.persist.bind(st); st.persist=()=>{ window.__persist++; return o(); }; } });
   await pg.goto(PAGE); await wipe(pg);
   await pg.mouse.click(500,300); await pg.keyboard.type('перша нотатка в IndexedDB'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500);
@@ -56,7 +58,7 @@ const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new P
   console.log(errs.length? errs.join('\n') : '✓ без помилок (IndexedDB)'); if(errs.length) fails++; await ctx.close(); }
 
 /* ── запасний режим: без IndexedDB ──────────────────────────────────────── */
-{ const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await pg.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); });
   await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>localStorage.clear()); await pg.reload(); await pg.waitForTimeout(400);
   await pg.mouse.click(500,300); await pg.keyboard.type('без IndexedDB'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500);

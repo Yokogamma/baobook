@@ -1,12 +1,14 @@
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({viewport:{width:1280,height:900}, permissions:['clipboard-read','clipboard-write']}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, permissions:['clipboard-read','clipboard-write']}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const paste=(text)=>pg.evaluate((text)=>{ const dt=new DataTransfer(); dt.setData('text/plain',text); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); },text);
 const PHP=`class CompleteLoginController extends Controller\n{\n    public function __invoke(string $token): RedirectResponse\n    {\n        $userId = Cache::pull("oauth_login:{$token}");\n        if (! $userId) {\n            return redirect()->route('login')->withErrors(['email' => __('Посилання недійсне.')]);\n        }\n        Auth::login(User::findOrFail($userId));\n        return redirect()->intended('/');\n    }\n}`;
 const SQL=`SELECT n.id, n.title, count(b.id) AS blocks\nFROM notes n LEFT JOIN blocks b ON b.note_id = n.id\nWHERE n.updated_at > now() - interval '7 days'\nGROUP BY n.id ORDER BY blocks DESC LIMIT 20;`;
-await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 await pg.mouse.click(420,300); await paste(PHP); await pg.waitForTimeout(150); await pg.mouse.move(1200,850); await pg.waitForTimeout(150);
 const cb=pg.locator('.blk.is-code').first();
 ok('1 порожня назва: підказка невидима без наведення', await cb.locator('.ctitle').evaluate(e=>e.textContent==='' && getComputedStyle(e,'::before').opacity==='0'));

@@ -1,6 +1,6 @@
 # Baobook tests
 
-End-to-end Playwright scenarios (Chromium). Each file is a standalone scenario. It prints `✓`/`✗` lines and exits with code 1 if anything fails. Most scenarios open the page from the file system (`../public/index.html`), so no server is needed. `appsw.mjs` and `appmigrate.mjs` need a real origin: they start the tiny static server in `lib/server.mjs` (Node only, no dependencies) on `127.0.0.1` with a random port. Each server is its own origin with its own storage.
+End-to-end Playwright scenarios (Chromium). Each file is a standalone scenario. It prints `✓`/`✗` lines and exits with code 1 if anything fails. Every scenario serves `public/` over HTTP with the tiny static server in `lib/server.mjs` (Node only, no dependencies) on `127.0.0.1` with a random port. The app needs a real origin: its language files load with `fetch`, which does not work from `file://`, and the service worker only runs over http(s). Each server is its own origin with its own storage. Every browser context gets `CTX` from the same module: the Ukrainian locale (the checks read Ukrainian UI strings) and clipboard permissions.
 
 ```sh
 cd /path/to/baobook

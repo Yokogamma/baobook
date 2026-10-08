@@ -1,5 +1,7 @@
 // Import used for moving notes between sites: counts only real writes, re-reads storage, applies settings into an empty app only.
 import { chromium } from 'playwright';
+import { serve, CTX } from './lib/server.mjs';
+const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -7,7 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=path.join(os.tmpdir(),'sheet-tests'); fs.mkdirSync(OUT,{recursive:true});
-const PAGE=new URL('../public/index.html', import.meta.url).href;
+const PAGE=SITE;
 const idbNotes=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
 const importFile=async (pg,name,data)=>{ const f=path.join(OUT,name); fs.writeFileSync(f,JSON.stringify(data)); await pg.locator('#importFile').setInputFiles(f); await pg.waitForTimeout(700); return (await pg.locator('#toast').innerText()).trim(); };
@@ -27,7 +29,7 @@ const FIX=[
 const MOVE={app:'sheet',format:1,exported:'2026-10-08T10:00:00.000Z',settings:{theme:'dark',grid:false,spell:true},notes:FIX};
 
 let exported=null;
-{ const ctx=await br.newContext({viewport:{width:1280,height:900},acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900},acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await pg.addInitScript(ghostPut);
   await pg.goto(PAGE); await wipe(pg);
 
@@ -62,7 +64,7 @@ let exported=null;
   console.log(errs.length? errs.join('\n') : '✓ no page errors (first site)'); if(errs.length) fails++; await ctx.close(); }
 
 // another site: a fresh context has its own storage, as a new origin would
-{ const ctx=await br.newContext({viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await pg.goto(PAGE); await wipe(pg);
   const t=await importFile(pg,'export.json',exported);
   await pg.reload(); await pg.waitForTimeout(600);

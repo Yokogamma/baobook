@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { serve } from './lib/server.mjs';
+import { serve, CTX } from './lib/server.mjs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const idbNotes=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
@@ -11,7 +11,7 @@ const toast=async pg=>(await pg.locator('#toast').innerText()).trim();
 
 // two servers on two ports: two origins, like yokogamma.github.io and baobook.matamata.dev
 const oldSite=await serve(), newSite=await serve();
-const ctx=await br.newContext({viewport:{width:1280,height:900},acceptDownloads:true}); const errs=[];
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900},acceptDownloads:true}); const errs=[];
 
 const a=await ctx.newPage(); a.on('pageerror',e=>errs.push('PAGEERROR old '+e.message));
 await a.goto(oldSite.url); await a.waitForTimeout(500);

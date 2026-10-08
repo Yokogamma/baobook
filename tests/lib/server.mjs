@@ -9,6 +9,10 @@ const ROOT=fileURLToPath(new URL('../../public/', import.meta.url));
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8',
   '.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png','.css':'text/css; charset=utf-8'};
 
+// Browser context options for every scenario: the checks read Ukrainian UI strings, so the browser language is
+// pinned to Ukrainian; scenarios that copy and paste read the clipboard, which an http origin must be granted.
+export const CTX={locale:'uk-UA', permissions:['clipboard-read','clipboard-write']};
+
 // override: path → string (serve this body instead of the file) or null (answer 404); hits: path → request count
 export async function serve({host='127.0.0.1', port=0}={}){
   const override=new Map(), hits=new Map();
