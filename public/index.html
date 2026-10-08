@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Чистий аркуш</title>
+<title>Baobook</title>
 <meta name="description" content="Нотатки на чистому аркуші: клацніть у будь-якому місці й пишіть саме там. Працює без мережі, зберігає все на цьому пристрої.">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Аркуш">
+<meta name="apple-mobile-web-app-title" content="Baobook">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -89,6 +89,7 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .side-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px 6px 14px}
 .brand{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink)}
 .brand .i{font-size:16px;color:var(--ink-2)}
+.brand small{display:block;font-size:11px;font-weight:400;line-height:1.2;color:var(--ink-2)}
 .new{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer;white-space:nowrap}
 .new:hover{background:var(--hover);color:var(--ink)}
 .search{display:flex;align-items:center;gap:6px;margin:4px 10px 6px;padding:0 8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:var(--hover);color:var(--ink-3)}
@@ -402,7 +403,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 <div class="app" id="app">
   <aside class="side" id="side" aria-label="Нотатки">
     <div class="side-h">
-      <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg>Чистий аркуш</b>
+      <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<small>твій чистий аркуш</small></span></b>
       <button class="new" id="newBtn" title="Нова нотатка (Ctrl+Alt+N)"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Нова</button>
     </div>
     <label class="search" id="searchBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -807,7 +808,7 @@ window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
 function openNote(n){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
-  ttl.textContent=n.title; document.title=titleOf(n)+' · Чистий аркуш';
+  ttl.textContent=n.title; document.title=titleOf(n)+' · Baobook';
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function delNote(n){ if(!confirm('Видалити нотатку «'+titleOf(n)+'»?')) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI();
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
@@ -821,22 +822,33 @@ let persistAsked=false;
 function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
 const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
-function exportAll(){ flushSave(); const data={app:'sheet',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
-  const name='chystyi-arkush-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ S.lastExport=now(); db.setSettings(S); storageUI(); };
+function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
+  const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ S.lastExport=now(); db.setSettings(S); storageUI(); };
   const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
-  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Чистий аркуш — експорт'}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
+  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:'Baobook — експорт'}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
-async function importNotes(list){ flushSave(); let added=0,updated=0,skipped=0;
+async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
   for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
-    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); await writeNote(n); added++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); await writeNote(ex); updated++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
-  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped}; }
+    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
+  // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
+  const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:'запис не підтвердився',since:now()}); }
+  if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
+  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
+async function storedNotes(){ const m=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) m.set(n.id,n); }   // localStorage fallback first, IndexedDB wins
+  if(db.backend==='idb'){ try{ for(const n of await idb.all()) if(validNote(n)) m.set(n.id,n); }catch(_){} } return m; }
+function applySettings(s){ if(!s || typeof s!=='object') return false; let any=false;   // theme, grid and spelling from an export file, by the same rules as at startup
+  if(THEMES.includes(s.theme)){ S.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); any=true; }
+  if(typeof s.grid==='boolean'){ S.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); any=true; }
+  if(typeof s.spell==='boolean'){ S.spell=spell=s.spell; spellUI(); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); any=true; }
+  if(any) db.setSettings(S); return any; }
 exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
 importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
-  const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say('Це не файл експорту «Чистого аркуша»'); return; }
-  const r=await importNotes(list); say('Імпортовано: '+r.added+' '+pl(r.added,'нова','нові','нових')+', '+r.updated+' оновлено, '+r.skipped+' без змін'); });
-ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=titleOf(cur)+' · Чистий аркуш'; });
+  const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say('Це не файл експорту Baobook'); return; }
+  const r=await importNotes(list, Array.isArray(data)? null : data.settings);
+  say('Імпортовано: '+r.added+' '+pl(r.added,'нова','нові','нових')+', '+r.updated+' оновлено, '+r.skipped+' без змін'+(r.failed? ', не збережено: '+r.failed : '')+(r.settings? '; налаштування — з файлу' : '')); });
+ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=titleOf(cur)+' · Baobook'; });
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
 ttl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
 ttl.addEventListener('blur',()=>{ if(cur&&ttl.textContent!==cur.title) ttl.textContent=cur.title; flushSave(); });
