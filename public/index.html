@@ -1273,7 +1273,8 @@ function createAt(e, focus=true){
   const p=el('div','ping'+(ok?'':' bad')); p.style.left=(xOf(c.col,null)-1)+'px'; p.style.top=yOf(c.row,null)+'px'; setTimeout(()=>p.remove(),500);
   if(!ok) return null;
   const b=make({col:c.col,row:c.row}, false); markDirty();
-  if(focus){ b.txt.focus(); setTimeout(()=>{ if(document.activeElement!==b.txt) b.txt.focus(); },0); }
+  if(focus){ b.txt.focus(); let keyed=false; const k=()=>{ keyed=true; }; b.txt.addEventListener('keydown',k,{once:true});
+    setTimeout(()=>{ b.txt.removeEventListener('keydown',k); if(!keyed && document.activeElement!==b.txt) b.txt.focus(); },0); }   // the timer can run after queued input (typing and Esc): once a key went to the block, its focus was not stolen by the click, so do not take it back
   if(!toastShown){ toastShown=true; toast.innerHTML=HINT_HTML; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),4500); } return b; }
 // «+» на дотику: новий блок у наступному вільному ряду, у фокусі (клік — жест, тож клавіатура відкриється)
 function createNext(){ const row=Math.max(cMinRow(null), ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=make({col:cMinCol(null),row},false); markDirty(); b.el.scrollIntoView({block:'center'}); b.txt.focus(); return b; }
