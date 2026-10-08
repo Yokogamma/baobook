@@ -32,9 +32,23 @@ Moving out of `mockups`, with no new features. Steps:
    - a "moved" banner on the old site, with no redirect and no data deletion;
    - the plan map, Notion and a daily check.
 
-## Localization (next stage)
+## Localization
 
-All UI strings move into per-language files. The language is chosen from the saved setting, then the browser language, then English. Plurals use `Intl.PluralRules`, dates use `Intl.DateTimeFormat`, and `<html lang>` follows the UI language.
+- Every UI string lives in `public/locales/<lang>.json`. Code asks for it with `loc('key', {params})`, or `locA()` when the text goes inside an HTML string or attribute.
+- Static markup uses `data-i18n` (text), `data-i18n-html` (markup from our own files) and `data-i18n-attr="title:key;aria-label:key"`.
+- A plural value is an object keyed by `Intl.PluralRules` categories (`one`, `few`, `many`, `other`) and is chosen by `params.n`. `{name}` marks a parameter. Write whole sentences with parameters, never glue fragments.
+- Dates use `Intl` with `I18N.locale`.
+- The language comes from the saved setting, then the browser language, then the fallback.
+- `tests/appi18n.mjs` fails on Cyrillic string literals outside the language files, on missing or unused keys, and on broken plurals.
+- Tests pin `uk-UA` through `CTX` in `tests/lib/server.mjs`.
+- A new language file must be added to `PRECACHE` in `sw.js`.
+
+## Product status
+
+- **Mobile plan (`docs/MOBILE-PLAN.md`):** closed. PRs A, B and C are done; manual checks such as TalkBack and VoiceOver are still pending.
+- **Note versions (`docs/VERSIONS-PLAN.md`):** PR 1 (storage) is done. Next are PR 2 (the «Історія» button and panel, showing a version on the canvas, restoring a note) and PR 3 (restoring a block, named versions, clearing history, search, export with history).
+- **Secret links with Matamata:** A0 → A1 → A2; the plan lives in the private `payee-private-docs`.
+- **Sync and sign-in (`docs/SYNC-PLAN.md`):** waiting for the owner's Firebase config and answers.
 
 ## After the move
 

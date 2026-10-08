@@ -2,9 +2,9 @@
    App shell: network first, cache as the fallback, so updates arrive at once and the app still opens offline.
    Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
    Cache names carry the app prefix; activate deletes only this app's old caches, because other apps may share the origin. */
-const VERSION='v4', PREFIX='baobook-';
+const VERSION='v5', PREFIX='baobook-';
 const SHELL=PREFIX+'shell-'+VERSION, FONTS=PREFIX+'fonts';
-const PRECACHE=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
+const PRECACHE=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./locales/uk.json'];
 
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(SHELL).then(c=>c.addAll(PRECACHE)).then(()=>self.skipWaiting())); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==SHELL&&k!==FONTS).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
