@@ -75,8 +75,13 @@ await pg.locator('.blk .txt').filter({hasText:'Рядок 30'}).tap(); await pg.
 await pinAboveBar(); await pg.waitForTimeout(100);
 { await pg.evaluate(()=>sheetDebug.offerUndo('довга плашка')); await pg.waitForTimeout(350); const after=await caretBottom(), u=await box(pg.locator('#undo'));
   ok('10b плашка «Скасувати»: курсор над нею ('+after+' ≤ '+u.y+')', u && after<=u.y); await pg.evaluate(()=>sheetDebug.dropUndo()); await pg.waitForTimeout(300); }
+// 10c the «⋯» row and the toast together (~190px of panels): the sheet leaves enough room below the last block to lift the caret above both
+await pinAboveBar(); await pg.waitForTimeout(100); await tapEl(pg.locator('#bubble .more')); await pg.waitForTimeout(300);
+{ await pg.evaluate(()=>sheetDebug.offerUndo('довга плашка')); await pg.waitForTimeout(350); const after=await caretBottom(), u=await box(pg.locator('#undo'));
+  ok('10c ряд «⋯» і плашка разом: курсор в останньому рядку над плашкою ('+after+' ≤ '+(u&&u.y)+')', await focusedTxt() && u && after<=u.y);
+  await pg.evaluate(()=>sheetDebug.dropUndo()); await pg.waitForTimeout(300); await tapEl(pg.locator('#bubble .more')); await pg.waitForTimeout(200); }
 await pinAboveBar(); await pg.waitForTimeout(100); await pg.setViewportSize({width:320,height:300}); await pg.waitForTimeout(400);
-{ const after=await caretBottom(), bb=await box(pg.locator('#bubble')); ok('10c «клавіатура» (вікно 300): курсор підкрутило над панель ('+after+' ≤ '+bb.y+')', await focusedTxt() && bb && after<=bb.y && Math.abs(bb.y+bb.h-300)<=1); }
+{ const after=await caretBottom(), bb=await box(pg.locator('#bubble')); ok('10d «клавіатура» (вікно 300): курсор підкрутило над панель ('+after+' ≤ '+bb.y+')', await focusedTxt() && bb && after<=bb.y && Math.abs(bb.y+bb.h-300)<=1); }
 await pg.screenshot({path:OUT+'/appkb-final.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
