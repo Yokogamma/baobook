@@ -7,7 +7,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const stored=async(re)=>(await idbAll()).some(n=>n.blocks.some(b=>new RegExp(re).test(b.text||'')||new RegExp(re).test(b.title||'')));
 const undo=pg.locator('#undo'); const shown=async()=>await undo.evaluate(e=>!e.hidden && e.classList.contains('show'));
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 // область із двома блоками + окремий блок на аркуші
 await pg.mouse.move(500,260); await pg.mouse.down(); await pg.mouse.move(1000,420,{steps:8}); await pg.mouse.up(); await pg.waitForTimeout(200);
 await pg.keyboard.type('Паролі'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(100);

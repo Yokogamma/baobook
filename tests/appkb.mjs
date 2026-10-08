@@ -14,7 +14,7 @@ const focusedText=()=>pg.evaluate(()=>document.activeElement && document.activeE
 const vis=loc=>loc.isVisible();
 const bubbleBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubble button')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.dataset.cmd||b.dataset.act));
 const moreBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubbleMore button')].map(b=>b.dataset.cmd||b.dataset.act));
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 ok('0 viewport без interactive-widget: клавіатура не стискає сторінку, нижні панелі — від visualViewport', !/interactive-widget/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')) && /viewport-fit=cover/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')));
 // 1 курсор у блоці: «+» схований, панель видно з самим курсором — «Готово», «Блок», без «Копіювати»; кнопки 44 px; панель при низу вікна
 await hold(150,400); await pg.waitForTimeout(250); await pg.keyboard.type('перший'); await pg.waitForTimeout(200);

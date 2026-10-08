@@ -20,7 +20,7 @@ const SEED={id:'flow1',title:'',created:1,updated:Date.now(),blocks:[
   {id:'k1',parent:'A',col:0,row:0,text:'Дитина 1'},
   {id:'k2',parent:'A',col:0,row:2,text:'Дитина 2'},
   {id:'b4',fx:0.3,row:30,text:'Четвертий далеко внизу'}]};
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(400);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(400);
 await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 SEED.updated=Date.now()+60000;
 await pg.evaluate(seed=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put(seed); t.oncomplete=()=>{ d.close(); res(); }; }; }), SEED);

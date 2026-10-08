@@ -45,7 +45,7 @@ jobs:
   - build
   - deploy`;
 const guess=async(t)=>pg.evaluate(t=>{ const dt=new DataTransfer(); dt.setData('text/plain',t); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); const b=[...document.querySelectorAll('.blk.is-code')].pop(); return b? b.querySelector('.lang').textContent : '(text)'; },t);
-await pg.goto(new URL('../index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(new URL('../public/index.html', import.meta.url).href); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 // 1 автовизначення: кожен зразок у новій нотатці, щоб не заважали одне одному
 const langs={}; for(const [name,src] of [['PHP',PHP],['Blade',BLADE],['TypeScript',TS],['Go',GO],['YAML',YAML]]){ await pg.locator('#newBtn').click(); await pg.waitForTimeout(100); await pg.mouse.click(400,300); await pg.waitForTimeout(50); langs[name]=await guess(src); await pg.waitForTimeout(100); }
 ok('1 автовизначення мов: '+JSON.stringify(langs), Object.entries(langs).every(([k,v])=>v===k));

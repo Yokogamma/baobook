@@ -1,0 +1,12 @@
+// Cloudflare Workers Static Assets: only public/ is served, there is no server code.
+// Merge to main → npx wrangler deploy (Workers Builds) → https://baobook.matamata.dev
+{
+  "name": "baobook",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    { "pattern": "baobook.matamata.dev", "custom_domain": true }
+  ]
+}
