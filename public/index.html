@@ -344,6 +344,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 
 .gbox{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:6px;pointer-events:none;display:none;transition:left .15s,top .15s}
 .gbox.on{display:block} .gbox.bad{border-color:rgba(235,87,87,.8);background:rgba(235,87,87,.12)}
+.hbox{position:absolute;border:1.5px dashed var(--sel-line);border-radius:6px;pointer-events:none;display:none;opacity:.45} .hbox.on{display:block} .hbox.hit{opacity:1;background:var(--sel)}   /* where the dragged block came from; lit when a drop puts it back */
 .gbox .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
 .gbox.bad .lbl{display:block}
 .ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
@@ -580,7 +581,7 @@ const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
 const G=()=>cssN('--g')||24, PAD=()=>cssN('--pad'), OFF=()=>cssN('--handle')+2+6;   // ручка + gap + padding тексту
 function el(t,c,parent){ const e=document.createElement(t); e.className=c; (parent||sheet).appendChild(e); return e; }
-const ghost=el('div','ghost'), gbox=el('div','gbox'); gbox.innerHTML='<span class="lbl">'+locA('drag.noRoom')+'</span>';
+const ghost=el('div','ghost'), gbox=el('div','gbox'), hbox=el('div','hbox'); gbox.innerHTML='<span class="lbl">'+locA('drag.noRoom')+'</span>';
 
 /* ══ сховище ══════════════════════════════════════════════════════════════
    Поки що — localStorage на цьому пристрої, по запису на нотатку. Це окремий шар:
@@ -1502,7 +1503,7 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
 
 const HOLD_DRAG_MS=350;   // шапка картки на дотику: утримання без руху понад HOLD_SLOP піднімає картку (стартова гіпотеза плану, порівняти з 250)
 function drag(b, grip, o={}){   // o.hold — на дотику перенос лише після утримання (шапка картки); o.skip(e) — не починати (кнопки, назва в правці); o.quiet — натискання без руху нічого не робить
-  let gx,gy,moved,from,others,probe,host,ptype,entry,entryIn;
+  let gx,gy,moved,from,others,probe,host,ptype,entry,entryIn,home,left;
   // A neighbour in the same column gives way only once the leading edge of the dragged block passes its middle: the top edge when
   // coming from below, the bottom edge when coming from above; until then the ghost lands next to it. A neighbour approached sideways
   // keeps the old rule: it is pushed down, or the ghost turns red when there is no room. Returns the neighbours that will be pushed down.
@@ -1518,7 +1519,8 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     return give; };
   const start=e=>{ grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel(); entry=new Map(); entryIn=undefined;
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
-    const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
+    const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; home=false; left=false; from={col:b.col,row:b.row,parent:b.parent,fx:b.fx}; host=ctnEl(b);
+    host.appendChild(hbox); Object.assign(hbox.style, {left:b.el.offsetLeft+'px', top:b.el.offsetTop+'px', width:b.w+'px', height:b.el.offsetHeight+'px'});
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
     probe={col:b.col,row:b.row,fx:b.fx,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,parent:b.parent,el:gbox}; b.hidden=true; blocks.push(probe); ctnEl(probe).appendChild(gbox);
     b.el.classList.add('drag'); gbox.className='gbox on'; };
@@ -1532,23 +1534,31 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     // куди кладемо: спершу позиція на аркуші; щойно блок торкається області (за правилом накладання) або курсор у її картці — блок іде всередину.
     // Область блоком ніколи не виштовхується, інакше вона «тікала» б униз від блока, який заносять згори (самі області всередину не йдуть — вкладеності немає)
     const sr=sheet.getBoundingClientRect(); probe.parent=undefined; probe.col=colOfX(e.clientX-gx-sr.left+OFF(),null,probe); probe.row=rowOfY(e.clientY-gy-sr.top,null); render(probe);
-    let target=null;
+    const onSheet={col:probe.col, row:probe.row}; let target=null;
     if(b.kind!=='area') for(const ar of live(null)){ if(ar.kind!=='area'||ar.collapsed) continue; probe.hidden=true; render(ar); probe.hidden=false; const cr=ar.card.getBoundingClientRect();   // the ghost still on the sheet is not the area's right neighbour: otherwise the area narrows for a moment, its blocks rewrap taller and jump down
       if(overlaps(probe,ar) || (e.clientX>=cr.left&&e.clientX<=cr.right&&e.clientY>=cr.top&&e.clientY<=cr.bottom)){ target=ar; break; } }
     if(target){ probe.parent=target.id; const tr=target.abody.getBoundingClientRect(); probe.col=colOfX(e.clientX-gx-tr.left+OFF(),target,probe); probe.row=rowOfY(e.clientY-gy-tr.top,target); }
+    // brought back within one cell of where it came from, the block snaps home, and a drop there leaves the whole layout as it was.
+    // Home pulls only after the block has been farther away, so a one-cell nudge is still a move
+    const near=p=>Math.abs(p.col-from.col)<=1 && Math.abs(p.row-from.row)<=1;
+    const close=from.parent? !!target && target.id===from.parent && near(probe) : near(onSheet);
+    if(!close) left=true; home=left && close;
+    if(home){ if(!from.parent) target=null; probe.parent=from.parent; probe.col=from.col; probe.row=from.row; }
     if(gbox.parentNode!==ctnEl(probe)) ctnEl(probe).appendChild(gbox);
-    const give=approach(); give.forEach(o=>o.hidden=true); const bad=tooTight(probe); give.forEach(o=>o.hidden=false);   // a neighbour that is about to move down leaves room
-    if(bad){ live(null).forEach(render); if(target) live(target).forEach(render); render(probe); } else resolve(probe);
-    gbox.className='gbox on'+(bad?' bad':''); },
-    onEnd:()=>end(), onCancel:()=>end() });
-  const end=()=>{
+    let bad=false;
+    if(home) resolve(probe);   // the other rows are back at row0, so nothing moves
+    else { const give=approach(); give.forEach(o=>o.hidden=true); bad=tooTight(probe); give.forEach(o=>o.hidden=false);   // a neighbour that is about to move down leaves room
+      if(bad){ live(null).forEach(render); if(target) live(target).forEach(render); render(probe); } else resolve(probe); }
+    gbox.className='gbox on'+(bad?' bad':''); hbox.className='hbox'+(moved?' on':'')+(home?' hit':''); },
+    onEnd:()=>end(), onCancel:()=>end(true) });
+  const end=cancel=>{   // cancel: the browser took the gesture away (pointercancel), so nothing changes
     if(!probe) return;
-    const bad=gbox.classList.contains('bad'); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
-    b.el.classList.remove('drag','lift'); gbox.className='gbox'; sheet.appendChild(gbox);
-    if(bad || !moved){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; }
+    const back=cancel || home || !moved || gbox.classList.contains('bad') || (probe.parent===from.parent && probe.col===from.col && probe.row===from.row); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
+    b.el.classList.remove('drag','lift'); gbox.className='gbox'; sheet.appendChild(gbox); hbox.className='hbox'; sheet.appendChild(hbox);
+    if(back){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; b.fx=from.fx; }   // fx too: it may come from another window width
     else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; }
-    ctnEl(b).appendChild(b.el); if(!b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
-    resolve(b); if(moved) markDirty(); if(!moved && !o.quiet){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення
+    ctnEl(b).appendChild(b.el); if(!back && !b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
+    resolve(b); if(!back) markDirty(); if(!moved && !o.quiet){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення
   };
   if(o.hold) grip.addEventListener('touchmove',e=>{ if(probe) e.preventDefault(); },{passive:false});   // після підняття палець тягне картку, а не гортає сторінку
 }
