@@ -5,6 +5,8 @@ import fs from 'node:fs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true,acceptDownloads:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
+// Web Share stub: Chrome on Windows reports canShare for files (Chrome on Linux has no Web Share) and denies share under automation, so export on touch would not download there. By default sharing is off everywhere; step 5b switches the mode
+await ctx.addInitScript(()=>{ window.__share={mode:'off', calls:0}; navigator.canShare=()=>window.__share.mode!=='off'; navigator.share=()=>{ window.__share.calls++; const m=window.__share.mode; return m==='ok'? Promise.resolve() : Promise.reject(new DOMException('stub', m)); }; });
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const PAGE=SITE;
@@ -44,6 +46,12 @@ ok('4b повернення в першу нотатку: незаписаний
 await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(400);
 { const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#saveExport').tap()]); const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8')); const all=JSON.stringify(data);
   ok('5 експорт з рядка помилки: у файлі обидві незаписані версії', /не записалось/.test(all) && /друга в памʼяті/.test(all)); }
+// 5b export through the share sheet: refused (NotAllowedError, as Chrome on Windows does) → the file is downloaded anyway; cancelled by the user (AbortError) or shared → no download
+{ await pg.evaluate(()=>{ window.__share.mode='NotAllowedError'; });
+  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:5000}).catch(()=>null), pg.locator('#saveExport').tap()]); const refused=!!dl && /не записалось/.test(fs.readFileSync(await dl.path(),'utf8'));
+  const noDownload=async mode=>{ await pg.evaluate(m=>{ window.__share.mode=m; }, mode); let got=false; const h=()=>{ got=true; }; pg.on('download',h); await pg.locator('#saveExport').tap(); await pg.waitForTimeout(800); pg.off('download',h); return !got; };
+  const aborted=await noDownload('AbortError'), shared=await noDownload('ok'), calls=await pg.evaluate(()=>window.__share.calls); await pg.evaluate(()=>{ window.__share.mode='off'; });
+  ok('5b експорт через «Поділитися»: відмова → файл завантажено ('+refused+'), скасування → без завантаження ('+aborted+'), успіх → без завантаження ('+shared+'), викликів share '+calls+' з 3', refused && aborted && shared && calls===3); }
 // 6 beforeunload попереджає, поки є незаписане
 ok('6 beforeunload: закриття вкладки з незаписаним потребує підтвердження', await pg.evaluate(()=>{ const e=new Event('beforeunload',{cancelable:true}); window.dispatchEvent(e); return e.defaultPrevented; }));
 // 7 відмову вимкнено (без перезавантаження) → «Повторити» записує останню версію обох нотаток
