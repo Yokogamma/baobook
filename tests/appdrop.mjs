@@ -34,10 +34,12 @@ await pg.mouse.click(330,700); await pg.keyboard.type('зліва'); await pg.ke
   const a1=await box(area.locator('.ablk')); const inside=await pg.evaluate(()=>!!document.querySelector('.gbox').closest('.abody')); await pg.mouse.up(); await pg.waitForTimeout(300);
   const t=await box(area.locator('.abody .blk').filter({hasText:'зліва'}).locator('.txt'));
   ok('3 блок, піднесений зліва впритул: область на місці ('+a0.y+'='+a1.y+'), контур усередині, після дропу блок у колонці 0', a1.y===a0.y && inside && dotK(t.x+6)===areaK+1); }
-// 4 сама область і далі виштовхує блоки, коли її тягнуть (блок, що починається не правіше за колонку області)
-await pg.mouse.click(380,780); await pg.keyboard.type('під областю'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
-{ const under=pg.locator('#sheet > .blk').filter({hasText:'під областю'}); const u0=await box(under.locator('.txt')); const g=await box(area.locator('.grip').first());
-  await pg.mouse.move(g.x+10,g.y+12); await pg.mouse.down(); await pg.mouse.move(g.x+10, u0.y-40,{steps:10}); await pg.mouse.up(); await pg.waitForTimeout(300);
+// 4 сама область і далі виштовхує блоки, коли її тягнуть (блок, що починається не правіше за колонку області).
+// A neighbour gives way only while the area's bottom edge has not passed its middle (appswap.mjs): a 4-line block, the area overlaps it by one row
+await pg.mouse.click(380,780); for(const [i,t] of ['під областю','2','3','4'].entries()){ if(i) await pg.keyboard.press('Enter'); await pg.keyboard.type(t); } await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+{ const under=pg.locator('#sheet > .blk').filter({hasText:'під областю'}); const u0=await box(under.locator('.txt')); const g=await box(area.locator('.grip').first()); const c0=await box(area.locator('.ablk'));
+  const dy=(u0.y+G)-(c0.y+c0.h+2);   // the area card's bottom edge one row below the block's top
+  await pg.mouse.move(g.x+10,g.y+12); await pg.mouse.down(); await pg.mouse.move(g.x+10, g.y+12+dy,{steps:10}); await pg.mouse.up(); await pg.waitForTimeout(300);
   const u1=await box(under.locator('.txt')); const a=await box(area.locator('.ablk'));
   ok('4 перетягнута область виштовхнула блок під собою вниз ('+u0.y+'→'+u1.y+')', u1.y>u0.y && u1.y>=a.y+a.h); }
 // 5 текстові блоки поруч: сусіда можна поставити на відстані однієї клітинки від картки блока із заданою шириною

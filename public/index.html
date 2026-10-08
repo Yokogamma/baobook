@@ -949,7 +949,8 @@ function rawWidth(b){ const a=ctn(b), r=rect(b); let right=cW(a)-cPadR(a);
   return right-r.xl; }
 // ширина, яку блок «займає» по горизонталі: задана ручкою (cw) або мінімальна; сусід ближче за неї — накладання, його зсуваємо вниз
 const need=b=>b.cw? Math.max(minw(b), CL()+b.cw*G()) : minw(b);
-function overlaps(a,b){ const A=rect(a),B=rect(b); if(!(A.r0<B.r1 && A.r1>B.r0)) return false; const left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-L.xl<need(left); }
+function colsOverlap(a,b){ const A=rect(a),B=rect(b), left=A.x0<=B.x0?a:b, [L,R]=A.x0<=B.x0?[A,B]:[B,A]; return R.xl-L.xl<need(left); }   // whatever the rows
+function overlaps(a,b){ const A=rect(a),B=rect(b); return A.r0<B.r1 && A.r1>B.r0 && colsOverlap(a,b); }
 function tooTight(b){ const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR(a)+1 || rawWidth(b)<minw(b); }
 function fits(b){ return !tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o)); }
 const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки (ручка + gap)
@@ -1501,8 +1502,21 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
 
 const HOLD_DRAG_MS=350;   // шапка картки на дотику: утримання без руху понад HOLD_SLOP піднімає картку (стартова гіпотеза плану, порівняти з 250)
 function drag(b, grip, o={}){   // o.hold — на дотику перенос лише після утримання (шапка картки); o.skip(e) — не починати (кнопки, назва в правці); o.quiet — натискання без руху нічого не робить
-  let gx,gy,moved,from,others,probe,host,ptype;
-  const start=e=>{ grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel();
+  let gx,gy,moved,from,others,probe,host,ptype,entry,entryIn;
+  // A neighbour in the same column gives way only once the leading edge of the dragged block passes its middle: the top edge when
+  // coming from below, the bottom edge when coming from above; until then the ghost lands next to it. A neighbour approached sideways
+  // keeps the old rule: it is pushed down, or the ghost turns red when there is no room. Returns the neighbours that will be pushed down.
+  const approach=()=>{ const a=ctn(probe); if(entryIn!==a){ entry.clear(); entryIn=a; }
+    const top=probe.row, bot=top+probe.lines, under=[], give=[];
+    for(const o of solid(a)){ if(o===probe) continue; const r0=o.row, r1=r0+(o.lines||1), mid=(r0+r1)/2;
+      if(!(top<r1 && bot>r0)){ entry.set(o, bot<=r0? 'above' : 'below'); continue; }
+      if(!colsOverlap(probe,o)){ entry.set(o,'side'); continue; }
+      if(!entry.has(o)) entry.set(o, top+bot<r0+r1? 'above' : 'below');   // already on its rows (entered an area right there)
+      const side=entry.get(o); if(side==='side') continue;
+      if(side==='below'? top>=mid : bot>mid) under.push(o); else give.push(o); }
+    for(let i=0;i<60;i++){ const hit=under.find(o=>overlaps(probe,o)); if(!hit) break; probe.row=hit.row+(hit.lines||1); }
+    return give; };
+  const start=e=>{ grip.setPointerCapture(e.pointerId); ptype=e.pointerType; if(selBlk && selBlk!==b) exitSel(); entry=new Map(); entryIn=undefined;
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; from={col:b.col,row:b.row,parent:b.parent}; host=ctnEl(b);
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
@@ -1519,11 +1533,11 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     // Область блоком ніколи не виштовхується, інакше вона «тікала» б униз від блока, який заносять згори (самі області всередину не йдуть — вкладеності немає)
     const sr=sheet.getBoundingClientRect(); probe.parent=undefined; probe.col=colOfX(e.clientX-gx-sr.left+OFF(),null,probe); probe.row=rowOfY(e.clientY-gy-sr.top,null); render(probe);
     let target=null;
-    if(b.kind!=='area') for(const ar of live(null)){ if(ar.kind!=='area'||ar.collapsed) continue; render(ar); const cr=ar.card.getBoundingClientRect();
+    if(b.kind!=='area') for(const ar of live(null)){ if(ar.kind!=='area'||ar.collapsed) continue; probe.hidden=true; render(ar); probe.hidden=false; const cr=ar.card.getBoundingClientRect();   // the ghost still on the sheet is not the area's right neighbour: otherwise the area narrows for a moment, its blocks rewrap taller and jump down
       if(overlaps(probe,ar) || (e.clientX>=cr.left&&e.clientX<=cr.right&&e.clientY>=cr.top&&e.clientY<=cr.bottom)){ target=ar; break; } }
     if(target){ probe.parent=target.id; const tr=target.abody.getBoundingClientRect(); probe.col=colOfX(e.clientX-gx-tr.left+OFF(),target,probe); probe.row=rowOfY(e.clientY-gy-tr.top,target); }
     if(gbox.parentNode!==ctnEl(probe)) ctnEl(probe).appendChild(gbox);
-    const bad=tooTight(probe);
+    const give=approach(); give.forEach(o=>o.hidden=true); const bad=tooTight(probe); give.forEach(o=>o.hidden=false);   // a neighbour that is about to move down leaves room
     if(bad){ live(null).forEach(render); if(target) live(target).forEach(render); render(probe); } else resolve(probe);
     gbox.className='gbox on'+(bad?' bad':''); },
     onEnd:()=>end(), onCancel:()=>end() });
