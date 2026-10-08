@@ -25,7 +25,7 @@ Desktop Chrome on Windows differs from Chromium on Linux in two ways that matter
 | `appcode.mjs`, `appcode2.mjs`, `appcode3.mjs` | code block: paste, lock, copy, wrap, line numbers, folding, resize handle, language menu, auto-detection |
 | `apptitle.mjs` | code block title (centred, narrow cards, search) |
 | `nl2.mjs` | line breaks in text are kept |
-| `apparea.mjs` | areas: drag to draw, child blocks, auto-grow, move, fold, colours, persistence, ungroup |
+| `apparea.mjs` | areas: drag to draw, child blocks, auto-grow, move, fold, colours, persistence, ungroup. Esc right after a click makes a block (on the sheet and in an area) keeps the focus out of it even when the block's deferred refocus runs after the keys |
 | `apptext.mjs` | text block resize handle; area header, buttons on hover, its «⋯» matches the neighbouring buttons |
 | `appundo.mjs` | area «⋯» menu («Видалити область і N блоків»), the «Скасувати» toast, Ctrl+Z outside a field. Undo stack: an area with blocks gives a toast without a timer, ✕ hides it and Ctrl+Z still restores; switching notes hides the toast but keeps that note's stack; two entries come back in reverse order; limit of 20 entries |
 | `appnav.mjs` | system Back on the phone: panel, header «⋯» menu, position mode and overview each push a history entry; Back closes them; closing from the UI removes the entry. Route: panel → search → scroll → open → Back returns the panel with the query and scroll → Back hides it. Accessibility: every button has a name, arrows and Home/End work on the position bar, Esc leaves. On desktop the panel pushes no entries, the area menu does |

@@ -67,6 +67,16 @@ ok('12b видалення області забирає і її вміст', (a
 await pg.mouse.click(1000,700); await pg.keyboard.type('клік'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(100);
 ok('13 клік без протяжки → текстовий блок', (await pg.locator('#sheet > .blk').filter({hasText:'клік'}).count())===1);
 await pg.mouse.move(10,10); await pg.evaluate(()=>window.scrollTo(0,0));
+// 13b a busy main thread can run keys before the deferred refocus of a block made by a click (it failed appfmt 13b in CI once):
+// a click, typing and Esc in one task, so the refocus timer always comes after Esc; the focus must stay out of the block
+const raceEsc=(sel,x,y)=>pg.evaluate(async([sel,x,y])=>{ const host=[...document.querySelectorAll(sel)].pop(), o={bubbles:true,cancelable:true,clientX:x,clientY:y,button:0,buttons:1,pointerId:9,pointerType:'mouse',isPrimary:true};
+  host.dispatchEvent(new PointerEvent('pointerdown',o)); host.dispatchEvent(new PointerEvent('pointerup',{...o,buttons:0}));
+  const t=document.activeElement; if(!t.classList.contains('txt')) return 'no new block in focus';
+  document.execCommand('insertText',false,'race'); t.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+  await new Promise(r=>setTimeout(r,50)); return document.activeElement===t? 'the block took the focus back' : t.isConnected? 'ok' : 'the block is gone'; },[sel,x,y]);
+{ const onSheet=await raceEsc('#sheet',700,660);
+  await pg.locator('#areaBtn').click(); await pg.keyboard.press('Escape'); await pg.waitForTimeout(100); const ab=await box(pg.locator('.blk.is-area .abody').last()); const inArea=await raceEsc('.blk.is-area .abody', ab.x+60, ab.y+40);
+  ok('13b Esc right after a click-made block keeps the focus out of it even before the deferred refocus: sheet «'+onSheet+'», area «'+inArea+'»', onSheet==='ok' && inArea==='ok'); }
 // 14 тач: тап створює блок одразу
 const tctx=await br.newContext({viewport:{width:390,height:844},hasTouch:true}); const tp=await tctx.newPage(); await tp.goto(new URL('../public/index.html', import.meta.url).href); await tp.waitForTimeout(300);
 const tcdp=await tctx.newCDPSession(tp); await tp.touchscreen.tap(150,400); await tp.waitForTimeout(200); const tapMade=await tp.locator('#sheet .blk').count();
