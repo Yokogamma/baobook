@@ -1222,7 +1222,10 @@ function buildArea(b){
   // клік у порожнє місце області → текстовий блок усередині
   const createIn=(e,focus)=>{ const r=b.abody.getBoundingClientRect(); const col=colOfX(e.clientX-r.left,b,{}), row=rowOfY(e.clientY-r.top-G()/2,b); const probe={col,row,lines:1,w:MINW,parent:b.id}; const ok=fits(probe);
     const pg=document.createElement('div'); pg.className='ping'+(ok?'':' bad'); pg.style.left=(xOf(col,b)-1)+'px'; pg.style.top=yOf(row,b)+'px'; b.abody.appendChild(pg); setTimeout(()=>pg.remove(),500);
-    if(!ok) return null; const nb=make({col,row,parent:b.id},false); markDirty(); if(focus){ nb.txt.focus(); setTimeout(()=>{ if(document.activeElement!==nb.txt) nb.txt.focus(); },0); } return nb; };
+    if(!ok) return null; const nb=make({col,row,parent:b.id},false); markDirty();
+    if(focus){ nb.txt.focus(); let keyed=false; const k=()=>{ keyed=true; }; nb.txt.addEventListener('keydown',k,{once:true});
+      setTimeout(()=>{ nb.txt.removeEventListener('keydown',k); if(!keyed && document.activeElement!==nb.txt) nb.txt.focus(); },0); }   // as in createAt: after a key went to the block (typing and Esc can run before the timer), do not take the focus back
+    return nb; };
   b.hold=holdGesture(b.abody, ev=>createIn(ev,false), false);
   b.abody.addEventListener('pointerdown',e=>{ if(e.button!==0 || e.target!==b.abody) return; e.stopPropagation(); const wasSel=!!selBlk; exitSel();
     if(e.pointerType!=='mouse'){ e.preventDefault(); if(wasSel) return; b.hold.start(e); return; }   // дотик: утримання, як на аркуші
