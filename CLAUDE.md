@@ -39,4 +39,4 @@ All UI strings move into per-language files. The language is chosen from the sav
 ## After the move
 
 - Sync and Google/Apple sign-in come as a separate stage: Firebase Auth + Firestore, see `docs/SYNC-PLAN.md`. On a custom domain, proxy `/__/auth/` through the Worker.
-- Production on `baobook.matamata.app` needs the `matamata.app` zone moved to Cloudflare, and it changes the origin again. Either sync or another export/import has to carry the notes over.
+- Production on `baobook.matamata.app` (the zone is already on Cloudflare) changes the origin again. Either sync or another export/import has to carry the notes over.
