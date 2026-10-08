@@ -1,6 +1,6 @@
 # Baobook
 
-Notes on a blank sheet: click anywhere and type right there. Baobook runs in the browser and installs as an app (PWA), works offline, and keeps notes on the device. The interface is in Ukrainian; English is planned, with each language in its own file.
+Notes on a blank sheet: click anywhere and type right there. Baobook runs in the browser and installs as an app (PWA), works offline, and keeps notes on the device. The interface speaks Ukrainian and English. A browser set to Ukrainian gets Ukrainian, any other gets English, and the choice can be changed under «Language» in the panel.
 
 - Development build: https://baobook.matamata.dev (available after the first deploy).
 - Production: https://baobook.matamata.app, later, as a separate deployment.
@@ -15,6 +15,7 @@ Notes on a blank sheet: click anywhere and type right there. Baobook runs in the
 - Phone layout: hold to create a block, position mode with arrows, system Back, panels that stay above the keyboard.
 - Several notes, search, autosave to IndexedDB, per-field undo history, stored note versions, export and import as JSON.
 - Offline shell through a service worker; light, dark and sand themes.
+- Ukrainian and English UI from `public/locales/*.json`; a new language is one more file (see CLAUDE.md).
 
 ## Layout
 

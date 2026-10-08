@@ -38,10 +38,10 @@ Moving out of `mockups`, with no new features. Steps:
 - Static markup uses `data-i18n` (text), `data-i18n-html` (markup from our own files) and `data-i18n-attr="title:key;aria-label:key"`.
 - A plural value is an object keyed by `Intl.PluralRules` categories (`one`, `few`, `many`, `other`) and is chosen by `params.n`. `{name}` marks a parameter. Write whole sentences with parameters, never glue fragments.
 - Dates use `Intl` with `I18N.locale`.
-- The language comes from the saved setting, then the browser language, then the fallback.
+- The language comes from the saved setting (the «Мова / Language» switcher in the panel), then the browser language, then English.
+- A new language takes a `public/locales/<code>.json` with every key, its code in `I18N.langs`, a `lang.<code>` name in every file, and a `PRECACHE` entry.
 - `tests/appi18n.mjs` fails on Cyrillic string literals outside the language files, on missing or unused keys, and on broken plurals.
 - Tests pin `uk-UA` through `CTX` in `tests/lib/server.mjs`.
-- A new language file must be added to `PRECACHE` in `sw.js`.
 
 ## Product status
 
