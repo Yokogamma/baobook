@@ -1,5 +1,6 @@
 // Cloudflare Workers Static Assets: only public/ is served, there is no server code.
 // Merge to main → npx wrangler deploy (Workers Builds) → https://baobook.matamata.dev
+// Other branches → npx wrangler preview, which needs the "previews" block (empty: assets and compatibility stay at the top level)
 {
   "name": "baobook",
   "compatibility_date": "2026-10-01",
@@ -8,5 +9,6 @@
   },
   "routes": [
     { "pattern": "baobook.matamata.dev", "custom_domain": true }
-  ]
+  ],
+  "previews": {}
 }
