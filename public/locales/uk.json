@@ -110,6 +110,8 @@
   "fmt.underline": "Підкреслення (Ctrl+U)",
   "fmt.strike": "Перекреслення (Ctrl+Shift+S)",
   "fmt.code": "Код: моноширинний чип, копіюється кліком (Ctrl+E)",
+  "fmt.ul": "Маркований список (Ctrl+Shift+8)",
+  "fmt.ol": "Нумерований список (Ctrl+Shift+7)",
   "fmt.copy.title": "Копіювати виділене (Ctrl+C)",
   "fmt.moreButtons": "Ще кнопки",
   "fmt.more": "Ще форматування",

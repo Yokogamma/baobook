@@ -110,6 +110,8 @@
   "fmt.underline": "Underline (Ctrl+U)",
   "fmt.strike": "Strikethrough (Ctrl+Shift+S)",
   "fmt.code": "Code: monospace chip, copied with a click (Ctrl+E)",
+  "fmt.ul": "Bulleted list (Ctrl+Shift+8)",
+  "fmt.ol": "Numbered list (Ctrl+Shift+7)",
   "fmt.copy.title": "Copy selection (Ctrl+C)",
   "fmt.moreButtons": "More buttons",
   "fmt.more": "More formatting",

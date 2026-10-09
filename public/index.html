@@ -207,6 +207,11 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .txt b{font-weight:650} .txt u{text-underline-offset:2px} .txt s{text-decoration-thickness:1.5px}
+/* lists: a list line is its own <div data-l>, indented by one grid step; the marker is drawn, not typed, and sits in the first cell.
+   A wrapped item hangs under its text. Numbers grow to the left, so «10.» does not run into the text */
+.txt>[data-l]{position:relative;padding-left:var(--g)}
+.txt>[data-l]::before{position:absolute;top:0;right:calc(100% - var(--g) + 6px);white-space:nowrap;color:var(--ink-2);font-variant-numeric:tabular-nums;pointer-events:none;user-select:none;-webkit-user-select:none}
+.txt>[data-l="ul"]::before{content:"•"} .txt>[data-l="ol"]::before{content:attr(data-n) "."}
 /* чип «код»: моноширинний, з підкладкою. Без position: позиціонований чип Chrome малює окремим шаром поверх курсора — курсор усередині чипа зникає */
 .txt code{font-family:var(--mono);font-size:.9em;padding:1px 5px 1px 6px;border-radius:5px;background:var(--code-bg);border:.5px solid var(--code-line);white-space:pre-wrap;transition:background .15s,color .15s}
 /* іконка копіювання в кінці чипа, у потоці рядка: клік по ній копіює вміст, клік по тексту ставить курсор як звичайно */
@@ -218,7 +223,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .bubble button,.bmore button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
 .bubble button:hover,.bmore button:hover{background:rgba(128,128,128,.35)} .bubble button[aria-pressed="true"],.bmore button[aria-pressed="true"]{background:rgba(128,128,128,.55)}
 .bubble .sep{width:1px;align-self:stretch;margin:4px 3px;background:rgba(128,128,128,.5)} .bubble button.act{width:auto;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font-size:13px} .bubble button.act .i{font-size:15px}
-.bubble button.act.done{color:#8fd3a5}
+.bubble button.act.done{color:#8fd3a5} .bubble button>.i,.bmore button>.i{font-size:17px;vertical-align:middle}
 .grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:14px;font-weight:700}
 .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:none}   /* лише на дотику */
 /* дотик: панель положення вибраного блока (стрілки притискають до краю чи сусіда); лише на сенсорних екранах */
@@ -539,7 +544,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button" data-i18n-html="undo.button"></button><button class="uclose" type="button" data-i18n-attr="aria-label:common.hide;title:common.hide">✕</button></div>
 <button class="fab" id="fab" data-i18n-attr="title:block.new;aria-label:block.new"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-<div class="bubble" id="bubble" hidden role="toolbar" data-i18n-attr="aria-label:fmt.toolbar"><button type="button" data-cmd="bold" data-i18n-attr="title:fmt.bold"><b>B</b></button><button type="button" data-cmd="italic" data-i18n-attr="title:fmt.italic"><i>I</i></button><button type="button" data-cmd="underline" data-i18n-attr="title:fmt.underline"><u>U</u></button><button type="button" data-cmd="strikeThrough" data-i18n-attr="title:fmt.strike"><s>S</s></button><button type="button" data-cmd="code" data-i18n-attr="title:fmt.code" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep"></span><button type="button" class="act" data-act="copy" data-i18n-attr="title:fmt.copy.title"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span data-i18n="common.copy"></span></button><button type="button" class="act" data-act="new" data-i18n-attr="title:block.newBelow;aria-label:block.newBelow"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="block.short"></span></button><button type="button" class="act" data-act="done" data-i18n="common.done" data-i18n-attr="title:edit.done.title"></button><button type="button" class="more" data-act="more" data-i18n-attr="title:fmt.moreButtons;aria-label:fmt.moreButtons" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
+<div class="bubble" id="bubble" hidden role="toolbar" data-i18n-attr="aria-label:fmt.toolbar"><button type="button" data-cmd="bold" data-i18n-attr="title:fmt.bold"><b>B</b></button><button type="button" data-cmd="italic" data-i18n-attr="title:fmt.italic"><i>I</i></button><button type="button" data-cmd="underline" data-i18n-attr="title:fmt.underline"><u>U</u></button><button type="button" data-cmd="strikeThrough" data-i18n-attr="title:fmt.strike"><s>S</s></button><button type="button" data-cmd="code" data-i18n-attr="title:fmt.code" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep lsep" hidden></span><button type="button" data-cmd="ul" data-i18n-attr="title:fmt.ul;aria-label:fmt.ul" hidden><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"/></svg></button><button type="button" data-cmd="ol" data-i18n-attr="title:fmt.ol;aria-label:fmt.ol" hidden><svg class="i" viewBox="0 0 24 24"><path d="M11 6h9M11 12h9M12 18h8M4 16a2 2 0 1 1 4 0c0 .6-.5 1-1 1.5L4 20h4M6 10V4L4 6"/></svg></button><span class="sep"></span><button type="button" class="act" data-act="copy" data-i18n-attr="title:fmt.copy.title"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span data-i18n="common.copy"></span></button><button type="button" class="act" data-act="new" data-i18n-attr="title:block.newBelow;aria-label:block.newBelow"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="block.short"></span></button><button type="button" class="act" data-act="done" data-i18n="common.done" data-i18n-attr="title:edit.done.title"></button><button type="button" class="more" data-act="more" data-i18n-attr="title:fmt.moreButtons;aria-label:fmt.moreButtons" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
 <div class="bmore" id="bubbleMore" hidden role="toolbar" data-i18n-attr="aria-label:fmt.more"></div>
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
@@ -821,15 +826,70 @@ function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]');
    поруч завжди чистий text — для пошуку, списку нотаток і майбутнього злиття. Усе інше (стилі, скрипти, чужі теги) вичищається ══ */
 const RICH_TAG={B:'b',STRONG:'b',I:'i',EM:'i',U:'u',S:'s',STRIKE:'s',DEL:'s',CODE:'code',KBD:'code',TT:'code'};
 const escHtml=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function richOf(root){ let out=''; const walk=n=>{ for(const c of n.childNodes){ if(c.nodeType===3){ out+=escHtml(c.nodeValue.replace(/\u00a0/g,' ').replace(/\u200b/g,'')); continue; } if(c.nodeType!==1) continue; const tag=c.tagName;
-    if(tag==='BR'){ out+='\n'; continue; } if(/^(SCRIPT|STYLE|TEMPLATE)$/.test(tag)) continue; if(/^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR)$/.test(tag) && out && !out.endsWith('\n')) out+='\n';
+// the list type of an element: our list line <div data-l> (or <li data-l> in stored html), or a foreign <li> inside <ul>/<ol>
+const listOf=c=>{ const l=c.getAttribute('data-l'); if((l==='ul'||l==='ol') && (c.tagName==='DIV'||c.tagName==='LI')) return l; return c.tagName==='LI'? (c.parentElement&&c.parentElement.tagName==='OL'? 'ol' : 'ul') : ''; };
+function richOf(root){ let out='', nl=false; const brk=()=>{ if(out && !out.endsWith('\n')) out+='\n'; nl=false; };   // nl: a list line has just ended, so whatever follows starts a new line
+  const walk=n=>{ for(const c of n.childNodes){ if(c.nodeType===3){ const t=c.nodeValue.replace(/\u00a0/g,' ').replace(/\u200b/g,''); if(nl && t){ if(t[0]!=='\n') brk(); nl=false; } out+=escHtml(t); continue; } if(c.nodeType!==1) continue; const tag=c.tagName;
+    if(tag==='BR'){ if(nl) brk(); out+='\n'; continue; } if(/^(SCRIPT|STYLE|TEMPLATE)$/.test(tag)) continue;
+    const lt=listOf(c); if(lt){ brk(); out+='<li data-l="'+lt+'">'; walk(c); out=out.replace(/\n((?:<\/(?:b|i|u|s|code)>)*)$/,'$1')+'</li>'; nl=true; continue; }   // a trailing <br> in a line is the browser's placeholder, not a line break
+    if(/^(DIV|P|H[1-6]|BLOCKQUOTE|PRE|TR)$/.test(tag)) brk(); else if(nl && c.textContent.replace(/\u200b/g,'')) brk();
     const wrap=[]; if(RICH_TAG[tag]) wrap.push(RICH_TAG[tag]); else if(c.style){ const st=c.style; if(/bold|^[6-9]00$/.test(st.fontWeight)) wrap.push('b'); if(st.fontStyle==='italic') wrap.push('i'); const td=st.textDecorationLine||st.textDecoration||''; if(/underline/.test(td)) wrap.push('u'); if(/line-through/.test(td)) wrap.push('s'); }
     out+=wrap.map(w=>'<'+w+'>').join(''); walk(c); out+=wrap.slice().reverse().map(w=>'</'+w+'>').join(''); } };
   walk(root); out=out.replace(/\n$/,''); let prev; do{ prev=out; out=out.replace(/<(b|i|u|s|code)><\/\1>/g,''); }while(out!==prev); return out; }
-const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-const hasRich=h=>/<(b|i|u|s|code)>/.test(h);
+const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>|<li data-l="\w+">|<\/li>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+const hasRich=h=>/<(b|i|u|s|code)>|<li /.test(h);
 function cleanRich(h){ const t=document.createElement('template'); t.innerHTML=String(h||''); return richOf(t.content); }
-function showTxt(b){ if(b.html) b.txt.innerHTML=b.html; else b.txt.textContent=b.text; splitChipLines(b.txt); padChips(b.txt); }
+/* lists: a list is a property of a line, as in Quill and Google Docs. In the stored html a list line is <li data-l="ul|ol">…</li> standing on its own line
+   (lines are still joined by \n); the plain text has no markers, so search and the note list do not change. A block with a list is drawn one <div> per line:
+   the marker is CSS, the numbers are counted here. Older versions read such html as plain lines */
+// rich html → lines {l, h}: l is the list type or '', h the line's inline html. A tag open across a line break is closed at the end of the line and opened again on the next one
+function linesOf(h){ const L=[], open=[]; let li='', cur={l:'',h:''};
+  for(const [m,lt,cl,tag] of String(h||'').matchAll(/<li data-l="(ul|ol)">|<\/li>|<(\/?)(b|i|u|s|code)>|\n|[^<\n]+/g)){
+    if(lt){ li=lt; cur.l=lt; } else if(m==='</li>') li='';
+    else if(m==='\n'){ cur.h+=open.map(t=>'</'+t+'>').reverse().join(''); L.push(cur); cur={l:li, h:open.map(t=>'<'+t+'>').join('')}; }
+    else { if(tag){ if(cl){ const k=open.lastIndexOf(tag); if(k>=0) open.splice(k,1); } else open.push(tag); } cur.h+=m; } }
+  L.push(cur); return L; }
+const joinLines=L=>L.map(x=>x.l? '<li data-l="'+x.l+'">'+x.h+'</li>' : x.h).join('\n');
+const hasList=h=>/<li /.test(h||'');
+const lineVis=h=>plainOf(h).replace(/[\u200b\ue000\ue001]/g,'').trim();   // the visible text of a line; selection marks do not count
+// copying: plain text gets «• » and «1. », html gets real <ul>/<ol>, so a list pastes as a list into a chat or another editor
+function listText(h){ if(!hasList(h)) return plainOf(h); let n=0; return linesOf(h).map(x=>{ n=x.l==='ol'? n+1 : 0; return (x.l==='ul'? '• ' : x.l==='ol'? n+'. ' : '')+plainOf(x.h); }).join('\n'); }
+function listHtml(h){ if(!hasList(h)) return h.replace(/\n/g,'<br>'); let out='', open='', prev=false;
+  for(const x of linesOf(h)){ if(x.l!==open){ if(open) out+='</'+open+'>'; open=x.l; if(open) out+='<'+open+'>'; prev=false; }
+    if(open) out+='<li>'+x.h+'</li>'; else { if(prev) out+='<br>'; out+=x.h; prev=true; } }
+  return out+(open? '</'+open+'>' : ''); }
+// numbers of numbered lines: they run on through consecutive lines and start again after any other line, an empty one included
+function numberLists(txt){ let n=0; for(const c of txt.childNodes){ if(c.nodeType===1 && c.getAttribute('data-l')==='ol'){ c.setAttribute('data-n', ++n); continue; }
+  if(c.nodeType===1){ c.removeAttribute('data-n'); n=0; } else if(c.nodeType===3 && /[^\s\u200b]/.test(c.nodeValue)) n=0; } }
+function paint(txt, h, text){ if(hasList(h)) txt.innerHTML=linesOf(h).map(x=>'<div'+(x.l? ' data-l="'+x.l+'"' : '')+'>'+x.h+(plainOf(x.h).replace(/[\u200b\ue000\ue001]/g,'')? '' : '<br>')+'</div>').join('');
+  else if(h) txt.innerHTML=h; else txt.textContent=text||''; numberLists(txt); splitChipLines(txt); padChips(txt); }
+function showTxt(b){ paint(b.txt, b.html, b.text); }
+/* the selection by lines: marks M0 and M1 go in at its ends (in a copy of the field, or in the field itself right before it is redrawn), and the line a mark lands on is the line it is on */
+const M0='\ue000', M1='\ue001';
+function markSel(txt, live){ const s=getSelection(); if(!s||!s.rangeCount) return null; const r=s.getRangeAt(0); let a=r.startContainer, z=r.endContainer; const ao=r.startOffset, zo=r.endOffset; if(!txt.contains(a)||!txt.contains(z)) return null;
+  let root=txt; if(!live){ const pa=pathOf(txt,a), pz=pathOf(txt,z); if(!pa||!pz) return null; root=txt.cloneNode(true); const at=p=>p.reduce((n,i)=>n.childNodes[i],root); a=at(pa); z=at(pz); }
+  const put=(n,o,ch)=>{ if(n.nodeType===3){ n.insertData(o,ch); return; } const k=n.childNodes[o]||null, t=document.createTextNode(ch); if(k && k.nodeType===1 && /^(DIV|P|LI)$/.test(k.tagName)) k.insertBefore(t,k.firstChild); else n.insertBefore(t,k); };   // a point between two line <div>s belongs to the next line
+  put(z,zo,M1); put(a,ao,M0); return richOf(root); }
+function marksAt(L){ let a=-1, z=-1; L.forEach((x,i)=>{ if(x.h.includes(M0)) a=i; if(x.h.includes(M1)) z=i; }); if(a<0||z<0) return null;
+  if(z>a && !plainOf(L[z].h).split(M1)[0].replace(/[\s\u200b\ue000]/g,'')) z--;   // the selection ends at the start of a line (a triple click takes the line break too): that line is not touched
+  return [a,z]; }
+function takeMarks(txt){ const at={}; for(const ch of [M0,M1]) for(const t of textNodes(txt)){ const i=t.nodeValue.indexOf(ch); if(i>=0){ t.deleteData(i,1); at[ch]=[t,i]; break; } }
+  const a=at[M0]||at[M1], z=at[M1]||at[M0]; if(!a) return; const r=document.createRange(); r.setStart(a[0],a[1]); r.setEnd(z[0],z[1]); const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
+// redraw the field from its own html, keeping the selection: lines with a line break inside become separate lines
+function repaint(txt){ const h=markSel(txt,true); if(h==null) return; paint(txt,h); takeMarks(txt); padChips(txt); }
+// lines the selection touches: how many, and the list type of each one that has text or already is a list line
+function listState(txt){ const h=markSel(txt,false); if(h==null) return null; const L=linesOf(h), m=marksAt(L); if(!m) return null; const T=L.slice(m[0],m[1]+1); return {n:T.length, on:T.filter(x=>x.l||lineVis(x.h)).map(x=>x.l)}; }
+// the list buttons: every touched line becomes a list line of this type; if all of them already are, the list comes off. Empty lines stay plain, so a list breaks there
+function setList(txt, type){ const h=markSel(txt,true); if(h==null) return; const L=linesOf(h), m=marksAt(L);
+  if(m){ const T=L.slice(m[0],m[1]+1), on=T.filter(x=>x.l||lineVis(x.h)), off=on.length>0 && on.every(x=>x.l===type); T.forEach(x=>{ if(off) x.l=''; else if(x.l||lineVis(x.h)) x.l=type; }); }
+  paint(txt, joinLines(L)); takeMarks(txt); padChips(txt); }
+// «- » or «1. » typed at the start of a plain line makes it a list line; Ctrl+Z brings the typed characters back
+function mdList(txt){ const s=getSelection(); if(!s||!s.isCollapsed||codeAncestor(s.anchorNode,txt)) return false; const h0=markSel(txt,false); if(h0==null) return false;
+  const L0=linesOf(h0), m=marksAt(L0), k=m && !L0[m[1]].l && plainOf(L0[m[1]].h).match(/^(-|1\.) \ue000\ue001/); if(!k) return false;
+  histRec(txt,'cmd'); const L=linesOf(markSel(txt,true)), x=L[m[1]]; let n=k[1].length+1; x.h=x.h.replace(/<[^>]+>|&\w+;|[^<&]/g, t=>(n>0 && t[0]!=='<')? (n--, '') : t); x.l=k[1]==='-'? 'ul' : 'ol';
+  paint(txt, joinLines(L)); takeMarks(txt); padChips(txt); return true; }
+const listLine=txt=>{ const s=getSelection(); if(!s||!s.rangeCount||!s.isCollapsed) return null; let n=s.anchorNode; while(n && n.parentNode!==txt) n=n.parentNode; return n && n.nodeType===1 && n.hasAttribute('data-l')? n : null; };
+DEBUG.rich={cleanRich, linesOf, listText};   // the stored format, for the tests
 // чип — у межах рядка: чип на кілька рядків (так зберігалося до виправлення) ділимо на окремі чипи
 function splitChipLines(txt){ txt.querySelectorAll('code').forEach(c=>{ if(c.children.length || !c.textContent.includes('\n')) return; const f=document.createDocumentFragment();
   c.textContent.split('\n').forEach((p,i)=>{ if(i) f.appendChild(document.createTextNode('\n')); if(p){ const k=document.createElement('code'); k.textContent=p; f.appendChild(k); } }); c.replaceWith(f); }); }
@@ -1180,15 +1240,21 @@ function buildText(b){
   b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
     if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
-  b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); if(!e.isComposing) padChips(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
-  const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
+  b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); else if(e.inputType==='insertText' && e.data===' ') mdList(b.txt); if(!e.isComposing) padChips(b.txt); numberLists(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
+  const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else if(cmd==='ul'||cmd==='ol') setList(b.txt,cmd); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && inCopyZone(c,e)) return; setTimeout(()=>{ expandToken(b.txt,e.clientX,e.clientY); placeBubble(); },0); });   // подвійний клік по іконці чипа — лише копіювання
   b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в кінці чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
   ['mousedown','mouseup','click'].forEach(t=>b.txt.addEventListener(t,e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)) e.preventDefault(); }));   // якщо браузер усе ж надішле «мишачі» події після скасованого pointerdown — курсор у блок не ставиться і виділення не починається
   b.api={fmt};
   b.txt.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=hotkey(e); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
-      if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; } }
+      if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; }
+      if(e.shiftKey && (e.code==='Digit7'||e.code==='Digit8')){ e.preventDefault(); fmt(e.code==='Digit7'? 'ol' : 'ul'); return; } }   // as in Google Docs and Slack; by key position, so any layout works
+    // a list line: Enter on an empty one leaves the list, Backspace at its start takes the marker off (the text stays), Shift+Enter starts the next item like Enter
+    const it=(e.key==='Enter'||e.key==='Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey && listLine(b.txt);
+    if(it){ const s=getSelection(), r=document.createRange(); r.setStart(it,0); r.setEnd(s.anchorNode,s.anchorOffset);
+      if(e.key==='Enter'? !it.textContent.replace(/\u200b/g,'') : !r.toString().replace(/\u200b/g,'')){ e.preventDefault(); histRec(b.txt,'cmd'); it.removeAttribute('data-l'); it.removeAttribute('data-n'); numberLists(b.txt); readTxt(); relayout(b); markDirty(); bubbleState(); return; }
+      if(e.key==='Enter' && e.shiftKey){ e.preventDefault(); document.execCommand('insertParagraph'); return; } }
     if((e.key==='ArrowRight'||e.key==='ArrowLeft') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && exitChip(b.txt, e.key==='ArrowRight'? 1 : -1)){ e.preventDefault(); return; }
     if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
     if(e.key==='Backspace' && !b.txt.textContent.replace(/\u200b/g,'')){ e.preventDefault(); dropText(b); return; }
@@ -1196,13 +1262,13 @@ function buildText(b){
   });
   // копіювання й вирізання: у буфер — без службових нульових пробілів, інакше вони потрапляють у скопійований пароль чи команду
   const clip=e=>{ const s=getSelection(); if(!s||!s.rangeCount||s.isCollapsed) return; const tmp=document.createElement('div'); tmp.appendChild(s.getRangeAt(0).cloneContents()); const h=richOf(tmp);
-    e.clipboardData.setData('text/plain',plainOf(h)); e.clipboardData.setData('text/html',h.replace(/\n/g,'<br>')); e.preventDefault(); if(e.type==='cut'){ histRec(b.txt,'cmd'); document.execCommand('delete'); } };
+    e.clipboardData.setData('text/plain',listText(h)); e.clipboardData.setData('text/html',listHtml(h)); e.preventDefault(); if(e.type==='cut'){ histRec(b.txt,'cmd'); document.execCommand('delete'); } };
   b.txt.addEventListener('copy',clip); b.txt.addEventListener('cut',clip);
   // вставка: у порожній блок код стає блоком коду; інакше — простий текст
   b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); e.preventDefault(); if(!t) return;
     const wasEmpty=!b.txt.textContent.trim();
     if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,locA('paste.asCode'),locA('paste.makeText'),()=>toText(nb)); return; }
-    histRec(b.txt,'cmd'); document.execCommand('insertText',false,t);
+    histRec(b.txt,'cmd'); document.execCommand('insertText',false,t); if(t.includes('\n') && b.txt.querySelector(':scope>[data-l]')){ repaint(b.txt); numberLists(b.txt); }   // lines pasted into a list item become items
     b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,locA('paste.asText'),locA('paste.makeCode'),()=>toCode(b,b.text)); });
   /* ручка розміру (resizer): фіксована ширина в клітинках і мінімальна висота в рядах; текст завжди видно повністю */
   const card=b.card, rz=b.el.querySelector('.rz');
@@ -1529,21 +1595,27 @@ let bubbleBlk=null;
 function curTextBlock(){ const sel=getSelection(); if(!sel||sel.rangeCount===0) return null; const el=n=>n&&(n.nodeType===1? n : n.parentElement); const t=el(sel.anchorNode)&&el(sel.anchorNode).closest('.txt'); if(!t) return null;
   if(sel.isCollapsed && !(TOUCH && document.activeElement===t)) return null;   // на дотику панель видно й з самим курсором: там «Готово» і «Блок»
   const f=el(sel.focusNode); if(!f||f.closest('.txt')!==t) return null; return blocks.find(b=>b.txt===t)||null; }
-function bubbleState(){ if(bubble.hidden) return; bubble.querySelectorAll('button[data-cmd]').forEach(bt=>{ let on=false; if(bt.dataset.cmd==='code'){ const sel=getSelection(); on=!!(sel&&sel.rangeCount&&bubbleBlk&&codeAncestor(sel.getRangeAt(0).startContainer,bubbleBlk.txt)); } else { try{ on=document.queryCommandState(bt.dataset.cmd); }catch(_){} } bt.setAttribute('aria-pressed',String(!!on)); }); }
-function placeBubble(){ const b=curTextBlock(); if(!b){ if(!bubble.hidden){ bubble.hidden=true; bubbleMore.hidden=true; layoutBottom(); fabSync(); } bubbleBlk=null; return; } const fresh=bubble.hidden||bubbleBlk!==b; bubbleBlk=b; bubble.hidden=false;
+function bubbleState(){ if(bubble.hidden) return; const ls=bubbleBlk&&listState(bubbleBlk.txt);
+  [...bubble.querySelectorAll('button[data-cmd]'), ...bubbleMore.querySelectorAll('button[data-cmd]')].forEach(bt=>{ const cmd=bt.dataset.cmd; let on=false; if(cmd==='code'){ const sel=getSelection(); on=!!(sel&&sel.rangeCount&&bubbleBlk&&codeAncestor(sel.getRangeAt(0).startContainer,bubbleBlk.txt)); } else if(cmd==='ul'||cmd==='ol') on=!!ls && ls.on.length>0 && ls.on.every(l=>l===cmd); else { try{ on=document.queryCommandState(cmd); }catch(_){} } bt.setAttribute('aria-pressed',String(!!on)); }); }
+// the list buttons show when the selection takes in more than one line, or touches a line that already is a list line (to switch or take the list off)
+const LIST_BTNS=[...bubble.querySelectorAll('[data-cmd="ul"],[data-cmd="ol"]')], LSEP=bubble.querySelector('.lsep');
+function listUI(b){ const ls=listState(b.txt), on=!!ls && (ls.n>1 || ls.on.some(Boolean)); LIST_BTNS.forEach(x=>x.hidden=!on); LSEP.hidden=!on; }
+function placeBubble(){ const b=curTextBlock(); if(!b){ if(!bubble.hidden){ bubble.hidden=true; bubbleMore.hidden=true; layoutBottom(); fabSync(); } bubbleBlk=null; return; } const fresh=bubble.hidden||bubbleBlk!==b; bubbleBlk=b; bubble.hidden=false; listUI(b);
   if(TOUCH){ bubble.style.top=''; bubble.style.bottom=''; fitBubble(); layoutBottom(); if(fresh){ fabSync(); revealCaret(); } }
   else { const r=getSelection().getRangeAt(0).getBoundingClientRect(); const w=bubble.offsetWidth||150, h=bubble.offsetHeight||38; bubble.style.bottom=''; bubble.style.left=Math.max(8, Math.min(window.innerWidth-w-8, r.left+r.width/2-w/2))+'px'; bubble.style.top=(r.top-h-8>=8? r.top-h-8 : r.bottom+8)+'px'; }
   bubbleState(); }
 document.addEventListener('selectionchange',()=>{ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); });
 document.addEventListener('focusin',()=>{ if(TOUCH){ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); } });
 bubble.addEventListener('pointerdown',e=>e.preventDefault()); bubbleMore.addEventListener('pointerdown',e=>e.preventDefault());   // не втрачати виділення
-/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю */
-const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,underline:4,strikeThrough:5,code:6};
-function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.forEach(el=>bubble.appendChild(el)); bubbleMore.hidden=true; more.hidden=true; more.setAttribute('aria-expanded','false');
+/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, списки, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю.
+   The list buttons show only for a selection over several lines, and there they matter more than U; the two go to «⋯» together */
+const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,ul:4,ol:4,underline:5,strikeThrough:6,code:7};
+function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.forEach(el=>bubble.appendChild(el)); bubbleMore.hidden=true; more.hidden=true; more.setAttribute('aria-expanded','false'); LSEP.hidden=LIST_BTNS.every(x=>x.hidden);
   const vis=()=>[...bubble.children].filter(e=>!e.hidden && getComputedStyle(e).display!=='none'), width=()=>{ const v=vis(); return v.length? v[v.length-1].getBoundingClientRect().right-v[0].getBoundingClientRect().left : 0; }, avail=window.innerWidth-12;
   if(width()<=avail) return; more.hidden=false;
   const items=BUBBLE_ORDER.filter(e=>e.tagName==='BUTTON' && e.dataset.act!=='copy' && e!==more).sort((a,b)=>(PRI[b.dataset.cmd||b.dataset.act]??0)-(PRI[a.dataset.cmd||a.dataset.act]??0));   // наймолодші першими
-  for(const b of items){ if(width()<=avail) break; bubbleMore.appendChild(b); } }
+  for(const b of items){ if(width()<=avail) break; if(b.parentNode!==bubble) continue; bubbleMore.appendChild(b); if(LIST_BTNS.includes(b)) LIST_BTNS.forEach(x=>bubbleMore.appendChild(x)); }
+  LSEP.hidden=LIST_BTNS.every(x=>x.hidden || x.parentNode!==bubble); }   // both list buttons went to «⋯»: no separator left alone
 /* курсор не ховається під нижні панелі: межа — верх найвищої з них (панель + ряд «⋯» + плашка «Скасувати»); викликається при появі панелі, відкритті «⋯», плашці та зміні visualViewport */
 function bottomStack(){ const bar=(TOUCH && !bubble.hidden)? bubble.offsetHeight+(bubbleMore.hidden? 0 : bubbleMore.offsetHeight) : 0; return bar+(undoEl.hidden? 0 : undoEl.offsetHeight+18); }
 function revealCaret(){ if(!TOUCH || !fieldOf(document.activeElement)) return; const sel=getSelection(); if(!sel||!sel.rangeCount) return; let r=sel.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=sel.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); if(!el) return; r=el.getBoundingClientRect(); }
@@ -1551,9 +1623,10 @@ function revealCaret(){ if(!TOUCH || !fieldOf(document.activeElement)) return; c
 /* копіювання: у буфер ідуть і чистий текст, і форматування (текст — у чат, жирний і курсив — у редактор) */
 async function copyBoth(text, html){ try{ if(navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([text],{type:'text/plain'}),'text/html':new Blob([html.replace(/\n/g,'<br>')],{type:'text/html'})})]); return true; } }catch(_){}
   try{ await navigator.clipboard.writeText(text); return true; }catch(_){} try{ return document.execCommand('copy'); }catch(_){ return false; } }
-async function copySelection(){ const sel=getSelection(); if(!sel||sel.isCollapsed) return false; const tmp=document.createElement('div'); tmp.appendChild(sel.getRangeAt(0).cloneContents()); const h=richOf(tmp); return copyBoth(plainOf(h), h); }
-function blockText(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.text||'').filter(t=>t.trim()).join('\n\n'); return b.text||''; }
-function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.html||escHtml(o.text||'')).filter(t=>t.trim()).join('\n\n'); return b.html||escHtml(b.text||''); }
+async function copySelection(){ const sel=getSelection(); if(!sel||sel.isCollapsed) return false; const tmp=document.createElement('div'); tmp.appendChild(sel.getRangeAt(0).cloneContents()); const h=richOf(tmp); return copyBoth(listText(h), listHtml(h)); }
+const oneText=o=>o.html? listText(o.html) : (o.text||''), oneHtml=o=>o.html? listHtml(o.html) : escHtml(o.text||'');   // a list is copied with its markers
+function blockText(b){ if(b.kind==='area') return flowOrder(b).map(oneText).filter(t=>t.trim()).join('\n\n'); return oneText(b); }
+function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(oneHtml).filter(t=>t.trim()).join('\n\n'); return oneHtml(b); }
 async function copyBlock(b, grip){ const ok=await copyBoth(blockText(b), blockHtml(b)); if(!ok){ say(loc('copy.failed')); return; } say(loc('copy.done')); if(grip){ grip.classList.add('done'); setTimeout(()=>grip.classList.remove('done'),1200); } }
 const bubbleAct=async e=>{ const a=e.target.closest('button[data-act]'); if(!a) return false; const act=a.dataset.act;
   if(act==='more'){ bubbleMore.hidden=!bubbleMore.hidden; a.setAttribute('aria-expanded',String(!bubbleMore.hidden)); layoutBottom(); revealCaret(); return true; }
