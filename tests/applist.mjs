@@ -92,6 +92,15 @@ await pg.keyboard.press('Escape');
   ok('12c старий html без списків не змінюється', r.old==='a\n<b>b</b>\n\nc');
   ok('12d жирний через перенос закривається й відкривається на кожному рядку: '+r.span, r.span==='[{"l":"","h":"<b>a</b>"},{"l":"","h":"<b>b</b>"}]');
   ok('12e текст для копіювання: «'+show(r.text)+'»', r.text==='А\n1. x y\n2. \n\nБ'); }
+
+// 12f spaces at the start of a line go when it becomes a list item, also before a bold word; Ctrl+Z brings them back
+await pg.mouse.click(900,300); await pg.keyboard.type('  один'); await pg.keyboard.press('Enter'); await pg.keyboard.type(' два'); await pg.keyboard.press('Enter'); await pg.keyboard.type('  '); await pg.keyboard.press('Control+b'); await pg.keyboard.type(' жирний'); await pg.keyboard.press('Control+b');
+{ const L=pg.locator('.blk .txt').filter({hasText:'жирний'}).first(); const before=await stored(/жирний/);
+  await selLines(0,2); await pg.locator('#bubble [data-cmd="ol"]').click(); const st=await stored(/жирний/);
+  const x=await L.evaluate(e=>[...e.children].map(d=>{ const r=document.createRange(); r.selectNodeContents(d); return Math.round(r.getClientRects()[0].left-d.getBoundingClientRect().left); }));
+  ok('12f пробіли на початку рядків прибрано: «'+show(before&&before.html)+'» → «'+show(st&&st.html)+'», текст починається за номером ('+x.join(', ')+')', /^ {2}один\n два\n/.test(before.text) && st.html==='<li data-l="ol">один</li>\n<li data-l="ol">два</li>\n<li data-l="ol"><b>жирний</b></li>' && st.text==='один\nдва\nжирний' && x.every(v=>v===x[0]));
+  await pg.keyboard.press('Control+z'); const st2=await stored(/жирний/); ok('12g Ctrl+Z повертає рядки з пробілами без списку', st2 && st2.text===before.text && !/<li /.test(st2.html||''));
+  await pg.keyboard.press('Escape'); }
 await pg.screenshot({path:OUT+'/applist-desktop.png'});
 
 // 13 touch: the bar gets the list buttons with a selection over two lines; S and </> leave for «⋯» first
