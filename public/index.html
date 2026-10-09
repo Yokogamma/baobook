@@ -531,6 +531,7 @@ const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn')
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
+const TEXT_CW=26;                                   // a text block without a set width wraps at 26 cells (624px): about 75 characters, the text column of an A4 page
 const minw=b=>b&&(b.kind==='code'||b.kind==='area')?MINW_CODE:MINW;
 const TOUCH=matchMedia('(hover:none)').matches;
 // літера гарячої клавіші за будь-якої розкладки: у кириличній Ctrl+Z приходить як «я» — тоді беремо фізичну клавішу
@@ -990,7 +991,7 @@ function tooTight(b){ const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR
 function fits(b){ return !tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o)); }
 const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки (ручка + gap)
 function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));   // стрічка: завжди на всю ширину
-  if(b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=avail; if(b.card && !b.resizing) b.card.style.width=''; }
+  if(b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=b.kind? avail : Math.min(avail, Math.max(minw(b), CL()+TEXT_CW*G())); if(b.card && !b.resizing) b.card.style.width=''; }
   if(b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
   if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
