@@ -18,10 +18,10 @@ const bubbleBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubble butt
 const moreBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubbleMore button')].map(b=>b.dataset.cmd||b.dataset.act));
 await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 ok('0 viewport без interactive-widget: клавіатура не стискає сторінку, нижні панелі — від visualViewport', !/interactive-widget/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')) && /viewport-fit=cover/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')));
-// 1 курсор у блоці: «+» схований, панель видно з самим курсором — «Готово», «Блок», без «Копіювати»; кнопки 44 px; панель при низу вікна
+// 1 курсор у блоці: «+» схований, панель видно з самим курсором — «Готово», «Блок», посилання, без «Копіювати» (S і </> на 390 px — у «⋯»); кнопки 44 px; панель при низу вікна
 await hold(150,400); await pg.waitForTimeout(250); await pg.keyboard.type('перший'); await pg.waitForTimeout(200);
 { const btns=await bubbleBtns(); const bb=await box(pg.locator('#bubble')); const sizes=[]; for(const sel of ['[data-cmd="bold"]','[data-act="done"]','[data-act="new"]']){ sizes.push(await box(pg.locator('#bubble '+sel))); }
-  ok('1 курсор у блоці: «+» схований, панель ('+btns.join(' ')+') при низу вікна ('+(bb.y+bb.h)+'/844), кнопки ≥44 px ('+sizes.map(s=>s.w+'×'+s.h).join(', ')+')', await focusedTxt() && !(await vis(pg.locator('#fab'))) && btns.join(' ')==='bold italic underline strikeThrough code new done' && Math.abs(bb.y+bb.h-844)<=1 && sizes.every(s=>s.w>=44 && s.h>=44) && !(await vis(pg.locator('#bubble [data-act="copy"]')))); }
+  ok('1 курсор у блоці: «+» схований, панель ('+btns.join(' ')+') при низу вікна ('+(bb.y+bb.h)+'/844), кнопки ≥44 px ('+sizes.map(s=>s.w+'×'+s.h).join(', ')+')', await focusedTxt() && !(await vis(pg.locator('#fab'))) && btns.join(' ')==='bold italic underline link new done more' && Math.abs(bb.y+bb.h-844)<=1 && sizes.every(s=>s.w>=44 && s.h>=44) && !(await vis(pg.locator('#bubble [data-act="copy"]')))); }
 // 2 форматування зберігає виділення, набір триває
 await pg.keyboard.press('Shift+Home'); await pg.waitForTimeout(150); const selBefore=await pg.evaluate(()=>getSelection().toString());
 await tapEl(pg.locator('#bubble [data-cmd="bold"]')); await pg.waitForTimeout(200); const selAfter=await pg.evaluate(()=>getSelection().toString());
@@ -48,7 +48,7 @@ await pg.locator('.blk .txt').filter({hasText:'другий'}).tap(); await pg.w
   ok('6b «⋯» відкриває ряд над панеллю (низ '+(mb&&mb.y+mb.h)+' ≤ верх '+bb2.y+'), кнопки ≥44', mb && mb.y+mb.h<=bb2.y && sb.w>=44 && sb.h>=44 && (await pg.locator('#bubble .more').getAttribute('aria-expanded'))==='true');
   await tapEl(pg.locator('#bubbleMore [data-cmd="strikeThrough"]')); await pg.waitForTimeout(150); }
 await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(300);
-{ const main=await bubbleBtns(), more=await moreBtns(); ok('7 знову 390 px: усі кнопки в ряду ('+main.join(' ')+'), «⋯» схований', main.join(' ')==='bold italic underline strikeThrough code new done' && more.length===0 && !(await vis(pg.locator('#bubbleMore')))); }
+{ const main=await bubbleBtns(), more=await moreBtns(); ok('7 знову 390 px: у ряду '+main.join(' ')+', у «⋯» '+more.join(' ')+', ряд «⋯» закритий', main.join(' ')==='bold italic underline link new done more' && more.join(' ')==='code strikeThrough' && !(await vis(pg.locator('#bubbleMore')))); }
 // 8 «клавіатура»: вікно нижче — панель при новому низу, плашка над нею
 await pg.setViewportSize({width:390,height:420}); await pg.waitForTimeout(300); await pg.evaluate(()=>sheetDebug.offerUndo('ще плашка')); await pg.waitForTimeout(350);
 { const bb=await box(pg.locator('#bubble')), u=await box(pg.locator('#undo'));
