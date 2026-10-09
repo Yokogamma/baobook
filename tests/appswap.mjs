@@ -38,6 +38,13 @@ await pg.reload(); await pg.waitForTimeout(500);
   let back={frames:0, home:true};
   for(let y=gy-480; y<=gy-200; y+=6){ await pg.mouse.move(gx,y); const top=await dragTop(); if(top>mid+EDGE){ back.frames++; const k=await box(kid); if(k.y!==k0.y) back.home=false; } }
   ok('3 повернув край нижче середини — блок області знову на своєму місці ('+back.frames+' кадрів)', back.frames>3 && back.home);
+  // 3b the same after a sideways detour out of the block's column and back: it still remembers the block was approached from below
+  for(let y=gy-200; y>=gy-470; y-=6) await pg.mouse.move(gx,y);
+  for(let x=gx; x<=gx+360; x+=8) await pg.mouse.move(x,gy-470);
+  const out=await box(kid); for(let x=gx+360; x>=gx; x-=8) await pg.mouse.move(x,gy-470);
+  let back2={frames:0, home:true, at:''};
+  for(let y=gy-470; y<=gy-200; y+=6){ await pg.mouse.move(gx,y); const top=await dragTop(); if(top>mid+EDGE){ back2.frames++; const k=await box(kid); if(k.y!==k0.y){ back2.home=false; back2.at=` (блок на ${k.y}, а був на ${k0.y})`; } } }
+  ok('3b після відходу вбік за межі колонки ('+out.y+') і назад: нижче середини блок області знову на своєму місці'+back2.at, back2.frames>3 && back2.home);
   // drop past the middle: the block of the area is below the dropped one
   for(let y=gy-200; y>=gy-470; y-=6) await pg.mouse.move(gx,y);
   const gh=await ghost(); await pg.mouse.up(); await pg.waitForTimeout(300);
