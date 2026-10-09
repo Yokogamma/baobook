@@ -122,6 +122,9 @@ const bin=async(pg,id)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]'); 
   await pg.click('#trashRow'); await pg.waitForTimeout(300); await open(pg,'n1'); await pg.waitForTimeout(500);
   const sb=await box(pg.locator('.rostrip')), fb=await box(pg.locator('#sheet .blk').first()), btn=await box(pg.locator('#roRestore')), btn2=await box(pg.locator('#roPurge'));
   ok('10d the read-only strip fits the screen ('+sb.x+'+'+sb.w+' of 390), covers no block ('+sb.y+'+'+sb.h+' vs '+fb.y+'), buttons '+btn.h+'px on one row', sb.x>=0 && sb.x+sb.w<=390 && await strip(pg) && sb.y+sb.h<=fb.y && btn.h>=40 && btn.y===btn2.y);
+  await pg.evaluate(()=>document.getElementById('moreBtn').click()); await pg.waitForTimeout(250);
+  ok('10e the header «⋯» menu opens above the strip', await pg.evaluate(()=>{ const r=document.querySelector('.rostrip').getBoundingClientRect(), e=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2); return !!(e && e.closest('.amenu')); }));
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
   await pg.screenshot({path:OUT+'/apptrash-phone.png'});
   console.log(errs.length? errs.join('\n') : '✓ phone: no errors'); if(errs.length) fails++;
   await ctx.close(); }

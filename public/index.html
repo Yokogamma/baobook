@@ -432,7 +432,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 }
 @media (prefers-reduced-motion:reduce){ .ask[open],.ask[open]::backdrop{animation:none} }
 /* a note from the trash is shown read-only: a strip under the header, the sheet two rows lower so the strip covers nothing, no editing tools */
-.rowrap{position:sticky;top:50px;z-index:6;height:0;display:flex;align-items:flex-start;justify-content:center;pointer-events:none}
+.rowrap{position:sticky;top:50px;z-index:5;height:0;display:flex;align-items:flex-start;justify-content:center;pointer-events:none}
 .rostrip{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:13px;color:var(--ink-2);pointer-events:auto}
 .rowrap[hidden]{display:none} .ro-b{display:flex;gap:6px} .rostrip .fbtn{flex:0 0 auto;height:30px;padding:0 12px} .rostrip .fbtn.danger:hover{color:#c33}
 .app.ro .sheet{margin-top:48px} .app.ro .empty{display:none} .app.ro .sheet .grip,.app.ro .sheet .rz,.app.ro .sheet .bact{visibility:hidden}
@@ -548,6 +548,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="backdrop" id="backdrop"></div>
 
   <main class="main">
+    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button></span></div></div>
     <header class="top">
       <div class="left">
         <button class="tb" id="sideBtn" data-i18n-attr="title:panel.label" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -566,7 +567,6 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="tb" id="moreBtn" data-i18n-attr="title:menu.more;aria-label:menu.more" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
     </header>
-    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button></span></div></div>
     <div class="sheet" id="sheet">
       <div class="empty" id="empty">
         <div class="big"><span class="mouse" data-i18n="empty.mouse"></span><span class="touch" data-i18n="empty.touch"></span></div>

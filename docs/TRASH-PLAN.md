@@ -30,6 +30,7 @@ State (2026-10-09): PR 1 and PR 2 are done, PR 3 is next.
   - a strip under the header says «Нотатка в кошику, ще N днів», with «Відновити» and «Видалити назавжди»;
   - clearing, a new area and the history are gone from the header and its «⋯» menu; Ctrl+Alt+H, paste and Ctrl+Z do nothing;
   - the sheet is two rows lower (four on a phone, where the strip has two rows), so the strip covers no block.
+  - the strip shares the header's layer and comes before it in the page, so the header «⋯» menu opens above it.
 - Search in the notes section skips the trash; in the trash section it filters the trash.
 - Purge: at start and every hour while the app is open, notes with `deleted` older than 30 days are deleted for good with their versions; other tabs are told (`del`).
 - After a restore or a purge empties the trash, the panel goes back to the notes.
