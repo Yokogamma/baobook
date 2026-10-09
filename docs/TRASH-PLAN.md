@@ -9,7 +9,7 @@ Owner's decisions (2026-10-09):
 
 Three PRs: PR 1 is the dialog and the broom for clearing the sheet, PR 2 is the trash and the list sections, PR 3 is the archive on top of them.
 
-State (2026-10-09): PR 1 and PR 2 are done, PR 3 is next.
+State (2026-10-09): PR 1, PR 2 and PR 3 are done.
 
 ## 1. Data
 
@@ -34,18 +34,21 @@ State (2026-10-09): PR 1 and PR 2 are done, PR 3 is next.
 - Search in the notes section skips the trash; in the trash section it filters the trash.
 - Purge: at start and every hour while the app is open, notes with `deleted` older than 30 days are deleted for good with their versions; other tabs are told (`del`).
 - After a restore or a purge empties the trash, the panel goes back to the notes.
-- The storage line counts the notes of the list; the trash has its own counter on its row.
+- The storage line does not count the trash; the trash has its own counter on its row.
 - At start (and after a reload) the app opens the last note only if it is in the list, otherwise the newest note of the list.
 
 ## 3. Archive (PR 3)
 
-- «В архів» sits next to the bin on a list item (an archive box icon) and in the header «⋯» menu. The toast says «Нотатку «…» перенесено в архів · Скасувати».
-- The row «Архів · N» sits next to «Кошик · N» and opens the archive section the same way.
-- An archived note opens and edits as usual; a strip says «В архіві» with «Повернути до нотаток». Its bin moves it to the trash; a restore from the trash brings it back to the archive.
-- Search in the notes section also finds archived notes, in a separate group «В архіві» below the results.
+- «Перенести в архів» is the box button left of the bin on a list item, and an item of the header «⋯» menu on touch. No dialog; the toast «Нотатку «…» перенесено в архів · Скасувати» has the usual timer. If the note was open, the newest note of the list opens.
+- The row «Архів · N» sits above «Кошик · N» while the archive is not empty and opens the archive section the same way (header, hint «без строку», a nav entry on a phone). An archive item has «Повернути до нотаток» and the bin.
+- An archived note opens and edits as usual, history included. The strip under the header says «Нотатка в архіві» with «Повернути до нотаток» (one row on a phone); the note stays open after it. A reload keeps an open archived note open.
+- The bin moves an archived note to the trash, and it keeps `archived` there; a restore brings it back to the archive («Нотатку «…» відновлено в архів»).
+- Search in the notes also finds archived notes, in a group «В архіві» below the notes; in the archive section it filters the archive; the trash is never in the notes' results.
+- The storage line counts the notes of the list and the archive (both are on this device); the trash is not counted.
+- A section that becomes empty (the last note restored, moved back or deleted) gives way to the notes.
 
 ## 4. Tests
 
 - `appask.mjs` (PR 1, updated in PR 2): the dialog itself; clearing the sheet with its undo and version; delete forever through the dialog.
 - `apptrash.mjs` (PR 2): the bin and the toast; the trash row and section; read-only view; restore from the strip and from the list; «Очистити кошик»; the 30-day purge; reload; export and import of `deleted`; two tabs; the phone.
-- `apparchive.mjs` (PR 3): to the archive and back, editing there, search groups, trash from the archive and back to the archive.
+- `apparchive.mjs` (PR 3): to the archive and the undo; the search group; the section; editing an archived note and its strip; trash from the archive and back to it; back to the notes from the strip and the item; a reload; export and import of `archived`; two tabs; the phone «⋯» items and the strip under the menu.

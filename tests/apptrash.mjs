@@ -116,7 +116,7 @@ const bin=async(pg,id)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]'); 
   await pg.click('#undo .uclose'); await pg.click('#sideBtn'); await pg.waitForTimeout(400); const rb=await box(pg.locator('#trashRow'));
   ok('10a the trash row is a 44px target ('+rb.h+')', rb.h>=44);
   await pg.click('#trashRow'); await pg.waitForTimeout(300);
-  ok('10b the trash section has its own history entry', (await pg.evaluate(()=>history.state&&history.state.nav))==='trash' && await pg.locator('#sect').isVisible());
+  ok('10b the trash section has its own history entry', (await pg.evaluate(()=>history.state&&history.state.nav))==='section' && await pg.locator('#sect').isVisible());
   await pg.goBack(); await pg.waitForTimeout(400);
   ok('10c system Back returns to the notes, the panel stays open', await pg.locator('#sect').isHidden() && await pg.evaluate(()=>document.getElementById('app').classList.contains('open')));
   await pg.click('#trashRow'); await pg.waitForTimeout(300); await open(pg,'n1'); await pg.waitForTimeout(500);
