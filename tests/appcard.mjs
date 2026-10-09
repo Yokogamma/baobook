@@ -45,7 +45,8 @@ const JS='function a(){\n  return 1;\n}\nfunction b(){\n  return 2;\n}';
   { await tapEl(pg.locator('#blockbar [data-mv="done"]')).catch(()=>{}); await pg.waitForTimeout(200); await tapEl(blk('Перший').locator('.grip')); await pg.waitForTimeout(300); const h0=(await box(blk('Перший').locator('.txt'))).h;
     await tapEl(blk('Перший').locator('.bact')); await pg.waitForTimeout(250); await tapEl(pg.locator('.amenu.bm .mi').filter({hasText:'Розмір'})); await pg.waitForTimeout(300); const sizes=(await pg.locator('.amenu.bm .mi').allInnerTexts()).map(t=>t.replace(/\s+/g,' ')); await tapEl(pg.locator('.amenu.bm .mi').filter({hasText:'Вищий'})); await pg.waitForTimeout(400); const h1=(await box(blk('Перший').locator('.txt'))).h;
     await tapEl(blk('Перший').locator('.bact')); await pg.waitForTimeout(250); await tapEl(pg.locator('.amenu.bm .mi').filter({hasText:'Розмір'})); await pg.waitForTimeout(300); await tapEl(pg.locator('.amenu.bm .mi').filter({hasText:'Авто'})); await pg.waitForTimeout(400); const h2=(await box(blk('Перший').locator('.txt'))).h;
-    ok('5 «Розмір»: '+sizes.join(' | ')+'; «Вищий» '+h0+' → '+h1+', «Авто» → '+h2, sizes.length===3 && h1===h0+48 && h2===h0); await tapEl(pg.locator('#blockbar [data-mv="done"]')).catch(()=>{}); }
+    const g=await pg.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--g')));   // two grid rows: 48px at 16px text, 54px at a phone's 18px
+    ok('5 «Розмір»: '+sizes.join(' | ')+'; «Вищий» '+h0+' → '+h1+' (two '+g+'px rows), «Авто» → '+h2, sizes.length===3 && h1===h0+2*g && h2===h0); await tapEl(pg.locator('#blockbar [data-mv="done"]')).catch(()=>{}); }
   await pg.screenshot({path:OUT+'/appcard-touch.png'});
   console.log(errs.length? errs.join('\n') : '✓ без помилок (телефон)'); if(errs.length) fails++; await ctx.close(); }
 /* ── компʼютер: мишею за шапку одразу; клік по назві — правка; «⋯» коду прихований ── */
