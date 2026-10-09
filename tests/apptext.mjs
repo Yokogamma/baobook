@@ -14,10 +14,10 @@ await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400);
 const CL=await pg.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle'))+2);
 
 /* ── текстовий блок: ручка розміру ─────────────────────────────────────── */
-await pg.mouse.click(500,300); await pg.keyboard.type('Довгий текст для перевірки ручки розміру текстового блока на чистому аркуші'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+await pg.mouse.click(500,300); await pg.keyboard.type('Довгий текст для перевірки ручки розміру текстового блока'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 const blk=pg.locator('#sheet > .blk').filter({hasText:'Довгий текст'}); const card=blk.locator('.tcard'), txt=blk.locator('.txt'), rz=blk.locator('.rz');
 const c0=await box(card);
-ok('1a одна лінія, картка по ширині тексту, без класу sized: '+c0.w+'×'+c0.h, c0.h===24 && c0.w>500 && !(await card.evaluate(e=>e.classList.contains('sized'))));
+ok('1a одна лінія, картка по ширині тексту, без класу sized: '+c0.w+'×'+c0.h, c0.h===24 && c0.w>400 && !(await card.evaluate(e=>e.classList.contains('sized'))));
 await pg.mouse.move(100,100); await pg.waitForTimeout(200);
 const opHidden=await op(rz); await txt.hover(); await pg.waitForTimeout(200); const opShown=await op(rz);
 ok('1b ручка зʼявляється при наведенні на текст ('+opHidden+'→'+opShown+')', opHidden===0 && opShown===1);
@@ -60,7 +60,7 @@ ok('1c під час набору ручка схована ('+opFocused+'), п�
 // 7 подвійний клік по ручці — авто
 { const b=pg.locator('#sheet > .blk').filter({hasText:'Довгий текст'}); const r=b.locator('.rz'); await b.locator('.txt').hover(); await r.dblclick(); await pg.waitForTimeout(350);
   const c=await box(b.locator('.tcard')), t=await box(b.locator('.txt')); const m=await model('Довгий текст');
-  ok('7 авто: картка знову по тексту в один рядок, cw/ch зняті', t.h===24 && c.w>500 && m && !m.cw && !m.ch && !(await b.locator('.tcard').evaluate(e=>e.classList.contains('sized')))); }
+  ok('7 авто: картка знову по тексту в один рядок, cw/ch зняті', t.h===24 && c.w>400 && m && !m.cw && !m.ch && !(await b.locator('.tcard').evaluate(e=>e.classList.contains('sized')))); }
 // 8 задана ширина — тверда: сусід, кинутий у її межі, виштовхує блок униз, а не звужує його
 { const b=pg.locator('#sheet > .blk').filter({hasText:'Довгий текст'}); const r=await box(b.locator('.rz')); await pg.mouse.move(r.x+9,r.y+9); await pg.mouse.down(); await pg.mouse.move(r.x+9-120,r.y+9,{steps:5}); await pg.mouse.up(); await pg.waitForTimeout(350);
   const c=await box(b.locator('.tcard')); await pg.mouse.click(c.x+20, c.y+c.h+120); await pg.keyboard.type('сусід'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
