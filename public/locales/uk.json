@@ -198,6 +198,7 @@
   "undo.blockMovedInto": "Блок «{label}» перенесено в область «{area}»",
   "undo.blockPulledOut": "Блок «{label}» винесено з області",
   "undo.blockResized": "Висоту блока «{label}» змінено",
+  "undo.blockSized": "Розмір блока «{label}» змінено",
   "undo.ungrouped": "Область розгруповано, блоки лишились на аркуші",
   "undo.areaDeleted": "Область «{name}» видалено",
   "undo.areaResized": "Розмір області «{name}» змінено",

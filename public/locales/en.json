@@ -198,6 +198,7 @@
   "undo.blockMovedInto": "Block «{label}» moved into the area «{area}»",
   "undo.blockPulledOut": "Block «{label}» moved out of the area",
   "undo.blockResized": "Height of the block «{label}» changed",
+  "undo.blockSized": "Size of the block «{label}» changed",
   "undo.ungrouped": "Area ungrouped, the blocks stay on the sheet",
   "undo.areaDeleted": "Area «{name}» deleted",
   "undo.areaResized": "Area «{name}» resized",
