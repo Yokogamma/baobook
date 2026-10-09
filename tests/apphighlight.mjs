@@ -8,11 +8,11 @@ const ctx=await br.newContext({...CTX, viewport:{width:1440,height:800}}); const
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
-const seed=async blocks=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+const seed=async blocks=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
   await pg.evaluate(async blocks=>{ const n={id:'nhl',title:'',blocks,created:1,updated:1};
     const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
     await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
-    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nhl'; localStorage.setItem('sheet:settings', JSON.stringify(s)); }, blocks);
+    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nhl'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); }, blocks);
   await pg.reload(); await pg.waitForTimeout(500); };
 const marks=()=>pg.evaluate(()=>({ dz:[...document.querySelectorAll('.blk.dz')].map(e=>e.textContent.trim().slice(0,12)),
   shifted:[...document.querySelectorAll('.blk.shifted')].map(e=>e.textContent.trim().slice(0,12)),

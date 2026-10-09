@@ -13,11 +13,11 @@ const stored=()=>pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet'
 // sorted: a dropped block is re-appended, so DOM order may change; an area is labelled by kind, its text includes its blocks
 const layout=()=>pg.evaluate(()=>[...document.querySelectorAll('#sheet .blk')].map(e=>{ const r=e.getBoundingClientRect(); return [(e.classList.contains('is-area')? 'area' : e.textContent.trim().slice(0,6)).replace(/\s/g,' '), Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(' '); }).sort().join(' | '));
 const BLOCKS=[{id:'ba',row:6,text:'блок A',fx:0.2137},{id:'bb',row:9,text:'блок B\nдругий рядок\nтретій рядок',fx:0.2},{id:'barea',row:20,text:'',fx:0.5,kind:'area',cw:20,ch:6}];
-const seed=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+const seed=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
   await pg.evaluate(async blocks=>{ const n={id:'ncancel',title:'',blocks,created:1,updated:1};
     const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
     await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
-    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='ncancel'; localStorage.setItem('sheet:settings', JSON.stringify(s)); }, BLOCKS);
+    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='ncancel'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); }, BLOCKS);
   await pg.reload(); await pg.waitForTimeout(500); };
 const A=pg.locator('#sheet > .blk').filter({hasText:'блок A'});
 // grab A and carry it down onto B, so that B is pushed down

@@ -16,7 +16,7 @@ const JS='function a(){\n  return 1;\n}\nfunction b(){\n  return 2;\n}';
   const hold=async(x,y,ms=650)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(ms); await touch('touchEnd',[]); };
   const blk=t=>pg.locator('#sheet > .blk').filter({hasText:t});
   const topOf=loc=>loc.evaluate(e=>parseInt(e.style.top)||0);
-  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   await hold(80,300); await pg.waitForTimeout(250); await pg.keyboard.type('Перший блок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
   await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); await tapEl(pg.locator('.amenu.hm .mi').first()); await pg.waitForTimeout(300); await pg.keyboard.type('Папка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
   const area=pg.locator('#sheet > .blk.is-area').first();
@@ -51,7 +51,7 @@ const JS='function a(){\n  return 1;\n}\nfunction b(){\n  return 2;\n}';
 /* ── компʼютер: мишею за шапку одразу; клік по назві — правка; «⋯» коду прихований ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const topOf=loc=>loc.evaluate(e=>parseInt(e.style.top)||0);
-  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   await pg.mouse.move(500,260); await pg.mouse.down(); await pg.mouse.move(1000,420,{steps:8}); await pg.mouse.up(); await pg.waitForTimeout(200); await pg.keyboard.type('Папка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
   const area=pg.locator('.blk.is-area').first(); const bar=await box(area.locator('.cbar')), tt=await box(area.locator('.ctitle')); const t0=await topOf(area);
   const ex=tt.x+tt.w+40;   // порожнє місце шапки праворуч від назви

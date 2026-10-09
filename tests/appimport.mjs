@@ -11,7 +11,7 @@ let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n);
 const OUT=path.join(os.tmpdir(),'sheet-tests'); fs.mkdirSync(OUT,{recursive:true});
 const PAGE=SITE;
 const idbNotes=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
-const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
+const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
 const importFile=async (pg,name,data)=>{ const f=path.join(OUT,name); fs.writeFileSync(f,JSON.stringify(data)); await pg.locator('#importFile').setInputFiles(f); await pg.waitForTimeout(700); return (await pg.locator('#toast').innerText()).trim(); };
 const byId=(list,ids)=>ids.map(id=>list.find(n=>n.id===id));
 // silent bad write: IndexedDB reports success but stores a different version (ids starting with "ghost")

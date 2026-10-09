@@ -6,7 +6,7 @@ const fs=await import('node:fs');
 const br=await chromium.launch({ignoreDefaultArgs:['--hide-scrollbars'], ...(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {})});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); fs.mkdirSync(OUT,{recursive:true});
-const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
+const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
 const importNotes=async(pg,notes)=>{ await pg.setInputFiles('#importFile',{name:'n.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({app:'baobook',format:1,notes}))}); await pg.waitForTimeout(800); };
 const many=n=>[...Array(n)].map((_,i)=>({id:'n'+i,title:'Нотатка '+(i+1),blocks:[{id:'b'+i,row:2,text:'текст '+(i+1),fx:0.2}],created:1,updated:Date.now()-i*60000}));
 const LONG={id:'long',title:'Довга',blocks:[{id:'l1',row:2,text:'верх',fx:0.2},{id:'l2',row:160,text:'низ',fx:0.2}],created:1,updated:Date.now()+60000};   // the sheet is taller than the window

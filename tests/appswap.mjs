@@ -12,7 +12,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.
 // the ghost slides to its place (transition on top), so read where it is going, not where it is in this frame
 const ghost=()=>pg.evaluate(()=>{ const g=document.querySelector('.gbox.on'); if(!g) return null; const p=g.offsetParent, y=p.getBoundingClientRect().top+p.clientTop+parseFloat(g.style.top); return {y:Math.round(y), b:Math.round(y+g.offsetHeight), bad:g.classList.contains('bad'), inArea:!!g.closest('.abody')}; });
 const dragTop=()=>pg.evaluate(()=>{ const d=document.querySelector('.blk.drag'); return d? Math.round(d.getBoundingClientRect().top) : null; });
-const wipe=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300); };
+const wipe=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300); };
 // pointermove reaches the page with the next frame: wait for it before reading positions
 const mv=async(x,y,o)=>{ await pg.mouse.move(x,y,o); await pg.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))); };
 const G=24, EDGE=14;   // frames within half a row of the middle are skipped: the edge snaps to the grid there
@@ -23,7 +23,7 @@ const T="New 9.x feature that size the items to fit their content height as to n
 await pg.evaluate(async T=>{ const n={id:'nswap',title:'',blocks:[{id:'barea',row:5,text:'',fx:0.09,kind:'area',cw:29,ch:23},{id:'bkid',row:1,text:T,parent:'barea',col:1,cw:10},{id:'bbelow',row:30,text:T,fx:0.107}],created:1,updated:Date.now()};
   const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
   await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
-  const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nswap'; localStorage.setItem('sheet:settings', JSON.stringify(s)); }, T);
+  const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nswap'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); }, T);
 await pg.reload(); await pg.waitForTimeout(500);
 { const area=pg.locator('.blk.is-area'), kid=area.locator('.abody .blk').first(); const k0=await box(kid), a0=await box(area.locator('.ablk')); const mid=k0.y+k0.h/2;
   const g=await box(pg.locator('#sheet > .blk:not(.is-area) .grip').last()); const gx=g.x+g.w/2, gy=g.y+g.h/2;

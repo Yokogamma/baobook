@@ -23,10 +23,10 @@ const SEED={id:'flow1',title:'',created:1,updated:Date.now(),blocks:[
   {id:'k2',parent:'A',col:0,row:2,text:'Дитина 2'},
   {id:'b4',fx:0.3,row:30,text:'Четвертий далеко внизу'}]};
 await pg.goto(SITE); await pg.waitForTimeout(400);
-await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 SEED.updated=Date.now()+60000;
 await pg.evaluate(seed=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put(seed); t.oncomplete=()=>{ d.close(); res(); }; }; }), SEED);
-await pg.evaluate(()=>localStorage.clear()); await pg.reload(); await pg.waitForTimeout(600);
+await pg.evaluate(()=>(localStorage.clear(),sessionStorage.clear())); await pg.reload(); await pg.waitForTimeout(600);
 const W=await pg.locator('#sheet').evaluate(e=>e.clientWidth);
 const noOverlap=async()=>{ const t=(await tops()).filter(o=>o.w>0); for(let i=0;i<t.length;i++) for(let j=i+1;j<t.length;j++){ const a=t[i],b=t[j]; if(a.x<b.x+b.w && b.x<a.x+a.w && a.y<b.y+b.h && b.y<a.y+a.h) return false; } return true; };
 // 1 вузький екран — те саме полотно: горизонталь за fx, вертикаль за рядом, стрічки немає

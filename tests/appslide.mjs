@@ -12,7 +12,7 @@ async function scene(reduced){
   await pg.evaluate(async blocks=>{ const n={id:'nslide',title:'',blocks,created:1,updated:1};
     const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
     await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
-    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nslide'; localStorage.setItem('sheet:settings', JSON.stringify(s)); }, BLOCKS);
+    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nslide'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); }, BLOCKS);
   await pg.reload(); await pg.waitForTimeout(500);
   const B=pg.locator('#sheet > .blk').filter({hasText:'блок B'}), A=pg.locator('#sheet > .blk').filter({hasText:'блок A'});
   // where B is drawn now, and where it is going (its left/top style)

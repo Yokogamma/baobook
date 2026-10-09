@@ -7,7 +7,7 @@ let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n);
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
-await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 // 1 протяжка мишею → область
 await pg.mouse.move(500,300); await pg.mouse.down(); await pg.mouse.move(980,460,{steps:8}); 
 ok('1a під час протяжки видно рамку', (await pg.locator('.marq').count())===1);
@@ -86,7 +86,7 @@ await tcdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:15
 ok('14 тач: тап нічого не створює ('+tapMade+'), утримання створює текстовий блок у фокусі', tapMade===0 && (await tp.locator('#sheet .blk').count())===1 && await tp.evaluate(()=>document.activeElement.classList.contains('txt')));
 await tp.close(); await tctx.close();
 // скріншот сцени для користувача
-await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 await pg.mouse.move(440,180); await pg.mouse.down(); await pg.mouse.move(1000,470,{steps:6}); await pg.mouse.up(); await pg.waitForTimeout(150); await pg.keyboard.type('Запуск: що зробити до пʼятниці'); await pg.keyboard.press('Enter');
 { const a=await box(pg.locator('.blk.is-area .ablk').first()); await pg.mouse.click(a.x+60,a.y+70); await pg.keyboard.type('Зібрати відгуки з тестування'); await pg.keyboard.press('Escape'); await pg.mouse.click(a.x+60,a.y+118); await pg.keyboard.type('Оновити скріншоти в описі'); await pg.keyboard.press('Escape'); await pg.mouse.click(a.x+330,a.y+70); await pg.keyboard.type('Дедлайн: пт, 16:00'); await pg.keyboard.press('Escape');
   await pg.locator('.blk.is-area .ablk').hover(); await pg.locator('.blk.is-area .colorb').click(); await pg.locator('.cpick button[data-c="blue"]').click(); }
