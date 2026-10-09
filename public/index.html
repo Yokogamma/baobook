@@ -1942,7 +1942,7 @@ async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if
   if(v) await vqueue(n.id, ()=>idb.tx(['versions'],'readwrite',t=>{ const s=t.objectStore('versions'), g=s.get(v.id); g.onsuccess=()=>{ if(g.result){ g.result.name=name; s.put(g.result); } }; }));   // the shown version gets the name
   else { flushSave(); await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name); }   // «Зараз» becomes a named version (R4)
   say(loc('hist.named',{name})); await loadHist(); }
-async function clearHist(){ const n=cur; if(!n || !confirm(loc('hist.clearConfirm',{title:titleOf(n)}))) return; H.sel='now'; showNow();
+async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
   await vqueue(n.id, async()=>{ await vdelete(n.id, await vlist(n.id), []); VLAST.set(n.id,null); }); storageUI(); await loadHist(); }
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
 histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });

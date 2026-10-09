@@ -85,7 +85,8 @@ ok('14 export without the box has no history; with it, every version and body ('
 await pg.evaluate(()=>{ sheetDebug.vers.estimate={usage:0, quota:1}; return sheetDebug.vers.sweep(); }); await pg.waitForTimeout(200); const s6=await state();
 ok('16 a tiny budget leaves the named versions and the newest one ('+s6.vers.map(v=>v.name||v.reason).join(', ')+')', s6.vers.some(v=>v.name==='Реліз') && s6.vers.some(v=>v.name==='Перша') && s6.vers.length<s5.vers.length);
 await pg.evaluate(()=>{ sheetDebug.vers.estimate=null; });
-await openPanel(); await menu('Очистити історію нотатки'); await pg.waitForTimeout(500); const s7=await state();
+await openPanel(); await menu('Очистити історію нотатки'); const t7=await pg.locator('#askTitle').innerText(); await pg.click('#askYes'); await pg.waitForTimeout(500); const s7=await state();
+ok('17a it asks in our own dialog: «'+t7+'»', /^Очистити історію нотатки «.+»\?$/.test(t7));
 ok('17 «Очистити історію нотатки» removes its versions and bodies, «Інша» keeps hers ('+s7.vers.length+'/'+s7.blobs.length+', other '+s7.other.length+'/'+s7.otherBlobs.length+')', s7.vers.length===0 && s7.blobs.length===0 && s7.other.length===1 && s7.otherBlobs.length>0 && blk(s7.note,'b'));
 ok('18 the list says «Поки версій немає»', await pg.evaluate(()=>document.querySelector('#histList .none')?.textContent)==='Поки версій немає');
 
