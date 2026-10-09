@@ -23,6 +23,7 @@
   "search.none": "Nothing found",
 
   "save.ok": "Saved",
+  "tabs.conflict": "This note was just changed in another tab. This tab keeps its version; the other one is saved in the version history.",
   "save.failed": "Not saved",
   "save.failedOpen": "Not saved: open the panel",
   "save.failedReason": "Not saved: {reason}",

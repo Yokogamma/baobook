@@ -858,8 +858,8 @@ function markDirty(){ const first=!dirty; dirty=true; savedShow('pend','●','�
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено» */
-function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const p=db.save(n); if(n===cur) saveP=p;
-  p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id); if(r.ok) unsaved.delete(n.id); else unsaved.set(n.id,{reason:r.reason,since:now()});
+function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, p=db.save(n); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
+  p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id); if(r.ok){ unsaved.delete(n.id); tellTabs({t:'put',n:snap}); } else unsaved.set(n.id,{reason:r.reason,since:now()});
     if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
     saveUI(); storageUI(); if(r.ok && db.backend==='idb') vafter(n); }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
@@ -874,12 +874,35 @@ window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
 function openNote(n, o={}){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
-  blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
-  ttl.textContent=n.title; document.title=titleOf(n)+' · Baobook';
+  drawNote(n);
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
-function delNote(n){ if(!confirm(loc('notes.deleteConfirm',{title:titleOf(n)}))) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI();
+function drawNote(n){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
+  ttl.textContent=n.title; document.title=titleOf(n)+' · Baobook'; }
+function delNote(n){ if(!confirm(loc('notes.deleteConfirm',{title:titleOf(n)}))) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
 newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
+
+/* ══ other tabs: every tab keeps its notes in memory, so a save or a delete in one tab is sent to the others, and a tab never writes an old copy over a newer one ══
+   A note this tab has no unwritten edits of takes the other tab's copy (the open one is redrawn in place). If the open note has unwritten edits here,
+   this tab's copy stays and is saved; the other one goes into the version history as «conflict» first. A tab that missed messages (hidden, frozen,
+   back from the page cache) compares its notes with the storage when it is shown again. */
+const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
+function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
+const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet
+function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.id);
+  if(!n){ notes.push(r); renderList(); storageUI(); return; }
+  if((r.updated||0)<=(n.updated||0)) return;
+  VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
+  if(n===cur && busy(n)){ if(db.backend==='idb') vcapture(n.id, {title:r.title, blocks:r.blocks, updated:r.updated}, 'conflict'); if(!dirty) markDirty(); say(loc('tabs.conflict')); return; }
+  if(busy(n)) return;
+  Object.assign(n, r); SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
+  if(n===cur){ const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); }
+  renderList(); }
+function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n)) return;   // edits here keep the note: its next save writes it back
+  notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
+  if(cur===n){ cur=null; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
+if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); };
+async function syncTabs(){ if(!cur) return; const m=await storedNotes(); for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r); }
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
@@ -923,7 +946,8 @@ q.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; renderList()
 qClear.addEventListener('click',()=>{ q.value=''; renderList(); q.focus(); });
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&hotkey(e)==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
   if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='n'){ e.preventDefault(); newBtn.click(); } });
-window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else if(unsaved.size) retrySave(); });
+window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else { if(unsaved.size) retrySave(); syncTabs(); } });
+window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // back from the page cache: messages sent meanwhile never came
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 /* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)
