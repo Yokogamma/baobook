@@ -367,6 +367,11 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .gbox.on{display:block} .gbox.bad{border-color:rgba(235,87,87,.8);background:rgba(235,87,87,.12)}
 .hbox{position:absolute;border:1.5px dashed var(--sel-line);border-radius:6px;pointer-events:none;display:none;opacity:.45} .hbox.on{display:block} .hbox.hit{opacity:1;background:var(--sel)}   /* where the dragged block came from; lit when a drop puts it back */
 .hbox .lbl{position:absolute;left:6px;top:-9px;font-size:10px;font-weight:600;color:var(--ink-2);background:var(--page);padding:0 5px;border-radius:4px;white-space:nowrap;display:none} .hbox.kb .lbl{display:block}   /* "Esc to cancel", for the mouse only */
+/* while dragging, why blocks move: the blocks of the area under the dragged one are outlined, a block pushed aside gets an accent
+   outline, and a faint one (.trace) stays at its old place */
+.blk.dz>.tcard,.blk.dz>.cblk{outline:1.5px dashed var(--sel-line);outline-offset:2px;border-radius:6px}
+.blk.shifted>.tcard,.blk.shifted>.cblk,.blk.shifted>.ablk{outline:2px solid var(--n);outline-offset:2px;border-radius:6px}
+.trace{position:absolute;border:1.5px dashed var(--n);border-radius:6px;pointer-events:none;opacity:.5}
 .gbox .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
 .gbox.bad .lbl{display:block}
 .ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
@@ -1539,6 +1544,13 @@ function slideFrom(el, r0){   // FLIP: the element is already in its new place; 
   el.style.transition='transform .18s ease-out'; el.style.transform=''; el.addEventListener('transitionend',()=>{ el.style.transition=''; },{once:true}); }
 function drag(b, grip, o={}){   // o.hold — на дотику перенос лише після утримання (шапка картки); o.skip(e) — не починати (кнопки, назва в правці); o.quiet — натискання без руху нічого не робить
   let gx,gy,moved,from,others,probe,host,ptype,entry,entryIn,home,left,undo;
+  const traces=new Map();   // pushed-aside block → the faint outline at its old place
+  const mark=on=>{ const a=on && ctn(probe);
+    for(const o of others){ const off=on && o.row0!==undefined && o.row!==o.row0;
+      o.el.classList.toggle('dz', !!a && o.parent===a.id); o.el.classList.toggle('shifted', off);
+      let t=traces.get(o); if(!off){ if(t){ t.remove(); traces.delete(o); } continue; }
+      if(!t){ t=el('div','trace',ctnEl(o)); traces.set(o,t); } else if(t.parentNode!==ctnEl(o)) ctnEl(o).appendChild(t);
+      const c=ctn(o); Object.assign(t.style, {left:xlOf(o.col,c)+'px', top:yOf(o.row0,c)+'px', width:o.w+'px', height:(o.lines||1)*G()+'px'}); } };
   // changed your mind: Esc, the right button, leaving the window or the tab cancel the drag; the layout goes back as it was
   const onKey=e=>{ if(e.key==='Escape' && probe){ e.preventDefault(); e.stopPropagation(); end(true); } };
   const onAway=()=>{ if(probe && (document.hidden || !document.hasFocus())) end(true); };
@@ -1594,10 +1606,10 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     if(home) resolve(probe);   // the other rows are back at row0, so nothing moves
     else { const give=approach(); give.forEach(o=>o.hidden=true); bad=tooTight(probe); give.forEach(o=>o.hidden=false);   // a neighbour that is about to move down leaves room
       if(bad){ live(null).forEach(render); if(target) live(target).forEach(render); render(probe); } else resolve(probe); }
-    gbox.className='gbox on'+(bad?' bad':''); hbox.className='hbox'+(moved?' on':'')+(home?' hit':'')+(ptype==='mouse'?' kb':''); },
+    gbox.className='gbox on'+(bad?' bad':''); hbox.className='hbox'+(moved?' on':'')+(home?' hit':'')+(ptype==='mouse'?' kb':''); mark(moved); },
     onEnd:()=>end(), onCancel:()=>end(true) });
   const end=cancel=>{   // cancel: Esc, the right button, leaving the window, or the browser took the gesture away (pointercancel) — nothing changes
-    if(!probe) return; listen(false);
+    if(!probe) return; listen(false); mark(false);
     const back=cancel || home || !moved || gbox.classList.contains('bad') || (probe.parent===from.parent && probe.col===from.col && probe.row===from.row); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
     const was=back && moved? b.el.getBoundingClientRect() : null;   // where the block is now, to slide it home from there
     b.el.classList.remove('drag','lift'); gbox.className='gbox'; sheet.appendChild(gbox); hbox.className='hbox'; sheet.appendChild(hbox);
