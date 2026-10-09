@@ -200,5 +200,6 @@
   "undo.blockResized": "Height of the block «{label}» changed",
   "undo.ungrouped": "Area ungrouped, the blocks stay on the sheet",
   "undo.areaDeleted": "Area «{name}» deleted",
+  "undo.areaResized": "Area «{name}» resized",
   "undo.withBlocks": { "one": " with {n} block", "other": " with {n} blocks" }
 }

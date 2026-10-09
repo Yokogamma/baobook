@@ -1318,13 +1318,29 @@ function buildArea(b){
   rz.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); rz.setPointerCapture(e.pointerId);
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const cr=card.getBoundingClientRect(), sx=e.clientX, sy=e.clientY, w0=cr.width, h0=cr.height; card.classList.add('resizing'); card.classList.remove('settle'); b.resizing=true; card.style.maxWidth='none'; card.style.flex='0 0 auto';
-    const move=ev=>{ const g=G(), avail=Math.max(minw(b), rawWidth(b))-CL();
-      const wpx=Math.max(MINW_CODE, Math.min(avail, w0+(ev.clientX-sx))); b.cw=Math.max(Math.ceil(MINW_CODE/g), Math.round(wpx/g));
+    // widening pushes everything to the right on the same rows along (in a chain), and stops where they have no room left on the sheet.
+    // Esc or a cancelled gesture puts the size and every neighbour back; a finished resize goes into Ctrl+Z quietly
+    const a=ctn(b), was=solid(a).filter(o=>o!==b).map(o=>({o, col:o.col, fx:o.fx})), cw0=b.cw, ch0=b.ch, undo=placeUndo(b, loc('undo.areaResized',{name:areaName(b)}), true);
+    const reset=()=>was.forEach(w=>w.o.col=w.col);
+    const push=()=>{ let over=0; const q=[b];   // → cells the farthest pushed block would stick out past the sheet edge
+      while(q.length){ const L=q.shift(), R=rect(L), right=R.xl+(L===b? CL()+b.cw*G() : need(L));
+        for(const n of solid(a)){ if(n===L || n===b) continue; const N=rect(n); if(!(N.r0<R.r1 && N.r1>R.r0) || N.x0<=R.x0 || N.xl>=right) continue;
+          n.col=Math.ceil((right-cOX(a))/G()); over=Math.max(over, n.col-Math.floor((cW(a)-cPadR(a)-need(n)-cOX(a))/G())); q.push(n); } }
+      return over; };
+    clearTimeout(slideT); sheet.classList.add('dragging');   // pushed neighbours slide
+    const move=ev=>{ const g=G(), edge=cW(a)-cPadR(a)-rect(b).xl-CL();
+      let wpx=Math.max(MINW_CODE, Math.min(edge, w0+(ev.clientX-sx))); b.cw=Math.max(Math.ceil(MINW_CODE/g), Math.round(wpx/g));
+      for(let k=0;k<4;k++){ reset(); const over=push(); if(over<=0) break; b.cw=Math.max(Math.ceil(MINW_CODE/g), b.cw-over); wpx=Math.min(wpx, b.cw*g); }
       const barH=card.querySelector('.cbar').offsetHeight; const content=Math.ceil((barH+1+(b.at||AT)+Math.max(1, ...live(b).map(o=>o.row+(o.lines||1)))*g+12)/g); const rows=Math.max(3, Math.round((h0+(ev.clientY-sy))/g)); b.ch = rows>content? rows : undefined;
-      card.style.width=wpx+'px'; relayout(b); };
-    const up=()=>{ rz.removeEventListener('pointermove',move); rz.removeEventListener('pointerup',up); rz.removeEventListener('pointercancel',up); card.classList.remove('resizing'); b.resizing=false; card.style.maxWidth=''; card.style.flex='';
-      card.classList.add('settle'); relayout(b); setTimeout(()=>card.classList.remove('settle'),220); markDirty(); };
-    rz.addEventListener('pointermove',move); rz.addEventListener('pointerup',up); rz.addEventListener('pointercancel',up); });
+      card.style.width=wpx+'px'; resolve(b); };
+    const stop=keep=>{ rz.removeEventListener('pointermove',move); rz.removeEventListener('pointerup',up); rz.removeEventListener('pointercancel',cancel); document.removeEventListener('keydown',onKey,true);
+      card.classList.remove('resizing'); b.resizing=false; card.style.maxWidth=''; card.style.flex='';
+      if(!keep){ reset(); was.forEach(w=>w.o.fx=w.fx); b.cw=cw0; b.ch=ch0; }
+      card.classList.add('settle'); resolve(b); setTimeout(()=>card.classList.remove('settle'),220); slideT=setTimeout(()=>sheet.classList.remove('dragging'),250);
+      if(!keep) return; was.forEach(w=>{ if(w.o.col!==w.col && !w.o.parent) w.o.fx=xOf(w.o.col,null)/W(); });
+      if(b.cw!==cw0 || b.ch!==ch0 || was.some(w=>w.o.col!==w.col)){ markDirty(); undo(); } };
+    const up=()=>stop(true), cancel=()=>stop(false), onKey=ev=>{ if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); cancel(); } };
+    rz.addEventListener('pointermove',move); rz.addEventListener('pointerup',up); rz.addEventListener('pointercancel',cancel); document.addEventListener('keydown',onKey,true); });
   rz.addEventListener('dblclick',e=>{ e.stopPropagation(); b.ch=undefined; relayout(b); markDirty(); });
   b.api={closeMenu:closeAll};
 }
@@ -1393,9 +1409,9 @@ function removeWithUndo(b){ const d=serBlock(b), label=blockLabel(b), big=(b.tex
 const areas=()=>blocks.filter(o=>o.kind==='area');
 function areaName(a){ if(a.title) return a.title; const all=areas(); return all.length>1? loc('area.untitledN',{n:all.indexOf(a)+1}) : loc('area.untitled'); }
 function placeUndo(b, msg, quiet){   // знімок положення до дії → запис у стек після неї. The snapshot holds every block: neighbours the action pushed down come back too
-  const was=blocks.filter(o=>o.el!==gbox).map(o=>({o, col:o.col, row:o.row, fx:o.fx, parent:o.parent, ch:o.ch}));
+  const was=blocks.filter(o=>o.el!==gbox).map(o=>({o, col:o.col, row:o.row, fx:o.fx, parent:o.parent, cw:o.cw, ch:o.ch}));
   return m=>offerUndo(m||msg, ()=>{ if(!blocks.includes(b)) return;
-    for(const w of was){ const o=w.o; if(!blocks.includes(o) || (w.parent && !byId(w.parent))) continue; Object.assign(o, {col:w.col, row:w.row, fx:w.fx, parent:w.parent, ch:w.ch}); ctnEl(o).appendChild(o.el); }
+    for(const w of was){ const o=w.o; if(!blocks.includes(o) || (w.parent && !byId(w.parent))) continue; Object.assign(o, {col:w.col, row:w.row, fx:w.fx, parent:w.parent, cw:w.cw, ch:w.ch}); ctnEl(o).appendChild(o.el); }
     blocks.forEach(render); resolve(); update(); markDirty(); }, {quiet}); }
 function moveInto(b, a){ if(!blocks.includes(a) || b.parent===a.id) return; const done=placeUndo(b, loc('undo.blockMovedInto',{label:blockLabel(b), area:areaName(a)})); const kids=blocks.filter(o=>o.parent===a.id && o!==b);
   b.parent=a.id; b.col=0; b.row=kids.length? Math.max(...kids.map(o=>o.row+(o.lines||1)+1)) : 0; ctnEl(b).appendChild(b.el); render(b); resolve(); update(); markDirty(); b.el.scrollIntoView({block:'nearest'}); done(); }   // під найнижчий блок області
