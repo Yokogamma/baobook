@@ -49,6 +49,7 @@ Moving out of `mockups`, with no new features. Steps:
 
 - **Mobile plan (`docs/MOBILE-PLAN.md`):** closed. PRs A, B and C are done; manual checks such as TalkBack and VoiceOver are still pending.
 - **Note versions (`docs/VERSIONS-PLAN.md`):** closed. PR 1 (storage), PR 2 (the «Історія» panel, showing a version, restoring a note) and PR 3 (restoring a block, named versions, clearing history, search, export with history) are done; manual checks on devices (section 6) are still pending.
+- **Trash and archive (`docs/TRASH-PLAN.md`):** PR 1 (the in-app `ask()` dialog instead of `confirm()`, a broom for «Очистити аркуш», undo after clearing) and PR 2 (a 30-day trash, read-only view, restore, delete forever) are done. Next is PR 3 (the archive).
 - **Secret links with Matamata:** A0 → A1 → A2; the plan lives in the private `payee-private-docs`.
 - **Sync and sign-in (`docs/SYNC-PLAN.md`):** waiting for the owner's Firebase config and answers.
 

@@ -139,6 +139,18 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .it-x .i{font-size:14px}
 .item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
 .it-x:hover{background:var(--hover-2);color:#c33}
+/* trash (TRASH-PLAN): the panel shows it in place of the list; a footer row leads there while it is not empty */
+.it-r{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i{font-size:14px}
+.item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r{display:inline-flex} .it-r:hover{background:var(--hover-2);color:var(--ink)}
+.item.tr{padding-right:60px}
+.sect{display:flex;flex-direction:column;gap:2px;margin:0 10px 4px;padding:0 0 6px;border-bottom:.5px solid var(--line)} .sect[hidden]{display:none}
+.sect-r{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sect-b{display:inline-flex;align-items:center;gap:4px;height:28px;margin-left:-4px;padding:0 8px 0 4px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer} .sect-b .i{font-size:16px;color:var(--ink-2)} .sect-b:hover{background:var(--hover)}
+.sect-x{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer} .sect-x:hover{background:var(--hover);color:#c33} .sect-x[hidden]{display:none}
+.sect-h{font-size:11.5px;line-height:1.45;color:var(--ink-3)}
+.srow{display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;text-align:left;cursor:pointer} .srow:hover{background:var(--hover);color:var(--ink)} .srow .i{font-size:14px} .srow[hidden]{display:none}
+.srow-n{margin-left:auto;color:var(--ink-3);font-variant-numeric:tabular-nums}
+@media (hover:none){ .srow,.sect-b,.sect-x{min-height:44px} }
 .none{padding:18px 12px;font-size:13px;color:var(--ink-3);text-align:center}
 /* підвал лежить поверх низу списку, правіше лишає місце повзунку — смуга прокрутки доходить до низу панелі */
 .side-f{position:absolute;left:0;right:8px;bottom:0;z-index:2;padding:14px 14px 8px;font-size:11px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px;pointer-events:none}
@@ -419,6 +431,14 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .ask-b .fbtn{flex:1 1 0;height:44px;font-size:14px}
 }
 @media (prefers-reduced-motion:reduce){ .ask[open],.ask[open]::backdrop{animation:none} }
+/* a note from the trash is shown read-only: a strip under the header, the sheet two rows lower so the strip covers nothing, no editing tools */
+.rowrap{position:sticky;top:50px;z-index:5;height:0;display:flex;align-items:flex-start;justify-content:center;pointer-events:none}
+.rostrip{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:13px;color:var(--ink-2);pointer-events:auto}
+.rowrap[hidden]{display:none} .ro-b{display:flex;gap:6px} .rostrip .fbtn{flex:0 0 auto;height:30px;padding:0 12px} .rostrip .fbtn.danger:hover{color:#c33}
+.app.ro .sheet{margin-top:48px} .app.ro .empty{display:none} .app.ro .sheet .grip,.app.ro .sheet .rz,.app.ro .sheet .bact{visibility:hidden}
+@media (max-width:640px){ .rostrip{padding:8px 10px} .ro-b{width:100%} .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:96px} }   /* a phone: the text, then both buttons on one row; the sheet four rows lower */
+@media (hover:none){ .rostrip .fbtn{height:40px} }
+.app.ro #clearBtn,.app.ro #areaBtn,.app.ro #histBtn{display:none}
 
 /* ══ дотик (hover:none): усі правила для сенсорних екранів зібрано в одному блоці (план 3.9); порядок — як був у файлі, бо пізніше правило перекриває раніше ══ */
 @media (hover:none){
@@ -512,17 +532,23 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <input id="q" type="search" data-i18n-attr="placeholder:search.placeholder" autocomplete="off" spellcheck="false">
       <button class="qx" id="qClear" data-i18n-attr="title:search.clear"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </label>
+    <div class="sect" id="sect" hidden>
+      <div class="sect-r"><button class="sect-b" id="sectBack" type="button" data-i18n-attr="title:trash.back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span data-i18n="trash.title"></span></button><button class="sect-x" id="trashEmpty" type="button" data-i18n="trash.empty"></button></div>
+      <div class="sect-h" data-i18n="trash.hint"></div>
+    </div>
     <div class="list" id="list"></div>
     <div class="side-f" id="sideFoot">
       <div class="serr" id="saveErr" hidden role="alert"><span id="saveErrMsg"></span><div class="frow"><button class="fbtn" id="saveRetry" type="button" data-i18n="save.retry"></button><button class="fbtn" id="saveExport" type="button" data-i18n="save.export"></button></div></div>
       <label class="dbg" id="dbgRow" hidden data-i18n="debug.failStorage"><input type="checkbox" id="dbgFail"></label>
       <div class="dbg" id="dbgGeo" hidden></div>
+      <button class="srow" id="trashRow" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-i18n="trash.title"></span><span class="srow-n" id="trashN"></span></button>
       <div class="stor" id="storInfo"></div>
     </div>
   </aside>
   <div class="backdrop" id="backdrop"></div>
 
   <main class="main">
+    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button></span></div></div>
     <header class="top">
       <div class="left">
         <button class="tb" id="sideBtn" data-i18n-attr="title:panel.label" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -603,6 +629,7 @@ const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubb
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
+const sect=$('sect'), sectBack=$('sectBack'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const TEXT_CW=26;                                   // a text block without a set width wraps at 26 cells (624px): about 75 characters, the text column of an A4 page
@@ -820,23 +847,25 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
 
 /* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
 function renderList(){
-  const T=terms(), query=norm(q.value).trim(); searchBox.classList.toggle('has',!!q.value);
+  const T=terms(), query=norm(q.value).trim(), tr=section==='trash', pool=notes.filter(tr? trashed : listed), bin=notes.filter(trashed).length; searchBox.classList.toggle('has',!!q.value);
+  sect.hidden=!tr; trashEmpty.hidden=!pool.length; trashRow.hidden=tr || !bin; trashN.textContent=bin;
   let items;
-  if(!T.length) items=[...notes].sort((a,b)=>b.updated-a.updated).map(n=>({n}));
-  else{ items=[]; for(const n of notes){ const t=norm(titleOf(n)), x=norm(noteText(n));
+  if(!T.length) items=[...pool].sort(tr? (a,b)=>b.deleted-a.deleted : (a,b)=>b.updated-a.updated).map(n=>({n}));
+  else{ items=[]; for(const n of pool){ const t=norm(titleOf(n)), x=norm(noteText(n));
       if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
     items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
   list.innerHTML='';
-  if(!items.length){ el('div','none',list).textContent=loc(T.length? 'search.none' : 'notes.none'); return; }
-  for(const it of items){ const n=it.n; const d=el('div','item'+(cur&&n.id===cur.id?' cur':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
-    d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div><button class="it-x" title="'+locA('notes.delete')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
-    fillItem(d,n,T,it.snip);
-    d.addEventListener('click',e=>{ if(e.target.closest('.it-x')){ e.stopPropagation(); delNote(n); } else openNote(n); });
-    d.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ delNote(n); } });
+  if(!items.length){ el('div','none',list).textContent=loc(T.length? 'search.none' : tr? 'trash.none' : 'notes.none'); return; }
+  for(const it of items){ const n=it.n; const d=el('div','item'+(tr?' tr':'')+(cur&&n.id===cur.id?' cur':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
+    d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(tr? '<button class="it-r" title="'+locA('trash.restore')+'"><svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button><button class="it-x" title="'+locA('trash.purge')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>'
+      : '<button class="it-x" title="'+locA('notes.delete')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>');
+    fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n);
+    d.addEventListener('click',e=>{ if(e.target.closest('.it-r')){ e.stopPropagation(); restoreNote(n); } else if(e.target.closest('.it-x')){ e.stopPropagation(); del(); } else openNote(n); });
+    d.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ del(); } });
   }
 }
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
-  const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=fmtDate(n.updated); }
+  const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(n.updated); }
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
 
 /* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
@@ -987,7 +1016,7 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ if(H.view) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
+function markDirty(){ if(H.view || ro()) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
@@ -1012,16 +1041,37 @@ function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); las
   drawNote(n);
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function drawNote(n){ drawBlocks(n.blocks);
-  ttl.textContent=n.title; document.title=docTitle(n); }
+  ttl.textContent=n.title; document.title=docTitle(n); roSync(); }
 function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; makeAll(list); }
 function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }   // areas first: their blocks go inside
-/* a note with no title, no text and no history is deleted without asking: there is nothing to lose */
+/* ══ trash (docs/TRASH-PLAN.md): a deleted note keeps its record with `deleted` (ms) for TRASH_DAYS, then goes for good with its versions.
+   Moving it there and back is a change of the note (`updated`), so other tabs and import pick it up; the versions stay with it ══ */
+const TRASH_DAYS=30, listed=n=>!n.deleted, trashed=n=>!!n.deleted;
+const daysLeft=n=>Math.max(1, Math.ceil((n.deleted+TRASH_DAYS*864e5-now())/864e5));
+let section='notes';   // what the panel lists: 'notes' or 'trash'
+const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||newNote();
+/* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
+   The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
 async function delNote(n){ if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
-  if(!bare && !await ask({title:loc('notes.deleteConfirm',{title:titleOf(n)}), text:loc('notes.deleteText'), ok:loc('common.delete')})) return;
-  if(!notes.includes(n)) return;   // another tab deleted it meanwhile
-  notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
-  if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
-newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
+  if(!notes.includes(n) || n.deleted) return;   // another tab deleted it meanwhile
+  if(bare){ purgeNote(n); return; }
+  const was=cur===n; n.deleted=now(); n.updated=now(); writeNote(n); if(was) openNote(firstNote()); renderList(); storageUI();
+  offerUndo(loc('trash.moved',{title:titleOf(n)}), ()=>restoreNote(n, was)); }
+function restoreNote(n, open){ if(!notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
+  if(open || cur===n) openNote(n); else say(loc('trash.restored',{title:titleOf(n)}));
+  if(section==='trash' && !notes.some(trashed)) setSection('notes'); else renderList(); storageUI(); }
+function purgeNote(n){ notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+  if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } if(section==='trash' && !notes.some(trashed)) setSection('notes'); else renderList(); storageUI(); }
+async function purgeAsk(n){ if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
+function purgeOld(){ const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
+function setSection(s){ if(section===s) return; section=s; q.value=''; if(s==='trash' && isMobile()) nav.open('trash', ()=>setSection('notes')); else nav.close('trash'); renderList(); list.scrollTop=0; }
+sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash'));
+trashEmpty.addEventListener('click',async()=>{ const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
+/* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
+const ro=()=>!!(cur && cur.deleted);
+function roSync(){ const r=ro(); sheet.inert=r; ttl.contentEditable=r? 'false' : 'true'; app.classList.toggle('ro', r); roStrip.hidden=!r; if(r) roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); fabSync(); }
+roRestore.addEventListener('click',()=>{ if(cur) restoreNote(cur, true); }); roPurge.addEventListener('click',()=>{ if(cur) purgeAsk(cur); });
+newBtn.addEventListener('click',()=>{ flushSave(); setSection('notes'); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
 /* ══ other tabs: every tab keeps its notes in memory, so a save or a delete in one tab is sent to the others, and a tab never writes an old copy over a newer one ══
    A note this tab has no unwritten edits of takes the other tab's copy (the open one is redrawn in place). If the open note has unwritten edits here,
@@ -1036,19 +1086,19 @@ function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.i
   VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
   if(n===cur && busy(n)){ if(db.backend==='idb') vcapture(n.id, {title:r.title, blocks:r.blocks, updated:r.updated}, 'conflict'); if(!dirty) markDirty(); say(loc('tabs.conflict')); return; }
   if(busy(n)) return;
-  Object.assign(n, r); SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
+  Object.assign(n, r); if(!r.deleted) delete n.deleted; SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
   if(n===cur){ closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); }
   renderList(); }
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n)) return;   // edits here keep the note: its next save writes it back
   notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
-  if(cur===n){ cur=null; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
+  if(cur===n){ cur=null; openNote(firstNote()); } renderList(); storageUI(); }
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); };
 async function syncTabs(){ if(!cur) return; const m=await storedNotes(); for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r); }
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
 const fmtSize=b=>b<1048576? loc('size.kb',{n:Math.max(1,Math.round(b/1024))}) : loc('size.mb',{n:(b/1048576).toLocaleString(I18N.locale,{maximumFractionDigits:1})});
-function storageUI(){ storInfo.textContent=loc('storage.notes',{n:notes.length})+(db.backend==='idb'?'':' '+loc('storage.fallback'))+' · '+loc('storage.export',{when:S.lastExport? ago(S.lastExport) : loc('storage.exportNever')})+(db.backend==='idb' && DEBUG.vers.size>0? ' · '+loc('storage.history',{size:fmtSize(DEBUG.vers.size)}) : ''); }   // history: the size of the versions and their bodies
+function storageUI(){ storInfo.textContent=loc('storage.notes',{n:notes.filter(listed).length})+(db.backend==='idb'?'':' '+loc('storage.fallback'))+' · '+loc('storage.export',{when:S.lastExport? ago(S.lastExport) : loc('storage.exportNever')})+(db.backend==='idb' && DEBUG.vers.size>0? ' · '+loc('storage.history',{size:fmtSize(DEBUG.vers.size)}) : ''); }   // history: the size of the versions and their bodies
 let persistAsked=false;
 function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
 const HINT_HTML=toast.innerHTML;
@@ -1061,12 +1111,12 @@ async function exportAll(){ flushSave(); const data={app:'baobook',format:1,expo
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
-  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()};
-    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; if(+raw.deleted>0) n.deleted=+raw.deleted;   // only a trashed note carries the field
+    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); if(!n.deleted) delete ex.deleted; SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
   // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
   const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now()}); }
   if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
-  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
+  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ const m=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) m.set(n.id,n); }   // localStorage fallback first, IndexedDB wins
   if(db.backend==='idb'){ try{ for(const n of await idb.all()) if(validNote(n)) m.set(n.id,n); }catch(_){} } return m; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
@@ -1109,7 +1159,7 @@ try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточни�
 window.addEventListener('popstate',e=>nav.onPop(e));
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
-function setSide(open, o={}){ if(!open) setMenu(false); if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
+function setSide(open, o={}){ if(!open) setMenu(false); if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
   app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()) saveS({side:open});
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
@@ -1423,7 +1473,7 @@ askYes.addEventListener('click',()=>{ if(askEnd) askEnd(true); }); $('askNo').ad
 askDlg.addEventListener('close',()=>{ if(askEnd) askEnd(false); });   // Esc, or the browser closed it on its own
 askDlg.addEventListener('click',e=>{ if(e.target!==askDlg || !askEnd) return; const r=askDlg.getBoundingClientRect(); if(e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom) askEnd(false); });   // a click on the backdrop
 addEventListener('keydown',e=>{ if(askDlg.open) e.stopPropagation(); },true);   // the page under the dialog hears no keys (Ctrl+Z, Delete, Esc for its panels); Esc, Tab and Enter in the dialog are default actions and still work
-function doUndo(){ closeHist(); const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
+function doUndo(){ if(ro()) return false; closeHist(); const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
 function blockLabel(b){ const line=(b.text||'').trim().split('\n')[0]||loc('block.noText'); return line.length>28? line.slice(0,28)+'…' : line; }
 undoBtn.addEventListener('click',()=>doUndo()); undoEl.querySelector('.uclose').addEventListener('click',()=>hideUndo());
 /* ══ історія правок у полях — текстовий блок, код у редагуванні, назви: Ctrl+Z, Ctrl+Shift+Z або Ctrl+Y. Власна, бо браузерна одна на всю сторінку,
@@ -1602,18 +1652,18 @@ function sizeMenu(b){ const cur=b.ch||b.lines||1; const set=ch=>{ const done=pla
   popMenu(b.el.querySelector('.bact'), b.card, 'bm', [ {label:loc('size.auto'), small: loc(b.ch? 'size.auto.byText' : 'size.auto.now'), act:()=>set(undefined)}, {label:loc('size.shorter'), small:loc('size.shorter.hint'), act:()=>set(Math.max(1,cur-2))}, {label:loc('size.taller'), small:loc('size.taller.hint'), act:()=>set(cur+2)} ]); }
 const THEME_NAMES={light:loc('theme.short.light'),dark:loc('theme.short.dark'),sand:loc('theme.short.sand')};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
-  {ico:areaBtn.querySelector('svg').outerHTML, label:loc('area.new'), small:loc('area.new.touchHint'), act:()=>areaBtn.click()},
-  ...(undoStack().length? [{label:loc('undo.menu',{msg:undoStack()[undoStack().length-1].msg}), small:loc('undo.untilReload'), act:()=>doUndo()}] : []),
+  ...(ro()? [] : [{ico:areaBtn.querySelector('svg').outerHTML, label:loc('area.new'), small:loc('area.new.touchHint'), act:()=>areaBtn.click()}]),
+  ...(undoStack().length && !ro()? [{label:loc('undo.menu',{msg:undoStack()[undoStack().length-1].msg}), small:loc('undo.untilReload'), act:()=>doUndo()}] : []),
   {label:loc('spell.title'), small: loc(spell? 'common.on' : 'common.off'), act:()=>spellBtn.click()},
   {label:loc('grid.title'), small: loc(sheet.classList.contains('nogrid')? 'common.off' : 'common.on'), act:()=>gridBtn.click()},
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
-  {ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()} ]));
+  ...(ro()? [] : [{ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()}]) ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
 function createAfter(b){ const a=ctn(b); const d={row:b.row+(b.lines||1)+1, col:b.col}; if(!a) d.fx=b.fx;
   if(a) d.parent=a.id; const nb=make(d,false); markDirty(); nb.el.scrollIntoView({block:'center'}); nb.txt.focus(); return nb; }
 /* «+» ховається, поки курсор у будь-якому полі, видно панель форматування чи плашку, відкрито панель нотаток або огляд; повертається через 150 мс після втрати фокуса */
 let fabT=null;
-function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElement) || !bubble.hidden || !blockbar.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches) || (H.open&&narrowQ.matches);
+function fabSync(){ clearTimeout(fabT); const busy=ro() || !!fieldOf(document.activeElement) || !bubble.hidden || !blockbar.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches) || (H.open&&narrowQ.matches);
   if(busy){ fab.hidden=true; return; } fabT=setTimeout(()=>{ fab.hidden=false; },150); }
 document.addEventListener('focusin',fabSync); document.addEventListener('focusout',fabSync);
 /* нижні елементи: --kb — висота клавіатури за visualViewport, --bar — висота панелі форматування (плашка стоїть над нею), safe area лише в найнижчого */
@@ -1735,7 +1785,7 @@ sheet.addEventListener('pointermove',e=>{
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
 areaBtn.addEventListener('click',()=>{ closeHist(); const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
-document.addEventListener('paste',e=>{ if(H.view) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
+document.addEventListener('paste',e=>{ if(H.view || ro()) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
   const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty();
@@ -1841,7 +1891,7 @@ let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; apply
 
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
 /* clearing the sheet: the note stays, its blocks go. The state before it is a version, so «Історія» has it after a reload too, and «Скасувати» puts it back right away */
-clearBtn.addEventListener('click',async()=>{ closeHist(); const n=cur; if(!n || !blocks.length) return;
+clearBtn.addEventListener('click',async()=>{ closeHist(); const n=cur; if(!n || !blocks.length || ro()) return;
   if(!await ask({title:loc('sheet.clearTitle'), text:loc('sheet.clearText',{n:blocks.length}), ok:loc('sheet.clearOk')}) || cur!==n || !blocks.length) return;
   flushSave(); const was=n.blocks; if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:was, updated:n.updated}, 'base', undefined, undefined, {now:true});
   blocks.slice().forEach(remove); offerUndo(loc('undo.sheetCleared'), ()=>{ makeAll(was.filter(d=>!byId(d.id))); markDirty(); }, {big:true, size:JSON.stringify(was).length}); });
@@ -1885,7 +1935,7 @@ async function loadHist(){ const n=cur; let list=[], bodies=[];
   if(!H.open || cur!==n) return;
   H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
   if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
-async function openHist(){ if(H.open || !cur) return; flushSave(); hideUndo(); exitSel(); closePop();
+async function openHist(){ if(H.open || !cur || ro()) return; flushSave(); hideUndo(); exitSel(); closePop();
   H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
   hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
   if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
@@ -1983,9 +2033,10 @@ async function start(){
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
   if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') saveS({spell:true});
-  if(!notes.length) newNote();
+  purgeOld(); setInterval(purgeOld, 36e5);
+  if(!notes.some(listed)) newNote();
   notes.sort((a,b)=>b.updated-a.updated);
-  renderList(); const byId=id=>id && notes.find(n=>n.id===id); openNote(byId(tabCur.get())||byId(S.current)||notes[0], {restore:true}); field(); storageUI();
+  renderList(); const byId=id=>id && notes.find(n=>n.id===id && listed(n)); openNote(byId(tabCur.get())||byId(S.current)||firstNote(), {restore:true}); field(); storageUI();
 }
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
