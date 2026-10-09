@@ -114,6 +114,8 @@
   "fmt.underline": "Підкреслення (Ctrl+U)",
   "fmt.strike": "Перекреслення (Ctrl+Shift+S)",
   "fmt.code": "Код: моноширинний чип, копіюється кліком (Ctrl+E)",
+  "fmt.ul": "Маркований список (Ctrl+Shift+8)",
+  "fmt.ol": "Нумерований список (Ctrl+Shift+7)",
   "fmt.copy.title": "Копіювати виділене (Ctrl+C)",
   "fmt.moreButtons": "Ще кнопки",
   "fmt.more": "Ще форматування",
@@ -234,5 +236,23 @@
   "hist.sum.mv": { "one": "переміщено {n} блок", "few": "переміщено {n} блоки", "many": "переміщено {n} блоків", "other": "переміщено {n} блоку" },
   "hist.sum.ttl": "назву змінено",
   "hist.sum.none": "без змін",
-  "hist.restored": "Нотатку відновлено до версії {time}"
+  "hist.restored": "Нотатку відновлено до версії {time}",
+
+  "hist.more": "Ще дії з історією",
+  "hist.name": "Назва версії",
+  "hist.save": "Зберегти",
+  "hist.search": "Шукати у версіях…",
+  "hist.nameNow": "Зафіксувати версію…",
+  "hist.nameShown": "Назвати цю версію…",
+  "hist.named": "Версію «{name}» збережено",
+  "hist.clear": "Очистити історію нотатки",
+  "hist.clearConfirm": "Видалити всі версії нотатки «{title}»? Поточний текст залишиться.",
+  "hist.blockRestore": "Повернути цей блок",
+  "hist.blockRestored": "Блок повернуто з версії {time}",
+  "hist.tooBig": "завеликий для історії",
+  "storage.history": "історія: {size}",
+  "size.kb": "{n} КБ",
+  "size.mb": "{n} МБ",
+  "export.withHistory": "з історією версій",
+  "import.history": { "one": "; історія: {n} версія", "few": "; історія: {n} версії", "many": "; історія: {n} версій", "other": "; історія: {n} версії" }
 }

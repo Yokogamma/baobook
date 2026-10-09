@@ -207,6 +207,11 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk .txt{flex:0 1 auto;width:fit-content;min-width:0;transition:background .12s,box-shadow .12s;min-height:var(--g);padding:0 6px;font-size:var(--fs);line-height:var(--g);outline:0;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--ink);border-radius:4px}
 .blk .txt:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
 .txt b{font-weight:650} .txt u{text-underline-offset:2px} .txt s{text-decoration-thickness:1.5px}
+/* lists: a list line is its own <div data-l>, indented by one grid step; the marker is drawn, not typed, and sits in the first cell.
+   A wrapped item hangs under its text. Numbers grow to the left, so «10.» does not run into the text */
+.txt>[data-l]{position:relative;padding-left:var(--g)}
+.txt>[data-l]::before{position:absolute;top:0;right:calc(100% - var(--g) + 6px);white-space:nowrap;color:var(--ink-2);font-variant-numeric:tabular-nums;pointer-events:none;user-select:none;-webkit-user-select:none}
+.txt>[data-l="ul"]::before{content:"•"} .txt>[data-l="ol"]::before{content:attr(data-n) "."}
 /* чип «код»: моноширинний, з підкладкою. Без position: позиціонований чип Chrome малює окремим шаром поверх курсора — курсор усередині чипа зникає */
 .txt code{font-family:var(--mono);font-size:.9em;padding:1px 5px 1px 6px;border-radius:5px;background:var(--code-bg);border:.5px solid var(--code-line);white-space:pre-wrap;transition:background .15s,color .15s}
 /* іконка копіювання в кінці чипа, у потоці рядка: клік по ній копіює вміст, клік по тексту ставить курсор як звичайно */
@@ -218,7 +223,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .bubble button,.bmore button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
 .bubble button:hover,.bmore button:hover{background:rgba(128,128,128,.35)} .bubble button[aria-pressed="true"],.bmore button[aria-pressed="true"]{background:rgba(128,128,128,.55)}
 .bubble .sep{width:1px;align-self:stretch;margin:4px 3px;background:rgba(128,128,128,.5)} .bubble button.act{width:auto;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font-size:13px} .bubble button.act .i{font-size:15px}
-.bubble button.act.done{color:#8fd3a5}
+.bubble button.act.done{color:#8fd3a5} .bubble button>.i,.bmore button>.i{font-size:17px;vertical-align:middle}
 .grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:14px;font-weight:700}
 .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:none}   /* лише на дотику */
 /* дотик: панель положення вибраного блока (стрілки притискають до краю чи сусіда); лише на сенсорних екранах */
@@ -465,7 +470,20 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 .sheet.history .grip,.sheet.history .rz,.sheet.history .bact{visibility:hidden}
 .sheet.history .blk.v-ch>.tcard,.sheet.history .blk.v-ch>.cblk,.sheet.history .blk.v-ch>.ablk{box-shadow:-4px 0 0 0 var(--n);border-radius:6px}   /* body or title differs from now */
 .sheet.history .blk.v-add>.tcard,.sheet.history .blk.v-add>.cblk,.sheet.history .blk.v-add>.ablk{box-shadow:-4px 0 0 0 var(--s);border-radius:6px}   /* not in the note now: a restore brings it back */
+.hist-h{position:relative} .hist-b{display:flex;align-items:center;gap:2px} #histMore{font-size:18px;letter-spacing:1px}
+.hist-name{display:flex;gap:6px;padding:2px 10px 6px} .hist-name input{flex:1;min-width:0;height:30px;padding:0 8px;border:.5px solid var(--sel-line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:13px;outline:0} .hist-name .fbtn{flex:0 0 auto;padding:0 12px}
+.hist-q{flex:0 0 auto}
+.hv.named .hv-k{color:var(--ink);font-weight:500}
+.setpop .chk{gap:8px;padding-left:36px;font-size:12.5px} .setpop .chk input{margin:0}
+.ghost-blk{position:absolute;border:1.5px dashed var(--ink-3);border-radius:6px;pointer-events:none;opacity:.7}   /* a block the note has now but the version has not: a restore of the whole note removes it */
+.sheet.history .blk.v-hit>.tcard,.sheet.history .blk.v-hit>.cblk{outline:2px solid rgba(245,190,60,.75);outline-offset:2px;border-radius:6px}   /* matches the search in versions */
+.sheet.history .blk.v-big::after{content:attr(data-vnote);position:absolute;left:8px;bottom:-16px;font-size:11px;color:var(--ink-3);white-space:nowrap}
+.vlayer{position:absolute;inset:0;z-index:4;pointer-events:none}
+.vbtn{position:absolute;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:.5px solid var(--line-2);border-radius:12px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font:inherit;font-size:12px;white-space:nowrap;cursor:pointer;pointer-events:auto}
+.vbtn:hover,.vbtn:focus-visible{color:var(--ink);background:var(--hover-2)} .vbtn .i{font-size:13px}
+@media (hover:none){ .vbtn{height:32px;padding:0 10px} }
 @media (max-width:640px){
+  .hist-q:not(.on){display:none}   /* a phone shows the search only when «Шукати у версіях…» is picked */
   .hist{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;height:40dvh;border-left:0;border-top:.5px solid var(--line-2);border-radius:12px 12px 0 0;box-shadow:var(--shadow)}
   .app.hist-open .main{padding-bottom:40dvh}   /* the sheet scrolls above the panel */
   .app.hist-open~.toast,.app.hist-open~.undo{bottom:calc(40dvh + 12px)}   /* messages stay above the panel */
@@ -484,6 +502,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <label class="langrow"><span data-i18n="lang.label"></span><select class="fsel" id="langSel"></select></label>
         <hr>
         <button class="mi" id="exportBtn" type="button" data-i18n="export.button" data-i18n-attr="title:export.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+        <label class="mi chk" id="exportHistRow"><input type="checkbox" id="exportHist"><span data-i18n="export.withHistory"></span></label>
         <button class="mi" id="importBtn" type="button" data-i18n="import.button" data-i18n-attr="title:import.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg></button><input type="file" id="importFile" accept=".json,application/json" hidden>
         <button class="mi" id="installBtn" type="button" hidden data-i18n="install.button"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
         <div class="hint" id="iosHint" hidden data-i18n="install.iosHint"></div>
@@ -528,9 +547,12 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <div class="sm" data-i18n-html="empty.help"></div>
       </div>
     </div>
+    <div class="vlayer" id="vlayer"></div>
   </main>
   <aside class="hist" id="hist" hidden role="complementary" data-i18n-attr="aria-label:hist.title">
-    <div class="hist-h"><span data-i18n="hist.title"></span><button class="tb" id="histClose" type="button" data-i18n-attr="title:hist.close;aria-label:hist.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="hist-h"><span data-i18n="hist.title"></span><span class="hist-b"><button class="tb" id="histMore" type="button" aria-haspopup="menu" aria-expanded="false" data-i18n-attr="title:hist.more;aria-label:hist.more">⋯</button><button class="tb" id="histClose" type="button" data-i18n-attr="title:hist.close;aria-label:hist.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+    <form class="hist-name" id="histNameRow" hidden><input id="histName" maxlength="80" autocomplete="off" data-i18n-attr="placeholder:hist.name;aria-label:hist.name"><button class="fbtn" id="histSave" type="submit" data-i18n="hist.save"></button></form>
+    <label class="search hist-q" id="histQBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="histQ" type="search" data-i18n-attr="placeholder:hist.search;aria-label:hist.search" autocomplete="off" spellcheck="false"></label>
     <input type="range" id="histRange" min="0" max="0" step="1" value="0" data-i18n-attr="aria-label:hist.range">
     <div class="hist-l" id="histList" role="listbox" tabindex="0" data-i18n-attr="aria-label:hist.title"></div>
     <div class="hist-f"><button class="fbtn" id="histRestore" type="button" disabled data-i18n="hist.restore"></button></div>
@@ -538,7 +560,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button" data-i18n-html="undo.button"></button><button class="uclose" type="button" data-i18n-attr="aria-label:common.hide;title:common.hide">✕</button></div>
 <button class="fab" id="fab" data-i18n-attr="title:block.new;aria-label:block.new"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-<div class="bubble" id="bubble" hidden role="toolbar" data-i18n-attr="aria-label:fmt.toolbar"><button type="button" data-cmd="bold" data-i18n-attr="title:fmt.bold"><b>B</b></button><button type="button" data-cmd="italic" data-i18n-attr="title:fmt.italic"><i>I</i></button><button type="button" data-cmd="underline" data-i18n-attr="title:fmt.underline"><u>U</u></button><button type="button" data-cmd="strikeThrough" data-i18n-attr="title:fmt.strike"><s>S</s></button><button type="button" data-cmd="code" data-i18n-attr="title:fmt.code" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep"></span><button type="button" class="act" data-act="copy" data-i18n-attr="title:fmt.copy.title"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span data-i18n="common.copy"></span></button><button type="button" class="act" data-act="new" data-i18n-attr="title:block.newBelow;aria-label:block.newBelow"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="block.short"></span></button><button type="button" class="act" data-act="done" data-i18n="common.done" data-i18n-attr="title:edit.done.title"></button><button type="button" class="more" data-act="more" data-i18n-attr="title:fmt.moreButtons;aria-label:fmt.moreButtons" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
+<div class="bubble" id="bubble" hidden role="toolbar" data-i18n-attr="aria-label:fmt.toolbar"><button type="button" data-cmd="bold" data-i18n-attr="title:fmt.bold"><b>B</b></button><button type="button" data-cmd="italic" data-i18n-attr="title:fmt.italic"><i>I</i></button><button type="button" data-cmd="underline" data-i18n-attr="title:fmt.underline"><u>U</u></button><button type="button" data-cmd="strikeThrough" data-i18n-attr="title:fmt.strike"><s>S</s></button><button type="button" data-cmd="code" data-i18n-attr="title:fmt.code" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep lsep" hidden></span><button type="button" data-cmd="ul" data-i18n-attr="title:fmt.ul;aria-label:fmt.ul" hidden><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"/></svg></button><button type="button" data-cmd="ol" data-i18n-attr="title:fmt.ol;aria-label:fmt.ol" hidden><svg class="i" viewBox="0 0 24 24"><path d="M11 6h9M11 12h9M12 18h8M4 16a2 2 0 1 1 4 0c0 .6-.5 1-1 1.5L4 20h4M6 10V4L4 6"/></svg></button><span class="sep"></span><button type="button" class="act" data-act="copy" data-i18n-attr="title:fmt.copy.title"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span data-i18n="common.copy"></span></button><button type="button" class="act" data-act="new" data-i18n-attr="title:block.newBelow;aria-label:block.newBelow"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="block.short"></span></button><button type="button" class="act" data-act="done" data-i18n="common.done" data-i18n-attr="title:edit.done.title"></button><button type="button" class="more" data-act="more" data-i18n-attr="title:fmt.moreButtons;aria-label:fmt.moreButtons" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
 <div class="bmore" id="bubbleMore" hidden role="toolbar" data-i18n-attr="aria-label:fmt.more"></div>
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
@@ -741,7 +763,7 @@ function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.rejec
     m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); pending++;
       const tryKey=(h,k)=>{ const g=B.get([note,h]); g.onsuccess=()=>{ const ex=g.result; if(!ex){ const z=new Blob([body]).size; B.put({note,h,s:body,r:(!d.kind&&d.html)?1:0,z}); e.h=h; size+=z; finish(); } else if(ex.s!==body) tryKey(e.h+'~'+(k+1),k+1); else { e.h=h; finish(); } }; };   // колізія хешу — сусідній ключ
       tryKey(e.h,0); });
-    finish(); return {get result(){ return rec; }}; }).then(r=>{ VLAST.set(note,{id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason}); DEBUG.vers.size+=r.size; return r; }); }
+    finish(); return {get result(){ return rec; }}; }).then(r=>{ VLAST.set(note,{id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason}); DEBUG.vers.size+=r.size; storageUI(); return r; }); }
 function vcapture(note, st, reason, name, from, o={}){ if(!st) return Promise.resolve(); vload(note); return vqueue(note, async()=>{ const m=manifestOf(st.title, st.blocks); const L=VLAST.get(note);
   if(!o.force){ if(reason!=='manual' && L && L.sig===m.sig) return; if(reason==='base' && !o.now){ if(!m.blocks.length && !m.title) return; if(L && vnow()-(st.at||st.updated||0)<V_GAP) return; } }   // R1: порожній новий стан не версія; стан, що не відлежався, захищає R3
   const r=await vwrite(note, m, st.blocks, {t:o.force? vnow() : (st.updated||vnow()), w:vnow(), reason, name, from}); await vthin(note); return r; }); }   // R1, R2, R4, R5
@@ -757,7 +779,7 @@ async function vthin(note, list){ list=list||await vlist(note); if(!list.length)
 function vdelete(note, gone, rest){ const keepH=new Set(); rest.forEach(v=>v.blocks.forEach(e=>{ if(e.h) keepH.add(e.h); }));   // GC тіл: лишаються ті, на які ще посилається якась версія нотатки
   return idb.tx(['versions','blobs'],'readwrite',t=>{ const V=t.objectStore('versions'), B=t.objectStore('blobs'); gone.forEach(v=>{ V.delete(v.id); DEBUG.vers.size-=v.size||0; });
     const c=B.openCursor(IDBKeyRange.bound([note,''],[note,'\uffff'])); c.onsuccess=()=>{ const r=c.result; if(!r) return; if(!keepH.has(r.value.h)) r.delete(); r.continue(); }; })
-    .then(()=>{ const L=VLAST.get(note); if(L && gone.some(v=>v.id===L.id)){ const top=rest.sort((a,b)=>b.t-a.t)[0]; VLAST.set(note, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); } }); }
+    .then(()=>{ const L=VLAST.get(note); if(L && gone.some(v=>v.id===L.id)){ const top=rest.sort((a,b)=>b.t-a.t)[0]; VLAST.set(note, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); } storageUI(); }); }
 function vdrop(note){ VLAST.set(note,null); SAVED.delete(note); return vqueue(note, async()=>{ const list=await vlist(note); await vdelete(note, list, []); }); }   // видалення нотатки — разом із версіями й тілами
 async function vbudget(){ let q=null; try{ q=DEBUG.vers.estimate || (navigator.storage&&navigator.storage.estimate? await navigator.storage.estimate() : null); }catch(_){} return Math.min(V_BUDGET_MAX, q&&q.quota? q.quota*0.05 : V_BUDGET_MAX); }
 let vsweeping=null;
@@ -822,15 +844,70 @@ function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]');
    поруч завжди чистий text — для пошуку, списку нотаток і майбутнього злиття. Усе інше (стилі, скрипти, чужі теги) вичищається ══ */
 const RICH_TAG={B:'b',STRONG:'b',I:'i',EM:'i',U:'u',S:'s',STRIKE:'s',DEL:'s',CODE:'code',KBD:'code',TT:'code'};
 const escHtml=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function richOf(root){ let out=''; const walk=n=>{ for(const c of n.childNodes){ if(c.nodeType===3){ out+=escHtml(c.nodeValue.replace(/\u00a0/g,' ').replace(/\u200b/g,'')); continue; } if(c.nodeType!==1) continue; const tag=c.tagName;
-    if(tag==='BR'){ out+='\n'; continue; } if(/^(SCRIPT|STYLE|TEMPLATE)$/.test(tag)) continue; if(/^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR)$/.test(tag) && out && !out.endsWith('\n')) out+='\n';
+// the list type of an element: our list line <div data-l> (or <li data-l> in stored html), or a foreign <li> inside <ul>/<ol>
+const listOf=c=>{ const l=c.getAttribute('data-l'); if((l==='ul'||l==='ol') && (c.tagName==='DIV'||c.tagName==='LI')) return l; return c.tagName==='LI'? (c.parentElement&&c.parentElement.tagName==='OL'? 'ol' : 'ul') : ''; };
+function richOf(root){ let out='', nl=false; const brk=()=>{ if(out && !out.endsWith('\n')) out+='\n'; nl=false; };   // nl: a list line has just ended, so whatever follows starts a new line
+  const walk=n=>{ for(const c of n.childNodes){ if(c.nodeType===3){ const t=c.nodeValue.replace(/\u00a0/g,' ').replace(/\u200b/g,''); if(nl && t){ if(t[0]!=='\n') brk(); nl=false; } out+=escHtml(t); continue; } if(c.nodeType!==1) continue; const tag=c.tagName;
+    if(tag==='BR'){ if(nl) brk(); out+='\n'; continue; } if(/^(SCRIPT|STYLE|TEMPLATE)$/.test(tag)) continue;
+    const lt=listOf(c); if(lt){ brk(); out+='<li data-l="'+lt+'">'; walk(c); out=out.replace(/\n((?:<\/(?:b|i|u|s|code)>)*)$/,'$1')+'</li>'; nl=true; continue; }   // a trailing <br> in a line is the browser's placeholder, not a line break
+    if(/^(DIV|P|H[1-6]|BLOCKQUOTE|PRE|TR)$/.test(tag)) brk(); else if(nl && c.textContent.replace(/\u200b/g,'')) brk();
     const wrap=[]; if(RICH_TAG[tag]) wrap.push(RICH_TAG[tag]); else if(c.style){ const st=c.style; if(/bold|^[6-9]00$/.test(st.fontWeight)) wrap.push('b'); if(st.fontStyle==='italic') wrap.push('i'); const td=st.textDecorationLine||st.textDecoration||''; if(/underline/.test(td)) wrap.push('u'); if(/line-through/.test(td)) wrap.push('s'); }
     out+=wrap.map(w=>'<'+w+'>').join(''); walk(c); out+=wrap.slice().reverse().map(w=>'</'+w+'>').join(''); } };
   walk(root); out=out.replace(/\n$/,''); let prev; do{ prev=out; out=out.replace(/<(b|i|u|s|code)><\/\1>/g,''); }while(out!==prev); return out; }
-const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-const hasRich=h=>/<(b|i|u|s|code)>/.test(h);
+const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>|<li data-l="\w+">|<\/li>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+const hasRich=h=>/<(b|i|u|s|code)>|<li /.test(h);
 function cleanRich(h){ const t=document.createElement('template'); t.innerHTML=String(h||''); return richOf(t.content); }
-function showTxt(b){ if(b.html) b.txt.innerHTML=b.html; else b.txt.textContent=b.text; splitChipLines(b.txt); padChips(b.txt); }
+/* lists: a list is a property of a line, as in Quill and Google Docs. In the stored html a list line is <li data-l="ul|ol">…</li> standing on its own line
+   (lines are still joined by \n); the plain text has no markers, so search and the note list do not change. A block with a list is drawn one <div> per line:
+   the marker is CSS, the numbers are counted here. Older versions read such html as plain lines */
+// rich html → lines {l, h}: l is the list type or '', h the line's inline html. A tag open across a line break is closed at the end of the line and opened again on the next one
+function linesOf(h){ const L=[], open=[]; let li='', cur={l:'',h:''};
+  for(const [m,lt,cl,tag] of String(h||'').matchAll(/<li data-l="(ul|ol)">|<\/li>|<(\/?)(b|i|u|s|code)>|\n|[^<\n]+/g)){
+    if(lt){ li=lt; cur.l=lt; } else if(m==='</li>') li='';
+    else if(m==='\n'){ cur.h+=open.map(t=>'</'+t+'>').reverse().join(''); L.push(cur); cur={l:li, h:open.map(t=>'<'+t+'>').join('')}; }
+    else { if(tag){ if(cl){ const k=open.lastIndexOf(tag); if(k>=0) open.splice(k,1); } else open.push(tag); } cur.h+=m; } }
+  L.push(cur); return L; }
+const joinLines=L=>L.map(x=>x.l? '<li data-l="'+x.l+'">'+x.h+'</li>' : x.h).join('\n');
+const hasList=h=>/<li /.test(h||'');
+const lineVis=h=>plainOf(h).replace(/[\u200b\ue000\ue001]/g,'').trim();   // the visible text of a line; selection marks do not count
+// copying: plain text gets «• » and «1. », html gets real <ul>/<ol>, so a list pastes as a list into a chat or another editor
+function listText(h){ if(!hasList(h)) return plainOf(h); let n=0; return linesOf(h).map(x=>{ n=x.l==='ol'? n+1 : 0; return (x.l==='ul'? '• ' : x.l==='ol'? n+'. ' : '')+plainOf(x.h); }).join('\n'); }
+function listHtml(h){ if(!hasList(h)) return h.replace(/\n/g,'<br>'); let out='', open='', prev=false;
+  for(const x of linesOf(h)){ if(x.l!==open){ if(open) out+='</'+open+'>'; open=x.l; if(open) out+='<'+open+'>'; prev=false; }
+    if(open) out+='<li>'+x.h+'</li>'; else { if(prev) out+='<br>'; out+=x.h; prev=true; } }
+  return out+(open? '</'+open+'>' : ''); }
+// numbers of numbered lines: they run on through consecutive lines and start again after any other line, an empty one included
+function numberLists(txt){ let n=0; for(const c of txt.childNodes){ if(c.nodeType===1 && c.getAttribute('data-l')==='ol'){ c.setAttribute('data-n', ++n); continue; }
+  if(c.nodeType===1){ c.removeAttribute('data-n'); n=0; } else if(c.nodeType===3 && /[^\s\u200b]/.test(c.nodeValue)) n=0; } }
+function paint(txt, h, text){ if(hasList(h)) txt.innerHTML=linesOf(h).map(x=>'<div'+(x.l? ' data-l="'+x.l+'"' : '')+'>'+x.h+(plainOf(x.h).replace(/[\u200b\ue000\ue001]/g,'')? '' : '<br>')+'</div>').join('');
+  else if(h) txt.innerHTML=h; else txt.textContent=text||''; numberLists(txt); splitChipLines(txt); padChips(txt); }
+function showTxt(b){ paint(b.txt, b.html, b.text); }
+/* the selection by lines: marks M0 and M1 go in at its ends (in a copy of the field, or in the field itself right before it is redrawn), and the line a mark lands on is the line it is on */
+const M0='\ue000', M1='\ue001';
+function markSel(txt, live){ const s=getSelection(); if(!s||!s.rangeCount) return null; const r=s.getRangeAt(0); let a=r.startContainer, z=r.endContainer; const ao=r.startOffset, zo=r.endOffset; if(!txt.contains(a)||!txt.contains(z)) return null;
+  let root=txt; if(!live){ const pa=pathOf(txt,a), pz=pathOf(txt,z); if(!pa||!pz) return null; root=txt.cloneNode(true); const at=p=>p.reduce((n,i)=>n.childNodes[i],root); a=at(pa); z=at(pz); }
+  const put=(n,o,ch)=>{ if(n.nodeType===3){ n.insertData(o,ch); return; } const k=n.childNodes[o]||null, t=document.createTextNode(ch); if(k && k.nodeType===1 && /^(DIV|P|LI)$/.test(k.tagName)) k.insertBefore(t,k.firstChild); else n.insertBefore(t,k); };   // a point between two line <div>s belongs to the next line
+  put(z,zo,M1); put(a,ao,M0); return richOf(root); }
+function marksAt(L){ let a=-1, z=-1; L.forEach((x,i)=>{ if(x.h.includes(M0)) a=i; if(x.h.includes(M1)) z=i; }); if(a<0||z<0) return null;
+  if(z>a && !plainOf(L[z].h).split(M1)[0].replace(/[\s\u200b\ue000]/g,'')) z--;   // the selection ends at the start of a line (a triple click takes the line break too): that line is not touched
+  return [a,z]; }
+function takeMarks(txt){ const at={}; for(const ch of [M0,M1]) for(const t of textNodes(txt)){ const i=t.nodeValue.indexOf(ch); if(i>=0){ t.deleteData(i,1); at[ch]=[t,i]; break; } }
+  const a=at[M0]||at[M1], z=at[M1]||at[M0]; if(!a) return; const r=document.createRange(); r.setStart(a[0],a[1]); r.setEnd(z[0],z[1]); const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
+// redraw the field from its own html, keeping the selection: lines with a line break inside become separate lines
+function repaint(txt){ const h=markSel(txt,true); if(h==null) return; paint(txt,h); takeMarks(txt); padChips(txt); }
+// lines the selection touches: how many, and the list type of each one that has text or already is a list line
+function listState(txt){ const h=markSel(txt,false); if(h==null) return null; const L=linesOf(h), m=marksAt(L); if(!m) return null; const T=L.slice(m[0],m[1]+1); return {n:T.length, on:T.filter(x=>x.l||lineVis(x.h)).map(x=>x.l)}; }
+// the list buttons: every touched line becomes a list line of this type; if all of them already are, the list comes off. Empty lines stay plain, so a list breaks there
+function setList(txt, type){ const h=markSel(txt,true); if(h==null) return; const L=linesOf(h), m=marksAt(L);
+  if(m){ const T=L.slice(m[0],m[1]+1), on=T.filter(x=>x.l||lineVis(x.h)), off=on.length>0 && on.every(x=>x.l===type); T.forEach(x=>{ if(off) x.l=''; else if(x.l||lineVis(x.h)) x.l=type; }); }
+  paint(txt, joinLines(L)); takeMarks(txt); padChips(txt); }
+// «- » or «1. » typed at the start of a plain line makes it a list line; Ctrl+Z brings the typed characters back
+function mdList(txt){ const s=getSelection(); if(!s||!s.isCollapsed||codeAncestor(s.anchorNode,txt)) return false; const h0=markSel(txt,false); if(h0==null) return false;
+  const L0=linesOf(h0), m=marksAt(L0), k=m && !L0[m[1]].l && plainOf(L0[m[1]].h).match(/^(-|1\.) \ue000\ue001/); if(!k) return false;
+  histRec(txt,'cmd'); const L=linesOf(markSel(txt,true)), x=L[m[1]]; let n=k[1].length+1; x.h=x.h.replace(/<[^>]+>|&\w+;|[^<&]/g, t=>(n>0 && t[0]!=='<')? (n--, '') : t); x.l=k[1]==='-'? 'ul' : 'ol';
+  paint(txt, joinLines(L)); takeMarks(txt); padChips(txt); return true; }
+const listLine=txt=>{ const s=getSelection(); if(!s||!s.rangeCount||!s.isCollapsed) return null; let n=s.anchorNode; while(n && n.parentNode!==txt) n=n.parentNode; return n && n.nodeType===1 && n.hasAttribute('data-l')? n : null; };
+DEBUG.rich={cleanRich, linesOf, listText};   // the stored format, for the tests
 // чип — у межах рядка: чип на кілька рядків (так зберігалося до виправлення) ділимо на окремі чипи
 function splitChipLines(txt){ txt.querySelectorAll('code').forEach(c=>{ if(c.children.length || !c.textContent.includes('\n')) return; const f=document.createDocumentFragment();
   c.textContent.split('\n').forEach((p,i)=>{ if(i) f.appendChild(document.createTextNode('\n')); if(p){ const k=document.createElement('code'); k.textContent=p; f.appendChild(k); } }); c.replaceWith(f); }); }
@@ -967,12 +1044,14 @@ async function syncTabs(){ if(!cur) return; const m=await storedNotes(); for(con
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
-function storageUI(){ storInfo.textContent=loc('storage.notes',{n:notes.length})+(db.backend==='idb'?'':' '+loc('storage.fallback'))+' · '+loc('storage.export',{when:S.lastExport? ago(S.lastExport) : loc('storage.exportNever')}); }
+const fmtSize=b=>b<1048576? loc('size.kb',{n:Math.max(1,Math.round(b/1024))}) : loc('size.mb',{n:(b/1048576).toLocaleString(I18N.locale,{maximumFractionDigits:1})});
+function storageUI(){ storInfo.textContent=loc('storage.notes',{n:notes.length})+(db.backend==='idb'?'':' '+loc('storage.fallback'))+' · '+loc('storage.export',{when:S.lastExport? ago(S.lastExport) : loc('storage.exportNever')})+(db.backend==='idb' && DEBUG.vers.size>0? ' · '+loc('storage.history',{size:fmtSize(DEBUG.vers.size)}) : ''); }   // history: the size of the versions and their bodies
 let persistAsked=false;
 function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
 const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
-function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
+async function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
+  if($('exportHist').checked && db.backend==='idb'){ const h=await historyOf(); if(h) data.history=h; }   // older versions of the app ignore the field
   const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ saveS({lastExport:now()}); storageUI(); };
   const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
   try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:loc('export.shareTitle')}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
@@ -996,8 +1075,8 @@ exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
 importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
   const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say(loc('import.notExport')); return; }
-  const r=await importNotes(list, Array.isArray(data)? null : data.settings);
-  say(loc('import.done',{n:r.added, updated:r.updated, skipped:r.skipped})+(r.failed? loc('import.failed',{n:r.failed}) : '')+(r.settings? loc('import.settings') : '')); });
+  const r=await importNotes(list, Array.isArray(data)? null : data.settings), hv=Array.isArray(data)? 0 : await importHistory(data.history);
+  say(loc('import.done',{n:r.added, updated:r.updated, skipped:r.skipped})+(r.failed? loc('import.failed',{n:r.failed}) : '')+(r.settings? loc('import.settings') : '')+(hv? loc('import.history',{n:hv}) : '')); });
 ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=docTitle(cur); });
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
 ttl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
@@ -1184,15 +1263,21 @@ function buildText(b){
   b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
     if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
-  b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); if(!e.isComposing) padChips(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
-  const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
+  b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); else if(e.inputType==='insertText' && e.data===' ') mdList(b.txt); if(!e.isComposing) padChips(b.txt); numberLists(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
+  const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else if(cmd==='ul'||cmd==='ol') setList(b.txt,cmd); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && inCopyZone(c,e)) return; setTimeout(()=>{ expandToken(b.txt,e.clientX,e.clientY); placeBubble(); },0); });   // подвійний клік по іконці чипа — лише копіювання
   b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в кінці чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
   ['mousedown','mouseup','click'].forEach(t=>b.txt.addEventListener(t,e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)) e.preventDefault(); }));   // якщо браузер усе ж надішле «мишачі» події після скасованого pointerdown — курсор у блок не ставиться і виділення не починається
   b.api={fmt};
   b.txt.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=hotkey(e); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
-      if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; } }
+      if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; }
+      if(e.shiftKey && (e.code==='Digit7'||e.code==='Digit8')){ e.preventDefault(); fmt(e.code==='Digit7'? 'ol' : 'ul'); return; } }   // as in Google Docs and Slack; by key position, so any layout works
+    // a list line: Enter on an empty one leaves the list, Backspace at its start takes the marker off (the text stays), Shift+Enter starts the next item like Enter
+    const it=(e.key==='Enter'||e.key==='Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey && listLine(b.txt);
+    if(it){ const s=getSelection(), r=document.createRange(); r.setStart(it,0); r.setEnd(s.anchorNode,s.anchorOffset);
+      if(e.key==='Enter'? !it.textContent.replace(/\u200b/g,'') : !r.toString().replace(/\u200b/g,'')){ e.preventDefault(); histRec(b.txt,'cmd'); it.removeAttribute('data-l'); it.removeAttribute('data-n'); numberLists(b.txt); readTxt(); relayout(b); markDirty(); bubbleState(); return; }
+      if(e.key==='Enter' && e.shiftKey){ e.preventDefault(); document.execCommand('insertParagraph'); return; } }
     if((e.key==='ArrowRight'||e.key==='ArrowLeft') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && exitChip(b.txt, e.key==='ArrowRight'? 1 : -1)){ e.preventDefault(); return; }
     if(e.key==='Escape'){ b.txt.blur(); const sl=window.getSelection(); if(sl) sl.removeAllRanges(); }
     if(e.key==='Backspace' && !b.txt.textContent.replace(/\u200b/g,'')){ e.preventDefault(); dropText(b); return; }
@@ -1200,13 +1285,13 @@ function buildText(b){
   });
   // копіювання й вирізання: у буфер — без службових нульових пробілів, інакше вони потрапляють у скопійований пароль чи команду
   const clip=e=>{ const s=getSelection(); if(!s||!s.rangeCount||s.isCollapsed) return; const tmp=document.createElement('div'); tmp.appendChild(s.getRangeAt(0).cloneContents()); const h=richOf(tmp);
-    e.clipboardData.setData('text/plain',plainOf(h)); e.clipboardData.setData('text/html',h.replace(/\n/g,'<br>')); e.preventDefault(); if(e.type==='cut'){ histRec(b.txt,'cmd'); document.execCommand('delete'); } };
+    e.clipboardData.setData('text/plain',listText(h)); e.clipboardData.setData('text/html',listHtml(h)); e.preventDefault(); if(e.type==='cut'){ histRec(b.txt,'cmd'); document.execCommand('delete'); } };
   b.txt.addEventListener('copy',clip); b.txt.addEventListener('cut',clip);
   // вставка: у порожній блок код стає блоком коду; інакше — простий текст
   b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); e.preventDefault(); if(!t) return;
     const wasEmpty=!b.txt.textContent.trim();
     if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,locA('paste.asCode'),locA('paste.makeText'),()=>toText(nb)); return; }
-    histRec(b.txt,'cmd'); document.execCommand('insertText',false,t);
+    histRec(b.txt,'cmd'); document.execCommand('insertText',false,t); if(t.includes('\n') && b.txt.querySelector(':scope>[data-l]')){ repaint(b.txt); numberLists(b.txt); }   // lines pasted into a list item become items
     b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,locA('paste.asText'),locA('paste.makeCode'),()=>toCode(b,b.text)); });
   /* ручка розміру (resizer): фіксована ширина в клітинках і мінімальна висота в рядах; текст завжди видно повністю */
   const card=b.card, rz=b.el.querySelector('.rz');
@@ -1542,21 +1627,27 @@ let bubbleBlk=null;
 function curTextBlock(){ const sel=getSelection(); if(!sel||sel.rangeCount===0) return null; const el=n=>n&&(n.nodeType===1? n : n.parentElement); const t=el(sel.anchorNode)&&el(sel.anchorNode).closest('.txt'); if(!t) return null;
   if(sel.isCollapsed && !(TOUCH && document.activeElement===t)) return null;   // на дотику панель видно й з самим курсором: там «Готово» і «Блок»
   const f=el(sel.focusNode); if(!f||f.closest('.txt')!==t) return null; return blocks.find(b=>b.txt===t)||null; }
-function bubbleState(){ if(bubble.hidden) return; bubble.querySelectorAll('button[data-cmd]').forEach(bt=>{ let on=false; if(bt.dataset.cmd==='code'){ const sel=getSelection(); on=!!(sel&&sel.rangeCount&&bubbleBlk&&codeAncestor(sel.getRangeAt(0).startContainer,bubbleBlk.txt)); } else { try{ on=document.queryCommandState(bt.dataset.cmd); }catch(_){} } bt.setAttribute('aria-pressed',String(!!on)); }); }
-function placeBubble(){ const b=curTextBlock(); if(!b){ if(!bubble.hidden){ bubble.hidden=true; bubbleMore.hidden=true; layoutBottom(); fabSync(); } bubbleBlk=null; return; } const fresh=bubble.hidden||bubbleBlk!==b; bubbleBlk=b; bubble.hidden=false;
+function bubbleState(){ if(bubble.hidden) return; const ls=bubbleBlk&&listState(bubbleBlk.txt);
+  [...bubble.querySelectorAll('button[data-cmd]'), ...bubbleMore.querySelectorAll('button[data-cmd]')].forEach(bt=>{ const cmd=bt.dataset.cmd; let on=false; if(cmd==='code'){ const sel=getSelection(); on=!!(sel&&sel.rangeCount&&bubbleBlk&&codeAncestor(sel.getRangeAt(0).startContainer,bubbleBlk.txt)); } else if(cmd==='ul'||cmd==='ol') on=!!ls && ls.on.length>0 && ls.on.every(l=>l===cmd); else { try{ on=document.queryCommandState(cmd); }catch(_){} } bt.setAttribute('aria-pressed',String(!!on)); }); }
+// the list buttons show when the selection takes in more than one line, or touches a line that already is a list line (to switch or take the list off)
+const LIST_BTNS=[...bubble.querySelectorAll('[data-cmd="ul"],[data-cmd="ol"]')], LSEP=bubble.querySelector('.lsep');
+function listUI(b){ const ls=listState(b.txt), on=!!ls && (ls.n>1 || ls.on.some(Boolean)); LIST_BTNS.forEach(x=>x.hidden=!on); LSEP.hidden=!on; }
+function placeBubble(){ const b=curTextBlock(); if(!b){ if(!bubble.hidden){ bubble.hidden=true; bubbleMore.hidden=true; layoutBottom(); fabSync(); } bubbleBlk=null; return; } const fresh=bubble.hidden||bubbleBlk!==b; bubbleBlk=b; bubble.hidden=false; listUI(b);
   if(TOUCH){ bubble.style.top=''; bubble.style.bottom=''; fitBubble(); layoutBottom(); if(fresh){ fabSync(); revealCaret(); } }
   else { const r=getSelection().getRangeAt(0).getBoundingClientRect(); const w=bubble.offsetWidth||150, h=bubble.offsetHeight||38; bubble.style.bottom=''; bubble.style.left=Math.max(8, Math.min(window.innerWidth-w-8, r.left+r.width/2-w/2))+'px'; bubble.style.top=(r.top-h-8>=8? r.top-h-8 : r.bottom+8)+'px'; }
   bubbleState(); }
 document.addEventListener('selectionchange',()=>{ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); });
 document.addEventListener('focusin',()=>{ if(TOUCH){ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); } });
 bubble.addEventListener('pointerdown',e=>e.preventDefault()); bubbleMore.addEventListener('pointerdown',e=>e.preventDefault());   // не втрачати виділення
-/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю */
-const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,underline:4,strikeThrough:5,code:6};
-function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.forEach(el=>bubble.appendChild(el)); bubbleMore.hidden=true; more.hidden=true; more.setAttribute('aria-expanded','false');
+/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, списки, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю.
+   The list buttons show only for a selection over several lines, and there they matter more than U; the two go to «⋯» together */
+const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,ul:4,ol:4,underline:5,strikeThrough:6,code:7};
+function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.forEach(el=>bubble.appendChild(el)); bubbleMore.hidden=true; more.hidden=true; more.setAttribute('aria-expanded','false'); LSEP.hidden=LIST_BTNS.every(x=>x.hidden);
   const vis=()=>[...bubble.children].filter(e=>!e.hidden && getComputedStyle(e).display!=='none'), width=()=>{ const v=vis(); return v.length? v[v.length-1].getBoundingClientRect().right-v[0].getBoundingClientRect().left : 0; }, avail=window.innerWidth-12;
   if(width()<=avail) return; more.hidden=false;
   const items=BUBBLE_ORDER.filter(e=>e.tagName==='BUTTON' && e.dataset.act!=='copy' && e!==more).sort((a,b)=>(PRI[b.dataset.cmd||b.dataset.act]??0)-(PRI[a.dataset.cmd||a.dataset.act]??0));   // наймолодші першими
-  for(const b of items){ if(width()<=avail) break; bubbleMore.appendChild(b); } }
+  for(const b of items){ if(width()<=avail) break; if(b.parentNode!==bubble) continue; bubbleMore.appendChild(b); if(LIST_BTNS.includes(b)) LIST_BTNS.forEach(x=>bubbleMore.appendChild(x)); }
+  LSEP.hidden=LIST_BTNS.every(x=>x.hidden || x.parentNode!==bubble); }   // both list buttons went to «⋯»: no separator left alone
 /* курсор не ховається під нижні панелі: межа — верх найвищої з них (панель + ряд «⋯» + плашка «Скасувати»); викликається при появі панелі, відкритті «⋯», плашці та зміні visualViewport */
 function bottomStack(){ const bar=(TOUCH && !bubble.hidden)? bubble.offsetHeight+(bubbleMore.hidden? 0 : bubbleMore.offsetHeight) : 0; return bar+(undoEl.hidden? 0 : undoEl.offsetHeight+18); }
 function revealCaret(){ if(!TOUCH || !fieldOf(document.activeElement)) return; const sel=getSelection(); if(!sel||!sel.rangeCount) return; let r=sel.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=sel.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); if(!el) return; r=el.getBoundingClientRect(); }
@@ -1564,9 +1655,10 @@ function revealCaret(){ if(!TOUCH || !fieldOf(document.activeElement)) return; c
 /* копіювання: у буфер ідуть і чистий текст, і форматування (текст — у чат, жирний і курсив — у редактор) */
 async function copyBoth(text, html){ try{ if(navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([text],{type:'text/plain'}),'text/html':new Blob([html.replace(/\n/g,'<br>')],{type:'text/html'})})]); return true; } }catch(_){}
   try{ await navigator.clipboard.writeText(text); return true; }catch(_){} try{ return document.execCommand('copy'); }catch(_){ return false; } }
-async function copySelection(){ const sel=getSelection(); if(!sel||sel.isCollapsed) return false; const tmp=document.createElement('div'); tmp.appendChild(sel.getRangeAt(0).cloneContents()); const h=richOf(tmp); return copyBoth(plainOf(h), h); }
-function blockText(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.text||'').filter(t=>t.trim()).join('\n\n'); return b.text||''; }
-function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(o=>o.html||escHtml(o.text||'')).filter(t=>t.trim()).join('\n\n'); return b.html||escHtml(b.text||''); }
+async function copySelection(){ const sel=getSelection(); if(!sel||sel.isCollapsed) return false; const tmp=document.createElement('div'); tmp.appendChild(sel.getRangeAt(0).cloneContents()); const h=richOf(tmp); return copyBoth(listText(h), listHtml(h)); }
+const oneText=o=>o.html? listText(o.html) : (o.text||''), oneHtml=o=>o.html? listHtml(o.html) : escHtml(o.text||'');   // a list is copied with its markers
+function blockText(b){ if(b.kind==='area') return flowOrder(b).map(oneText).filter(t=>t.trim()).join('\n\n'); return oneText(b); }
+function blockHtml(b){ if(b.kind==='area') return flowOrder(b).map(oneHtml).filter(t=>t.trim()).join('\n\n'); return oneHtml(b); }
 async function copyBlock(b, grip){ const ok=await copyBoth(blockText(b), blockHtml(b)); if(!ok){ say(loc('copy.failed')); return; } say(loc('copy.done')); if(grip){ grip.classList.add('done'); setTimeout(()=>grip.classList.remove('done'),1200); } }
 const bubbleAct=async e=>{ const a=e.target.closest('button[data-act]'); if(!a) return false; const act=a.dataset.act;
   if(act==='more'){ bubbleMore.hidden=!bubbleMore.hidden; a.setAttribute('aria-expanded',String(!bubbleMore.hidden)); layoutBottom(); revealCaret(); return true; }
@@ -1742,7 +1834,7 @@ function applyMode(){ const narrow=narrowQ.matches; app.classList.toggle('narrow
   fabSync();
   blocks.forEach(b=>{ if(!b.parent) b.col=colOfX((b.fx||0)*W(),null,b); }); resolve(); }
 viewBtn.addEventListener('click',()=>{ overview=!overview; if(overview) nav.open('view', ()=>{ overview=false; applyMode(); nav.close('view'); }); else nav.close('view'); applyMode(); window.scrollTo(0,0); });
-let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); }).observe(sheet);
+let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); if(H.view) placeVbtns(); }).observe(sheet);
 
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
 /* clearing the sheet: the note stays, its blocks go. The state before it is a version, so «Історія» has it after a reload too, and «Скасувати» puts it back right away */
@@ -1764,12 +1856,14 @@ themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme(
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
-/* ══ version history panel (VERSIONS-PLAN 3.5–3.6, PR 2) ══════════════════════════════════════════════
+/* ══ version history panel (VERSIONS-PLAN 3.5–3.8) ══════════════════════════════════════════════════════
    «Зараз» and the note's versions, newest first. Picking a version draws it on the sheet read-only (inert, writes off) and marks the blocks
-   that differ from now; «Зараз», Esc, ✕ or another note bring the live note back. «Відновити цю версію» keeps the current state as a version,
-   puts the version's title and blocks into the note, saves it as «restore» and offers «Скасувати». */
-const hist=$('hist'), histBtn=$('histBtn'), histList=$('histList'), histRestore=$('histRestore'), histClose=$('histClose'), histRange=$('histRange');
-const H={open:false, list:[], bodies:null, sel:'now', view:null, nowSum:null, t:0};   // sel: highlighted row ('now' or a version id); view: the version drawn on the sheet
+   that differ from now; dashed outlines show blocks the version does not have. «Зараз», Esc, ✕ or another note bring the live note back.
+   «Відновити цю версію» and «Повернути цей блок» keep the current state as a version, put the version (or one block of it) into the note,
+   save it as «restore» and offer «Скасувати». The «⋯» menu names a version, searches the versions and clears the note's history. */
+const hist=$('hist'), histBtn=$('histBtn'), histList=$('histList'), histRestore=$('histRestore'), histClose=$('histClose'), histRange=$('histRange'), histMore=$('histMore');
+const histNameRow=$('histNameRow'), histName=$('histName'), histQBox=$('histQBox'), histQ=$('histQ'), vlayer=$('vlayer'), mainEl=sheet.parentElement;
+const H={open:false, list:[], vis:[], bodies:null, sel:'now', view:null, nowSum:null, t:0, q:'', txt:new Map(), geo:null};   // sel: highlighted row ('now' or a version id); view: the version drawn on the sheet; vis: the rows the search leaves
 const hm=t=>new Date(t).toLocaleTimeString(I18N.locale,{hour:'2-digit',minute:'2-digit'});
 function dayOf(t){ const d=new Date(t), y=new Date(); y.setDate(y.getDate()-1); return d.toDateString()===new Date().toDateString()? loc('hist.today') : d.toDateString()===y.toDateString()? loc('hist.yesterday') : fmtDate(t); }
 const SUM={ch:n=>loc('hist.sum.ch',{n}), add:n=>loc('hist.sum.add',{n}), del:n=>loc('hist.sum.del',{n}), mv:n=>loc('hist.sum.mv',{n})},
@@ -1782,19 +1876,24 @@ function verBlocks(v){ return v.blocks.map(e=>{ const d={...e}; delete d.h; cons
     if(b){ if(!d.kind && b.r){ d.html=b.s; d.text=plainOf(cleanRich(b.s)); } else d.text=b.s; }
     else { const now=cur.blocks.find(x=>x.id===e.id); d.text=now? now.text : ''; if(now && now.html) d.html=now.html; }   // a body too big for the history keeps today's text
     return d; }); }
-async function openHist(){ if(H.open || !cur) return; flushSave(); hideUndo(); exitSel(); closePop();
-  H.open=true; H.list=[]; H.bodies=null; H.sel='now'; H.view=null; hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
-  if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
-  const n=cur; let list=[], bodies=[];
+const vtext=v=>{ if(!H.txt.has(v.id)) H.txt.set(v.id, norm([v.title||'', ...verBlocks(v).map(d=>(d.title||'')+'\n'+(d.text||''))].join('\n'))); return H.txt.get(v.id); };
+async function loadHist(){ const n=cur; let list=[], bodies=[];
   if(db.backend==='idb'){ try{ if(saveP) await saveP; await (VQ.get(n.id)||Promise.resolve()); [list,bodies]=await Promise.all([vlist(n.id), vbodies(n.id)]); }catch(_){} }   // versions of the last save are written after it
   if(!H.open || cur!==n) return;
-  H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null; renderHist(); }
-function closeHist(){ if(!H.open) return; clearTimeout(H.t); showNow(); H.open=false; H.list=[]; H.bodies=null; hist.hidden=true; app.classList.remove('hist-open'); histBtn.setAttribute('aria-pressed','false'); nav.close('hist'); fabSync(); }
-const histOrder=()=>['now', ...H.list.map(v=>v.id)];
+  H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
+  if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
+async function openHist(){ if(H.open || !cur) return; flushSave(); hideUndo(); exitSel(); closePop();
+  H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
+  hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
+  if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
+  await loadHist(); }
+function closeHist(){ if(!H.open) return; clearTimeout(H.t); showNow(); H.open=false; H.list=[]; H.vis=[]; H.bodies=null; H.txt.clear(); hist.hidden=true; app.classList.remove('hist-open'); histBtn.setAttribute('aria-pressed','false'); nav.close('hist'); fabSync(); }
+const histOrder=()=>['now', ...H.vis.map(v=>v.id)];
 function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('div','hv'+cls,histList); d.dataset.id=id; d.setAttribute('role','option'); d.setAttribute('aria-selected',String(H.sel===id)); return d; };
+  H.vis=H.q? H.list.filter(v=>vtext(v).includes(H.q)) : H.list;
   const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
-  if(H.bodies && !H.list.length) el('div','none',histList).textContent=loc('hist.empty');
-  let day=''; for(const v of H.list){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
+  if(H.bodies && !H.vis.length) el('div','none',histList).textContent=loc(H.q? 'search.none' : 'hist.empty');
+  let day=''; for(const v of H.vis){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
     const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span><div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
   syncHist(); }
 function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel)), v=H.list.find(x=>x.id===H.sel);
@@ -1803,23 +1902,59 @@ function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel))
   histRestore.disabled=!H.view; }
 function pickHist(id, delay=0){ if(!histOrder().includes(id)) return; H.sel=id; syncHist(); const d=histList.querySelector('.hv[data-id="'+id+'"]'); if(d) d.scrollIntoView({block:'nearest'});
   clearTimeout(H.t); const go=()=>{ if(id==='now') showNow(); else showVersion(H.list.find(v=>v.id===id)); syncHist(); }; if(delay) H.t=setTimeout(go,delay); else go(); }
+const cardOf=b=>b.el.querySelector(':scope>.tcard,:scope>.cblk,:scope>.ablk')||b.el;
+function liveGeo(){ const s=sheet.getBoundingClientRect(), m=new Map(); for(const b of blocks){ const r=cardOf(b).getBoundingClientRect(); if(r.width) m.set(b.id,{x:r.left-s.left, y:r.top-s.top, w:r.width, h:r.height}); } return m; }
 function showVersion(v){ if(!v || !cur) return; const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
+  if(!H.view) H.geo=liveGeo();   // where the live blocks are, for the outlines of the blocks this version has not
   H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
   const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
   for(const b of blocks){ const e=v.blocks.find(x=>x.id===b.id), n=now.get(b.id);
-    b.el.classList.toggle('v-add', !n); b.el.classList.toggle('v-ch', !!n && !!e && ((!!e.h && n.h!==e.h) || (n.title||'')!==(e.title||'') || (n.kind||'')!==(e.kind||'') || (n.lang||'')!==(e.lang||''))); } }
-function showNow(){ if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
+    b.el.classList.toggle('v-add', !n); b.el.classList.toggle('v-ch', !!n && !!e && ((!!e.h && n.h!==e.h) || (n.title||'')!==(e.title||'') || (n.kind||'')!==(e.kind||'') || (n.lang||'')!==(e.lang||'')));
+    b.el.classList.toggle('v-big', !!e && !e.h); if(e && !e.h) b.el.dataset.vnote=loc('hist.tooBig'); }   // its body was too big for the history: today's text is shown
+  sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove());
+  for(const [id,g] of H.geo||[]) if(now.has(id) && !v.blocks.some(e=>e.id===id)){ const d=el('div','ghost-blk',sheet); Object.assign(d.style,{left:g.x+'px', top:g.y+'px', width:g.w+'px', height:g.h+'px'}); }
+  markHits(); placeVbtns(); }
+function markHits(){ for(const b of blocks) b.el.classList.toggle('v-hit', !!H.view && !!H.q && norm((b.title||'')+'\n'+(b.text||'')).includes(H.q)); }
+function placeVbtns(){ vlayer.innerHTML=''; if(!H.view) return; const m=mainEl.getBoundingClientRect();
+  for(const b of blocks){ if(!b.el.classList.contains('v-ch') && !b.el.classList.contains('v-add')) continue; const r=cardOf(b).getBoundingClientRect(); if(!r.width) continue;
+    const bt=document.createElement('button'); bt.type='button'; bt.className='vbtn'; bt.dataset.id=b.id; bt.innerHTML='<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'+locA('hist.blockRestore');
+    bt.addEventListener('click',()=>restoreBlock(b.id)); vlayer.appendChild(bt);
+    const x=Math.min(r.right-m.left+8, mainEl.clientWidth-bt.offsetWidth-8); bt.style.left=Math.max(8,x)+'px'; bt.style.top=(r.top-m.top)+'px'; } }   // right of the block; at the right edge, over it
+function showNow(){ vlayer.innerHTML=''; sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove()); if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
   const y=window.scrollY; drawNote(cur); window.scrollTo(0,y); }
-function restoreVersion(){ const v=H.view, n=cur; if(!v || !n) return; const at=hm(v.t), vb=verBlocks(v), prev={title:n.title, blocks:n.blocks};
-  closeHist();
-  if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'base', undefined, undefined, {now:true});   // R1: the state before the restore is a version too (skipped when it already is the newest)
-  const put=st=>{ n.title=st.title; drawBlocks(st.blocks); ttl.textContent=n.title; document.title=docTitle(n); markDirty(); flushSave(); updateItem(n); };
-  put({title:v.title||'', blocks:vb});
-  if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'restore', undefined, v.id);   // R5
-  offerUndo(loc('hist.restored',{time:at}), ()=>{ if(cur===n) put(prev); }, {big:true}); }
+function putState(n, st){ n.title=st.title; drawBlocks(st.blocks); ttl.textContent=n.title; document.title=docTitle(n); markDirty(); flushSave(); updateItem(n); }
+// both restores: the state before becomes a version (R1, skipped when it already is the newest), the result is written as «restore» from the version (R5)
+function restoreWith(v, make){ const n=cur, at=hm(v.t), before={title:n.title, blocks:n.blocks}; closeHist();
+  if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'base', undefined, undefined, {now:true});
+  putState(n, make(before));
+  if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'restore', undefined, v.id);
+  return {n, at, before}; }
+function restoreVersion(){ const v=H.view; if(!v || !cur) return; const vb=verBlocks(v);
+  const {n, at, before}=restoreWith(v, ()=>({title:v.title||'', blocks:vb}));
+  offerUndo(loc('hist.restored',{time:at}), ()=>{ if(cur===n) putState(n, before); }, {big:true}); }
+// one block: its body, kind, language and title come back; place and size stay as they are now. A block the note no longer has comes back where it was (into its area if that is still there)
+function restoreBlock(id){ const v=H.view; if(!v || !cur) return; const d=verBlocks(v).find(x=>x.id===id); if(!d) return; const old=cur.blocks.find(x=>x.id===id);
+  const nb={...d}; if(old){ nb.row=old.row; delete nb.parent; delete nb.col; delete nb.fx; if(old.parent){ nb.parent=old.parent; nb.col=old.col; } else nb.fx=old.fx; delete nb.cw; delete nb.ch; if(old.cw) nb.cw=old.cw; if(old.ch) nb.ch=old.ch; }
+  const {n, at}=restoreWith(v, st=>({title:st.title, blocks: old? st.blocks.map(x=>x.id===id? nb : x) : [...st.blocks, nb]}));
+  offerUndo(loc('hist.blockRestored',{time:at}), ()=>{ if(cur!==n) return; flushSave(); putState(n, {title:n.title, blocks: old? n.blocks.map(x=>x.id===id? old : x) : n.blocks.filter(x=>x.id!==id)}); }, {big:true}); }   // undo puts back only this block
+function nameHist(){ histNameRow.hidden=false; histName.value=(H.view&&H.view.name)||''; histName.focus(); histName.select(); }
+async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if(!name || !n) return; histNameRow.hidden=true;
+  if(v) await vqueue(n.id, ()=>idb.tx(['versions'],'readwrite',t=>{ const s=t.objectStore('versions'), g=s.get(v.id); g.onsuccess=()=>{ if(g.result){ g.result.name=name; s.put(g.result); } }; }));   // the shown version gets the name
+  else { flushSave(); await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name); }   // «Зараз» becomes a named version (R4)
+  say(loc('hist.named',{name})); await loadHist(); }
+async function clearHist(){ const n=cur; if(!n || !confirm(loc('hist.clearConfirm',{title:titleOf(n)}))) return; H.sel='now'; showNow();
+  await vqueue(n.id, async()=>{ await vdelete(n.id, await vlist(n.id), []); VLAST.set(n.id,null); }); storageUI(); await loadHist(); }
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
 histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });
 histRestore.addEventListener('click',restoreVersion);
+histMore.addEventListener('click',()=>{ if(db.backend!=='idb') return; popMenu(histMore, histMore.closest('.hist-h'), 'hm', [
+  {label:loc(H.view? 'hist.nameShown' : 'hist.nameNow'), act:nameHist},
+  ...(narrowQ.matches? [{label:loc('hist.search'), act:()=>{ histQBox.classList.add('on'); histQ.focus(); }}] : []),
+  {ico:ICO.trash, label:loc('hist.clear'), danger:true, act:clearHist} ]); });
+histNameRow.addEventListener('submit',e=>{ e.preventDefault(); saveName(); });
+histName.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); histNameRow.hidden=true; histList.focus(); } });
+let hqT; histQ.addEventListener('input',()=>{ clearTimeout(hqT); hqT=setTimeout(()=>{ H.q=norm(histQ.value).trim(); renderHist(); markHits(); },120); });
+histQ.addEventListener('keydown',e=>{ if(e.key==='Escape' && histQ.value){ e.preventDefault(); e.stopPropagation(); histQ.value=''; H.q=''; renderHist(); markHits(); } });
 histList.addEventListener('click',e=>{ const d=e.target.closest('.hv'); if(d) pickHist(d.dataset.id); });
 histList.addEventListener('keydown',e=>{ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel));
   const to={ArrowDown:i+1, ArrowUp:i-1, Home:0, End:order.length-1}[e.key];
@@ -1828,6 +1963,15 @@ histList.addEventListener('keydown',e=>{ const order=histOrder(), i=Math.max(0,o
 histRange.addEventListener('input',()=>{ const order=histOrder(); pickHist(order[order.length-1-Number(histRange.value)], 80); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && H.open && !popOpen && !fieldOf(document.activeElement)){ e.preventDefault(); closeHist(); histBtn.focus(); } });
 Object.assign(DEBUG.vers,{ openHist:()=>openHist(), closeHist:()=>closeHist() });
+
+/* ══ history in the export file (VERSIONS-PLAN 3.8): only with «з історією версій»; an import adds versions and bodies it does not have yet ══ */
+async function historyOf(){ try{ const [versions,blobs]=await Promise.all([idb.tx(['versions'],'readonly',t=>t.objectStore('versions').getAll()), idb.tx(['blobs'],'readonly',t=>t.objectStore('blobs').getAll())]); return {versions, blobs}; }catch(_){ return null; } }
+async function importHistory(h){ if(db.backend!=='idb' || !h || !Array.isArray(h.versions) || !Array.isArray(h.blobs)) return 0; const ids=new Set(notes.map(n=>n.id)); let added=0, size=0;
+  const vs=h.versions.filter(v=>v && typeof v.id==='string' && ids.has(v.note) && Array.isArray(v.blocks) && typeof v.sig==='string'), bs=h.blobs.filter(b=>b && ids.has(b.note) && typeof b.h==='string' && typeof b.s==='string');
+  try{ await idb.tx(['versions','blobs'],'readwrite',t=>{ const V=t.objectStore('versions'), B=t.objectStore('blobs');
+    for(const b of bs){ const g=B.get([b.note,b.h]); g.onsuccess=()=>{ if(!g.result) B.put({note:b.note, h:b.h, s:b.s, r:b.r? 1 : 0, z:+b.z||new Blob([b.s]).size}); }; }
+    for(const v of vs){ const g=V.get(v.id); g.onsuccess=()=>{ if(!g.result){ V.put(v); added++; size+=v.size||0; } }; } }); }catch(_){ return 0; }
+  for(const id of new Set(vs.map(v=>v.note))) VLAST.delete(id); DEBUG.vers.size+=size; storageUI(); return added; }
 
 async function start(){
   await db.init(); notes=await db.all(); vstart();
