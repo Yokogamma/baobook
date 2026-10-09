@@ -372,6 +372,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk.dz>.tcard,.blk.dz>.cblk{outline:1.5px dashed var(--sel-line);outline-offset:2px;border-radius:6px}
 .blk.shifted>.tcard,.blk.shifted>.cblk,.blk.shifted>.ablk{outline:2px solid var(--n);outline-offset:2px;border-radius:6px}
 .trace{position:absolute;border:1.5px dashed var(--n);border-radius:6px;pointer-events:none;opacity:.5}
+.sheet.dragging .blk:not(.drag){transition:left .15s ease-out,top .15s ease-out}   /* neighbours making room slide instead of jumping (and back on a cancel) */
 .gbox .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
 .gbox.bad .lbl{display:block}
 .ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
@@ -1538,8 +1539,9 @@ document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest &&
   b.el.scrollIntoView({block:'nearest'}); });
 
 const HOLD_DRAG_MS=350;   // шапка картки на дотику: утримання без руху понад HOLD_SLOP піднімає картку (стартова гіпотеза плану, порівняти з 250)
+let slideT=0;   // keeps .dragging on the sheet a moment after the drop, so blocks settle smoothly
 function slideFrom(el, r0){   // FLIP: the element is already in its new place; draw it at r0 and let it slide there (instant with reduced motion)
-  const r1=el.getBoundingClientRect(), dx=r0.left-r1.left, dy=r0.top-r1.top; if(!dx && !dy) return;
+  const r1=el.getBoundingClientRect(), dx=r0.left-r1.left, dy=r0.top-r1.top; if(!dx && !dy){ el.style.transition=''; return; }
   el.style.transition='none'; el.style.transform=`translate(${dx}px,${dy}px)`; el.getBoundingClientRect();
   el.style.transition='transform .18s ease-out'; el.style.transform=''; el.addEventListener('transitionend',()=>{ el.style.transition=''; },{once:true}); }
 function drag(b, grip, o={}){   // o.hold — на дотику перенос лише після утримання (шапка картки); o.skip(e) — не починати (кнопки, назва в правці); o.quiet — натискання без руху нічого не робить
@@ -1572,7 +1574,7 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     const ae=document.activeElement; if(ae && ae!==document.body && !b.el.contains(ae)) ae.blur(); sheet.querySelectorAll('.chip').forEach(c=>c.remove());
     const br=b.el.getBoundingClientRect(); gx=e.clientX-br.left; gy=e.clientY-br.top; moved=false; home=false; left=false; from={col:b.col,row:b.row,parent:b.parent,fx:b.fx}; host=ctnEl(b);
     host.appendChild(hbox); Object.assign(hbox.style, {left:b.el.offsetLeft+'px', top:b.el.offsetTop+'px', width:b.w+'px', height:b.el.offsetHeight+'px'});
-    undo=placeUndo(b, loc('undo.blockMoved',{label:blockLabel(b)}), true); listen(true);
+    undo=placeUndo(b, loc('undo.blockMoved',{label:blockLabel(b)}), true); listen(true); clearTimeout(slideT); sheet.classList.add('dragging');
     others=blocks.filter(o=>o!==b); others.forEach(o=>o.row0=o.row);
     probe={col:b.col,row:b.row,fx:b.fx,lines:b.lines,w:b.w,kind:b.kind,cw:b.cw,ch:b.ch,parent:b.parent,el:gbox}; b.hidden=true; blocks.push(probe); ctnEl(probe).appendChild(gbox);
     b.el.classList.add('drag'); gbox.className='gbox on'; };
@@ -1611,12 +1613,12 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
   const end=cancel=>{   // cancel: Esc, the right button, leaving the window, or the browser took the gesture away (pointercancel) — nothing changes
     if(!probe) return; listen(false); mark(false);
     const back=cancel || home || !moved || gbox.classList.contains('bad') || (probe.parent===from.parent && probe.col===from.col && probe.row===from.row); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
-    const was=back && moved? b.el.getBoundingClientRect() : null;   // where the block is now, to slide it home from there
+    const was=moved? b.el.getBoundingClientRect() : null; b.el.style.transition='none';   // where the block is now, to slide it to its place from there; its own left/top must not animate (it may change containers)
     b.el.classList.remove('drag','lift'); gbox.className='gbox'; sheet.appendChild(gbox); hbox.className='hbox'; sheet.appendChild(hbox);
     if(back){ others.forEach(o=>o.row=o.row0); b.col=from.col; b.row=from.row; b.parent=from.parent; b.fx=from.fx; }   // fx too: it may come from another window width
     else { b.parent=probe.parent; b.col=probe.col; b.row=probe.row; }
     ctnEl(b).appendChild(b.el); if(!back && !b.parent) b.fx=xOf(b.col,null)/W(); others.forEach(o=>delete o.row0); probe=null;
-    resolve(b); if(was) slideFrom(b.el, was);
+    resolve(b); if(was) slideFrom(b.el, was); else b.el.style.transition=''; slideT=setTimeout(()=>sheet.classList.remove('dragging'), 250);
     if(!back){ markDirty(); const a=b.parent!==from.parent && byId(b.parent);   // Ctrl+Z puts back the whole layout, quietly: no toast after every drag
       undo(a? loc('undo.blockMovedInto',{label:blockLabel(b), area:areaName(a)}) : from.parent && !b.parent? loc('undo.blockPulledOut',{label:blockLabel(b)}) : null); }
     if(!moved && !cancel && !o.quiet){ if(b.kind==='code') focusBlock(b); else if(ptype!=='mouse' && !b.kind) enterSel(b); else copyBlock(b, grip); }   // клік по ручці без руху — копіювання тексту блока; на дотику для текстового блока — режим положення

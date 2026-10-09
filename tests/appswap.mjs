@@ -5,7 +5,8 @@ import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
 const SITE=(await serve()).url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
-const ctx=await br.newContext({...CTX, viewport:{width:1440,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
+// reduced motion: neighbours slide (appslide.mjs checks that), here positions are read right after each move
+const ctx=await br.newContext({...CTX, viewport:{width:1440,height:800}, reducedMotion:'reduce'}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 // the ghost slides to its place (transition on top), so read where it is going, not where it is in this frame
