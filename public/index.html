@@ -879,9 +879,12 @@ function takeMarks(txt){ const at={}; for(const ch of [M0,M1]) for(const t of te
 function repaint(txt){ const h=markSel(txt,true); if(h==null) return; paint(txt,h); takeMarks(txt); padChips(txt); }
 // lines the selection touches: how many, and the list type of each one that has text or already is a list line
 function listState(txt){ const h=markSel(txt,false); if(h==null) return null; const L=linesOf(h), m=marksAt(L); if(!m) return null; const T=L.slice(m[0],m[1]+1); return {n:T.length, on:T.filter(x=>x.l||lineVis(x.h)).map(x=>x.l)}; }
+// spaces at the start of a line that becomes a list item go: the text starts right after the marker. Tags and selection marks among them stay
+function trimLead(h){ let done=false; return h.replace(/<[^>]+>|[^<]+/g, t=>{ if(done || t[0]==='<') return t; let out='';
+  for(let i=0;i<t.length;i++){ const c=t[i]; if(c===M0||c===M1) out+=c; else if(!/\s/.test(c)){ done=true; return out+t.slice(i); } } return out; }); }
 // the list buttons: every touched line becomes a list line of this type; if all of them already are, the list comes off. Empty lines stay plain, so a list breaks there
 function setList(txt, type){ const h=markSel(txt,true); if(h==null) return; const L=linesOf(h), m=marksAt(L);
-  if(m){ const T=L.slice(m[0],m[1]+1), on=T.filter(x=>x.l||lineVis(x.h)), off=on.length>0 && on.every(x=>x.l===type); T.forEach(x=>{ if(off) x.l=''; else if(x.l||lineVis(x.h)) x.l=type; }); }
+  if(m){ const T=L.slice(m[0],m[1]+1), on=T.filter(x=>x.l||lineVis(x.h)), off=on.length>0 && on.every(x=>x.l===type); T.forEach(x=>{ if(off) x.l=''; else if(x.l||lineVis(x.h)){ x.l=type; x.h=trimLead(x.h); } }); }
   paint(txt, joinLines(L)); takeMarks(txt); padChips(txt); }
 // «- » or «1. » typed at the start of a plain line makes it a list line; Ctrl+Z brings the typed characters back
 function mdList(txt){ const s=getSelection(); if(!s||!s.isCollapsed||codeAncestor(s.anchorNode,txt)) return false; const h0=markSel(txt,false); if(h0==null) return false;
