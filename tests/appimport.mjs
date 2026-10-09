@@ -59,7 +59,7 @@ let exported=null;
   t=await importFile(pg,'ghost.json',{app:'baobook',format:1,notes:[{id:'ghost1',title:'Привид',blocks:[{id:'g1',row:2,text:'запис без підтвердження',fx:0.2}],created:1,updated:1759900000010}]});
   ok('6 a write that reports success but is not in storage is caught by the read-back ('+t+')', /Імпортовано: 0 нових.*не збережено: 1/.test(t) && await pg.locator('#saveWarn').isVisible() && /запис не підтвердився/.test(await pg.locator('#saveErrMsg').innerText()));
 
-  const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#exportBtn').click()]); exported=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
+  await pg.locator('#setBtn').click(); const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#exportBtn').click()]); exported=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
   ok('7 export: baobook file with the moved notes and settings', exported.app==='baobook' && isDeepStrictEqual(byId(exported.notes,['mv1','mv2']),FIX) && exported.settings.theme==='dark');
   console.log(errs.length? errs.join('\n') : '✓ no page errors (first site)'); if(errs.length) fails++; await ctx.close(); }
 

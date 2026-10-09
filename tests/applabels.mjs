@@ -44,14 +44,14 @@ const Y=new Date().getFullYear(), jan15=new Date().getMonth()===0 && new Date().
   console.log(errs.length? errs.join('\n') : '✓ без помилок (компʼютер)'); if(errs.length) fails++;
   await ctx.close(); }
 
-/* ── iPhone: підказка встановлення — рядком у підвалі панелі, а не спливною карткою над пошуком ─────── */
+/* ── iPhone: підказка встановлення — рядком у меню налаштувань (шестерня), а не спливною карткою над пошуком ─────── */
 { const ctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'});
   const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await pg.goto(PAGE); await wipe(pg);
-  await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(500);
+  await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(500); await pg.locator('#setBtn').tap(); await pg.waitForTimeout(300);
   const g=await pg.evaluate(()=>{ const r=id=>{ const b=document.getElementById(id).getBoundingClientRect(); return {t:Math.round(b.top), b:Math.round(b.bottom), l:Math.round(b.left), r:Math.round(b.right)}; }; const h=document.getElementById('iosHint');
-    return {hidden:h.hidden, pos:getComputedStyle(h).position, hint:r('iosHint'), foot:r('sideFoot'), search:r('searchBox')}; });
-  ok('5 iPhone: підказка встановлення видна, у підвалі панелі під кнопками ('+g.pos+', '+g.hint.t+'–'+g.hint.b+' у '+g.foot.t+'–'+g.foot.b+'), пошук ('+g.search.t+'–'+g.search.b+') не закриває',
+    return {hidden:h.hidden, pos:getComputedStyle(h).position, hint:r('iosHint'), foot:r('setPop'), search:r('searchBox')}; });
+  ok('5 iPhone: підказка встановлення видна, у меню налаштувань під кнопками ('+g.pos+', '+g.hint.t+'–'+g.hint.b+' у '+g.foot.t+'–'+g.foot.b+'), пошук ('+g.search.t+'–'+g.search.b+') не закриває',
     !g.hidden && g.pos==='static' && g.hint.t>=g.foot.t && g.hint.b<=g.foot.b && g.hint.l>=g.foot.l && g.hint.r<=g.foot.r && g.hint.t>g.search.b);
   ok('6 телефон: бокове поле аркуша 16px ('+(await pad(pg))+')', (await pad(pg))==='16px');
   await pg.screenshot({path:OUT+'/applabels-ios.png'});

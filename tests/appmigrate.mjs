@@ -27,7 +27,7 @@ const b=await ctx.newPage(); b.on('pageerror',e=>errs.push('PAGEERROR new '+e.me
 await b.goto(newSite.url); await b.waitForTimeout(500);
 ok('2 new site, same browser: none of the old notes are visible (separate origin)', filled(await idbNotes(b)).length===0 && (await b.locator('#list .item').filter({hasText:'перша нотатка'}).count())===0);
 
-const [dl]=await Promise.all([a.waitForEvent('download'), a.locator('#exportBtn').click()]); const file=await dl.path();
+await a.locator('#setBtn').click(); const [dl]=await Promise.all([a.waitForEvent('download'), a.locator('#exportBtn').click()]); const file=await dl.path();
 await b.locator('#importFile').setInputFiles(file); await b.waitForTimeout(800);
 const t1=await toast(b);
 await b.reload(); await b.waitForTimeout(600);
