@@ -15,11 +15,11 @@ const ghost=()=>pg.evaluate(()=>{ const g=document.querySelector('.gbox.on'); if
   return {x:Math.round(p.left+c.clientLeft+parseFloat(g.style.left)), y:Math.round(p.top+c.clientTop+parseFloat(g.style.top)), bad:g.classList.contains('bad')}; });
 const homeBox=()=>pg.evaluate(()=>{ const h=document.querySelector('.hbox'); const r=h.getBoundingClientRect(); return {on:h.classList.contains('on'), hit:h.classList.contains('hit'), x:Math.round(r.left), y:Math.round(r.top)}; });
 const stored=()=>pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>{ const t=q.result.transaction('notes').objectStore('notes').get('nhome'); t.onsuccess=()=>{ q.result.close(); r(JSON.stringify(t.result)); }; }; }));
-const seed=async blocks=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+const seed=async blocks=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
   await pg.evaluate(async blocks=>{ const n={id:'nhome',title:'',blocks,created:1,updated:1};
     const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
     await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
-    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nhome'; localStorage.setItem('sheet:settings', JSON.stringify(s)); }, blocks);
+    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nhome'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); }, blocks);
   await pg.reload(); await pg.waitForTimeout(500); };
 const layout=()=>pg.evaluate(()=>[...document.querySelectorAll('#sheet .blk')].map(e=>{ const r=e.getBoundingClientRect(); return [(e.classList.contains('is-area')? 'area' : e.textContent.trim().slice(0,6)).replace(/\s/g,' '), Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(' '); }).sort().join(' | '));   // sorted: a dropped block is re-appended, so DOM order may change
 await pg.goto(SITE); await pg.waitForTimeout(300);

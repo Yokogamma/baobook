@@ -17,7 +17,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   const st=()=>pg.evaluate(()=>({d:sheetDebug.navDepth(), top:sheetDebug.navTop(), h:(history.state&&history.state.d)||0}));
   const sideOpen=()=>pg.locator('.app').evaluate(e=>e.classList.contains('open'));
   const blk=t=>pg.locator('#sheet > .blk').filter({hasText:t});
-  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   // блоки для сценаріїв
   await hold(80,300); await pg.waitForTimeout(250); await pg.keyboard.type('Перший блок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
   // 1 панель нотаток: відкрити → запис в історії; Back закриває; відкрити і закрити з інтерфейсу → запису немає
@@ -57,7 +57,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
 /* ── компʼютер: панель не накладення, меню — так ───────────────────── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const st=()=>pg.evaluate(()=>({d:sheetDebug.navDepth(), top:sheetDebug.navTop(), h:(history.state&&history.state.d)||0}));
-  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   await pg.locator('#sideBtn').click(); await pg.waitForTimeout(200); const s1=await st(); await pg.locator('#sideBtn').click(); await pg.waitForTimeout(200);
   await pg.mouse.move(500,260); await pg.mouse.down(); await pg.mouse.move(900,400,{steps:6}); await pg.mouse.up(); await pg.waitForTimeout(200); await pg.keyboard.press('Escape'); await pg.waitForTimeout(100);
   const area=pg.locator('.blk.is-area').first(); await area.locator('.ablk').hover(); await area.locator('.cb.more').click(); await pg.waitForTimeout(150); const s2=await st(), m2=await pg.locator('.amenu').count(); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300); const s3=await st(), m3=await pg.locator('.amenu').count();

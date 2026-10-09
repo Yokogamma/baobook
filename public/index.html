@@ -656,7 +656,7 @@ const db={ backend:'local',
     const e2=store.put(NK+n.id,n); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; },
   async remove(id){ store.del(NK+id); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
   settings(){ return store.get(SK,{})||{}; },
-  setSettings(s){ store.set(SK,s); }
+  setSettings(p){ const s={...db.settings(),...p}; store.set(SK,s); return s; }   // merge into what is stored now: another tab may have saved its own settings since this one started
 };
 /* ══ версії нотаток (VERSIONS-PLAN, PR 1: лише сховище, без інтерфейсу) ═══════════════════════════════════════
    versions: {id, note, t (час вмісту), w (час запису), reason: base|auto|import|manual|restore, name?, title, sig, from?, size, sum:{ch,add,del,mv,ttl}, blocks:[запис маніфесту…]}
@@ -715,13 +715,16 @@ function vsweep(){ if(vsweeping) return vsweeping; vsweeping=(async()=>{ try{ co
     for(const v of left){ if(size<=budget*0.9) break; if(v.name || newest.get(v.note)===v) continue; if(!goneBy.has(v.note)) goneBy.set(v.note,[]); goneBy.get(v.note).push(v); size-=v.size||0; }   // найстаріші без імені, крім найновішої кожної нотатки
     for(const [note,gone] of goneBy){ const ids=new Set(gone.map(v=>v.id)); await vdelete(note, gone, left.filter(v=>v.note===note && !ids.has(v.id))); } }
   catch(e){ DEBUG.vers.errors++; } finally{ vsweeping=null; } })(); return vsweeping; }
-function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb') return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due){ S.versSwept=now(); db.setSettings(S); } }).catch(()=>{}); };
+function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb') return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due) saveS({versSwept:now()}); }).catch(()=>{}); };
   if(window.requestIdleCallback) requestIdleCallback(go,{timeout:3000}); else setTimeout(go,3000); }   // на старті: раз на добу прорідження й бюджет, інакше лише підрахунок розміру
 Object.assign(DEBUG.vers,{ force:(reason,name)=>{ if(!cur) return Promise.resolve(); flushSave(); return vcapture(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated},reason||'manual',name,undefined,{force:true}); },
   list:note=>vlist(note||(cur&&cur.id)), bodies:note=>vbodies(note||(cur&&cur.id)), thin:note=>vthin(note||(cur&&cur.id)), sweep:()=>vsweep(), last:note=>VLAST.get(note||(cur&&cur.id)), queue:note=>VQ.get(note||(cur&&cur.id))||Promise.resolve(), budget:()=>vbudget() });
 Object.assign(DEBUG,{idb, cur:()=>cur&&cur.id, offerUndo:m=>offerUndo(m,()=>{}), dropUndo:()=>dropUndo(), undoCount:()=>undoStack().length, navDepth:()=>nav.stack.length, navTop:()=>nav.stack.length? nav.stack[nav.stack.length-1].tag : null});   // гачки для тестів: скрипт не глобальний
 
 /* ══ нотатки ══════════════════════════════════════════════════════════════ */
+// tabCur: the note this tab shows, so a reload stays on it; S.current is the last note opened in any tab, for a new tab
+const TK='sheet:tab-current', tabCur={ get(){ try{ return sessionStorage.getItem(TK); }catch(_){ return null; } }, set(id){ try{ sessionStorage.setItem(TK,id); }catch(_){} } };
+const saveS=p=>{ Object.assign(S,p); db.setSettings(p); };   // only the keys this tab changed, never its whole copy
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
 function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); writeNote(n); return n; }
@@ -869,7 +872,8 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; S.current=n.id; db.setSettings(S); if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
+function openNote(n, o={}){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
+  if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
   ttl.textContent=n.title; document.title=titleOf(n)+' · Baobook';
@@ -886,7 +890,7 @@ function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.
 const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
 function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
-  const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ S.lastExport=now(); db.setSettings(S); storageUI(); };
+  const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ saveS({lastExport:now()}); storageUI(); };
   const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
   try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:loc('export.shareTitle')}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
   download(); }
@@ -900,11 +904,11 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(notes[0]); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ const m=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) m.set(n.id,n); }   // localStorage fallback first, IndexedDB wins
   if(db.backend==='idb'){ try{ for(const n of await idb.all()) if(validNote(n)) m.set(n.id,n); }catch(_){} } return m; }
-function applySettings(s){ if(!s || typeof s!=='object') return false; let any=false;   // theme, grid and spelling from an export file, by the same rules as at startup
-  if(THEMES.includes(s.theme)){ S.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); any=true; }
-  if(typeof s.grid==='boolean'){ S.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); any=true; }
-  if(typeof s.spell==='boolean'){ S.spell=spell=s.spell; spellUI(); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); any=true; }
-  if(any) db.setSettings(S); return any; }
+function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
+  if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); }
+  if(typeof s.grid==='boolean'){ p.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); }
+  if(typeof s.spell==='boolean'){ p.spell=spell=s.spell; spellUI(); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); }
+  const any=Object.keys(p).length>0; if(any) saveS(p); return any; }
 exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
 importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
@@ -939,7 +943,7 @@ window.addEventListener('popstate',e=>nav.onPop(e));
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
 function setSide(open, o={}){ if(!open) setMenu(false); if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
-  app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()){ S.side=open; db.setSettings(S); }
+  app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()) saveS({side:open});
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
 backdrop.addEventListener('click',()=>setSide(false));
@@ -1514,7 +1518,7 @@ function holdGesture(host, makeAt, draw){ return gesture(host, {manual:true, hol
     if(!g.moved && !g.held){ const ae=document.activeElement; if(ae && ae!==document.body) ae.blur(); const sl=getSelection(); if(sl) sl.removeAllRanges(); tapHint(); } },
   onCancel:(e,g)=>{ const d=g.data; if(d.marq){ d.marq.remove(); return; } if(d.made){ d.made.el.classList.remove('held'); if(g.moved){ if(!(d.made.text||'').trim()) remove(d.made); } else focusBlock(d.made); } } }); }   // браузер скасував жест (гортання) — блок із текстом не втрачаємо
 const sheetGest=holdGesture(sheet, ev=>createAt(ev,false), true);
-function tapHint(){ if((S.tapHint||0)>=3) return; S.tapHint=(S.tapHint||0)+1; db.setSettings(S); say(loc('touch.hint')); }
+function tapHint(){ if((S.tapHint||0)>=3) return; saveS({tapHint:(S.tapHint||0)+1}); say(loc('touch.hint')); }
 sheet.addEventListener('touchmove',e=>{ const g=sheetGest.state; if(g && (g.data.made||g.data.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання
 sheet.addEventListener('contextmenu',e=>{ if(sheetGest.state || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню
 function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw,ch:rows},false); markDirty(); if(focus) b.ttlEl.focus(); return b; }
@@ -1649,16 +1653,16 @@ let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; apply
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
 clearBtn.addEventListener('click',()=>{ if(!blocks.length||confirm(loc('sheet.clearConfirm'))){ blocks.slice().forEach(remove); } });
 function gridUI(){ const off=sheet.classList.contains('nogrid'); gridBtn.setAttribute('aria-pressed', off?'false':'true'); gridBtn.title=loc(off?'grid.show':'grid.hide'); }
-gridBtn.addEventListener('click',()=>{ sheet.classList.toggle('nogrid'); gridUI(); S.grid=!sheet.classList.contains('nogrid'); db.setSettings(S); });
+gridBtn.addEventListener('click',()=>{ sheet.classList.toggle('nogrid'); gridUI(); saveS({grid:!sheet.classList.contains('nogrid')}); });
 let spell=false;
 function spellUI(){ sheet.spellcheck=spell; ttl.spellcheck=spell; spellBtn.setAttribute('aria-pressed', spell?'true':'false'); spellBtn.title=loc(spell?'spell.on.title':'spell.off.title'); }
-spellBtn.addEventListener('click',()=>{ spell=!spell; spellUI(); S.spell=spell; db.setSettings(S); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); });
+spellBtn.addEventListener('click',()=>{ spell=!spell; spellUI(); saveS({spell}); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); });
 const THEMES=['light','dark','sand'], NAMES={light:loc('theme.light'),dark:loc('theme.dark'),sand:loc('theme.sand')};
 const sysTheme=()=>matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
 const curTheme=()=>document.documentElement.dataset.theme||sysTheme();
 function themeUI(){ const c=curTheme(), n=THEMES[(THEMES.indexOf(c)+1)%THEMES.length]; themeBtn.dataset.th=c; themeBtn.title=loc('theme.button',{cur:NAMES[c], next:NAMES[n]});
   requestAnimationFrame(()=>{ const m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=getComputedStyle(document.documentElement).getPropertyValue('--page').trim()||'#ffffff'; }); }
-themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme())+1)%THEMES.length]; document.documentElement.dataset.theme=n; S.theme=n; db.setSettings(S); themeUI(); });
+themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme())+1)%THEMES.length]; document.documentElement.dataset.theme=n; saveS({theme:n}); themeUI(); });
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
@@ -1666,12 +1670,12 @@ async function start(){
   await db.init(); notes=await db.all(); vstart();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
   if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
-  if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) S.theme=store.raw('freeform-editor-v4:theme');
-  if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') S.grid=false;
-  if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') S.spell=true;
+  if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
+  if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
+  if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') saveS({spell:true});
   if(!notes.length) newNote();
   notes.sort((a,b)=>b.updated-a.updated);
-  renderList(); openNote(notes.find(n=>n.id===S.current)||notes[0]); field(); storageUI();
+  renderList(); const byId=id=>id && notes.find(n=>n.id===id); openNote(byId(tabCur.get())||byId(S.current)||notes[0], {restore:true}); field(); storageUI();
 }
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
@@ -1681,7 +1685,7 @@ applyMode(); start();
 
 /* ══ language: the choice is saved in settings and applied by reloading, so every string comes from one file ══ */
 langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</option>').join(''); langSel.value=I18N.lang;
-langSel.addEventListener('change',()=>{ S.lang=langSel.value; db.setSettings(S); location.reload(); });
+langSel.addEventListener('change',()=>{ saveS({lang:langSel.value}); location.reload(); });
 
 /* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
 function setMenu(open, o={}){ if(open===!setPop.hidden) return; setPop.hidden=!open; setBtn.setAttribute('aria-expanded',open?'true':'false');

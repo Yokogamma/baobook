@@ -14,7 +14,7 @@ const settle=async()=>{ await pg.waitForTimeout(700); await pg.evaluate(()=>shee
 const clock=ms=>pg.evaluate(ms=>{ sheetDebug.vers.clock=ms; }, ms);
 const force=(reason,name)=>pg.evaluate(([r,n])=>sheetDebug.vers.force(r,n), [reason,name||null]);
 const paste=(text)=>pg.evaluate(t=>{ const dt=new DataTransfer(); dt.setData('text/plain',t); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); }, text);
-await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 // 0 база версії 2, нова нотатка з блоком: версій ще немає (порожній стан не версія, інтервал не минув)
 await pg.mouse.click(500,300); await pg.keyboard.type('пароль: Qw3rty!'); await pg.keyboard.press('Escape'); await settle();
 const id=await curId(); const dbv=await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const names=[...d.objectStoreNames]; const v=d.version; d.close(); res({v,names}); }; }));

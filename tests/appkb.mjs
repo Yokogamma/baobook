@@ -16,7 +16,7 @@ const focusedText=()=>pg.evaluate(()=>document.activeElement && document.activeE
 const vis=loc=>loc.isVisible();
 const bubbleBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubble button')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.dataset.cmd||b.dataset.act));
 const moreBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubbleMore button')].map(b=>b.dataset.cmd||b.dataset.act));
-await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 ok('0 viewport без interactive-widget: клавіатура не стискає сторінку, нижні панелі — від visualViewport', !/interactive-widget/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')) && /viewport-fit=cover/.test(await pg.locator('meta[name="viewport"]').getAttribute('content')));
 // 1 курсор у блоці: «+» схований, панель видно з самим курсором — «Готово», «Блок», без «Копіювати»; кнопки 44 px; панель при низу вікна
 await hold(150,400); await pg.waitForTimeout(250); await pg.keyboard.type('перший'); await pg.waitForTimeout(200);
@@ -65,7 +65,7 @@ await pg.reload(); await pg.waitForTimeout(500);
 // 10 довга нотатка: курсор не ховається під ряд «⋯», плашку «Скасувати» і «клавіатуру»
 const SEED={id:'tall1',title:'',created:1,updated:Date.now()+60000,blocks:Array.from({length:30},(_,i)=>({id:'t'+i,fx:0.05,row:2+i*2,text:'Рядок '+(i+1)}))};
 await pg.evaluate(seed=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put(seed); t.oncomplete=()=>{ d.close(); res(); }; }; }), SEED);
-await pg.evaluate(()=>localStorage.clear()); await pg.setViewportSize({width:320,height:568}); await pg.reload(); await pg.waitForTimeout(600);
+await pg.evaluate(()=>(localStorage.clear(),sessionStorage.clear())); await pg.setViewportSize({width:320,height:568}); await pg.reload(); await pg.waitForTimeout(600);
 const caretBottom=()=>pg.evaluate(()=>{ const s=getSelection(); if(!s||!s.rangeCount) return null; let r=s.getRangeAt(0).getBoundingClientRect(); if(!r.height){ const n=s.focusNode, el=n&&(n.nodeType===1? n : n.parentElement); r=el.getBoundingClientRect(); } return Math.round(r.bottom); });
 const pinAboveBar=()=>pg.evaluate(()=>{ const r=document.activeElement.getBoundingClientRect(), bar=document.getElementById('bubble').getBoundingClientRect(); window.scrollBy(0, r.bottom-(bar.top-2)); });
 await pg.locator('.blk .txt').filter({hasText:'Рядок 30'}).tap(); await pg.waitForTimeout(300); await pinAboveBar(); await pg.waitForTimeout(100);

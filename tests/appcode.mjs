@@ -16,7 +16,7 @@ export function debounce(fn, wait = 300) {
   };
 }`;
 await pg.goto(SITE); await pg.waitForTimeout(400);
-await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 // 1 вставка коду в щойно створений блок
 await pg.mouse.click(400,300); await pg.waitForTimeout(50); await paste(null, JS); await pg.waitForTimeout(150);
 const cb=pg.locator('.blk.is-code').first();

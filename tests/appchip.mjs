@@ -15,7 +15,7 @@ const chipAt=(re,k)=>txt(re).evaluate((e,k)=>{ const t=e.querySelector('code').f
 const chipBox=re=>txt(re).evaluate(e=>{ const r=e.querySelector('code').getBoundingClientRect(); return {l:r.left,r:r.right,t:r.top,b:r.bottom,y:r.top+r.height/2}; });
 const sel=()=>pg.evaluate(()=>{ const s=getSelection(), el=n=>n&&(n.nodeType===1? n : n.parentElement); return {text:s.toString(), a:!!(s.anchorNode&&el(s.anchorNode).closest('code')), f:!!(s.focusNode&&el(s.focusNode).closest('code'))}; });
 const textAt=(re,word)=>txt(re).evaluate((e,word)=>{ const w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while((n=w.nextNode())) if(n.nodeValue.includes(word)) break; const i=n.nodeValue.indexOf(word), r=document.createRange(); r.setStart(n,i); r.setEnd(n,i+1); const b=r.getBoundingClientRect(); return {x:b.left+b.width/2, y:b.top+b.height/2}; },word);
-await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await reload();
+await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await reload();
 
 // 1 курсор усередині чипа видно: чип без position (позиціонований Chrome малює шаром поверх курсора), іконка — у потоці рядка
 await write(200,'Ключ: `sk-live-77x` далі'); await reload();
@@ -91,7 +91,7 @@ await write(800,'ab `cd` ef'); await reload();
 
 // 12 чип на кілька рядків зі старих даних (до виправлення так бувало) показується окремими чипами по рядках
 await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('notes','readwrite'); t.objectStore('notes').put({id:'old',title:'',blocks:[{id:'o1',fx:0.2,row:2,text:'пароль abc\nnext тут',html:'пароль <code>abc\nnext</code> тут'}],created:1,updated:Date.now()+90000}); t.oncomplete=()=>{ d.close(); res(); }; }; }));
-await pg.evaluate(()=>localStorage.clear()); await reload();
+await pg.evaluate(()=>(localStorage.clear(),sessionStorage.clear())); await reload();
 { const chips=await txt(/next/).evaluate((e,ZW)=>[...e.querySelectorAll('code')].map(c=>c.textContent.split(ZW).join('')),ZW);
   ok('12 старий чип на два рядки показано двома чипами: '+JSON.stringify(chips), JSON.stringify(chips)==='["abc","next"]'); }
 

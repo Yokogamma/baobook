@@ -10,7 +10,7 @@ const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('shee
 const op=async(loc)=>Number(await loc.evaluate(e=>getComputedStyle(e).opacity));
 const bg=async(loc)=>loc.evaluate(e=>getComputedStyle(e).backgroundColor);
 const model=async(re)=>{ for(const n of await idbAll()){ const b=n.blocks.find(b=>new RegExp(re).test(b.text||'')||new RegExp(re).test(b.title||'')); if(b) return b; } return null; };
-await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 const CL=await pg.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle'))+2);
 
 /* ── текстовий блок: ручка розміру ─────────────────────────────────────── */
@@ -69,7 +69,7 @@ ok('1c під час набору ручка схована ('+opFocused+'), п�
   ok('8 сусід кинуто в межі заданої ширини: ширина та сама ('+c.w+'→'+c2.w+'), блок пішов униз ('+c.y+'→'+c2.y+'), сусід на його рядку ('+n.y+')', c2.w===c.w && c2.y>c.y && n.y===c.y && m && m.cw===c.w/24); }
 
 /* ── область: шапка без підпису, назва по центру, кнопки при наведенні ── */
-await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 await pg.mouse.move(500,500); await pg.mouse.down(); await pg.mouse.move(1140,640,{steps:8}); await pg.mouse.up(); await pg.waitForTimeout(200);
 const area=pg.locator('.blk.is-area').first();
 ok('9a підпису «Область» у шапці немає', (await area.locator('.akind').count())===0 && !/Область/.test(await area.locator('.cbar').innerText()));

@@ -6,7 +6,7 @@ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
-await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.goto(SITE); await pg.waitForTimeout(300); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 const G=24, sheetLeft=(await box(pg.locator('#sheet'))).x;
 const dotK=x=>(x-sheetLeft-G/2)/G;   // номер стовпчика точок для початку тексту (x у координатах вікна)
 // область
@@ -43,7 +43,7 @@ await pg.mouse.click(380,780); for(const [i,t] of ['під областю','2','
   const u1=await box(under.locator('.txt')); const a=await box(area.locator('.ablk'));
   ok('4 перетягнута область виштовхнула блок під собою вниз ('+u0.y+'→'+u1.y+')', u1.y>u0.y && u1.y>=a.y+a.h); }
 // 5 текстові блоки поруч: сусіда можна поставити на відстані однієї клітинки від картки блока із заданою шириною
-await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 await pg.mouse.click(400,300); await pg.keyboard.type('komax-backups'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const L=pg.locator('#sheet > .blk').filter({hasText:'komax-backups'}); let tries=0, c=null; for(;tries<3;tries++){ const r=await box(L.locator('.rz')); await pg.mouse.move(r.x+9,r.y+9); await pg.waitForTimeout(120); await pg.mouse.down(); await pg.mouse.move(r.x+9+30,r.y+9,{steps:4}); await pg.mouse.up(); await pg.waitForTimeout(350);
     c=await box(L.locator('.tcard')); if(Number.isInteger(c.w/G) && await L.locator('.tcard').evaluate(e=>e.classList.contains('sized'))) break; }   // зрідка перший захват ручки не спрацьовує (ширина лишається авто) — повторюємо, кількість спроб у підписі
@@ -60,7 +60,7 @@ await pg.mouse.click(400,300); await pg.keyboard.type('komax-backups'); await pg
   const t2=await box(R.locator('.txt')), c2=await box(L.locator('.tcard'));
   ok('5b на клітинку ближче — блок із заданою шириною виштовхнуто вниз, ширина та сама', c2.y>c1.y && c2.w===c.w && t2.y===c1.y); }
 // 6 два звичайні блоки: мінімальна відстань — 6 клітинок (мінімальна ширина 140px), а не 7
-await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
 await pg.mouse.click(400,300); await pg.keyboard.type('перший'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 await pg.mouse.click(400,600); await pg.keyboard.type('другий'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const A=pg.locator('#sheet > .blk').filter({hasText:'перший'}), B=pg.locator('#sheet > .blk').filter({hasText:'другий'}); const ta=await box(A.locator('.txt')); const g=await box(B.locator('.grip')); const tb=await box(B.locator('.txt'));

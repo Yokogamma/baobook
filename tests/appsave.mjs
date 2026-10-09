@@ -18,7 +18,7 @@ const vis=loc=>loc.isVisible();
 const idbNotes=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const hasText=t=>pg.locator('.blk .txt').filter({hasText:t}).count();
 const fail=v=>pg.evaluate(v=>{ window.sheetDebug.failSave=v; },v);
-await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
 // 1 звичайний запис: ⚠ немає, короткий статус ✓ на телефоні
 await hold(150,300); await pg.waitForTimeout(250); await pg.keyboard.type('перша записана'); await pg.waitForTimeout(500);
 { const st=await pg.locator('#saved').evaluate(e=>({cls:e.className, short:e.querySelector('.ss').textContent, longVis:getComputedStyle(e.querySelector('.sl')).display, shortVis:getComputedStyle(e.querySelector('.ss')).display}));

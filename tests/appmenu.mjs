@@ -14,7 +14,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   const tapEl=async(loc)=>{ const b=await box(loc); await tap(b.x+b.w/2, b.y+b.h/2); };
   const hold=async(x,y,ms=650)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(ms); await touch('touchEnd',[]); };
   const vis=loc=>loc.isVisible(); const blk=t=>pg.locator('#sheet > .blk').filter({hasText:t});
-  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   // 1 шапка на дотику: чотири кнопки по 44px, рідкісні — у «⋯»; назва не зникає на 320px
   { const ids=await pg.evaluate(()=>[...document.querySelectorAll('.top .tb')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.id+':'+Math.round(b.getBoundingClientRect().width)+'x'+Math.round(b.getBoundingClientRect().height)));
     await pg.setViewportSize({width:320,height:568}); await pg.waitForTimeout(300); const ttl=await box(pg.locator('#ttl')); const tools=await box(pg.locator('.tools')); await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(300);
@@ -74,7 +74,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   console.log(errs.length? errs.join('\n') : '✓ без помилок (дотик)'); if(errs.length) fails++; await ctx.close(); }
 /* ── компʼютер: нічого не змінилось ───────────────────────────────────── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
-  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+  await pg.goto(PAGE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
   await pg.mouse.click(500,300); await pg.keyboard.type('на компʼютері'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
   const bm=await pg.locator('.bact').evaluate(e=>getComputedStyle(e).display), more=await pg.locator('#moreBtn').evaluate(e=>getComputedStyle(e).display), tb=await pg.locator('#gridBtn').evaluate(e=>({d:getComputedStyle(e).display, h:Math.round(e.getBoundingClientRect().height)}));
   ok('7 компʼютер: «⋯» у блока не показується ('+bm+'), «⋯» шапки теж ('+more+'), кнопки шапки звичайні ('+tb.d+', '+tb.h+'px)', bm==='none' && more==='none' && tb.d!=='none' && tb.h===28);

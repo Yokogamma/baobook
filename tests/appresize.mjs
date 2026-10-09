@@ -15,13 +15,13 @@ const stored=()=>pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet'
 // every block on the sheet, keyed by its id in the note: left and right edges of the block, top
 const geo=()=>pg.evaluate(()=>{ const o={}; for(const e of document.querySelectorAll('#sheet > .blk')){ const r=e.getBoundingClientRect(), c=(e.querySelector('.ablk,.tcard')||e).getBoundingClientRect(); o[e.dataset.k]={l:Math.round(r.left), r:Math.round(r.right), cardR:Math.round(c.right), t:Math.round(r.top)}; } return o; });
 const tag=()=>pg.evaluate(()=>{ for(const e of document.querySelectorAll('#sheet > .blk')){ const t=e.textContent; e.dataset.k= /ліва/.test(e.querySelector('.cbar')?.textContent||'')? 'L' : /права/.test(e.querySelector('.cbar')?.textContent||'')? 'R' : t.includes('праворуч')? 'T' : t.includes('нижче')? 'U' : '?'; } });
-const seed=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
+const seed=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300);
   await pg.evaluate(async()=>{ const n={id:'nrz',title:'',created:1,updated:1,blocks:[
       {id:'aL',row:4,text:'',fx:0.05,kind:'area',title:'ліва',cw:12,ch:6},{id:'aR',row:4,text:'',fx:0.4,kind:'area',title:'права',cw:12,ch:6},
       {id:'tT',row:5,text:'текст праворуч',fx:0.75},{id:'tU',row:14,text:'блок нижче',fx:0.3}]};
     const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
     await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
-    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nrz'; localStorage.setItem('sheet:settings', JSON.stringify(s)); });
+    const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nrz'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); });
   await pg.reload(); await pg.waitForTimeout(500); await tag(); };
 // grab the left area's corner handle; returns where it was
 const grab=async()=>{ const card=pg.locator('#sheet > .blk.is-area').filter({has:pg.locator('.cbar',{hasText:'ліва'})}).locator('.ablk').first(); await card.hover(); const rz=await card.locator('.rz').last().boundingBox();

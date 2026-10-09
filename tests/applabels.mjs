@@ -5,7 +5,7 @@ const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const PAGE=SITE;
-const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
+const wipe=async pg=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
 const seed=(pg,notes)=>pg.evaluate(notes=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); notes.forEach(n=>t.objectStore('notes').put(n)); t.oncomplete=()=>{ d.close(); res(); }; }; }), notes);
 const pad=pg=>pg.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--pad').trim());
 const texts=n=>Array.from({length:n},(_,i)=>({id:'t'+i, fx:0.05+(i%3)*0.3, row:2+Math.floor(i/3)*2, text:'рядок '+(i+1)}));
@@ -22,7 +22,7 @@ const Y=new Date().getFullYear(), jan15=new Date().getMonth()===0 && new Date().
     {id:'c21', title:'Лічильник: 21', blocks:texts(21), created:1, updated:+new Date(Y-1, 0, 21)},
     {id:'c25', title:'Лічильник: 25', blocks:texts(25), created:1, updated:+new Date(Y-1, 0, 25)},
     {id:'area', title:'Область на 21', created:1, updated:+new Date(Y-2, 5, 1), blocks:[{id:'A', fx:0.05, row:2, kind:'area', cw:12, title:'Двадцять один'}, ...Array.from({length:21},(_,i)=>({id:'k'+i, parent:'A', col:0, row:i*2, text:'пункт '+(i+1)}))]}]);
-  await pg.evaluate(()=>localStorage.clear()); await pg.reload(); await pg.waitForTimeout(600);
+  await pg.evaluate(()=>(localStorage.clear(),sessionStorage.clear())); await pg.reload(); await pg.waitForTimeout(600);
   const item=t=>pg.locator('#list .item').filter({has:pg.locator('.it-t',{hasText:new RegExp('^'+t+'$')})});
   const date=async t=>(await item(t).locator('.it-d').innerText()).trim();
   // 1 дата: сьогодні — час; цього року — «15 січ.» (місяць словом, без року); іншого року — «28 вер. 2025 р.»
