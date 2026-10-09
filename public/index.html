@@ -434,6 +434,28 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none}
 }
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
+
+/* ── version history (VERSIONS-PLAN 3.5): a column right of the sheet; on a phone a bottom sheet with a slider. A shown version is read-only (the sheet is inert) ── */
+.hist{flex:0 0 300px;width:300px;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;border-left:.5px solid var(--line-2);background:var(--paper) var(--page);z-index:20}
+.hist-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 6px 14px;font-size:14px;font-weight:600;color:var(--ink)}
+.hist-l{flex:1 1 auto;overflow:auto;padding:2px 6px 8px;outline:0;overscroll-behavior:contain}
+.hg{padding:10px 10px 4px;font-size:11px;font-weight:600;color:var(--ink-3)}
+.hv{padding:7px 10px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-size:12px;line-height:1.4}
+.hv:hover{background:var(--hover)} .hv.cur{background:var(--hover-2);color:var(--ink)}
+.hist-l:focus-visible .hv.cur{outline:2px solid var(--sel-line);outline-offset:-2px}
+.hv-t{font-size:13.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums} .hv-k{margin-left:8px;color:var(--ink-2)} .hv-s{margin-top:2px;color:var(--ink-3)} .hv-s:empty{display:none}
+.hist-f{padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));border-top:.5px solid var(--line)} .hist-f .fbtn{width:100%;height:34px;font-size:13px} .fbtn:disabled{opacity:.45;cursor:default} .fbtn:disabled:hover{background:transparent;color:var(--ink-2)}
+#histRange{display:none}
+.sheet.history .grip,.sheet.history .rz,.sheet.history .bact{visibility:hidden}
+.sheet.history .blk.v-ch>.tcard,.sheet.history .blk.v-ch>.cblk,.sheet.history .blk.v-ch>.ablk{box-shadow:-4px 0 0 0 var(--n);border-radius:6px}   /* body or title differs from now */
+.sheet.history .blk.v-add>.tcard,.sheet.history .blk.v-add>.cblk,.sheet.history .blk.v-add>.ablk{box-shadow:-4px 0 0 0 var(--s);border-radius:6px}   /* not in the note now: a restore brings it back */
+@media (max-width:640px){
+  .hist{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;height:40dvh;border-left:0;border-top:.5px solid var(--line-2);border-radius:12px 12px 0 0;box-shadow:var(--shadow)}
+  .app.hist-open .main{padding-bottom:40dvh}   /* the sheet scrolls above the panel */
+  .app.hist-open~.toast,.app.hist-open~.undo{bottom:calc(40dvh + 12px)}   /* messages stay above the panel */
+  #histRange{display:block;width:calc(100% - 28px);margin:0 14px 4px;accent-color:var(--accent)}
+  .hist-h .tb{height:40px;min-width:40px}
+}
 </style>
 </head>
 <body>
@@ -479,6 +501,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="tb" id="spellBtn" data-i18n-attr="title:spell.title" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="gridBtn" data-i18n-attr="title:grid.title" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="themeBtn" data-i18n-attr="title:theme.title" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
+        <button class="tb" id="histBtn" data-i18n-attr="title:hist.button" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg></button>
         <button class="tb" id="clearBtn" data-i18n-attr="title:sheet.clear"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
         <button class="tb" id="moreBtn" data-i18n-attr="title:menu.more;aria-label:menu.more" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
@@ -490,6 +513,12 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       </div>
     </div>
   </main>
+  <aside class="hist" id="hist" hidden role="complementary" data-i18n-attr="aria-label:hist.title">
+    <div class="hist-h"><span data-i18n="hist.title"></span><button class="tb" id="histClose" type="button" data-i18n-attr="title:hist.close;aria-label:hist.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <input type="range" id="histRange" min="0" max="0" step="1" value="0" data-i18n-attr="aria-label:hist.range">
+    <div class="hist-l" id="histList" role="listbox" tabindex="0" data-i18n-attr="aria-label:hist.title"></div>
+    <div class="hist-f"><button class="fbtn" id="histRestore" type="button" disabled data-i18n="hist.restore"></button></div>
+  </aside>
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button" data-i18n-html="undo.button"></button><button class="uclose" type="button" data-i18n-attr="aria-label:common.hide;title:common.hide">✕</button></div>
 <button class="fab" id="fab" data-i18n-attr="title:block.new;aria-label:block.new"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -696,7 +725,7 @@ function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.rejec
       tryKey(e.h,0); });
     finish(); return {get result(){ return rec; }}; }).then(r=>{ VLAST.set(note,{id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason}); DEBUG.vers.size+=r.size; return r; }); }
 function vcapture(note, st, reason, name, from, o={}){ if(!st) return Promise.resolve(); vload(note); return vqueue(note, async()=>{ const m=manifestOf(st.title, st.blocks); const L=VLAST.get(note);
-  if(!o.force){ if(reason!=='manual' && L && L.sig===m.sig) return; if(reason==='base'){ if(!m.blocks.length && !m.title) return; if(L && vnow()-(st.at||st.updated||0)<V_GAP) return; } }   // R1: порожній новий стан не версія; стан, що не відлежався, захищає R3
+  if(!o.force){ if(reason!=='manual' && L && L.sig===m.sig) return; if(reason==='base' && !o.now){ if(!m.blocks.length && !m.title) return; if(L && vnow()-(st.at||st.updated||0)<V_GAP) return; } }   // R1: порожній новий стан не версія; стан, що не відлежався, захищає R3
   const r=await vwrite(note, m, st.blocks, {t:o.force? vnow() : (st.updated||vnow()), w:vnow(), reason, name, from}); await vthin(note); return r; }); }   // R1, R2, R4, R5
 function vafter(n){ vload(n.id); return vqueue(n.id, async()=>{ const m=manifestOf(n.title, n.blocks), L=VLAST.get(n.id); if(L && L.sig===m.sig) return; if(vnow()-(L? L.w : (n.created||0))<V_GAP) return;
   await vwrite(n.id, m, n.blocks, {t:n.updated, w:vnow(), reason:'auto'}); await vthin(n.id); }); }   // R3: після запису нотатки, не частіше ніж раз на V_GAP
@@ -860,7 +889,7 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
+function markDirty(){ if(H.view) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
@@ -870,7 +899,7 @@ function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflig
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id); if(r.ok){ unsaved.delete(n.id); tellTabs({t:'put',n:snap}); } else unsaved.set(n.id,{reason:r.reason,since:now()});
     if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
     saveUI(); storageUI(); if(r.ok && db.backend==='idb') vafter(n); }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
-function flushSave(){ clearTimeout(saveT); if(!dirty||!cur) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
+function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
 function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n); } saveUI(); }
 function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(!k) return;
   const names=[...unsaved.keys()].map(id=>{ const x=notes.find(y=>y.id===id); return x? '«'+titleOf(x)+'»' : ''; }).filter(Boolean), first=unsaved.get(cur&&unsaved.has(cur.id)? cur.id : [...unsaved.keys()][0]);
@@ -879,13 +908,14 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n, o={}){ flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
+function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   drawNote(n);
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
-function drawNote(n){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; n.blocks.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update();
+function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); }
+function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }
 function delNote(n){ if(!confirm(loc('notes.deleteConfirm',{title:titleOf(n)}))) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
 newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
@@ -904,7 +934,7 @@ function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.i
   if(n===cur && busy(n)){ if(db.backend==='idb') vcapture(n.id, {title:r.title, blocks:r.blocks, updated:r.updated}, 'conflict'); if(!dirty) markDirty(); say(loc('tabs.conflict')); return; }
   if(busy(n)) return;
   Object.assign(n, r); SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
-  if(n===cur){ const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); }
+  if(n===cur){ closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); }
   renderList(); }
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n)) return;   // edits here keep the note: its next save writes it back
   notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
@@ -953,7 +983,8 @@ let qT; q.addEventListener('input',()=>{ clearTimeout(qT); qT=setTimeout(renderL
 q.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; renderList(); q.blur(); } });
 qClear.addEventListener('click',()=>{ q.value=''; renderList(); q.focus(); });
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&hotkey(e)==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
-  if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='n'){ e.preventDefault(); newBtn.click(); } });
+  if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='n'){ e.preventDefault(); newBtn.click(); }
+  if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='h'){ e.preventDefault(); H.open? closeHist() : openHist(); } });
 window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else { if(unsaved.size) retrySave(); syncTabs(); } });
 window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // back from the page cache: messages sent meanwhile never came
 
@@ -1272,7 +1303,7 @@ function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of
 function showUndo(msg, big){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
 function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
 function dropUndo(){ hideUndo(); }   // ховає плашку; стек лишається (перехід між нотатками, тести)
-function doUndo(){ const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
+function doUndo(){ closeHist(); const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
 function blockLabel(b){ const line=(b.text||'').trim().split('\n')[0]||loc('block.noText'); return line.length>28? line.slice(0,28)+'…' : line; }
 undoBtn.addEventListener('click',()=>doUndo()); undoEl.querySelector('.uclose').addEventListener('click',()=>hideUndo());
 /* ══ історія правок у полях — текстовий блок, код у редагуванні, назви: Ctrl+Z, Ctrl+Shift+Z або Ctrl+Y. Власна, бо браузерна одна на всю сторінку,
@@ -1462,7 +1493,7 @@ function createAfter(b){ const a=ctn(b); const d={row:b.row+(b.lines||1)+1, col:
   if(a) d.parent=a.id; const nb=make(d,false); markDirty(); nb.el.scrollIntoView({block:'center'}); nb.txt.focus(); return nb; }
 /* «+» ховається, поки курсор у будь-якому полі, видно панель форматування чи плашку, відкрито панель нотаток або огляд; повертається через 150 мс після втрати фокуса */
 let fabT=null;
-function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElement) || !bubble.hidden || !blockbar.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches);
+function fabSync(){ clearTimeout(fabT); const busy=!!fieldOf(document.activeElement) || !bubble.hidden || !blockbar.hidden || !undoEl.hidden || (app.classList.contains('open')&&isMobile()) || (overview&&narrowQ.matches) || (H.open&&narrowQ.matches);
   if(busy){ fab.hidden=true; return; } fabT=setTimeout(()=>{ fab.hidden=false; },150); }
 document.addEventListener('focusin',fabSync); document.addEventListener('focusout',fabSync);
 /* нижні елементи: --kb — висота клавіатури за visualViewport, --bar — висота панелі форматування (плашка стоїть над нею), safe area лише в найнижчого */
@@ -1576,8 +1607,8 @@ sheet.addEventListener('pointermove',e=>{
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
-areaBtn.addEventListener('click',()=>{ const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
-document.addEventListener('paste',e=>{ const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
+areaBtn.addEventListener('click',()=>{ closeHist(); const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
+document.addEventListener('paste',e=>{ if(H.view) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
   const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty();
@@ -1682,7 +1713,7 @@ viewBtn.addEventListener('click',()=>{ overview=!overview; if(overview) nav.open
 let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); }).observe(sheet);
 
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
-clearBtn.addEventListener('click',()=>{ if(!blocks.length||confirm(loc('sheet.clearConfirm'))){ blocks.slice().forEach(remove); } });
+clearBtn.addEventListener('click',()=>{ closeHist(); if(!blocks.length||confirm(loc('sheet.clearConfirm'))){ blocks.slice().forEach(remove); } });
 function gridUI(){ const off=sheet.classList.contains('nogrid'); gridBtn.setAttribute('aria-pressed', off?'false':'true'); gridBtn.title=loc(off?'grid.show':'grid.hide'); }
 gridBtn.addEventListener('click',()=>{ sheet.classList.toggle('nogrid'); gridUI(); saveS({grid:!sheet.classList.contains('nogrid')}); });
 let spell=false;
@@ -1697,6 +1728,71 @@ themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme(
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
+/* ══ version history panel (VERSIONS-PLAN 3.5–3.6, PR 2) ══════════════════════════════════════════════
+   «Зараз» and the note's versions, newest first. Picking a version draws it on the sheet read-only (inert, writes off) and marks the blocks
+   that differ from now; «Зараз», Esc, ✕ or another note bring the live note back. «Відновити цю версію» keeps the current state as a version,
+   puts the version's title and blocks into the note, saves it as «restore» and offers «Скасувати». */
+const hist=$('hist'), histBtn=$('histBtn'), histList=$('histList'), histRestore=$('histRestore'), histClose=$('histClose'), histRange=$('histRange');
+const H={open:false, list:[], bodies:null, sel:'now', view:null, nowSum:null, t:0};   // sel: highlighted row ('now' or a version id); view: the version drawn on the sheet
+const hm=t=>new Date(t).toLocaleTimeString(I18N.locale,{hour:'2-digit',minute:'2-digit'});
+function dayOf(t){ const d=new Date(t), y=new Date(); y.setDate(y.getDate()-1); return d.toDateString()===new Date().toDateString()? loc('hist.today') : d.toDateString()===y.toDateString()? loc('hist.yesterday') : fmtDate(t); }
+const SUM={ch:n=>loc('hist.sum.ch',{n}), add:n=>loc('hist.sum.add',{n}), del:n=>loc('hist.sum.del',{n}), mv:n=>loc('hist.sum.mv',{n})},
+  KIND={base:()=>loc('hist.kind.base'), auto:()=>loc('hist.kind.auto'), import:()=>loc('hist.kind.import'), manual:()=>loc('hist.kind.manual'), conflict:()=>loc('hist.kind.conflict')};
+function sumText(s){ if(!s) return ''; const p=[]; for(const k in SUM) if(s[k]) p.push(SUM[k](s[k])); if(s.ttl) p.push(loc('hist.sum.ttl')); return p.join(', ')||loc('hist.sum.none'); }
+function kindText(v){ if(v.name) return '● '+v.name;
+  if(v.reason==='restore'){ const f=v.from && H.list.find(x=>x.id===v.from); return f? loc('hist.kind.restoreFrom',{time:hm(f.t)}) : loc('hist.kind.restore'); }
+  return (KIND[v.reason]||KIND.auto)(); }
+function verBlocks(v){ return v.blocks.map(e=>{ const d={...e}; delete d.h; const b=e.h && H.bodies && H.bodies.get(e.h);
+    if(b){ if(!d.kind && b.r){ d.html=b.s; d.text=plainOf(cleanRich(b.s)); } else d.text=b.s; }
+    else { const now=cur.blocks.find(x=>x.id===e.id); d.text=now? now.text : ''; if(now && now.html) d.html=now.html; }   // a body too big for the history keeps today's text
+    return d; }); }
+async function openHist(){ if(H.open || !cur) return; flushSave(); hideUndo(); exitSel(); closePop();
+  H.open=true; H.list=[]; H.bodies=null; H.sel='now'; H.view=null; hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
+  if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
+  const n=cur; let list=[], bodies=[];
+  if(db.backend==='idb'){ try{ if(saveP) await saveP; await (VQ.get(n.id)||Promise.resolve()); [list,bodies]=await Promise.all([vlist(n.id), vbodies(n.id)]); }catch(_){} }   // versions of the last save are written after it
+  if(!H.open || cur!==n) return;
+  H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null; renderHist(); }
+function closeHist(){ if(!H.open) return; clearTimeout(H.t); showNow(); H.open=false; H.list=[]; H.bodies=null; hist.hidden=true; app.classList.remove('hist-open'); histBtn.setAttribute('aria-pressed','false'); nav.close('hist'); fabSync(); }
+const histOrder=()=>['now', ...H.list.map(v=>v.id)];
+function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('div','hv'+cls,histList); d.dataset.id=id; d.setAttribute('role','option'); d.setAttribute('aria-selected',String(H.sel===id)); return d; };
+  const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
+  if(H.bodies && !H.list.length) el('div','none',histList).textContent=loc('hist.empty');
+  let day=''; for(const v of H.list){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
+    const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span><div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
+  syncHist(); }
+function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel)), v=H.list.find(x=>x.id===H.sel);
+  histList.querySelectorAll('.hv').forEach(d=>{ const on=d.dataset.id===H.sel; d.classList.toggle('cur',on); d.setAttribute('aria-selected',String(on)); });
+  histRange.max=String(order.length-1); histRange.value=String(order.length-1-i); histRange.setAttribute('aria-valuetext', v? hm(v.t)+' · '+kindText(v) : loc('hist.now'));   // right end is «Зараз»
+  histRestore.disabled=!H.view; }
+function pickHist(id, delay=0){ if(!histOrder().includes(id)) return; H.sel=id; syncHist(); const d=histList.querySelector('.hv[data-id="'+id+'"]'); if(d) d.scrollIntoView({block:'nearest'});
+  clearTimeout(H.t); const go=()=>{ if(id==='now') showNow(); else showVersion(H.list.find(v=>v.id===id)); syncHist(); }; if(delay) H.t=setTimeout(go,delay); else go(); }
+function showVersion(v){ if(!v || !cur) return; const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
+  H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
+  const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
+  for(const b of blocks){ const e=v.blocks.find(x=>x.id===b.id), n=now.get(b.id);
+    b.el.classList.toggle('v-add', !n); b.el.classList.toggle('v-ch', !!n && !!e && ((!!e.h && n.h!==e.h) || (n.title||'')!==(e.title||'') || (n.kind||'')!==(e.kind||'') || (n.lang||'')!==(e.lang||''))); } }
+function showNow(){ if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
+  const y=window.scrollY; drawNote(cur); window.scrollTo(0,y); }
+function restoreVersion(){ const v=H.view, n=cur; if(!v || !n) return; const at=hm(v.t), vb=verBlocks(v), prev={title:n.title, blocks:n.blocks};
+  closeHist();
+  if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'base', undefined, undefined, {now:true});   // R1: the state before the restore is a version too (skipped when it already is the newest)
+  const put=st=>{ n.title=st.title; drawBlocks(st.blocks); ttl.textContent=n.title; document.title=docTitle(n); markDirty(); flushSave(); updateItem(n); };
+  put({title:v.title||'', blocks:vb});
+  if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'restore', undefined, v.id);   // R5
+  offerUndo(loc('hist.restored',{time:at}), ()=>{ if(cur===n) put(prev); }, {big:true}); }
+histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
+histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });
+histRestore.addEventListener('click',restoreVersion);
+histList.addEventListener('click',e=>{ const d=e.target.closest('.hv'); if(d) pickHist(d.dataset.id); });
+histList.addEventListener('keydown',e=>{ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel));
+  const to={ArrowDown:i+1, ArrowUp:i-1, Home:0, End:order.length-1}[e.key];
+  if(to!==undefined){ e.preventDefault(); pickHist(order[Math.max(0,Math.min(order.length-1,to))], 80); return; }
+  if(e.key===' '){ e.preventDefault(); if(H.view) showNow(); else if(H.sel!=='now') showVersion(H.list.find(v=>v.id===H.sel)); syncHist(); } });   // space compares in place: the picked version ↔ now
+histRange.addEventListener('input',()=>{ const order=histOrder(); pickHist(order[order.length-1-Number(histRange.value)], 80); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && H.open && !popOpen && !fieldOf(document.activeElement)){ e.preventDefault(); closeHist(); histBtn.focus(); } });
+Object.assign(DEBUG.vers,{ openHist:()=>openHist(), closeHist:()=>closeHist() });
+
 async function start(){
   await db.init(); notes=await db.all(); vstart();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
