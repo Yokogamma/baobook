@@ -18,7 +18,7 @@
 /* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
    бо на темному тлі тонка крапка з прозорістю «лінії» майже зникає ─────────────── */
 :root{
-  --page:#ffffff; --ink:#37352f; --ink-2:#787774; --ink-3:#b4b3b0;
+  --page:#ffffff; --ink:#37352f; --ink-2:#6b6a65; --ink-3:#b4b3b0;   /* --ink-2 is the colour of small captions: 5.4:1 on white */
   --line:rgba(55,53,47,.09); --line-2:rgba(55,53,47,.16);
   --hover:rgba(55,53,47,.06); --hover-2:rgba(55,53,47,.12);
   --sel:rgba(35,131,226,.14); --sel-line:rgba(35,131,226,.55);
@@ -29,7 +29,11 @@
   --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   /* ритм аркуша: крок сітки = висота рядка = 1.5 × кегль (16 → 24). Один токен --g тримає і точки, і рядки, і відступи */
   --fs:16px; --g:24px; --pad:var(--g); --handle:22px;
+  /* interface text: six sizes in rem, so the «Інтерфейс» setting (--k on the root font size) and the browser's own font size scale them all.
+     A computer gets the old sizes + 1px, touch screens their own scale below. The sheet text is --fs, set by the script */
+  --t-xs:.75rem; --t-sm:.8125rem; --t-md:.875rem; --t-lg:.9375rem; --t-xl:1.0625rem; --t-2xl:1.3125rem;
 }
+html{font-size:calc(100% * var(--k,1))}
 /* без явного вибору — за системою */
 @media (prefers-color-scheme:dark){ :root:not([data-theme]){
   --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
@@ -73,12 +77,12 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 
 /* ── каркас: панель нотаток + аркуш ─────────────────────────────────── */
 .app{display:flex;min-height:100dvh}
-.side{flex:0 0 280px;width:280px;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;border-right:.5px solid var(--line-2);background:var(--paper) var(--page);z-index:20}
+.side{flex:0 0 17.5rem;width:17.5rem;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;border-right:.5px solid var(--line-2);background:var(--paper) var(--page);z-index:20}
 .app:not(.open) .side{display:none}
 .main{flex:1 1 auto;min-width:0;position:relative}
 .backdrop{display:none}
 @media (max-width:900px){
-  .side{position:fixed;left:0;top:0;bottom:0;height:100dvh;display:flex;transform:translateX(-100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);box-shadow:none;width:min(300px,86vw);flex-basis:auto}
+  .side{position:fixed;left:0;top:0;bottom:0;height:100dvh;display:flex;transform:translateX(-100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);box-shadow:none;width:min(21.25rem,88vw);flex-basis:auto}
   .app:not(.open) .side{display:flex}
   .app.open .side{transform:none;box-shadow:var(--shadow)}
   .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:15;opacity:0;pointer-events:none;transition:opacity .25s}
@@ -87,32 +91,32 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 
 /* панель */
 .side-h{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px 6px 14px}
-.brand{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink)}
-.brand>.i{font-size:16px;color:var(--ink-2)}
-.brand small{display:block;font-size:11px;font-weight:400;line-height:1.2;color:var(--ink-2)}
+.brand{font-size:var(--t-lg);font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink)}
+.brand>.i{font-size:1rem;color:var(--ink-2)}
+.brand small{display:block;font-size:var(--t-xs);font-weight:400;line-height:1.2;color:var(--ink-2)}
 /* development build (only on baobook.matamata.dev): an orange strip along the top and a «DEV» tag after the name, so real notes go to the production site */
 .devtag{display:none}
-:root.dev .devtag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;background:#e8590c;color:#fff;font-size:10px;font-weight:700;line-height:16px;letter-spacing:.04em;vertical-align:1px;cursor:help}
+:root.dev .devtag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;background:#e8590c;color:#fff;font-size:var(--t-xs);font-weight:700;line-height:16px;letter-spacing:.04em;vertical-align:1px;cursor:help}
 :root.dev body::after{content:"";position:fixed;left:0;right:0;top:0;height:3px;background:#e8590c;z-index:2147483647;pointer-events:none}
 /* налаштування: шестерня одразу після назви, під нею — меню (мова, експорт, імпорт, встановлення); список нотаток займає всю висоту панелі */
 .gear{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0 0 0 4px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ink-3);vertical-align:-2px;cursor:pointer;transition:color .15s,background .15s}
 .gear::before{content:"";position:absolute;inset:-8px}   /* зона дотику ~38px, сусіди не перекриваються */
-.gear .i{font-size:15px;transition:transform .3s}
+.gear .i{font-size:.9375rem;transition:transform .3s}
 .gear:hover,.gear[aria-expanded="true"]{color:var(--ink);background:var(--hover)} .gear[aria-expanded="true"] .i{transform:rotate(45deg)}
-.setpop{position:absolute;left:10px;top:calc(100% - 2px);z-index:30;width:min(260px,calc(100% - 20px));padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-size:13px;color:var(--ink-2)}
+.setpop{position:absolute;left:10px;top:calc(100% - 2px);z-index:30;width:min(20rem,calc(100% - 20px));padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-size:var(--t-md);color:var(--ink-2)}
 .setpop[hidden]{display:none}
 .setpop hr{margin:4px 6px;border:0;border-top:.5px solid var(--line)}
 .setpop .mi{display:flex;align-items:center;gap:10px;width:100%;min-height:32px;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}
 .setpop .mi[hidden]{display:none}
-.setpop .mi .i{font-size:15px}
+.setpop .mi .i{font-size:.9375rem}
 .setpop .mi:hover,.setpop .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0}
-.setpop .hint{padding:4px 10px 6px;font-size:12px;color:var(--ink-3)}
+.setpop .hint{padding:4px 10px 6px;font-size:var(--t-sm);color:var(--ink-2)}
 @media (hover:none){ .setpop .mi{min-height:44px} }
-.new{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer;white-space:nowrap}
+.new{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:var(--t-md);cursor:pointer;white-space:nowrap}
 .new:hover{background:var(--hover);color:var(--ink)}
 .search{display:flex;align-items:center;gap:6px;margin:4px 10px 6px;padding:0 8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:var(--hover);color:var(--ink-3)}
 .search:focus-within{border-color:var(--sel-line);background:transparent}
-.search input{flex:1;min-width:0;border:0;background:transparent;outline:0;font-size:13.5px;color:var(--ink);padding:0}
+.search input{flex:1;min-width:0;border:0;background:transparent;outline:0;font-size:var(--t-md);color:var(--ink);padding:0}
 .search input::placeholder{color:var(--ink-3)}
 .search input::-webkit-search-cancel-button{display:none}
 .qx{border:0;background:transparent;color:var(--ink-3);cursor:pointer;padding:2px;display:none;border-radius:4px}
@@ -131,46 +135,46 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .item:focus-visible{outline:2px solid var(--sel-line);outline-offset:-2px}
 button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* видимий фокус з апаратної клавіатури у всіх кнопок; меню і плашка замість рамки підсвічують тло */
 @media (prefers-reduced-motion:reduce){ *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important;scroll-behavior:auto !important} }
-.it-t{font-size:13.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.it-s{font-size:12px;line-height:1.4;margin-top:2px;max-height:2.8em;overflow:hidden}
+.it-t{font-size:var(--t-md);font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it-s{font-size:var(--t-sm);line-height:1.4;margin-top:2px;max-height:2.8em;overflow:hidden}
 .it-s i{color:var(--ink-3)} .it-s:empty{display:none}
-.it-d{font-size:11px;color:var(--ink-3);margin-top:3px;font-variant-numeric:tabular-nums}
+.it-d{font-size:var(--t-xs);color:var(--ink-2);margin-top:3px;font-variant-numeric:tabular-nums}
 .it-x{position:absolute;right:6px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center}
-.it-x .i{font-size:14px}
+.it-x .i{font-size:.875rem}
 .item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
 .it-x:hover{background:var(--hover-2);color:#c33}
 /* trash (TRASH-PLAN): the panel shows it in place of the list; a footer row leads there while it is not empty */
-.it-r{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i{font-size:14px}
+.it-r{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i{font-size:.875rem}
 .item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r{display:inline-flex} .it-r:hover{background:var(--hover-2);color:var(--ink)}
 .it-t{padding-right:28px}   /* room for the second button of an item (archive, restore) next to the bin */
-.grp{padding:12px 10px 4px;font-size:11px;font-weight:600;color:var(--ink-3)}   /* «В архіві»: archived notes found by a search, below the notes */
+.grp{padding:12px 10px 4px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}   /* «В архіві»: archived notes found by a search, below the notes */
 .sect{display:flex;flex-direction:column;gap:2px;margin:0 10px 4px;padding:0 0 6px;border-bottom:.5px solid var(--line)} .sect[hidden]{display:none}
 .sect-r{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.sect-b{display:inline-flex;align-items:center;gap:4px;height:28px;margin-left:-4px;padding:0 8px 0 4px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer} .sect-b .i{font-size:16px;color:var(--ink-2)} .sect-b:hover{background:var(--hover)}
-.sect-x{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer} .sect-x:hover{background:var(--hover);color:#c33} .sect-x[hidden]{display:none}
-.sect-h{font-size:11.5px;line-height:1.45;color:var(--ink-3)}
-.srow{display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;text-align:left;cursor:pointer} .srow:hover{background:var(--hover);color:var(--ink)} .srow .i{font-size:14px} .srow[hidden]{display:none}
+.sect-b{display:inline-flex;align-items:center;gap:4px;height:28px;margin-left:-4px;padding:0 8px 0 4px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:var(--t-md);font-weight:600;cursor:pointer} .sect-b .i{font-size:1rem;color:var(--ink-2)} .sect-b:hover{background:var(--hover)}
+.sect-x{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;font-size:var(--t-sm);cursor:pointer} .sect-x:hover{background:var(--hover);color:#c33} .sect-x[hidden]{display:none}
+.sect-h{font-size:var(--t-xs);line-height:1.45;color:var(--ink-2)}
+.srow{display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:var(--t-sm);text-align:left;cursor:pointer} .srow:hover{background:var(--hover);color:var(--ink)} .srow .i{font-size:.875rem} .srow[hidden]{display:none}
 .srow-n{margin-left:auto;color:var(--ink-3);font-variant-numeric:tabular-nums}
 @media (hover:none){ .srow,.sect-b,.sect-x{min-height:44px} }
-.none{padding:18px 12px;font-size:13px;color:var(--ink-3);text-align:center}
+.none{padding:18px 12px;font-size:var(--t-md);color:var(--ink-3);text-align:center}
 /* підвал лежить поверх низу списку, правіше лишає місце повзунку — смуга прокрутки доходить до низу панелі */
-.side-f{position:absolute;left:0;right:8px;bottom:0;z-index:2;padding:14px 14px 8px;font-size:11px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.side-f{position:absolute;left:0;right:8px;bottom:0;z-index:2;padding:14px 14px 8px;font-size:var(--t-xs);color:var(--ink-2);display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .side-f::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--paper) var(--page);-webkit-mask-image:linear-gradient(transparent,#000 12px);mask-image:linear-gradient(transparent,#000 12px)}
 .side-f>*{pointer-events:auto}
 .side-f:not(:has(:not([hidden]))){display:none}
 .side-f .frow{display:flex;gap:6px}
 .langrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 4px 4px 10px}
-.fsel{font:inherit;font-size:12.5px;height:30px;padding:0 6px;border:.5px solid var(--line-2);border-radius:8px;background:var(--page);color:var(--ink-2);cursor:pointer} .fbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer}
-.fbtn:hover{background:var(--hover);color:var(--ink)} .fbtn .i{font-size:14px}
+.fsel{font:inherit;font-size:var(--t-sm);height:30px;padding:0 6px;border:.5px solid var(--line-2);border-radius:8px;background:var(--page);color:var(--ink-2);cursor:pointer} .fbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:var(--t-sm);cursor:pointer}
+.fbtn:hover{background:var(--hover);color:var(--ink)} .fbtn .i{font-size:.875rem}
 .stor{line-height:1.45}
 /* незаписані нотатки: помилка лишається, поки запис не вдасться; «Повторити» пише останню версію з памʼяті, «Експортувати» — у файл */
 .serr{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:8px;background:rgba(204,51,51,.1);color:var(--ink)} .serr b{color:#c33} .serr .frow .fbtn{height:34px}
-.dbg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);cursor:pointer} .dbg input{margin:0}
+.dbg{display:flex;align-items:center;gap:8px;font-size:var(--t-sm);color:var(--ink-2);cursor:pointer} .dbg input{margin:0}
 :root{--sa-probe:env(safe-area-inset-bottom,0px)}
-.dbgtop{position:fixed;left:6px;right:6px;top:46px;z-index:40;pointer-events:none;font-size:11px;line-height:1.3;color:var(--ink);background:rgba(255,255,255,.75);border-radius:6px;padding:3px 6px}   /* ?debug=1: геометрія вікна поверх аркуша, видно й при відкритій клавіатурі */
+.dbgtop{position:fixed;left:6px;right:6px;top:46px;z-index:40;pointer-events:none;font-size:var(--t-xs);line-height:1.3;color:var(--ink);background:rgba(255,255,255,.75);border-radius:6px;padding:3px 6px}   /* ?debug=1: геометрія вікна поверх аркуша, видно й при відкритій клавіатурі */
 /* дотик: плаваюча кнопка «+» (новий блок у наступному вільному ряду); ховається, поки видно плашку «Скасувати» або відкрито панель */
 .fab{position:fixed;right:16px;bottom:calc(16px + var(--kb,0px) + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;border:0;background:var(--accent);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:29;transition:transform .15s,opacity .15s}
-.fab .i{font-size:26px;stroke-width:2.2} .fab[hidden]{display:none !important}
+.fab .i{font-size:1.625rem;stroke-width:2.2} .fab[hidden]{display:none !important}
 
 .empty .touch{display:none} 
 .blk.held>.tcard>.txt{background:var(--hover)}
@@ -182,24 +186,24 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .top::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--paper) var(--page);-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
 .top>*{pointer-events:auto}
 .left{display:flex;align-items:center;gap:4px;min-width:0;flex:1 1 auto}
-.ttl{font-size:14px;font-weight:500;color:var(--ink);padding:4px 8px;border-radius:6px;outline:0;min-width:40px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl{font-size:var(--t-lg);font-weight:500;color:var(--ink);padding:4px 8px;border-radius:6px;outline:0;min-width:40px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ttl:hover{background:var(--hover)}
 .ttl:focus{background:var(--hover);text-overflow:clip}
 .ttl:empty::before{content:attr(data-ph);color:var(--ink-3)}
 .tools{display:flex;align-items:center;gap:2px;flex:0 0 auto}
-.tb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer}
+.tb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:var(--t-md);cursor:pointer}
 .tb:hover{background:var(--hover);color:var(--ink)}
-.tb .i{font-size:16px}
+.tb .i{font-size:1rem}
 .tb .th{display:none} .tb[data-th="light"] .th-light,.tb[data-th="dark"] .th-dark,.tb[data-th="sand"] .th-sand{display:block}
 .tb .off{display:none} .tb[aria-pressed="false"]{color:var(--ink-3)} .tb[aria-pressed="false"] .off{display:block}
-.cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px;padding:0 6px;white-space:nowrap}
-.saved{font-size:12px;color:var(--ink-3);padding:0 6px;white-space:nowrap;opacity:0;transition:opacity .3s}
+.cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:var(--t-sm);padding:0 6px;white-space:nowrap}
+.saved{font-size:var(--t-sm);color:var(--ink-3);padding:0 6px;white-space:nowrap;opacity:0;transition:opacity .3s}
 .saved.pend,.saved.ok{opacity:1} .saved.ok{color:var(--ink-2)} .saved.err{opacity:1;color:#c33}
 .saved .ss{display:none}
 /* ⚠ у шапці: є незаписані нотатки; видно на будь-якій ширині, відкриває панель із поясненням і «Повторити» */
-.tb.warn{color:#c33;font-weight:700;font-size:16px} .tb.warn:hover{color:#c33} .tb.warn[hidden]{display:none}
-@media (max-width:640px){ .cnt,.saved .sl{display:none} .saved{padding:0 2px} .saved .ss{display:inline;font-size:14px} .saved.err{display:none} .top{padding-right:4px} }   /* телефон: лише ● і ✓, помилка — кнопкою ⚠ */
-#moreBtn{display:none;font-size:18px;letter-spacing:1px}   /* кнопка «⋯» шапки є лише на дотику (правило нижче) */
+.tb.warn{color:#c33;font-weight:700;font-size:1rem} .tb.warn:hover{color:#c33} .tb.warn[hidden]{display:none}
+@media (max-width:640px){ .cnt,.saved .sl{display:none} .saved{padding:0 2px} .saved .ss{display:inline;font-size:.875rem} .saved.err{display:none} .top{padding-right:4px} }   /* телефон: лише ● і ✓, помилка — кнопкою ⚠ */
+#moreBtn{display:none;font-size:1.125rem;letter-spacing:1px}   /* кнопка «⋯» шапки є лише на дотику (правило нижче) */
 
 /* ── аркуш ───────────────────────────────────────────────────────────── */
 .sheet{position:relative;width:100%;min-height:100dvh;cursor:text}
@@ -210,9 +214,9 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .sheet.overview{width:1024px !important;max-width:none;pointer-events:none}
 .narrow-only{display:none} .app.narrow .narrow-only{display:inline-flex}
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;color:var(--ink-3);text-align:center;padding:0 24px;transition:opacity .25s}
-.empty .big{font-size:20px;font-weight:500;color:var(--ink-2)}
-.empty .sm{font-size:13.5px;line-height:1.5;max-width:36ch}
-.empty kbd{font:inherit;font-size:12px;padding:1px 6px;border:.5px solid var(--line-2);border-bottom-width:1.5px;border-radius:4px;color:var(--ink-2)}
+.empty .big{font-size:var(--t-2xl);font-weight:500;color:var(--ink-2)}
+.empty .sm{font-size:var(--t-md);line-height:1.5;max-width:36ch}
+.empty kbd{font:inherit;font-size:var(--t-sm);padding:1px 6px;border:.5px solid var(--line-2);border-bottom-width:1.5px;border-radius:4px;color:var(--ink-2)}
 .sheet.has .empty{opacity:0}
 
 .blk{position:absolute;display:flex;align-items:flex-start;gap:2px;max-width:calc(100% - var(--pad));border-radius:6px;pointer-events:none}
@@ -233,11 +237,11 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .txt code.done{background:var(--s);color:#fff;border-color:transparent} .txt code.done::after{opacity:1;-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E")}
 /* панель форматування: на компʼютері над виділенням, на дотику — внизу видимої області (над клавіатурою) */
 .bubble{position:fixed;z-index:28;display:flex;gap:2px;padding:4px;border-radius:8px;background:var(--ink);color:var(--page);box-shadow:var(--shadow)}
-.bubble button,.bmore button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
+.bubble button,.bmore button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:var(--t-lg);cursor:pointer}
 .bubble button:hover,.bmore button:hover{background:rgba(128,128,128,.35)} .bubble button[aria-pressed="true"],.bmore button[aria-pressed="true"]{background:rgba(128,128,128,.55)}
-.bubble .sep{width:1px;align-self:stretch;margin:4px 3px;background:rgba(128,128,128,.5)} .bubble button.act{width:auto;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font-size:13px} .bubble button.act .i{font-size:15px}
-.bubble button.act.done{color:#8fd3a5} .bubble button>.i,.bmore button>.i{font-size:17px;vertical-align:middle}
-.grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:14px;font-weight:700}
+.bubble .sep{width:1px;align-self:stretch;margin:4px 3px;background:rgba(128,128,128,.5)} .bubble button.act{width:auto;padding:0 9px;display:inline-flex;align-items:center;gap:6px;font-size:var(--t-md)} .bubble button.act .i{font-size:.9375rem}
+.bubble button.act.done{color:#8fd3a5} .bubble button>.i,.bmore button>.i{font-size:1.0625rem;vertical-align:middle}
+.grip.done{opacity:1;color:var(--s)} .grip.done svg{display:none} .grip.done::after{content:'✓';font-size:.875rem;font-weight:700}
 .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:none}   /* лише на дотику */
 /* дотик: панель положення вибраного блока (стрілки притискають до краю чи сусіда); лише на сенсорних екранах */
 .bbar{display:none} .blk.sel>.tcard>.txt{outline:2px solid var(--sel-line);outline-offset:3px;border-radius:4px} .blk.sel>.grip{opacity:.9 !important}
@@ -258,13 +262,13 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk.drag .txt,.blk.drag .tcard .rz{pointer-events:none}
 
 /* ── блок коду: картка з шапкою, «тільки читання» за замовчуванням ─────── */
-.cblk{position:relative;flex:0 1 auto;width:fit-content;min-width:min(288px,100%);max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:13.5px;line-height:var(--g);color:var(--ink);transition:border-color .15s,box-shadow .15s}
-.cbar{display:flex;align-items:center;gap:2px;height:32px;padding:0 6px 0 4px;font-family:var(--sans);font-size:12px;color:var(--ink-3);user-select:none;-webkit-user-select:none}
+.cblk{position:relative;flex:0 1 auto;width:fit-content;min-width:min(288px,100%);max-width:100%;border:.5px solid var(--code-line);border-radius:10px;background:var(--code-bg);font-family:var(--mono);font-size:calc(var(--fs) * .84375);line-height:var(--g);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.cbar{display:flex;align-items:center;gap:2px;height:32px;padding:0 6px 0 4px;font-family:var(--sans);font-size:var(--t-sm);color:var(--ink-3);user-select:none;-webkit-user-select:none}
 .cbar .grow{flex:1}
-.lang{border:0;background:transparent;color:var(--ink-3);font:inherit;font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:0 8px;height:24px;border-radius:6px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
+.lang{border:0;background:transparent;color:var(--ink-3);font:inherit;font-size:var(--t-xs);font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:0 8px;height:24px;border-radius:6px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
 .lang:hover{background:var(--hover);color:var(--ink-2)}
-.cb{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font:inherit;font-size:12px;cursor:pointer;opacity:0;transition:opacity .12s,background .12s,color .12s}
-.cb .i{font-size:14px}
+.cb{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);font:inherit;font-size:var(--t-sm);cursor:pointer;opacity:0;transition:opacity .12s,background .12s,color .12s}
+.cb .i{font-size:.875rem}
 .cb:hover{background:var(--hover-2);color:var(--ink)}
 .cb[aria-pressed="true"]{color:var(--ink-2);background:var(--hover)}
 .cb.copy{opacity:1;color:var(--ink-2)} .cb.lock{opacity:1}
@@ -282,17 +286,17 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .code code:empty::before{content:attr(data-ph);color:var(--ink-3)}
 .ln{display:inline}
 .cblk.num .code{padding-left:8px}
-.cblk.num .ln::before{content:counter(l);counter-increment:l;display:inline-block;width:2.2em;margin-right:12px;text-align:right;color:var(--ink-3);user-select:none;-webkit-user-select:none;font-size:11.5px}
+.cblk.num .ln::before{content:counter(l);counter-increment:l;display:inline-block;width:2.2em;margin-right:12px;text-align:right;color:var(--ink-3);user-select:none;-webkit-user-select:none;font-size:.85em}
 .code .k{color:var(--k);font-weight:500} .code .s{color:var(--s)} .code .n{color:var(--n)} .code .c{color:var(--c);font-style:normal} .code .t{color:var(--t)} .code .v{color:var(--t)}
 /* «Розгорнути / Згорнути» блока коду; лише в картці коду — кнопка «⋯» області теж має клас more */
-.cblk .more{display:block;width:100%;border:0;border-top:.5px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-family:var(--sans);font-size:12.5px;height:32px;cursor:pointer;border-radius:0 0 10px 10px}
+.cblk .more{display:block;width:100%;border:0;border-top:.5px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-family:var(--sans);font-size:var(--t-sm);height:32px;cursor:pointer;border-radius:0 0 10px 10px}
 .cblk .more:hover{background:var(--hover)} .cblk .more[hidden]{display:none}
 .fade{position:absolute;left:1px;right:1px;bottom:32px;height:44px;pointer-events:none;display:none;background:linear-gradient(to bottom,transparent,var(--code-bg) 85%)}
 .cblk.cut .fade{display:block}
 .code{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
 .code::-webkit-scrollbar{height:8px;width:8px} .code::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px} .code::-webkit-scrollbar-track{background:transparent}
 /* спливна підказка «Тільки читання» над кодом; лише в картці коду — підказка встановлення в панелі теж має клас hint */
-.cblk .hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:12px;color:var(--ink-2);pointer-events:none}
+.cblk .hint{position:absolute;left:8px;right:8px;top:34px;z-index:3;width:fit-content;max-width:calc(100% - 16px);margin-left:auto;background:var(--page);box-shadow:var(--shadow);border-radius:8px;padding:6px 10px;font-family:var(--sans);font-size:var(--t-sm);color:var(--ink-2);pointer-events:none}
 .cblk .hint b{color:var(--ink);font-weight:500}
 .cblk.pulse .cb.lock{animation:pulse .35s} @keyframes pulse{50%{transform:scale(1.25)}}
 .blk.drag>.cblk{box-shadow:var(--shadow)}
@@ -310,7 +314,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .cblk,.ablk{container-type:inline-size}
 .cbar{display:grid;grid-template-columns:minmax(max-content,1fr) minmax(0,auto) minmax(max-content,1fr);align-items:center}
 .lang{justify-self:start} .acts{display:flex;align-items:center;gap:2px;justify-self:end}
-.ctitle{justify-self:center;min-width:0;max-width:100%;padding:0 8px;height:24px;line-height:24px;border-radius:6px;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:0;cursor:text;user-select:text;-webkit-user-select:text;text-align:center}
+.ctitle{justify-self:center;min-width:0;max-width:100%;padding:0 8px;height:24px;line-height:24px;border-radius:6px;font-family:var(--sans);font-size:var(--t-sm);font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:0;cursor:text;user-select:text;-webkit-user-select:text;text-align:center}
 .ctitle:hover,.ctitle:focus{background:var(--hover)} .ctitle:focus{text-overflow:clip}
 /* вузька картка (телефон, звужений блок): порожня назва — маленьке поле в рядку з мовою; заповнена або в редагуванні — окремим рядком під шапкою */
 /* вузька картка: назва власним рядком під шапкою (по центру). Код — до 560px; область (у шапці лише кнопки праворуч) — до 420px, на дотику — до 640px */
@@ -327,13 +331,13 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .ablk .ctitle:focus,.ablk .ctitle:not(:empty){order:3;flex:1 1 100%;max-width:100%;margin:0 4px 4px 6px}
 }
 
-.cb.cmore{display:none;font-size:16px;letter-spacing:1px} .amenu.cm{right:6px;top:46px;min-width:220px}
+.cb.cmore{display:none;font-size:1rem;letter-spacing:1px} .amenu.cm{right:6px;top:46px;min-width:220px}
 
 .ctitle:empty::before{content:attr(data-ph);color:var(--ink-3);font-weight:400;opacity:0;transition:opacity .12s}
 .cblk:hover .ctitle:empty::before,.ctitle:focus:empty::before,.cblk.touch .ctitle:empty::before{opacity:1}
 
 /* меню мови з пошуком */
-.lmenu{position:absolute;left:4px;top:30px;z-index:8;width:230px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:13px;padding:6px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
+.lmenu{position:absolute;left:4px;top:30px;z-index:8;width:230px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:var(--t-md);padding:6px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
 .lmenu input{width:100%;box-sizing:border-box;border:.5px solid var(--line-2);border-radius:6px;padding:5px 8px;font:inherit;background:transparent;color:var(--ink);outline:0}
 .lmenu input:focus{border-color:var(--sel-line)} .lmenu input::-webkit-search-cancel-button{display:none}
 .lmenu .opts{max-height:224px;overflow:auto;margin-top:4px;overscroll-behavior:contain}
@@ -358,15 +362,15 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .ablk.collapsed .abody{display:none} .ablk.collapsed{height:calc(2*var(--g) - 2px)}
 .ablk .cb.fold{opacity:1} .ablk .cb.fold svg{transition:transform .15s} .ablk.collapsed .cb.fold svg{transform:rotate(-90deg)}
 /* меню «⋯» області: небезпечні дії сховані за додатковим кроком */
-.amenu{position:absolute;right:8px;top:30px;z-index:8;min-width:210px;padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:13px;text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
+.amenu{position:absolute;right:8px;top:30px;z-index:8;min-width:210px;padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:var(--t-md);text-transform:none;letter-spacing:0;font-weight:400;user-select:none;-webkit-user-select:none}
 .amenu .mi{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}
 /* дотик: «⋯» у правому верхньому куті текстового блока, лише коли блок виділено (режим положення) або в ньому курсор — інакше на сторінці була б купа значків (рішення власника); зона 44px; на компʼютері не показується */
-.bact{display:none;position:absolute;right:-11px;top:-11px;width:22px;height:22px;border-radius:50%;border:.5px solid var(--line-2);background:var(--page);color:var(--ink-2);font-size:14px;line-height:1;padding:0;cursor:pointer;opacity:.9;z-index:3;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.bact{display:none;position:absolute;right:-11px;top:-11px;width:22px;height:22px;border-radius:50%;border:.5px solid var(--line-2);background:var(--page);color:var(--ink-2);font-size:.875rem;line-height:1;padding:0;cursor:pointer;opacity:.9;z-index:3;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .bact::before{content:"";position:absolute;inset:-11px} .bact::after{content:"⋯"} .blk.drag>.tcard>.bact{display:none !important}
 
 .amenu.bm{right:-8px;top:14px;min-width:200px} .amenu.hm{right:6px;top:46px}
 .amenu .mi .ml{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .amenu.hm{max-width:calc(100vw - 16px)}
-.amenu .mi .i{font-size:15px} .amenu .mi small{margin-left:auto;padding-left:10px;color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.amenu .mi .i{font-size:.9375rem} .amenu .mi small{flex:1 1 0;min-width:30%;padding-left:10px;color:var(--ink-2);font-size:var(--t-xs);line-height:1.3;text-align:right}   /* a long hint wraps on the right, the label keeps its words */
 .amenu .mi:hover,.amenu .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0} .amenu .mi.danger:hover,.amenu .mi.danger:focus-visible{color:#c33}
 .ablk .cb.more[aria-expanded="true"]{opacity:1;background:var(--hover-2);color:var(--ink)}
 
@@ -381,14 +385,14 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 /* рамка, яку тягнуть мишею по порожньому аркушу — майбутня область */
 .marq{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:10px;pointer-events:none;z-index:4}
 /* чіп після вставки: «Вставлено як код · Зробити текстом» */
-.chip{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);background:var(--page);border:.5px solid var(--line-2);border-radius:999px;padding:4px 6px 4px 10px;box-shadow:var(--shadow);white-space:nowrap}
-.chip button{border:0;background:var(--hover);color:var(--ink);font:inherit;font-size:12px;padding:2px 8px;border-radius:999px;cursor:pointer}
+.chip{position:absolute;z-index:6;display:inline-flex;align-items:center;gap:8px;font-size:var(--t-sm);color:var(--ink-2);background:var(--page);border:.5px solid var(--line-2);border-radius:999px;padding:4px 6px 4px 10px;box-shadow:var(--shadow);white-space:nowrap}
+.chip button{border:0;background:var(--hover);color:var(--ink);font:inherit;font-size:var(--t-sm);padding:2px 8px;border-radius:999px;cursor:pointer}
 .chip button:hover{background:var(--hover-2)} .chip .x{background:transparent;color:var(--ink-3);padding:2px 6px}
 
 .gbox{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:6px;pointer-events:none;display:none;transition:left .15s,top .15s}
 .gbox.on{display:block} .gbox.bad{border-color:rgba(235,87,87,.8);background:rgba(235,87,87,.12)}
 .hbox{position:absolute;border:1.5px dashed var(--sel-line);border-radius:6px;pointer-events:none;display:none;opacity:.45} .hbox.on{display:block} .hbox.hit{opacity:1;background:var(--sel)}   /* where the dragged block came from; lit when a drop puts it back */
-.hbox .lbl{position:absolute;left:6px;top:-9px;font-size:10px;font-weight:600;color:var(--ink-2);background:var(--page);padding:0 5px;border-radius:4px;white-space:nowrap;display:none} .hbox.kb .lbl{display:block}   /* "Esc to cancel", for the mouse only */
+.hbox .lbl{position:absolute;left:6px;top:-9px;font-size:var(--t-xs);font-weight:600;color:var(--ink-2);background:var(--page);padding:0 5px;border-radius:4px;white-space:nowrap;display:none} .hbox.kb .lbl{display:block}   /* "Esc to cancel", for the mouse only */
 /* while dragging, why blocks move: the blocks of the area under the dragged one are outlined, a block pushed aside gets an accent
    outline, and a faint one (.trace) stays at its old place */
 .blk.dz>.tcard,.blk.dz>.cblk{outline:1.5px dashed var(--sel-line);outline-offset:2px;border-radius:6px}
@@ -396,7 +400,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .trace{position:absolute;border:1.5px dashed var(--n);border-radius:6px;pointer-events:none;opacity:.5}
 .sheet.dragging .blk:not(.drag){transition:left .15s ease-out,top .15s ease-out}   /* neighbours making room slide instead of jumping (and back on a cancel) */
 @media (prefers-reduced-motion:reduce){ .sheet.dragging .blk:not(.drag){transition:none} }   /* no transition at all: even a .01ms one keeps the old place for a frame */
-.gbox .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
+.gbox .lbl{position:absolute;right:6px;top:-9px;font-size:var(--t-xs);font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
 .gbox.bad .lbl{display:block}
 .ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}
 @media (hover:hover){ .sheet.hov .ghost{display:block} }
@@ -404,37 +408,65 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .ping{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);border-radius:1px;pointer-events:none;animation:ping .5s ease-out forwards}
 @keyframes ping{0%{opacity:1;transform:scaleY(1)}100%{opacity:0;transform:scaleY(1.4)}}
 
-.toast{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:30;padding:8px 12px;border-radius:8px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font-size:12.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.toast{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:30;padding:8px 12px;border-radius:8px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font-size:var(--t-sm);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast b{font-weight:500;color:var(--ink)}
 @media (max-width:640px){ .toast{white-space:normal;max-width:calc(100vw - 32px);text-align:center} }
 /* плашка «Скасувати»: дія вже виконана, кілька секунд її можна повернути */
-.undo{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:31;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;background:var(--ink);color:var(--page);font-family:var(--sans);font-size:13px;box-shadow:var(--shadow);opacity:0;transition:opacity .2s,transform .2s}
+.undo{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:31;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;background:var(--ink);color:var(--page);font-family:var(--sans);font-size:var(--t-md);box-shadow:var(--shadow);opacity:0;transition:opacity .2s,transform .2s}
 .undo.show{opacity:1;transform:translateX(-50%)}
 .undo .umsg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .undo .ubtn{flex:0 0 auto;border:0;border-radius:6px;padding:6px 10px;background:rgba(128,128,128,.28);color:inherit;font:inherit;font-weight:600;cursor:pointer}
 .undo .ubtn:hover,.undo .ubtn:focus-visible{background:rgba(128,128,128,.45);outline:0}
-.undo kbd{font:inherit;font-size:11px;opacity:.6;margin-left:2px}
-.undo .uclose{flex:0 0 auto;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:inherit;font:inherit;font-size:13px;opacity:.7;cursor:pointer} .undo .uclose:hover,.undo .uclose:focus-visible{opacity:1;background:rgba(128,128,128,.28);outline:0}
+.undo kbd{font:inherit;font-size:var(--t-xs);opacity:.6;margin-left:2px}
+.undo .uclose{flex:0 0 auto;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:inherit;font:inherit;font-size:var(--t-md);opacity:.7;cursor:pointer} .undo .uclose:hover,.undo .uclose:focus-visible{opacity:1;background:rgba(128,128,128,.28);outline:0}
 /* our own confirmation instead of confirm(): a modal <dialog> in the page's palette; on a phone a bottom sheet with 44px buttons */
 .ask{width:min(380px,calc(100vw - 32px));max-width:none;padding:18px 18px 14px;border:.5px solid var(--line-2);border-radius:12px;background:var(--paper) var(--page);color:var(--ink);box-shadow:var(--shadow);font-family:var(--sans)}
 .ask::backdrop{background:rgba(15,15,15,.32)}
 .ask[open]{animation:ask-in .16s ease-out} .ask[open]::backdrop{animation:ask-fade .16s ease-out}
 @keyframes ask-in{from{opacity:0;transform:translateY(6px)}} @keyframes ask-fade{from{opacity:0}}
-.ask-t{font-size:15px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
-.ask-x{margin-top:6px;font-size:13px;line-height:1.5;color:var(--ink-2)} .ask-x:empty{display:none}
+.ask-t{font-size:var(--t-xl);font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.ask-x{margin-top:6px;font-size:var(--t-md);line-height:1.5;color:var(--ink-2)} .ask-x:empty{display:none}
 .ask-b{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-.ask-b .fbtn{flex:0 0 auto;min-width:96px;height:34px;padding:0 14px;font-size:13px}
+.ask-b .fbtn{flex:0 0 auto;min-width:96px;height:34px;padding:0 14px;font-size:var(--t-md)}
 .ask-b .fbtn:focus-visible{outline:2px solid var(--sel-line);outline-offset:2px}
 .ask-b .fbtn.danger{border-color:#c33;background:#c33;color:#fff;font-weight:500} .ask-b .fbtn.danger:hover{border-color:#b02a2a;background:#b02a2a;color:#fff}
 @media (max-width:640px){
   .ask{width:100%;margin:auto 0 0;border-width:.5px 0 0;border-radius:14px 14px 0 0;padding:20px 16px calc(14px + env(safe-area-inset-bottom,0px))}
-  .ask-b .fbtn{flex:1 1 0;height:44px;font-size:14px}
+  .ask-b .fbtn{flex:1 1 0;height:44px;font-size:var(--t-lg)}
 }
 @media (prefers-reduced-motion:reduce){ .ask[open],.ask[open]::backdrop{animation:none} }
+/* text size (gear menu → «Розмір тексту»): a light backdrop, since the page behind is the preview; on a phone the same bottom sheet as .ask */
+.setpop .mi small{margin-left:auto;padding-left:10px;color:var(--ink-2);font-size:var(--t-sm);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tsz{width:min(26rem,calc(100vw - 32px))} .tsz::backdrop{background:rgba(15,15,15,.12)}
+@media (max-width:640px){ .tsz{width:100%} }
+.tsz-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-6px -8px 12px 0}
+.tsz-r{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:var(--t-md);font-weight:500}
+.tsz-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tsz small{display:block;font-size:var(--t-sm);font-weight:400;line-height:1.35;color:var(--ink-2)}
+.tsz-g{display:flex;flex-direction:column;gap:4px;margin-top:18px}
+.tsz-v{font-size:var(--t-sm);font-weight:400;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tsz-s{display:flex;align-items:center;gap:12px;height:44px;color:var(--ink-2)} .tsz-s span{font-size:14px;font-weight:500} .tsz-s span:last-child{font-size:24px}
+.tsz-s input{flex:1;min-width:0;margin:0;accent-color:var(--accent)}
+.tsz-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;margin-top:6px;padding:3px;border-radius:10px;background:var(--hover)}
+.tsz-seg button{height:40px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-weight:600;cursor:pointer}
+.tsz-seg button:nth-child(1){font-size:.8125rem} .tsz-seg button:nth-child(2){font-size:.9375rem} .tsz-seg button:nth-child(3){font-size:1.0625rem} .tsz-seg button:nth-child(4){font-size:1.1875rem}
+.tsz-seg button[aria-checked="true"]{background:var(--page);color:var(--ink);box-shadow:0 1px 3px rgba(15,15,15,.16),0 0 0 .5px rgba(15,15,15,.08)}
+.sw{flex:0 0 auto;position:relative;width:44px;height:26px;padding:0;border:0;border-radius:13px;background:var(--line-2);cursor:pointer;transition:background .15s}
+.sw::before{content:"";position:absolute;inset:-9px -4px}   /* a 44px touch zone */
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(15,15,15,.3);transition:transform .15s}
+.sw[aria-checked="true"]{background:var(--accent)} .sw[aria-checked="true"]::after{transform:translateX(18px)}
+.tsz .ask-b{justify-content:space-between}
+.ask-b .fbtn.pri,.ask-b .fbtn.pri:hover{border-color:var(--ink);background:var(--ink);color:var(--page);font-weight:500} .ask-b .fbtn.pri:hover{opacity:.85}
+@media (hover:none){ .tsz-seg button{height:44px} }
+/* the sheet text stepper in the header «⋯» menu (touch) */
+.amenu .mi-step{display:flex;align-items:center;gap:8px;padding:2px 4px 2px 12px;color:var(--ink-2)} .amenu .mi-step .ml{flex:1}
+.mi-step button{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink);cursor:pointer} .mi-step button:disabled{opacity:.35;cursor:default}
+.mi-step>.i{font-size:.9375rem} .mi-step button .i{font-size:1.125rem}
+.mi-step output{min-width:2ch;text-align:center;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
 /* a note from the trash is shown read-only: a strip under the header, the sheet two rows lower so the strip covers nothing, no editing tools */
 .rowrap{position:sticky;top:50px;z-index:5;height:0;display:flex;align-items:flex-start;justify-content:center;pointer-events:none}
-.rostrip{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:13px;color:var(--ink-2);pointer-events:auto}
+.rostrip{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100% - 24px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:var(--t-md);color:var(--ink-2);pointer-events:auto}
 .rowrap[hidden]{display:none} .ro-b{display:flex;gap:6px} .rostrip .fbtn{flex:0 0 auto;height:30px;padding:0 12px} .rostrip .fbtn.danger:hover{color:#c33}
 .app.ro .sheet,.app.arch .sheet{margin-top:48px} .app.ro .empty,.app.arch .empty{display:none} .rostrip .fbtn[hidden]{display:none} .app.ro .sheet .grip,.app.ro .sheet .rz,.app.ro .sheet .bact{visibility:hidden}
 @media (max-width:640px){ .app.ro .rostrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:96px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower */
@@ -443,6 +475,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 
 /* ══ дотик (hover:none): усі правила для сенсорних екранів зібрано в одному блоці (план 3.9); порядок — як був у файлі, бо пізніше правило перекриває раніше ══ */
 @media (hover:none){
+  :root{--t-xs:.8125rem;--t-sm:.875rem;--t-md:1rem;--t-lg:1.0625rem;--t-xl:1.125rem;--t-2xl:1.375rem}   /* touch: the phone scale (captions 13, list and menus 16, titles 18) */
+  .search{height:44px} .new{height:44px}
   .fab{display:flex}
     /* довге натискання на порожньому місці не має запускати системне виділення (сині маркери в Android); текст блоків лишається виділюваним */
     .sheet{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none} .blk.focus>.tcard>.txt,.code,.ctitle{-webkit-user-select:text;user-select:text}   /* текст блока виділяється системою лише з курсором у ньому: довге натискання на неактивному блоці — наш жест (стрілки), курсор по дотику ставимо самі */
@@ -452,10 +486,10 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   /* дотик: цілі 44px; рідкісні дії шапки (і «Нова область» — її малюють пальцем) у меню «⋯» */
   .tb{height:44px;min-width:44px;padding:0 8px;justify-content:center} .tools{gap:4px} .top{gap:4px} #spellBtn,#gridBtn,#themeBtn,#clearBtn,#areaBtn{display:none} #moreBtn{display:inline-flex}
   .bbar{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:28;display:flex;gap:2px;justify-content:center;min-height:48px;padding:4px 6px calc(4px + var(--sab,0px));background:var(--ink);color:var(--page);box-shadow:var(--shadow)} .bbar[hidden]{display:none}
-    .bbar button{flex:0 0 auto;width:44px;min-width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:20px;cursor:pointer} .bbar button.act{width:auto;padding:0 10px;font-size:14px;font-weight:600} .bbar button:disabled{opacity:.35}
+    .bbar button{flex:0 0 auto;width:44px;min-width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:1.25rem;cursor:pointer} .bbar button.act{width:auto;padding:0 10px;font-size:var(--t-lg);font-weight:600} .bbar button:disabled{opacity:.35}
   .bubble{left:0 !important;right:0;bottom:var(--kb,0px);top:auto !important;border-radius:0;justify-content:center;min-height:48px;padding:4px 6px calc(4px + var(--sab,0px))}
-    .bubble button,.bmore button{flex:0 0 auto;width:44px;min-width:44px;height:44px;font-size:16px} .bubble button.act,.bmore button.act{width:auto;padding:0 10px;font-size:14px} .bubble button.act[data-act="new"]{width:44px;padding:0} .bubble [data-act="new"] span{display:none}
-    .bubble button.act[data-act="copy"]{display:none} .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:inline-flex;align-items:center;justify-content:center} .bubble button.act[data-act="done"]{font-weight:600} .bubble .more{font-size:20px;letter-spacing:1px}
+    .bubble button,.bmore button{flex:0 0 auto;width:44px;min-width:44px;height:44px;font-size:var(--t-xl)} .bubble button.act,.bmore button.act{width:auto;padding:0 10px;font-size:var(--t-lg)} .bubble button.act[data-act="new"]{width:44px;padding:0} .bubble [data-act="new"] span{display:none}
+    .bubble button.act[data-act="copy"]{display:none} .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:inline-flex;align-items:center;justify-content:center} .bubble button.act[data-act="done"]{font-weight:600} .bubble .more{font-size:1.25rem;letter-spacing:1px}
   /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
   .grip{opacity:.45;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9}
   .cb{opacity:1} .cbar{height:48px} .cb{height:44px;min-width:44px;padding:0 12px;justify-content:center}
@@ -478,30 +512,30 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
 /* ── version history (VERSIONS-PLAN 3.5): a column right of the sheet; on a phone a bottom sheet with a slider. A shown version is read-only (the sheet is inert) ── */
-.hist{flex:0 0 300px;width:300px;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;border-left:.5px solid var(--line-2);background:var(--paper) var(--page);z-index:20}
-.hist-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 6px 14px;font-size:14px;font-weight:600;color:var(--ink)}
+.hist{flex:0 0 18.75rem;width:18.75rem;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;border-left:.5px solid var(--line-2);background:var(--paper) var(--page);z-index:20}
+.hist-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 6px 14px;font-size:var(--t-lg);font-weight:600;color:var(--ink)}
 .hist-l{flex:1 1 auto;overflow:auto;padding:2px 6px 8px;outline:0;overscroll-behavior:contain}
-.hg{padding:10px 10px 4px;font-size:11px;font-weight:600;color:var(--ink-3)}
-.hv{padding:7px 10px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-size:12px;line-height:1.4}
+.hg{padding:10px 10px 4px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}
+.hv{padding:7px 10px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-size:var(--t-sm);line-height:1.4}
 .hv:hover{background:var(--hover)} .hv.cur{background:var(--hover-2);color:var(--ink)}
 .hist-l:focus-visible .hv.cur{outline:2px solid var(--sel-line);outline-offset:-2px}
-.hv-t{font-size:13.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums} .hv-k{margin-left:8px;color:var(--ink-2)} .hv-s{margin-top:2px;color:var(--ink-3)} .hv-s:empty{display:none}
-.hist-f{padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));border-top:.5px solid var(--line)} .hist-f .fbtn{width:100%;height:34px;font-size:13px} .fbtn:disabled{opacity:.45;cursor:default} .fbtn:disabled:hover{background:transparent;color:var(--ink-2)}
+.hv-t{font-size:var(--t-md);font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums} .hv-k{margin-left:8px;color:var(--ink-2)} .hv-s{margin-top:2px;color:var(--ink-3)} .hv-s:empty{display:none}
+.hist-f{padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));border-top:.5px solid var(--line)} .hist-f .fbtn{width:100%;height:34px;font-size:var(--t-md)} .fbtn:disabled{opacity:.45;cursor:default} .fbtn:disabled:hover{background:transparent;color:var(--ink-2)}
 #histRange{display:none}
 .sheet.history .grip,.sheet.history .rz,.sheet.history .bact{visibility:hidden}
 .sheet.history .blk.v-ch>.tcard,.sheet.history .blk.v-ch>.cblk,.sheet.history .blk.v-ch>.ablk{box-shadow:-4px 0 0 0 var(--n);border-radius:6px}   /* body or title differs from now */
 .sheet.history .blk.v-add>.tcard,.sheet.history .blk.v-add>.cblk,.sheet.history .blk.v-add>.ablk{box-shadow:-4px 0 0 0 var(--s);border-radius:6px}   /* not in the note now: a restore brings it back */
-.hist-h{position:relative} .hist-b{display:flex;align-items:center;gap:2px} #histMore{font-size:18px;letter-spacing:1px}
-.hist-name{display:flex;gap:6px;padding:2px 10px 6px} .hist-name input{flex:1;min-width:0;height:30px;padding:0 8px;border:.5px solid var(--sel-line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:13px;outline:0} .hist-name .fbtn{flex:0 0 auto;padding:0 12px}
+.hist-h{position:relative} .hist-b{display:flex;align-items:center;gap:2px} #histMore{font-size:1.125rem;letter-spacing:1px}
+.hist-name{display:flex;gap:6px;padding:2px 10px 6px} .hist-name input{flex:1;min-width:0;height:30px;padding:0 8px;border:.5px solid var(--sel-line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:var(--t-md);outline:0} .hist-name .fbtn{flex:0 0 auto;padding:0 12px}
 .hist-q{flex:0 0 auto}
 .hv.named .hv-k{color:var(--ink);font-weight:500}
-.setpop .chk{gap:8px;padding-left:36px;font-size:12.5px} .setpop .chk input{margin:0}
+.setpop .chk{gap:8px;padding-left:36px;font-size:var(--t-sm)} .setpop .chk input{margin:0}
 .ghost-blk{position:absolute;border:1.5px dashed var(--ink-3);border-radius:6px;pointer-events:none;opacity:.7}   /* a block the note has now but the version has not: a restore of the whole note removes it */
 .sheet.history .blk.v-hit>.tcard,.sheet.history .blk.v-hit>.cblk{outline:2px solid rgba(245,190,60,.75);outline-offset:2px;border-radius:6px}   /* matches the search in versions */
-.sheet.history .blk.v-big::after{content:attr(data-vnote);position:absolute;left:8px;bottom:-16px;font-size:11px;color:var(--ink-3);white-space:nowrap}
+.sheet.history .blk.v-big::after{content:attr(data-vnote);position:absolute;left:8px;bottom:-16px;font-size:var(--t-xs);color:var(--ink-3);white-space:nowrap}
 .vlayer{position:absolute;inset:0;z-index:4;pointer-events:none}
-.vbtn{position:absolute;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:.5px solid var(--line-2);border-radius:12px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font:inherit;font-size:12px;white-space:nowrap;cursor:pointer;pointer-events:auto}
-.vbtn:hover,.vbtn:focus-visible{color:var(--ink);background:var(--hover-2)} .vbtn .i{font-size:13px}
+.vbtn{position:absolute;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:.5px solid var(--line-2);border-radius:12px;background:var(--page);box-shadow:var(--shadow);color:var(--ink-2);font:inherit;font-size:var(--t-sm);white-space:nowrap;cursor:pointer;pointer-events:auto}
+.vbtn:hover,.vbtn:focus-visible{color:var(--ink);background:var(--hover-2)} .vbtn .i{font-size:.8125rem}
 @media (hover:none){ .vbtn{height:32px;padding:0 10px} }
 @media (max-width:640px){
   .hist-q:not(.on){display:none}   /* a phone shows the search only when «Шукати у версіях…» is picked */
@@ -521,6 +555,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
       <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
         <label class="langrow"><span data-i18n="lang.label"></span><select class="fsel" id="langSel"></select></label>
+        <button class="mi" id="textBtn" type="button" aria-haspopup="dialog"><svg class="i" viewBox="0 0 24 24"><path d="M3 18 7.5 6 12 18M4.7 14h5.6M14 18l3-7.5 3 7.5M15.1 15.5h3.8"/></svg><span data-i18n="text.title"></span><small id="textV"></small></button>
         <hr>
         <button class="mi" id="exportBtn" type="button" data-i18n="export.button" data-i18n-attr="title:export.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
         <label class="mi chk" id="exportHistRow"><input type="checkbox" id="exportHist"><span data-i18n="export.withHistory"></span></label>
@@ -594,6 +629,21 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
 <div class="toast" id="toast" data-i18n-html="toast.help"></div>
 <dialog class="ask" id="ask" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askText"><div class="ask-t" id="askTitle"></div><div class="ask-x" id="askText"></div><div class="ask-b"><button class="fbtn" id="askNo" type="button" data-i18n="common.cancel"></button><button class="fbtn danger" id="askYes" type="button" data-i18n="common.delete"></button></div></dialog>
+<dialog class="ask tsz" id="tsz" aria-labelledby="tszTitle">
+  <div class="tsz-h"><div class="ask-t" id="tszTitle" data-i18n="text.title"></div><button class="tb" id="tszClose" type="button" data-i18n-attr="title:common.close;aria-label:common.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="tsz-r"><span class="tsz-l"><span id="tszSysL" data-i18n="text.system"></span><small data-i18n="text.systemHint"></small></span><button class="sw" id="tszSys" type="button" role="switch" aria-checked="true" aria-labelledby="tszSysL"></button></div>
+  <div class="tsz-g">
+    <div class="tsz-r"><label for="tszSheet" data-i18n="text.sheet"></label><span class="tsz-v" id="tszSheetV"></span></div>
+    <small data-i18n="text.sheetHint"></small>
+    <div class="tsz-s"><span aria-hidden="true">A</span><input type="range" id="tszSheet" min="0" max="5" step="1"><span aria-hidden="true">A</span></div>
+  </div>
+  <div class="tsz-g">
+    <div class="tsz-r"><span id="tszUiL" data-i18n="text.ui"></span><span class="tsz-v" id="tszUiV"></span></div>
+    <small data-i18n="text.uiHint"></small>
+    <div class="tsz-seg" id="tszUi" role="radiogroup" aria-labelledby="tszUiL"></div>
+  </div>
+  <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
+</dialog>
 
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -695,6 +745,7 @@ function highlight(src, lang){
   return out.split('\n').map(l=>'<span class="ln">'+l+'</span>').join('\n');
 }
 const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+  text:'<svg class="i" viewBox="0 0 24 24"><path d="M3 18 7.5 6 12 18M4.7 14h5.6M14 18l3-7.5 3 7.5M15.1 15.5h3.8"/></svg>',
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 7"/></svg>',
   wrap:'<svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-4M4 18h4"/><path d="M13 16l-2 2 2 2"/></svg>',
   lockC:'<svg class="i closed" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
@@ -1646,7 +1697,8 @@ let popOpen=null;
 function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); p.anchor.setAttribute('aria-expanded','false'); nav.close('menu'); }
 function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===anchor){ closePop(); return; } closePop();
   const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
-  items.forEach(it=>{ const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
+  items.forEach(it=>{ if(it.node){ menu.appendChild(it.node); return; }   // a row of its own (the text size stepper): it keeps the menu open
+    const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
   menu.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); }); host.appendChild(menu);   // дотик по пункту не переносить фокус: не знімає виділення блока і не ховає клавіатуру anchor.setAttribute('aria-expanded','true');
   const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; }
   const onDoc=e=>{ if(!menu.contains(e.target) && !anchor.contains(e.target)) closePop(); }; document.addEventListener('pointerdown',onDoc,true);
@@ -1675,6 +1727,7 @@ moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), '
   {label:loc('spell.title'), small: loc(spell? 'common.on' : 'common.off'), act:()=>spellBtn.click()},
   {label:loc('grid.title'), small: loc(sheet.classList.contains('nogrid')? 'common.off' : 'common.on'), act:()=>gridBtn.click()},
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
+  {node:textStepper()},
   ...(ro()? [] : [cur && cur.archived? {ico:ICO.back, label:loc('archive.unarchive'), act:()=>unarchive(cur)} : {ico:ICO.box, label:loc('archive.move'), act:()=>archiveNote(cur)}]),
   ...(ro()? [] : [{ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()}]) ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
@@ -2045,6 +2098,49 @@ async function importHistory(h){ if(db.backend!=='idb' || !h || !Array.isArray(h
     for(const v of vs){ const g=V.get(v.id); g.onsuccess=()=>{ if(!g.result){ V.put(v); added++; size+=v.size||0; } }; } }); }catch(_){ return 0; }
   for(const id of new Set(vs.map(v=>v.note))) VLAST.delete(id); DEBUG.vers.size+=size; storageUI(); return added; }
 
+/* ══ text size: «Як у системі» by default, otherwise the sheet text in px and a factor for the interface. Kept per device, never exported ══
+   The sheet is laid out in grid cells, so --fs and --g change together (a row is 1.5 × the text) and blocks keep their places, only larger.
+   The interface sizes are rem: the factor --k scales the root font size, on top of the browser's own font size */
+const FS_STEPS=[14,16,18,20,22,24], UI_STEPS=[.9,1,1.15,1.3];
+const FS_BASE=TOUCH && Math.min(screen.width, screen.height)<600? 18 : 16;   // a phone is read at arm's length: 18, like the system body text there
+const near=(list,v)=>list.reduce((b,x,i)=>Math.abs(x-v)<Math.abs(list[b]-v)? i : b, 0);
+function probePx(font){ const p=document.createElement('span'); p.style.cssText='position:absolute;visibility:hidden'; p.style.font=font; document.body.appendChild(p); const px=parseFloat(getComputedStyle(p).fontSize); p.remove(); return px; }
+// the system size: the browser's default font size, and on an iPhone or iPad the iOS text size too (Dynamic Type; 17px at the default size)
+function sysK(){ if(!TOUCH || !CSS.supports('font','-apple-system-body')) return 1; const px=probePx('-apple-system-body'); return px>0? Math.min(1.6, Math.max(.85, px/17)) : 1; }
+function textNow(){ if(S.textSys!==false){ const k=sysK(), base=probePx('medium sans-serif')||16; return {sys:true, k, fs:Math.round(Math.min(32, Math.max(12, FS_BASE*k*base/16)))}; }
+  return {sys:false, k:UI_STEPS.includes(S.textUi)? S.textUi : 1, fs:FS_STEPS.includes(S.textSheet)? S.textSheet : FS_BASE}; }
+function applyText(){ const t=textNow(), r=document.documentElement.style; r.setProperty('--k', String(t.k)); r.setProperty('--fs', t.fs+'px'); r.setProperty('--g', Math.round(t.fs*1.5)+'px'); }
+const manual=t=>({textSys:false, textSheet:FS_STEPS[near(FS_STEPS,t.fs)], textUi:UI_STEPS[near(UI_STEPS,t.k)]});   // the sizes shown now as manual ones: leaving system mode moves nothing
+function setText(p){ saveS(p); applyText(); textUI(); applyMode(); layoutBottom(); }
+const tszDlg=$('tsz'), tszSys=$('tszSys'), tszSheet=$('tszSheet'), tszUi=$('tszUi'), textV=$('textV');
+const uiName=i=>loc(['text.ui.0','text.ui.1','text.ui.2','text.ui.3'][i]);
+tszUi.innerHTML=UI_STEPS.map((k,i)=>'<button type="button" role="radio" data-i="'+i+'" aria-label="'+escHtml(uiName(i))+'">A</button>').join('');
+function textUI(){ const t=textNow(), pct=Math.round(t.k*100), ui=t.sys? -1 : UI_STEPS.indexOf(t.k);
+  textV.textContent=t.sys? loc('text.systemShort') : loc('text.summary',{fs:t.fs, pct});
+  tszSys.setAttribute('aria-checked', String(t.sys));
+  tszSheet.value=String(near(FS_STEPS,t.fs)); tszSheet.setAttribute('aria-valuetext', loc('text.px',{n:t.fs})); $('tszSheetV').textContent=loc('text.px',{n:t.fs});
+  $('tszUiV').textContent=ui<0? loc('text.pct',{n:pct}) : loc('text.uiValue',{name:uiName(ui), pct});
+  tszUi.querySelectorAll('button').forEach((b,i)=>{ b.setAttribute('aria-checked', String(i===ui)); b.tabIndex=i===(ui<0? near(UI_STEPS,t.k) : ui)? 0 : -1; }); }
+tszSys.addEventListener('click',()=>{ const t=textNow(); setText(t.sys? manual(t) : {textSys:true}); });
+tszSheet.addEventListener('input',()=>setText({...manual(textNow()), textSheet:FS_STEPS[+tszSheet.value]}));
+tszUi.addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) setText({...manual(textNow()), textUi:UI_STEPS[+b.dataset.i]}); });
+tszUi.addEventListener('keydown',e=>{ const d={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[e.key]; if(!d) return; e.preventDefault(); const t=textNow(), i=Math.max(0, Math.min(UI_STEPS.length-1, near(UI_STEPS,t.k)+d));
+  setText({...manual(t), textUi:UI_STEPS[i]}); tszUi.children[i].focus(); });
+$('tszReset').addEventListener('click',()=>setText({textSys:true, textSheet:undefined, textUi:undefined}));
+function openText(){ setMenu(false); closePop(); textUI(); tszDlg.showModal(); nav.open('text', ()=>tszDlg.close()); }
+$('textBtn').addEventListener('click', openText);
+[$('tszClose'), $('tszDone')].forEach(b=>b.addEventListener('click',()=>tszDlg.close()));
+tszDlg.addEventListener('close',()=>nav.close('text'));
+tszDlg.addEventListener('click',e=>{ if(e.target!==tszDlg) return; const r=tszDlg.getBoundingClientRect(); if(e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom) tszDlg.close(); });   // a click on the backdrop
+// the header «⋯» menu (touch): − and + for the sheet text, one step each; the menu stays open, so the sheet behind shows the result
+function textStepper(){ const d=document.createElement('div'); d.className='mi-step'; d.setAttribute('role','group'); d.setAttribute('aria-label', loc('text.sheet'));
+  d.innerHTML=ICO.text+'<span class="ml">'+locA('text.sheet')+'</span><button type="button" data-d="-1" aria-label="'+locA('text.smaller')+'"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button><output></output><button type="button" data-d="1" aria-label="'+locA('text.larger')+'"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>';
+  const [minus, plus]=d.querySelectorAll('button'), out=d.querySelector('output');
+  const show=()=>{ const t=textNow(); out.textContent=t.fs; minus.disabled=t.fs<=FS_STEPS[0]; plus.disabled=t.fs>=FS_STEPS[FS_STEPS.length-1]; };
+  d.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b || b.disabled) return; const t=textNow();
+    const next=b===plus? FS_STEPS.find(x=>x>t.fs) : [...FS_STEPS].reverse().find(x=>x<t.fs); if(next) setText({...manual(t), textSheet:next}); show(); });
+  show(); return d; }
+
 async function start(){
   await db.init(); notes=await db.all(); vstart();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
@@ -2057,6 +2153,7 @@ async function start(){
   notes.sort((a,b)=>b.updated-a.updated);
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted); openNote(byId(tabCur.get())||byId(S.current)||firstNote(), {restore:true}); field(); storageUI();
 }
+applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
 spell=S.spell===true; spellUI();

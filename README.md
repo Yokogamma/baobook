@@ -17,6 +17,7 @@ Each site keeps its own notes, because a site cannot read another site's browser
 - Phone layout: hold to create a block, position mode with arrows, system Back, panels that stay above the keyboard.
 - Several notes, search, autosave to IndexedDB, per-field undo history, stored note versions, export and import as JSON.
 - Offline shell through a service worker; light, dark and sand themes.
+- Text size: «Як у системі» by default (the browser font size, and the iOS text size on an iPhone or iPad), or the sheet text from 14 to 24px and the interface from 90 to 130%. Per device; the export does not carry it.
 - Ukrainian and English UI from `public/locales/*.json`; a new language is one more file (see CLAUDE.md).
 
 ## Layout
@@ -66,7 +67,7 @@ One-time setup of the production Worker in the Cloudflare dashboard: create the 
 
 ## Data
 
-Notes live in the IndexedDB database `sheet` (stores `notes`, `versions`, `blobs`); settings live in localStorage under `sheet:settings`. The names come from «Чистий аркуш» and are kept on purpose, because renaming storage needs a migration. Export files look like `{app, format: 1, exported, settings, notes}`.
+Notes live in the IndexedDB database `sheet` (stores `notes`, `versions`, `blobs`); settings live in localStorage under `sheet:settings` (the text size fields `textSys`, `textSheet`, `textUi` are optional and stay on the device). The names come from «Чистий аркуш» and are kept on purpose, because renaming storage needs a migration. Export files look like `{app, format: 1, exported, settings, notes}`.
 
 ## History
 

@@ -28,20 +28,21 @@ SEED.updated=Date.now()+60000;
 await pg.evaluate(seed=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'); t.objectStore('notes').put(seed); t.oncomplete=()=>{ d.close(); res(); }; }; }), SEED);
 await pg.evaluate(()=>(localStorage.clear(),sessionStorage.clear())); await pg.reload(); await pg.waitForTimeout(600);
 const W=await pg.locator('#sheet').evaluate(e=>e.clientWidth);
+const G=await pg.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--g')));   // the grid step: 27px on a phone (18px text), 24px at 16px
 const noOverlap=async()=>{ const t=(await tops()).filter(o=>o.w>0); for(let i=0;i<t.length;i++) for(let j=i+1;j<t.length;j++){ const a=t[i],b=t[j]; if(a.x<b.x+b.w && b.x<a.x+a.w && a.y<b.y+b.h && b.y<a.y+a.h) return false; } return true; };
 // 1 вузький екран — те саме полотно: горизонталь за fx, вертикаль за рядом, стрічки немає
 { const x1=await txtX('Перший'), x2=await txtX('Другий'); const t=await tops(); const first=t.find(o=>o.text==='Перший'), second=t.find(o=>o.text==='Другий право'), four=t.find(o=>/Четвертий/.test(o.text));
-  ok('1 полотно на '+W+'px: «Перший» x='+x1+', «Другий» x='+x2+' (fx 0.55 → ~'+Math.round(0.55*W)+'), обидва на ряду 2 (y '+first.y+'='+second.y+'), «Четвертий» далеко внизу (y '+four.y+'), блоки не накладаються', !(await pg.locator('#sheet').evaluate(e=>e.classList.contains('flow'))) && x2>x1+100 && Math.abs(x2-0.55*W)<=24 && first.y===second.y && four.y>=700 && await noOverlap()); }
+  ok('1 полотно на '+W+'px: «Перший» x='+x1+', «Другий» x='+x2+' (fx 0.55 → ~'+Math.round(0.55*W)+'), обидва на ряду 2 (y '+first.y+'='+second.y+'), «Четвертий» далеко внизу (y '+four.y+'), блоки не накладаються', !(await pg.locator('#sheet').evaluate(e=>e.classList.contains('flow'))) && x2>x1+100 && Math.abs(x2-0.55*W)<=G && first.y===second.y && four.y>=700 && await noOverlap()); }
 // 2 область: діти всередині на своїх рядах
 { const area=pg.locator('.blk.is-area').first(); const kids=await area.locator('.abody > .blk').all(); const k=[]; for(const e of kids) k.push(await box(e)); k.sort((p,q)=>p.y-q.y);
-  ok('2 область з двома дітьми стовпчиком через ряд', k.length===2 && k[0].x===k[1].x && (k[1].y-k[0].y)===48); }
+  ok('2 область з двома дітьми стовпчиком через ряд', k.length===2 && k[0].x===k[1].x && (k[1].y-k[0].y)===2*G); }
 // 3 правка тексту не змінює модель
 await pg.locator('.blk .txt').filter({hasText:'Перший'}).tap(); await pg.keyboard.press('End'); await pg.keyboard.type(' +'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
 { const n=await idbNote(); const chg=[]; for(const sb of SEED.blocks){ const b=n.blocks.find(x=>x.id===sb.id); if(!b){ chg.push(sb.id+':зник'); continue; } if(sb.parent){ if(b.col!==sb.col||b.parent!==sb.parent||b.row!==sb.row) chg.push(sb.id); } else { if(Math.abs(b.fx-sb.fx)>0.04) chg.push(sb.id+':fx '+b.fx.toFixed(2)); if(b.row!==sb.row && !['b3','A'].includes(sb.id)) chg.push(sb.id+':ряд '+b.row); } }
   // b3 (код на всю ширину) і A (область 12 клітинок) на 390px не вміщаються поруч — рушій виштовхує одну з них униз, це полотно, а не стрічка; решта лишається
   ok('3 після правки тексту fx (±1 клітинка) і ряди в сховищі ті самі, крім виштовхнутих коду/області'+(chg.length? ' — змінилось: '+chg.join(', ') : ''), chg.length===0 && /Перший \+/.test(n.blocks.find(b=>b.id==='b1').text)); }
 // 4 утримання в порожньому місці — блок саме там (ряд 12, третина ширини)
-{ const y=12+24*24; /* ряд 24: нижче коду й області, вище «Четвертого» (ряд 30) */ await hold(Math.round(0.3*W), y); await pg.waitForTimeout(250); await pg.keyboard.type('Вставлений'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
+{ const y=Math.round(G/2)+24*G; /* ряд 24: нижче коду й області, вище «Четвертого» (ряд 30) */ await hold(Math.round(0.3*W), y); await pg.waitForTimeout(250); await pg.keyboard.type('Вставлений'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const n=await idbNote(); const nb=n.blocks.find(b=>/Вставлений/.test(b.text)); const t=await box(pg.locator('#sheet > .blk').filter({hasText:'Вставлений'}).locator('.txt'));
   ok('4 утримання: блок на ряду '+(nb&&nb.row)+' із fx '+(nb&&nb.fx.toFixed(2))+' (x '+t.x+', y '+t.y+')', nb && nb.row===24 && Math.abs(nb.fx-0.3)<0.06 && Math.abs(t.y-y)<=2); }
 // 5 «+» — під найнижчим блоком, від лівого поля
@@ -51,7 +52,7 @@ await pg.locator('.blk .txt').filter({hasText:'Перший'}).tap(); await pg.k
 // 6 перенос за ручку — куди принесли
 { await pg.evaluate(()=>window.scrollTo(0,0)); await pg.waitForTimeout(150);   // «+» підкрутив сторінку до «Останнього»; ціль переносу — у координатах вікна
   const four=pg.locator('#sheet > .blk').filter({hasText:'Четвертий'}); const g=await box(four.locator('.grip'));
-  await dragTo(g.x+g.w/2, g.y+g.h/2, 200, 12+20*24); await pg.waitForTimeout(600);
+  await dragTo(g.x+g.w/2, g.y+g.h/2, 200, Math.round(G/2)+20*G); await pg.waitForTimeout(600);
   const n=await idbNote(); const nb=n.blocks.find(b=>b.id==='b4');
   ok('6 перенесений блок: ряд '+(nb&&nb.row)+', fx '+(nb&&nb.fx.toFixed(2))+' (було 30 / 0.30)', nb && nb.row>=19 && nb.row<=21 && nb.fx>0.4); }
 // 7 перенос у область

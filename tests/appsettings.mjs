@@ -40,7 +40,7 @@ const shown=(pg,sel)=>pg.locator(sel).isVisible();
 
   const f=await pg.evaluate(()=>{ const r=id=>document.getElementById(id).getBoundingClientRect(), l=r('list'), s=r('side'), i=r('storInfo'), list=document.getElementById('list');
     return {listBottom:Math.round(l.bottom), sideBottom:Math.round(s.bottom), infoTop:Math.round(i.top), infoBottom:Math.round(i.bottom), sb:list.offsetWidth-list.clientWidth, text:document.getElementById('storInfo').innerText, fs:getComputedStyle(document.getElementById('sideFoot')).fontSize}; });
-  ok('7 the list reaches the bottom of the panel ('+f.listBottom+' / '+f.sideBottom+'), «'+f.text+'» stays small ('+f.fs+') at the bottom', f.listBottom===f.sideBottom && f.infoBottom<=f.sideBottom && f.infoTop>f.sideBottom-60 && /^3\d нотат/.test(f.text) && f.fs==='11px');
+  ok('7 the list reaches the bottom of the panel ('+f.listBottom+' / '+f.sideBottom+'), «'+f.text+'» stays small ('+f.fs+') at the bottom', f.listBottom===f.sideBottom && f.infoBottom<=f.sideBottom && f.infoTop>f.sideBottom-60 && /^3\d нотат/.test(f.text) && f.fs==='12px');
   ok('7b the scrollbar is thin ('+f.sb+'px)', f.sb>0 && f.sb<=8);
   await pg.locator('#list').evaluate(e=>{ e.scrollTop=e.scrollHeight; }); await pg.waitForTimeout(100);
   const last=await pg.evaluate(()=>{ const its=document.querySelectorAll('#list .item'); return {b:Math.round(its[its.length-1].getBoundingClientRect().bottom), t:Math.round(document.getElementById('storInfo').getBoundingClientRect().top)}; });
