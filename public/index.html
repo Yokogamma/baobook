@@ -398,6 +398,22 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .undo .ubtn:hover,.undo .ubtn:focus-visible{background:rgba(128,128,128,.45);outline:0}
 .undo kbd{font:inherit;font-size:11px;opacity:.6;margin-left:2px}
 .undo .uclose{flex:0 0 auto;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:inherit;font:inherit;font-size:13px;opacity:.7;cursor:pointer} .undo .uclose:hover,.undo .uclose:focus-visible{opacity:1;background:rgba(128,128,128,.28);outline:0}
+/* our own confirmation instead of confirm(): a modal <dialog> in the page's palette; on a phone a bottom sheet with 44px buttons */
+.ask{width:min(380px,calc(100vw - 32px));max-width:none;padding:18px 18px 14px;border:.5px solid var(--line-2);border-radius:12px;background:var(--paper) var(--page);color:var(--ink);box-shadow:var(--shadow);font-family:var(--sans)}
+.ask::backdrop{background:rgba(15,15,15,.32)}
+.ask[open]{animation:ask-in .16s ease-out} .ask[open]::backdrop{animation:ask-fade .16s ease-out}
+@keyframes ask-in{from{opacity:0;transform:translateY(6px)}} @keyframes ask-fade{from{opacity:0}}
+.ask-t{font-size:15px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.ask-x{margin-top:6px;font-size:13px;line-height:1.5;color:var(--ink-2)} .ask-x:empty{display:none}
+.ask-b{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.ask-b .fbtn{flex:0 0 auto;min-width:96px;height:34px;padding:0 14px;font-size:13px}
+.ask-b .fbtn:focus-visible{outline:2px solid var(--sel-line);outline-offset:2px}
+.ask-b .fbtn.danger{border-color:#c33;background:#c33;color:#fff;font-weight:500} .ask-b .fbtn.danger:hover{border-color:#b02a2a;background:#b02a2a;color:#fff}
+@media (max-width:640px){
+  .ask{width:100%;margin:auto 0 0;border-width:.5px 0 0;border-radius:14px 14px 0 0;padding:20px 16px calc(14px + env(safe-area-inset-bottom,0px))}
+  .ask-b .fbtn{flex:1 1 0;height:44px;font-size:14px}
+}
+@media (prefers-reduced-motion:reduce){ .ask[open],.ask[open]::backdrop{animation:none} }
 
 /* ══ дотик (hover:none): усі правила для сенсорних екранів зібрано в одному блоці (план 3.9); порядок — як був у файлі, бо пізніше правило перекриває раніше ══ */
 @media (hover:none){
@@ -502,7 +518,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="tb" id="gridBtn" data-i18n-attr="title:grid.title" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="themeBtn" data-i18n-attr="title:theme.title" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
         <button class="tb" id="histBtn" data-i18n-attr="title:hist.button" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg></button>
-        <button class="tb" id="clearBtn" data-i18n-attr="title:sheet.clear"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        <button class="tb" id="clearBtn" data-i18n-attr="title:sheet.clear"><svg class="i" viewBox="0 0 24 24"><path d="M21 3l-7.5 7.5"/><path d="M11.4 8.4l4.2 4.2"/><path d="M11.4 8.4 3.6 12.6 11.4 20.4 15.6 12.6"/><path d="M12.8 9.8 6.2 15.2M14.2 11.2 8.8 17.8"/></svg></button>
         <button class="tb" id="moreBtn" data-i18n-attr="title:menu.more;aria-label:menu.more" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
     </header>
@@ -527,6 +543,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
 <div class="toast" id="toast" data-i18n-html="toast.help"></div>
+<dialog class="ask" id="ask" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askText"><div class="ask-t" id="askTitle"></div><div class="ask-x" id="askText"></div><div class="ask-b"><button class="fbtn" id="askNo" type="button" data-i18n="common.cancel"></button><button class="fbtn danger" id="askYes" type="button" data-i18n="common.delete"></button></div></dialog>
 
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -634,6 +651,7 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   palette:'<svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.2 0 2-.8 2-1.8 0-.6-.3-1-.6-1.4-.3-.4-.4-.7-.4-1.1 0-.9.7-1.5 1.6-1.5H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10" cy="7.5" r="1.1"/><circle cx="14" cy="7.5" r="1.1"/></svg>',
   ungroup:'<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 3"/><path d="M9 12h6"/></svg>',
   trash:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  broom:'<svg class="i" viewBox="0 0 24 24"><path d="M21 3l-7.5 7.5"/><path d="M11.4 8.4l4.2 4.2"/><path d="M11.4 8.4 3.6 12.6 11.4 20.4 15.6 12.6"/><path d="M12.8 9.8 6.2 15.2M14.2 11.2 8.8 17.8"/></svg>',   // clearing the sheet: the note stays, its blocks go
   chev:'<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
   more:'<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>'};
 const RZ=t=>'<div class="rz" title="'+t+'"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div>';
@@ -915,8 +933,13 @@ function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); las
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); }
-function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }
-function delNote(n){ if(!confirm(loc('notes.deleteConfirm',{title:titleOf(n)}))) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; makeAll(list); }
+function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }   // areas first: their blocks go inside
+/* a note with no title, no text and no history is deleted without asking: there is nothing to lose */
+async function delNote(n){ if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
+  if(!bare && !await ask({title:loc('notes.deleteConfirm',{title:titleOf(n)}), text:loc('notes.deleteText'), ok:loc('common.delete')})) return;
+  if(!notes.includes(n)) return;   // another tab deleted it meanwhile
+  notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(notes[0]||newNote()); } renderList(); storageUI(); }
 newBtn.addEventListener('click',()=>{ flushSave(); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
@@ -1303,6 +1326,15 @@ function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of
 function showUndo(msg, big){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
 function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
 function dropUndo(){ hideUndo(); }   // ховає плашку; стек лишається (перехід між нотатками, тести)
+/* own confirmation instead of confirm(): ask({title, text, ok}) → Promise<boolean>. A modal <dialog>: the page under it is inert, the safe button has the focus;
+   Esc, a click outside and system Back cancel (Back through nav, like the other overlays) */
+const askDlg=$('ask'), askYes=$('askYes'); let askEnd=null;
+function ask(o){ if(askEnd) askEnd(false); closePop(); return new Promise(res=>{ askEnd=v=>{ askEnd=null; if(askDlg.open) askDlg.close(); nav.close('ask'); res(v); };
+  $('askTitle').textContent=o.title; $('askText').textContent=o.text||''; askYes.textContent=o.ok; askDlg.showModal(); $('askNo').focus(); nav.open('ask', ()=>{ if(askEnd) askEnd(false); }); }); }
+askYes.addEventListener('click',()=>{ if(askEnd) askEnd(true); }); $('askNo').addEventListener('click',()=>{ if(askEnd) askEnd(false); });
+askDlg.addEventListener('close',()=>{ if(askEnd) askEnd(false); });   // Esc, or the browser closed it on its own
+askDlg.addEventListener('click',e=>{ if(e.target!==askDlg || !askEnd) return; const r=askDlg.getBoundingClientRect(); if(e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom) askEnd(false); });   // a click on the backdrop
+addEventListener('keydown',e=>{ if(askDlg.open) e.stopPropagation(); },true);   // the page under the dialog hears no keys (Ctrl+Z, Delete, Esc for its panels); Esc, Tab and Enter in the dialog are default actions and still work
 function doUndo(){ closeHist(); const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
 function blockLabel(b){ const line=(b.text||'').trim().split('\n')[0]||loc('block.noText'); return line.length>28? line.slice(0,28)+'…' : line; }
 undoBtn.addEventListener('click',()=>doUndo()); undoEl.querySelector('.uclose').addEventListener('click',()=>hideUndo());
@@ -1487,7 +1519,7 @@ moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), '
   {label:loc('spell.title'), small: loc(spell? 'common.on' : 'common.off'), act:()=>spellBtn.click()},
   {label:loc('grid.title'), small: loc(sheet.classList.contains('nogrid')? 'common.off' : 'common.on'), act:()=>gridBtn.click()},
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
-  {ico:ICO.trash, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()} ]));
+  {ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()} ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
 function createAfter(b){ const a=ctn(b); const d={row:b.row+(b.lines||1)+1, col:b.col}; if(!a) d.fx=b.fx;
   if(a) d.parent=a.id; const nb=make(d,false); markDirty(); nb.el.scrollIntoView({block:'center'}); nb.txt.focus(); return nb; }
@@ -1713,7 +1745,11 @@ viewBtn.addEventListener('click',()=>{ overview=!overview; if(overview) nav.open
 let lastW=0; new ResizeObserver(()=>{ const w=W(); if(w!==lastW){ lastW=w; applyMode(); } field(); }).observe(sheet);
 
 /* ══ спільні налаштування: тема, сітка, правопис ══════════════════════════ */
-clearBtn.addEventListener('click',()=>{ closeHist(); if(!blocks.length||confirm(loc('sheet.clearConfirm'))){ blocks.slice().forEach(remove); } });
+/* clearing the sheet: the note stays, its blocks go. The state before it is a version, so «Історія» has it after a reload too, and «Скасувати» puts it back right away */
+clearBtn.addEventListener('click',async()=>{ closeHist(); const n=cur; if(!n || !blocks.length) return;
+  if(!await ask({title:loc('sheet.clearTitle'), text:loc('sheet.clearText',{n:blocks.length}), ok:loc('sheet.clearOk')}) || cur!==n || !blocks.length) return;
+  flushSave(); const was=n.blocks; if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:was, updated:n.updated}, 'base', undefined, undefined, {now:true});
+  blocks.slice().forEach(remove); offerUndo(loc('undo.sheetCleared'), ()=>{ makeAll(was.filter(d=>!byId(d.id))); markDirty(); }, {big:true, size:JSON.stringify(was).length}); });
 function gridUI(){ const off=sheet.classList.contains('nogrid'); gridBtn.setAttribute('aria-pressed', off?'false':'true'); gridBtn.title=loc(off?'grid.show':'grid.hide'); }
 gridBtn.addEventListener('click',()=>{ sheet.classList.toggle('nogrid'); gridUI(); saveS({grid:!sheet.classList.contains('nogrid')}); });
 let spell=false;
