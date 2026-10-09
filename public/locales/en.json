@@ -229,5 +229,23 @@
   "hist.sum.mv": { "one": "{n} block moved", "other": "{n} blocks moved" },
   "hist.sum.ttl": "title changed",
   "hist.sum.none": "no changes",
-  "hist.restored": "Note restored to the {time} version"
+  "hist.restored": "Note restored to the {time} version",
+
+  "hist.more": "More history actions",
+  "hist.name": "Version name",
+  "hist.save": "Save",
+  "hist.search": "Search versions…",
+  "hist.nameNow": "Save a named version…",
+  "hist.nameShown": "Name this version…",
+  "hist.named": "Version «{name}» saved",
+  "hist.clear": "Clear this note's history",
+  "hist.clearConfirm": "Delete all versions of «{title}»? The current text stays.",
+  "hist.blockRestore": "Restore this block",
+  "hist.blockRestored": "Block restored from the {time} version",
+  "hist.tooBig": "too big for the history",
+  "storage.history": "history: {size}",
+  "size.kb": "{n} KB",
+  "size.mb": "{n} MB",
+  "export.withHistory": "with version history",
+  "import.history": { "one": "; history: {n} version", "other": "; history: {n} versions" }
 }
