@@ -9,6 +9,8 @@
   "panel.label": "Нотатки",
   "settings.title": "Налаштування",
   "brand.tagline": "твій чистий аркуш",
+  "dev.badge": "DEV",
+  "dev.title": "Тестова версія для розробки. Нотатки ведіть на baobook.matamata.app",
   "notes.new": "Нова",
   "notes.new.title": "Нова нотатка (Ctrl+Alt+N)",
   "notes.none": "Поки порожньо",

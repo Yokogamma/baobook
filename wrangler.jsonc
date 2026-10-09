@@ -1,5 +1,8 @@
 // Cloudflare Workers Static Assets: only public/ is served, there is no server code.
-// Merge to main → npx wrangler deploy (Workers Builds) → https://baobook.matamata.dev
+// One repository, two Workers:
+//   development  "baobook"       ← branch main  (npx wrangler deploy)            → https://baobook.matamata.dev
+//   production   "baobook-prod"  ← branch prod  (npx wrangler deploy --env prod) → https://baobook.matamata.app
+// A release is a pull request main → prod, merged only after the change was checked on .dev.
 // Other branches → npx wrangler preview, which needs the "previews" block (empty: assets and compatibility stay at the top level)
 {
   "name": "baobook",
@@ -10,5 +13,14 @@
   "routes": [
     { "pattern": "baobook.matamata.dev", "custom_domain": true }
   ],
-  "previews": {}
+  "previews": {},
+  "env": {
+    // routes are not inherited from the top level; assets and compatibility_date are
+    "prod": {
+      "name": "baobook-prod",
+      "routes": [
+        { "pattern": "baobook.matamata.app", "custom_domain": true }
+      ]
+    }
+  }
 }

@@ -6,6 +6,7 @@ A notes app "on a blank sheet", formerly «Чистий аркуш» in `Yokogam
 
 - Talk to the owner in Russian. Everything in the repository is in English: README, docs, code comments, commit messages, PR titles and descriptions. The interface is being localized for international use: Ukrainian and English, each language in its own file; no UI strings in code.
 - Workflow: branch → run the tests → PR into `main` → the owner merges (sessions do not run `gh pr merge` unless the owner says «вливай» for that PR; then wait for green CI and merge it) → check https://baobook.matamata.dev with `curl` for a marker of the change (`/`, not `/index.html`, which answers 307).
+- Two sites from one repository: `main` deploys to https://baobook.matamata.dev (development, scratch notes, marked «DEV»), `prod` deploys to https://baobook.matamata.app (production, the owner's real notes). Sessions open PRs only into `main`. A release is a PR `main → prod`, opened and merged only when the owner asks for it; then check https://baobook.matamata.app/ with `curl`. Never commit to `prod` directly, not even an urgent fix. Before a release that changes storage, the owner exports the notes from `.app`, and the migration is checked on `.dev` with a copy of them.
 - One worktree per session. Several Claude sessions work on this repository at the same time, and a shared checkout mixes their work: one switches the branch under another, or commits the other's unsaved edits. Never switch branches or commit in `D:\server\laragon\www\baobook`; keep it on `main`. Create your own worktree from `origin/main` (`git worktree add ../baobook-<task> -b <branch> origin/main`), link `node_modules` into it (`New-Item -ItemType Junction -Path <worktree>\node_modules -Target D:\server\laragon\www\baobook\node_modules`), and edit, test and commit there. Before each commit, check that `git status` and `git diff --cached` show only your own changes. Remove the worktree after the PR is merged (`git worktree remove`).
 - Run `tests/` before committing (Playwright, see `tests/README.md`). On Windows, use an installed browser via the `CHROMIUM` env var. Every new feature gets its own scenario.
 - Only `public/` is published. Don't put tests, docs or tooling there.
@@ -28,9 +29,9 @@ Moving out of `mockups`, with no new features. Steps:
    - offline start;
    - other apps' caches left untouched.
 5. Deploy to `baobook.matamata.dev` with Workers Builds.
-6. Move the owner's notes there.
+6. Production on `baobook.matamata.app` (Worker `baobook-prod` from branch `prod`), a «DEV» mark on `.dev`, and the owner's notes moved to `.app` on every device they use.
 7. Finish up:
-   - a "moved" banner on the old site, with no redirect and no data deletion;
+   - a "moved" page on the old site pointing to `.app`, with no redirect and no data deletion;
    - the plan map, Notion and a daily check.
 
 ## Localization
@@ -53,5 +54,4 @@ Moving out of `mockups`, with no new features. Steps:
 
 ## After the move
 
-- Sync and Google/Apple sign-in come as a separate stage: Firebase Auth + Firestore, see `docs/SYNC-PLAN.md`. On a custom domain, proxy `/__/auth/` through the Worker.
-- Production on `baobook.matamata.app` (the zone is already on Cloudflare) changes the origin again. Either sync or another export/import has to carry the notes over.
+- Sync and Google/Apple sign-in come as a separate stage: Firebase Auth + Firestore, see `docs/SYNC-PLAN.md`. Add `baobook.matamata.app` to the Firebase authorized domains and proxy `/__/auth/` through the production Worker.

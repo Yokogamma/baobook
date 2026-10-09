@@ -9,6 +9,8 @@
   "panel.label": "Notes",
   "settings.title": "Settings",
   "brand.tagline": "your blank sheet",
+  "dev.badge": "DEV",
+  "dev.title": "Development build for testing. Keep your notes at baobook.matamata.app",
   "notes.new": "New",
   "notes.new.title": "New note (Ctrl+Alt+N)",
   "notes.none": "Nothing here yet",

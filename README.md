@@ -2,9 +2,11 @@
 
 Notes on a blank sheet: click anywhere and type right there. Baobook runs in the browser and installs as an app (PWA), works offline, and keeps notes on the device. The interface speaks Ukrainian and English. A browser set to Ukrainian gets Ukrainian, any other gets English, and the choice can be changed under «Language» in the settings menu (the gear next to «Baobook»).
 
-- Development build: https://baobook.matamata.dev (available after the first deploy).
-- Production: https://baobook.matamata.app, later, as a separate deployment.
-- Previous home: https://yokogamma.github.io/mockups/sheet/ («Чистий аркуш»). It keeps working. Notes move over with Export → Import, because a new site cannot read another site's browser storage.
+- Production: https://baobook.matamata.app. Keep your notes here.
+- Development build: https://baobook.matamata.dev. Every merged change lands here first; it has an orange strip along the top and a «DEV» tag after the name. Its notes are scratch data.
+- Previous home: https://yokogamma.github.io/mockups/sheet/ («Чистий аркуш»), now a closing page that exports the notes left in that browser.
+
+Each site keeps its own notes, because a site cannot read another site's browser storage. Notes move between sites with Export → Import, once per browser and device.
 
 ## Features
 
@@ -46,7 +48,21 @@ GitHub Actions runs every scenario on each pull request and on pushes to `main`.
 
 ## Deploy
 
-Cloudflare Workers Static Assets through Workers Builds: a merge to `main` runs `npx wrangler deploy` and publishes `public/` to https://baobook.matamata.dev. Production on `baobook.matamata.app` gets its own deployment later.
+Cloudflare Workers Static Assets through Workers Builds, two Workers from this one repository (see `wrangler.jsonc`):
+
+| Worker | Branch | Deploy command | Site |
+|---|---|---|---|
+| `baobook` | `main` | `npx wrangler deploy` | https://baobook.matamata.dev |
+| `baobook-prod` | `prod` | `npx wrangler deploy --env prod` | https://baobook.matamata.app |
+
+Releasing:
+
+1. Every change goes into `main` through a pull request and is checked on https://baobook.matamata.dev.
+2. A release is a pull request `main → prod`. Merging it publishes exactly what was tested on `.dev`.
+3. Nobody commits to `prod` directly, urgent fixes included: they go through `main` and `.dev` like any other change, so `prod` never drifts from `main`.
+4. Before a release that changes storage (database version, stores, fields), export the notes from `.app` to disk, then import a copy into `.dev` and check the migration there.
+
+One-time setup of the production Worker in the Cloudflare dashboard: create the `prod` branch from `main`; Workers & Pages → Create → Import a repository → `Yokogamma/baobook`, Worker name `baobook-prod`, production branch `prod`, deploy command `npx wrangler deploy --env prod`, non-production branch builds off. The Worker name in the build settings must match `env.prod.name`, or the build fails. The first deploy attaches the custom domain `baobook.matamata.app` from the config.
 
 ## Data
 
