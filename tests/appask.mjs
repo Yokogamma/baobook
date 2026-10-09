@@ -49,32 +49,34 @@ const open=(pg,id)=>pg.evaluate(id=>document.querySelector('#list .item[data-id=
   await pg.click('#undo .ubtn'); await pg.waitForTimeout(800); const back=await stored(pg,'n1');
   ok('3d «Скасувати» puts the blocks back ('+await texts(pg)+') and they are saved ('+(back? back.blocks.length : 0)+')', await texts(pg)==='другий|перший рядок|третій' && back && back.blocks.filter(d=>(d.text||'').trim()).length===3);
 
-  // 4 deleting a note with text asks; Esc keeps it, «Видалити» deletes it with its versions
-  await pg.locator('#list .item.cur .it-x').click(); await pg.waitForTimeout(300);
+  // 4 the bin moves a note with text to the trash without asking; «Видалити назавжди» there asks, Esc keeps it, confirming removes it with its versions
+  await pg.locator('#list .item.cur .it-x').click(); await pg.waitForTimeout(400); const r4=await stored(pg,'n1');
+  ok('4a the bin asks nothing and moves the note to the trash, its versions stay', !await isOpen(pg) && natives===0 && !(await items(pg)).includes('n1') && r4 && r4.deleted>0 && (await pg.evaluate(()=>window.sheetDebug.vers.list('n1'))).length>0);
+  await pg.click('#trashRow'); await pg.waitForTimeout(250); await pg.locator('#list .item[data-id="n1"]').hover(); await pg.locator('#list .item[data-id="n1"] .it-x').click(); await pg.waitForTimeout(300);
   const t4=await pg.locator('#askTitle').innerText(), x4=await pg.locator('#askText').innerText(), y4=await pg.locator('#askYes').innerText();
-  ok('4a the delete button asks: «'+t4+'» «'+x4+'» ['+y4+']', await isOpen(pg) && natives===0 && t4==='Видалити нотатку «перший рядок»?' && /історією версій/.test(x4) && y4==='Видалити');
+  ok('4b «Видалити назавжди» asks: «'+t4+'» «'+x4+'» ['+y4+']', await isOpen(pg) && t4==='Видалити нотатку «перший рядок» назавжди?' && /історією версій/.test(x4) && y4==='Видалити назавжди');
   await pg.screenshot({path:OUT+'/appask-delete.png'});
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
-  ok('4b Esc keeps the note', !await isOpen(pg) && (await items(pg)).includes('n1') && !!await stored(pg,'n1'));
-  await pg.locator('#list .item.cur .it-x').click(); await pg.waitForTimeout(300); await pg.click('#askYes'); await pg.waitForTimeout(400); await settle(pg);
-  ok('4c «Видалити» deletes the note, its storage and its versions', !(await items(pg)).includes('n1') && !await stored(pg,'n1') && (await pg.evaluate(()=>window.sheetDebug.vers.list('n1'))).length===0);
+  ok('4c Esc keeps it in the trash', !await isOpen(pg) && (await items(pg)).includes('n1') && !!await stored(pg,'n1'));
+  await pg.locator('#list .item[data-id="n1"]').hover(); await pg.locator('#list .item[data-id="n1"] .it-x').click(); await pg.waitForTimeout(300); await pg.click('#askYes'); await pg.waitForTimeout(400); await settle(pg);
+  ok('4d confirming removes the note, its storage and its versions; the empty trash gives way to the notes', !await stored(pg,'n1') && (await pg.evaluate(()=>window.sheetDebug.vers.list('n1'))).length===0 && await pg.locator('#sect').isHidden() && await pg.locator('#trashRow').isHidden());
 
-  // 5 an empty note goes without asking
+  // 5 an empty note goes at once, without the trash
   await pg.click('#newBtn'); await pg.waitForTimeout(300); const e5=await pg.evaluate(()=>window.sheetDebug.cur()); const c5=(await items(pg)).length;
   await pg.locator('#list .item.cur .it-x').click(); await pg.waitForTimeout(400);
-  ok('5 an empty note is deleted at once, with no dialog ('+c5+' → '+(await items(pg)).length+' notes)', !await isOpen(pg) && natives===0 && !(await items(pg)).includes(e5) && !await stored(pg,e5));
+  ok('5 an empty note is deleted at once, with no dialog and not into the trash ('+c5+' → '+(await items(pg)).length+' notes)', !await isOpen(pg) && natives===0 && !(await items(pg)).includes(e5) && !await stored(pg,e5) && await pg.locator('#trashRow').isHidden());
 
-  // 6 an empty note that has history still asks
+  // 6 an empty note that has history goes to the trash, not away for good
   await pg.click('#newBtn'); await pg.waitForTimeout(300); const e6=await pg.evaluate(()=>window.sheetDebug.cur());
   await pg.mouse.click(500,300); await pg.keyboard.type('чернетка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
   await pg.click('#clearBtn'); await pg.waitForTimeout(250); await pg.click('#askYes'); await pg.waitForTimeout(500); await settle(pg);
-  await pg.locator('#list .item.cur .it-x').click(); await pg.waitForTimeout(400);
-  ok('6 a note emptied by clearing still has history, so deleting it asks («'+await pg.locator('#askTitle').innerText()+'»)', await isOpen(pg) && (await pg.evaluate(id=>window.sheetDebug.vers.list(id), e6)).length>0);
-  await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
+  await pg.locator('#list .item.cur .it-x').click(); await pg.waitForTimeout(400); const r6=await stored(pg,e6);
+  ok('6 a note emptied by clearing still has history, so the bin keeps it in the trash', !await isOpen(pg) && r6 && r6.deleted>0 && (await pg.evaluate(id=>window.sheetDebug.vers.list(id), e6)).length>0);
 
   // 7 an empty sheet has nothing to clear: no dialog
+  await pg.click('#newBtn'); await pg.waitForTimeout(300); const e7=await pg.evaluate(()=>window.sheetDebug.cur());
   await pg.click('#clearBtn'); await pg.waitForTimeout(300);
-  ok('7 «Очистити аркуш» on an empty sheet opens nothing', !await isOpen(pg) && (await items(pg)).includes(e6));
+  ok('7 «Очистити аркуш» on an empty sheet opens nothing', !await isOpen(pg) && (await items(pg)).includes(e7));
 
   // 8 the clear button is a broom, the list keeps the bin
   const ic=await pg.evaluate(()=>({clear:document.querySelector('#clearBtn svg').innerHTML, bin:document.querySelector('#list .it-x svg').innerHTML}));

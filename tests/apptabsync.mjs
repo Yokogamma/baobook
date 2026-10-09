@@ -38,7 +38,7 @@ const versions=(pg,id)=>pg.evaluate(id=>window.sheetDebug.vers.list(id), id);
   const before=(await items(B)).length; await A.bringToFront(); await A.click('#newBtn'); await A.waitForTimeout(500); const ids=await items(B);
   ok('5 a note created in A appears in B\'s list ('+before+' → '+ids.length+' notes)', ids.length===before+1);
   const fresh=await A.evaluate(()=>window.sheetDebug.cur());
-  await A.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"] .it-x').click(), 's1'); await A.click('#askYes'); await A.waitForTimeout(400);   // a note with text asks first; the empty one below goes without asking
+  await A.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"] .it-x').click(), 's1'); await A.waitForTimeout(400);   // a note with text goes to the trash; the empty one below goes for good
   ok('6 a note deleted in A leaves B\'s list', !(await items(B)).some(x=>x.startsWith('s1:')) && (await items(B)).some(x=>x.startsWith(fresh+':')));
   await open(B,fresh); await A.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"] .it-x').click(), fresh); await A.waitForTimeout(400);
   ok('7 when the note B shows is deleted in A, B moves to another note ('+await title(B)+')', await B.evaluate(()=>window.sheetDebug.cur())!==fresh && !(await items(B)).some(x=>x.startsWith(fresh+':')));
