@@ -83,12 +83,12 @@ const chromeCyr=pg=>pg.evaluate(()=>{ const bad=[], CY=/[\u0400-\u04FF]/; /* the
 { const ctx=await br.newContext({...CTX, locale:'en-US'}); const pg=await ctx.newPage(); await pg.goto(SITE); await pg.waitForTimeout(500);
   const st=await pg.evaluate(()=>({lang:document.documentElement.lang, newBtn:document.getElementById('newBtn').textContent.trim(), ph:document.getElementById('q').placeholder, pl:[1,2,21].map(n=>loc('blocks.count',{n})).join(', '), sel:document.getElementById('langSel').value, opts:[...document.querySelectorAll('#langSel option')].map(o=>o.textContent).join(', ')}));
   ok('6 en-US browser: English UI ('+st.newBtn+' · '+st.ph+' · '+st.pl+'), switcher shows '+st.opts, st.lang==='en' && st.newBtn==='New' && st.ph==='Search titles and text' && st.pl==='1 block, 2 blocks, 21 blocks' && st.sel==='en' && st.opts==='Українська, English');
-  await Promise.all([pg.waitForEvent('load'), pg.selectOption('#langSel','uk')]); await pg.waitForTimeout(500);
+  await pg.click('#setBtn'); await Promise.all([pg.waitForEvent('load'), pg.selectOption('#langSel','uk')]); await pg.waitForTimeout(500);
   const uk=await pg.evaluate(()=>({lang:document.documentElement.lang, newBtn:document.getElementById('newBtn').textContent.trim(), saved:JSON.parse(localStorage.getItem('sheet:settings')||'{}').lang}));
   ok('7 the switcher saves the choice and reloads in Ukrainian ('+uk.newBtn+')', uk.lang==='uk' && uk.newBtn==='Нова' && uk.saved==='uk');
   await pg.reload(); await pg.waitForTimeout(500);
   ok('7b the choice beats the browser language after a reload', await pg.evaluate(()=>document.documentElement.lang)==='uk');
-  await Promise.all([pg.waitForEvent('load'), pg.selectOption('#langSel','en')]); await pg.waitForTimeout(500);
+  await pg.click('#setBtn'); await Promise.all([pg.waitForEvent('load'), pg.selectOption('#langSel','en')]); await pg.waitForTimeout(500);
   ok('7c and back to English', await pg.evaluate(()=>document.documentElement.lang)==='en' && (await chromeCyr(pg)).length===0);
   await ctx.close(); }
 { const site2=await serve(); site2.override.set('/locales/uk.json', null);

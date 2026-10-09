@@ -86,10 +86,24 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 }
 
 /* панель */
-.side-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px 6px 14px}
+.side-h{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px 6px 14px}
 .brand{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink)}
-.brand .i{font-size:16px;color:var(--ink-2)}
+.brand>.i{font-size:16px;color:var(--ink-2)}
 .brand small{display:block;font-size:11px;font-weight:400;line-height:1.2;color:var(--ink-2)}
+/* налаштування: шестерня одразу після назви, під нею — меню (мова, експорт, імпорт, встановлення); список нотаток займає всю висоту панелі */
+.gear{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0 0 0 4px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ink-3);vertical-align:-2px;cursor:pointer;transition:color .15s,background .15s}
+.gear::before{content:"";position:absolute;inset:-8px}   /* зона дотику ~38px, сусіди не перекриваються */
+.gear .i{font-size:15px;transition:transform .3s}
+.gear:hover,.gear[aria-expanded="true"]{color:var(--ink);background:var(--hover)} .gear[aria-expanded="true"] .i{transform:rotate(45deg)}
+.setpop{position:absolute;left:10px;top:calc(100% - 2px);z-index:30;width:min(260px,calc(100% - 20px));padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-size:13px;color:var(--ink-2)}
+.setpop[hidden]{display:none}
+.setpop hr{margin:4px 6px;border:0;border-top:.5px solid var(--line)}
+.setpop .mi{display:flex;align-items:center;gap:10px;width:100%;min-height:32px;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;text-align:left;cursor:pointer}
+.setpop .mi[hidden]{display:none}
+.setpop .mi .i{font-size:15px}
+.setpop .mi:hover,.setpop .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0}
+.setpop .hint{padding:4px 10px 6px;font-size:12px;color:var(--ink-3)}
+@media (hover:none){ .setpop .mi{min-height:44px} }
 .new{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:13px;cursor:pointer;white-space:nowrap}
 .new:hover{background:var(--hover);color:var(--ink)}
 .search{display:flex;align-items:center;gap:6px;margin:4px 10px 6px;padding:0 8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:var(--hover);color:var(--ink-3)}
@@ -100,7 +114,13 @@ mark{background:rgba(245,190,60,.45);color:inherit;border-radius:2px;padding:0 1
 .qx{border:0;background:transparent;color:var(--ink-3);cursor:pointer;padding:2px;display:none;border-radius:4px}
 .search.has .qx{display:inline-flex}
 .qx:hover{background:var(--hover-2);color:var(--ink)}
-.list{flex:1 1 auto;overflow:auto;padding:2px 6px 8px;overscroll-behavior:contain}
+.list{flex:1 1 auto;overflow:auto;padding:2px 6px calc(var(--foot,0px) + 8px);overscroll-behavior:contain}   /* --foot: висота підвалу, що лежить поверх низу списку (ставить скрипт) */
+/* прокрутка списку: тонка «таблетка» без доріжки й стрілок, до самого низу панелі; ледь видна, темнішає, коли миша над панеллю і над самим повзунком */
+.list::-webkit-scrollbar{width:8px} .list::-webkit-scrollbar-track{background:transparent} .list::-webkit-scrollbar-button{display:none;height:0}
+.list::-webkit-scrollbar-thumb{min-height:40px;border:2px solid transparent;border-radius:8px;background:var(--line) padding-box}
+.side:hover .list::-webkit-scrollbar-thumb{background-color:var(--line-2)}
+.list::-webkit-scrollbar-thumb:hover,.list::-webkit-scrollbar-thumb:active{border-width:1px;background-color:var(--ink-3)}
+@supports not selector(::-webkit-scrollbar){ .list{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent} }   /* Firefox; у Chromium стандартні властивості вимкнули б стилі вище */
 .item{position:relative;display:block;padding:8px 30px 8px 10px;border-radius:8px;cursor:pointer;color:var(--ink-2)}
 .item:hover{background:var(--hover)}
 .item.cur{background:var(--hover-2);color:var(--ink)}
@@ -116,12 +136,13 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
 .it-x:hover{background:var(--hover-2);color:#c33}
 .none{padding:18px 12px;font-size:13px;color:var(--ink-3);text-align:center}
-.side-f{padding:8px 10px 10px;border-top:.5px solid var(--line);font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
+/* підвал лежить поверх низу списку, правіше лишає місце повзунку — смуга прокрутки доходить до низу панелі */
+.side-f{position:absolute;left:0;right:8px;bottom:0;z-index:2;padding:14px 14px 8px;font-size:11px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.side-f::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--paper) var(--page);-webkit-mask-image:linear-gradient(transparent,#000 12px);mask-image:linear-gradient(transparent,#000 12px)}
+.side-f>*{pointer-events:auto}
 .side-f:not(:has(:not([hidden]))){display:none}
-.install{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:32px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink);font-size:13px;cursor:pointer}
-.install:hover{background:var(--hover)}
 .side-f .frow{display:flex;gap:6px}
-.langrow{align-items:center;justify-content:space-between}
+.langrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 4px 4px 10px}
 .fsel{font:inherit;font-size:12.5px;height:30px;padding:0 6px;border:.5px solid var(--line-2);border-radius:8px;background:var(--page);color:var(--ink-2);cursor:pointer} .fbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;border:.5px solid var(--line-2);border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;cursor:pointer}
 .fbtn:hover{background:var(--hover);color:var(--ink)} .fbtn .i{font-size:14px}
 .stor{line-height:1.45}
@@ -407,8 +428,16 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 <div class="app" id="app">
   <aside class="side" id="side" data-i18n-attr="aria-label:panel.label">
     <div class="side-h">
-      <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<small data-i18n="brand.tagline"></small></span></b>
+      <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<button class="gear" id="setBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" data-i18n-attr="title:settings.title;aria-label:settings.title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><small data-i18n="brand.tagline"></small></span></b>
       <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
+        <label class="langrow"><span data-i18n="lang.label"></span><select class="fsel" id="langSel"></select></label>
+        <hr>
+        <button class="mi" id="exportBtn" type="button" data-i18n="export.button" data-i18n-attr="title:export.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+        <button class="mi" id="importBtn" type="button" data-i18n="import.button" data-i18n-attr="title:import.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg></button><input type="file" id="importFile" accept=".json,application/json" hidden>
+        <button class="mi" id="installBtn" type="button" hidden data-i18n="install.button"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+        <div class="hint" id="iosHint" hidden data-i18n="install.iosHint"></div>
+      </div>
     </div>
     <label class="search" id="searchBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
       <input id="q" type="search" data-i18n-attr="placeholder:search.placeholder" autocomplete="off" spellcheck="false">
@@ -420,10 +449,6 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <label class="dbg" id="dbgRow" hidden data-i18n="debug.failStorage"><input type="checkbox" id="dbgFail"></label>
       <div class="dbg" id="dbgGeo" hidden></div>
       <div class="stor" id="storInfo"></div>
-      <label class="frow langrow"><span data-i18n="lang.label"></span><select class="fsel" id="langSel"></select></label>
-      <div class="frow"><button class="fbtn" id="exportBtn" data-i18n="export.button" data-i18n-attr="title:export.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button><button class="fbtn" id="importBtn" data-i18n="import.button" data-i18n-attr="title:import.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg></button><input type="file" id="importFile" accept=".json,application/json" hidden></div>
-      <button class="install" id="installBtn" hidden data-i18n="install.button"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
-      <div class="hint" id="iosHint" hidden data-i18n="install.iosHint"></div>
     </div>
   </aside>
   <div class="backdrop" id="backdrop"></div>
@@ -495,6 +520,7 @@ const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('s
 const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), areaBtn=$('areaBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
+const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const minw=b=>b&&(b.kind==='code'||b.kind==='area')?MINW_CODE:MINW;
@@ -903,7 +929,7 @@ try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточни�
 window.addEventListener('popstate',e=>nav.onPop(e));
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
-function setSide(open, o={}){ if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
+function setSide(open, o={}){ if(!open) setMenu(false); if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
   app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()){ S.side=open; db.setSettings(S); }
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
@@ -1608,6 +1634,20 @@ applyMode(); start();
 /* ══ language: the choice is saved in settings and applied by reloading, so every string comes from one file ══ */
 langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</option>').join(''); langSel.value=I18N.lang;
 langSel.addEventListener('change',()=>{ S.lang=langSel.value; db.setSettings(S); location.reload(); });
+
+/* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
+function setMenu(open, o={}){ if(open===!setPop.hidden) return; setPop.hidden=!open; setBtn.setAttribute('aria-expanded',open?'true':'false');
+  if(open){ document.addEventListener('pointerdown',setOut,true); document.addEventListener('keydown',setKey,true); nav.open('settings', ()=>setMenu(false)); if(o.kb) setPop.querySelector('select').focus(); return; }
+  document.removeEventListener('pointerdown',setOut,true); document.removeEventListener('keydown',setKey,true); nav.close('settings'); if(setPop.contains(document.activeElement)) setBtn.focus(); }
+function setOut(e){ if(!setPop.contains(e.target) && !setBtn.contains(e.target)) setMenu(false); }
+function setKey(e){ if(e.key==='Escape'){ e.stopPropagation(); e.preventDefault(); setMenu(false); setBtn.focus(); } }
+setBtn.addEventListener('click',e=>setMenu(setPop.hidden, {kb:e.detail===0}));
+[exportBtn, importBtn, installBtn].forEach(b=>b.addEventListener('click',()=>setMenu(false)));
+// колесо над панеллю гортає список нотаток — і над шапкою, пошуком та підвалом, — а не аркуш під нею; над правою частиною гортається аркуш
+side.addEventListener('wheel',e=>{ if(e.ctrlKey || Math.abs(e.deltaY)<=Math.abs(e.deltaX)) return; const can=list.scrollHeight>list.clientHeight;
+  if(can && list.contains(e.target)) return;   // над самим списком — рідна плавна прокрутка; overscroll-behavior не передає її аркушу
+  e.preventDefault(); if(can && !setPop.contains(e.target)) list.scrollTop+=e.deltaY*(e.deltaMode===1? 16 : e.deltaMode===2? list.clientHeight : 1); },{passive:false});
+new ResizeObserver(()=>side.style.setProperty('--foot', sideFoot.offsetHeight+'px')).observe(sideFoot);   // підвал лежить поверх низу списку: список лишає під ним стільки ж місця
 
 /* ══ PWA: офлайн-оболонка і встановлення ══════════════════════════════════ */
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{});
