@@ -18,7 +18,7 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   // 1 шапка на дотику: чотири кнопки по 44px, рідкісні — у «⋯»; назва не зникає на 320px
   { const ids=await pg.evaluate(()=>[...document.querySelectorAll('.top .tb')].filter(b=>getComputedStyle(b).display!=='none' && !b.hidden).map(b=>b.id+':'+Math.round(b.getBoundingClientRect().width)+'x'+Math.round(b.getBoundingClientRect().height)));
     await pg.setViewportSize({width:320,height:568}); await pg.waitForTimeout(300); const ttl=await box(pg.locator('#ttl')); const tools=await box(pg.locator('.tools')); await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(300);
-    ok('1 шапка: видимі '+ids.join(', ')+'; на 320px назва '+ttl.w+'px, кнопки в межах екрана ('+(tools.x+tools.w)+')', ids.join(',')==='sideBtn:44x44,viewBtn:44x44,moreBtn:44x44' && ttl.w>=60 && tools.x+tools.w<=320); }
+    ok('1 шапка: видимі '+ids.join(', ')+'; на 320px назва '+ttl.w+'px, кнопки в межах екрана ('+(tools.x+tools.w)+')', ids.join(',')==='sideBtn:44x44,viewBtn:44x44,histBtn:44x44,moreBtn:44x44' && ttl.w>=60 && tools.x+tools.w<=320); }
   // 2 меню «⋯» шапки: пʼять пунктів ≥44px (перший — «Нова область»), «Тема» перемикає тему, «Сітка» — сітку, дотик поза меню закриває
   { await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const items=await pg.locator('.amenu.hm .mi').allInnerTexts(); const hs=await pg.evaluate(()=>[...document.querySelectorAll('.amenu.hm .mi')].map(b=>Math.round(b.getBoundingClientRect().height)));
     const th0=await pg.locator('#themeBtn').getAttribute('data-th'); await tapEl(pg.locator('.amenu.hm .mi').nth(3)); await pg.waitForTimeout(250); const th1=await pg.locator('#themeBtn').getAttribute('data-th');
