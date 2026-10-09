@@ -63,7 +63,7 @@ ok('3 правки на +1…+4 хв: версій '+n3+'; на +5,5 хв: '+v3.
 { await pg.evaluate(()=>{ sheetDebug.vers.fail=true; sheetDebug.vers.clock=120*60000; }); const e0=await pg.evaluate(()=>sheetDebug.vers.errors); await txt.click(); await pg.keyboard.press('End'); await pg.keyboard.type('q'); await pg.keyboard.press('Escape'); await settle(); const cls=await pg.locator('#saved').getAttribute('class'), e1=await pg.evaluate(()=>sheetDebug.vers.errors), warn=await pg.locator('#saveWarn').isHidden();
   await pg.evaluate(()=>{ sheetDebug.vers.fail=false; }); ok('9 відмова версії: статус «'+cls+'», ⚠ немає ('+warn+'), помилок '+e0+' → '+e1, /ok|^saved$/.test(cls) && warn && e1>e0); }
 // 10 видалення нотатки чистить її версії й тіла
-{ const other=(await idbAll('notes')).length; await pg.locator('#list .item.cur .it-x').click(); await settle(); await pg.waitForTimeout(300); ok('10 після видалення нотатки версій '+(await vers(id)).length+', тіл '+(await bodies(id)).length, (await vers(id)).length===0 && (await bodies(id)).length===0 && other>=1); }
+{ const other=(await idbAll('notes')).length; await pg.locator('#list .item.cur .it-x').click(); await pg.click('#askYes'); await settle(); await pg.waitForTimeout(300); ok('10 після видалення нотатки версій '+(await vers(id)).length+', тіл '+(await bodies(id)).length, (await vers(id)).length===0 && (await bodies(id)).length===0 && other>=1); }
 await pg.screenshot({path:OUT+'/appversions.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
