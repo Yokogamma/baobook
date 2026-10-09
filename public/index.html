@@ -373,6 +373,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .blk.shifted>.tcard,.blk.shifted>.cblk,.blk.shifted>.ablk{outline:2px solid var(--n);outline-offset:2px;border-radius:6px}
 .trace{position:absolute;border:1.5px dashed var(--n);border-radius:6px;pointer-events:none;opacity:.5}
 .sheet.dragging .blk:not(.drag){transition:left .15s ease-out,top .15s ease-out}   /* neighbours making room slide instead of jumping (and back on a cancel) */
+@media (prefers-reduced-motion:reduce){ .sheet.dragging .blk:not(.drag){transition:none} }   /* no transition at all: even a .01ms one keeps the old place for a frame */
 .gbox .lbl{position:absolute;right:6px;top:-9px;font-size:10px;font-weight:600;color:#c33;background:var(--page);padding:0 5px;border-radius:4px;display:none}
 .gbox.bad .lbl{display:block}
 .ghost{position:absolute;width:2px;height:calc(var(--g) - 8px);margin-top:4px;background:var(--sel-line);opacity:.55;border-radius:1px;pointer-events:none;display:none}

@@ -20,8 +20,9 @@ async function scene(reduced){
   const b0=await pos(B); const g=await A.locator('.grip').boundingBox(); const gx=g.x+g.width/2, gy=g.y+g.height/2;
   await pg.mouse.move(gx,gy); await pg.mouse.down(); await pg.mouse.move(gx,gy+2*24,{steps:4}); await pg.waitForTimeout(150);
   await pg.mouse.move(gx,gy+3*24+6);   // A's bottom edge now just inside B's first row: B gives way
+  await pg.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));   // pointermove reaches the page with the next frame
   const b1=await pos(B); await pg.waitForTimeout(350); const b2=await pos(B);
-  await pg.mouse.up(); const a1=await pos(A); await pg.waitForTimeout(400); const a2=await pos(A);
+  await pg.mouse.up(); await pg.evaluate(()=>new Promise(r=>requestAnimationFrame(r))); const a1=await pos(A); await pg.waitForTimeout(400); const a2=await pos(A);
   const dragging=await pg.evaluate(()=>document.getElementById('sheet').classList.contains('dragging'));
   await ctx.close(); return {b0,b1,b2,a1,a2,dragging}; }
 

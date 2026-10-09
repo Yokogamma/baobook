@@ -13,6 +13,8 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.
 const ghost=()=>pg.evaluate(()=>{ const g=document.querySelector('.gbox.on'); if(!g) return null; const p=g.offsetParent, y=p.getBoundingClientRect().top+p.clientTop+parseFloat(g.style.top); return {y:Math.round(y), b:Math.round(y+g.offsetHeight), bad:g.classList.contains('bad'), inArea:!!g.closest('.abody')}; });
 const dragTop=()=>pg.evaluate(()=>{ const d=document.querySelector('.blk.drag'); return d? Math.round(d.getBoundingClientRect().top) : null; });
 const wipe=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300); };
+// pointermove reaches the page with the next frame: wait for it before reading positions
+const mv=async(x,y,o)=>{ await pg.mouse.move(x,y,o); await pg.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))); };
 const G=24, EDGE=14;   // frames within half a row of the middle are skipped: the edge snaps to the grid there
 await pg.goto(SITE); await pg.waitForTimeout(300); await wipe();
 
@@ -25,9 +27,9 @@ await pg.evaluate(async T=>{ const n={id:'nswap',title:'',blocks:[{id:'barea',ro
 await pg.reload(); await pg.waitForTimeout(500);
 { const area=pg.locator('.blk.is-area'), kid=area.locator('.abody .blk').first(); const k0=await box(kid), a0=await box(area.locator('.ablk')); const mid=k0.y+k0.h/2;
   const g=await box(pg.locator('#sheet > .blk:not(.is-area) .grip').last()); const gx=g.x+g.w/2, gy=g.y+g.h/2;
-  await pg.mouse.move(gx,gy); await pg.mouse.down();
+  await mv(gx,gy); await pg.mouse.down();
   let before={frames:0, kidStill:true, ghostUnder:true, areaW:true}, after={frames:0, kidUnder:true, red:false, bad:''}, entered=false;
-  for(let y=gy; y>=gy-480; y-=6){ await pg.mouse.move(gx,y); const top=await dragTop(), gh=await ghost(); if(!gh || !gh.inArea) continue; entered=true;
+  for(let y=gy; y>=gy-480; y-=6){ await mv(gx,y); const top=await dragTop(), gh=await ghost(); if(!gh || !gh.inArea) continue; entered=true;
     const k=await box(kid), aw=(await box(area.locator('.ablk'))).w;
     if(top>mid+EDGE){ before.frames++; if(k.y!==k0.y) before.kidStill=false; if(gh.y<k0.y+k0.h) before.ghostUnder=false; if(aw!==a0.w) before.areaW=false; }
     else if(top<mid-EDGE){ after.frames++; if(k.y<gh.b){ after.kidUnder=false; after.bad+=` top ${top} kid ${k.y} ghost ${gh.y}-${gh.b}`; } if(gh.bad) after.red=true; } }
@@ -37,17 +39,17 @@ await pg.reload(); await pg.waitForTimeout(500);
   ok('2 після середини блок області йде під контур, контур не червоний'+(after.bad? ':'+after.bad.slice(0,200) : '')+(after.red?' (червоний)':''), after.kidUnder && !after.red);
   // 3 back down below the middle: the block returns to its place
   let back={frames:0, home:true};
-  for(let y=gy-480; y<=gy-200; y+=6){ await pg.mouse.move(gx,y); const top=await dragTop(); if(top>mid+EDGE){ back.frames++; const k=await box(kid); if(k.y!==k0.y) back.home=false; } }
+  for(let y=gy-480; y<=gy-200; y+=6){ await mv(gx,y); const top=await dragTop(); if(top>mid+EDGE){ back.frames++; const k=await box(kid); if(k.y!==k0.y) back.home=false; } }
   ok('3 повернув край нижче середини — блок області знову на своєму місці ('+back.frames+' кадрів)', back.frames>3 && back.home);
   // 3b the same after a sideways detour out of the block's column and back: it still remembers the block was approached from below
-  for(let y=gy-200; y>=gy-470; y-=6) await pg.mouse.move(gx,y);
-  for(let x=gx; x<=gx+360; x+=8) await pg.mouse.move(x,gy-470);
-  const out=await box(kid); for(let x=gx+360; x>=gx; x-=8) await pg.mouse.move(x,gy-470);
+  for(let y=gy-200; y>=gy-470; y-=6) await mv(gx,y);
+  for(let x=gx; x<=gx+360; x+=8) await mv(x,gy-470);
+  const out=await box(kid); for(let x=gx+360; x>=gx; x-=8) await mv(x,gy-470);
   let back2={frames:0, home:true, at:''};
-  for(let y=gy-470; y<=gy-200; y+=6){ await pg.mouse.move(gx,y); const top=await dragTop(); if(top>mid+EDGE){ back2.frames++; const k=await box(kid); if(k.y!==k0.y){ back2.home=false; back2.at=` (блок на ${k.y}, а був на ${k0.y})`; } } }
+  for(let y=gy-470; y<=gy-200; y+=6){ await mv(gx,y); const top=await dragTop(); if(top>mid+EDGE){ back2.frames++; const k=await box(kid); if(k.y!==k0.y){ back2.home=false; back2.at=` (блок на ${k.y}, а був на ${k0.y})`; } } }
   ok('3b після відходу вбік за межі колонки ('+out.y+') і назад: нижче середини блок області знову на своєму місці'+back2.at, back2.frames>3 && back2.home);
   // drop past the middle: the block of the area is below the dropped one
-  for(let y=gy-200; y>=gy-470; y-=6) await pg.mouse.move(gx,y);
+  for(let y=gy-200; y>=gy-470; y-=6) await mv(gx,y);
   const gh=await ghost(); await pg.mouse.up(); await pg.waitForTimeout(300);
   const r=await area.locator('.abody .blk').evaluateAll(els=>els.map(e=>{ const q=e.getBoundingClientRect(); return {sized:!!e.querySelector('.sized'), y:Math.round(q.top), b:Math.round(q.bottom)}; }));
   const was=r.find(o=>o.sized), came=r.find(o=>!o.sized);
@@ -59,9 +61,9 @@ await pg.mouse.click(500,420); for(const [i,t] of ['перший рядок','д
 await pg.mouse.click(500,200); await pg.keyboard.type('зверху'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const B=pg.locator('#sheet > .blk').filter({hasText:'четвертий'}), A=pg.locator('#sheet > .blk').filter({hasText:'зверху'}); const b0=await box(B), a0=await box(A); const mid=b0.y+b0.h/2;
   ok('4 підготовка: нижній блок — 4 рядки, верхній — 1', b0.h===4*G && a0.h===G);
-  const g=await box(A.locator('.grip')); const gx=g.x+g.w/2, gy=g.y+g.h/2; await pg.mouse.move(gx,gy); await pg.mouse.down();
+  const g=await box(A.locator('.grip')); const gx=g.x+g.w/2, gy=g.y+g.h/2; await mv(gx,gy); await pg.mouse.down();
   let early={frames:0, pushed:true}, late={frames:0, home:true, ghostUnder:true, why:''};
-  for(let y=gy; y<=gy+(b0.y+b0.h-a0.y)+G; y+=4){ await pg.mouse.move(gx,y); const top=await dragTop(), bottom=top+a0.h, gh=await ghost(); const b=await box(B);
+  for(let y=gy; y<=gy+(b0.y+b0.h-a0.y)+G; y+=4){ await mv(gx,y); const top=await dragTop(), bottom=top+a0.h, gh=await ghost(); const b=await box(B);
     if(bottom>b0.y+EDGE && bottom<mid-EDGE){ early.frames++; if(b.y<gh.b) early.pushed=false; }
     else if(bottom>mid+EDGE && top<b0.y+b0.h){ late.frames++; if(b.y!==b0.y) late.home=false; if(gh.y<b0.y+b0.h) late.ghostUnder=false; if(b.y!==b0.y||gh.y<b0.y+b0.h) late.why+=` [bottom ${bottom} B ${b.y} ghost ${gh.y}]`; } }
   ok('4a поки нижній край не дійшов до середини, нижній блок звільняє місце — йде під контур ('+early.frames+' кадрів)', early.frames>2 && early.pushed);
