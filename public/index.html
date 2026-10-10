@@ -235,6 +235,45 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .txt code::after{content:'';display:inline-block;width:13px;height:13px;margin-left:6px;vertical-align:-1.5px;background:currentColor;opacity:.45;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V6a2 2 0 0 1 2-2h9'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V6a2 2 0 0 1 2-2h9'/%3E%3C/svg%3E") center/contain no-repeat}
 .txt code::after{cursor:pointer} .txt code:hover::after{opacity:1}
 .txt code.done{background:var(--s);color:#fff;border-color:transparent} .txt code.done::after{opacity:1;-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l4 4L19 7'/%3E%3C/svg%3E")}
+/* links (docs/LINKS-PLAN.md): a chip with the target's name, «note › block» for a block. Blue of the code types: readable on every theme. In the trash — struck
+   through; gone (deleted, or not on this device yet) and a gone block — dashed, grey */
+.txt a.lnk{color:var(--t);text-decoration:none;background:color-mix(in srgb,var(--t) 9%,transparent);border:.5px solid color-mix(in srgb,var(--t) 35%,transparent);border-radius:5px;padding:1px 6px 1px 4px;font-size:.94em;cursor:pointer;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-box-decoration-break:clone;box-decoration-break:clone;-webkit-user-select:none;user-select:none;transition:background .12s}
+.txt a.lnk::before{content:'';display:inline-block;width:.8em;height:.8em;margin-right:3px;vertical-align:-.05em;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17 17 7M9 7h8v8'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17 17 7M9 7h8v8'/%3E%3C/svg%3E") center/contain no-repeat}
+.txt a.lnk:hover{background:color-mix(in srgb,var(--t) 17%,transparent)} .txt a.lnk .lsep{opacity:.55}
+.txt a.lnk.trash{color:var(--ink-2);background:var(--hover);border-color:var(--line-2);text-decoration:line-through}
+.txt a.lnk.gone,.txt a.lnk.nob{color:var(--ink-2);background:transparent;border:.5px dashed var(--ink-3)}
+/* the block a link leads to is lit for a moment */
+.lflash{animation:lflash 2s ease-out}
+@keyframes lflash{0%,35%{box-shadow:0 0 0 2px var(--sel-line),0 0 0 7px var(--sel)}100%{box-shadow:0 0 0 2px transparent,0 0 0 7px transparent}}
+/* the picker of «[[»: under the caret on a computer, across the screen above the formatting bar on touch */
+.lpick{position:fixed;z-index:45;width:min(400px,calc(100vw - 16px));max-height:min(380px,60vh);overflow:auto;overscroll-behavior:contain;padding:4px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:var(--t-md);color:var(--ink);-webkit-user-select:none;user-select:none}
+.lp-h{display:flex;align-items:center;gap:4px;min-height:28px;padding:2px 8px;font-size:var(--t-sm);font-weight:600;color:var(--ink-2)} .lp-h span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-back{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-6px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);cursor:pointer} .lp-back:hover{background:var(--hover);color:var(--ink)} .lp-back .i{font-size:16px}
+.lp-g{padding:8px 8px 3px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}
+.lp-i{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--ink)} .lp-i:hover{background:var(--hover)} .lp-i.on{background:var(--sel)}
+.lp-i>.i{font-size:16px;color:var(--ink-2)} .lp-new,.lp-new>.i{color:var(--t)}
+.lp-b{flex:1;min-width:0;display:flex;flex-direction:column}
+.lp-t,.lp-s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .lp-t{font-weight:500} .lp-s{font-size:var(--t-sm);color:var(--ink-2);margin-top:1px}
+.lp-i small{flex:0 0 auto;font-size:var(--t-xs);color:var(--ink-3)} .lp-i.on small{display:none}
+.lp-x{display:none;align-items:center;justify-content:center;flex:0 0 auto;width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);cursor:pointer} .lp-x .i{font-size:16px}
+.lp-i.on .lp-x,.lp-i:hover .lp-x{display:inline-flex} .lp-x:hover{background:var(--hover-2);color:var(--ink)} .lp-i:hover small{display:none}
+.lp-none{padding:8px 10px;color:var(--ink-3)} .lp-f{margin-top:4px;padding:6px 8px 3px;border-top:.5px solid var(--line);font-size:var(--t-xs);color:var(--ink-3)}
+/* the preview of a link (computer): the target's name and its first lines */
+.lprev{position:fixed;z-index:44;width:min(380px,calc(100vw - 16px));padding:10px 12px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:var(--t-md);color:var(--ink);pointer-events:none}
+.lv-h{display:flex;align-items:center;gap:6px;min-width:0;font-size:var(--t-sm);color:var(--ink-2)} .lv-h .i{font-size:15px;flex:0 0 auto} .lv-h b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)} .lv-h span{flex:0 0 auto}
+.lv-b{margin-top:8px;white-space:pre-line;line-height:1.5;max-height:9em;overflow:hidden} .lv-m{color:var(--ink-3)}
+.lv-c{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--code-bg);border:.5px solid var(--code-line);font-family:var(--mono);font-size:var(--t-sm);line-height:1.5;white-space:pre;overflow:hidden}
+.lv-f{margin-top:8px;padding-top:6px;border-top:.5px solid var(--line);font-size:var(--t-xs);color:var(--ink-3)}
+/* the notes that link here: under the lowest block */
+.blinks{position:absolute;z-index:1;padding-top:10px;border-top:.5px solid var(--line-2);font-family:var(--sans);cursor:default} .sheet.history .blinks{display:none}
+.bl-h{display:flex;align-items:center;gap:6px;padding:0 8px 4px;font-size:var(--t-sm);font-weight:600;color:var(--ink-2)} .bl-h .i{font-size:14px}
+.bl-i{display:block;padding:7px 8px;border-radius:8px;text-decoration:none;color:var(--ink)} .bl-i:hover{background:var(--hover)} .bl-i:focus-visible{outline:2px solid var(--sel-line);outline-offset:-2px}
+.bl-t{display:flex;align-items:center;gap:6px;font-size:var(--t-md);font-weight:500} .bl-t .i{font-size:14px;color:var(--ink-2);flex:0 0 auto} .bl-t span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bl-s{display:block;margin-top:2px;font-size:var(--t-sm);line-height:1.5;color:var(--ink-2)} .bl-s b{font-weight:600;color:var(--t)}
+/* «back» after a link: the note we came from */
+.tb.lback{max-width:30vw;color:var(--t);background:color-mix(in srgb,var(--t) 9%,transparent);border-radius:999px;padding:0 10px 0 6px} .tb.lback:hover{color:var(--t);background:color-mix(in srgb,var(--t) 17%,transparent)}
+.tb.lback span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.amenu.bm.gm{left:-4px;right:auto;top:calc(var(--g) + 4px)}   /* the block menu from the right button on ⋮⋮ */
 /* панель форматування: на компʼютері над виділенням, на дотику — внизу видимої області (над клавіатурою) */
 .bubble{position:fixed;z-index:28;display:flex;gap:2px;padding:4px;border-radius:8px;background:var(--ink);color:var(--page);box-shadow:var(--shadow)}
 .bubble button,.bmore button{width:32px;height:30px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:var(--t-lg);cursor:pointer}
@@ -492,6 +531,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
     .bubble button.act[data-act="copy"]{display:none} .bubble .more,.bubble button.act[data-act="new"],.bubble button.act[data-act="done"]{display:inline-flex;align-items:center;justify-content:center} .bubble button.act[data-act="done"]{font-weight:600} .bubble .more{font-size:1.25rem;letter-spacing:1px}
   /* зона дотику ручки 44px, ліворуч і по вертикалі, не над текстом */
   .grip{opacity:.45;position:relative} .grip::before{content:"";position:absolute;inset:-10px -2px -10px -16px} .blk.focus>.grip,.blk:focus-within>.grip,.blk.drag>.grip{opacity:.9}
+  .lp-i{min-height:48px;padding:2px 4px 2px 10px} .lp-x{display:inline-flex;width:44px;height:44px} .lp-i small,.lp-i:hover small{display:none} .lp-back{width:44px;height:44px} .lp-h{min-height:44px} .bl-i{min-height:44px}   /* touch: the picker's rows and its → are 44px; links under the blocks too */
   .cb{opacity:1} .cbar{height:48px} .cb{height:44px;min-width:44px;padding:0 12px;justify-content:center}
   .ctitle:not(:focus){-webkit-user-select:none;user-select:none}   /* дотик: назву в шапці система не виділяє (утримання піднімає картку), лише в правці */
   @container (max-width:640px){   /* телефон: шапка картки (код і область) одним рядком 48px — [мова], назва з трикрапкою, дії; дії з overflow (перенос рядків, номери) — за «⋯»; назва області не вужча за 40% (рішення власника, план 3.5) */
@@ -590,6 +630,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <div class="left">
         <button class="tb" id="sideBtn" data-i18n-attr="title:panel.label" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
         <button class="tb narrow-only" id="viewBtn" data-i18n-attr="title:view.desktop" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+        <button class="tb lback" id="linkBack" type="button" hidden data-i18n-attr="title:link.backShort;aria-label:link.backShort"><svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span id="linkBackT"></span></button>
         <span class="ttl" id="ttl" contenteditable="true" role="textbox" data-i18n-attr="data-ph:note.untitled;aria-label:note.titleLabel"></span>
       </div>
       <div class="tools">
@@ -623,7 +664,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button" data-i18n-html="undo.button"></button><button class="uclose" type="button" data-i18n-attr="aria-label:common.hide;title:common.hide">✕</button></div>
 <button class="fab" id="fab" data-i18n-attr="title:block.new;aria-label:block.new"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-<div class="bubble" id="bubble" hidden role="toolbar" data-i18n-attr="aria-label:fmt.toolbar"><button type="button" data-cmd="bold" data-i18n-attr="title:fmt.bold"><b>B</b></button><button type="button" data-cmd="italic" data-i18n-attr="title:fmt.italic"><i>I</i></button><button type="button" data-cmd="underline" data-i18n-attr="title:fmt.underline"><u>U</u></button><button type="button" data-cmd="strikeThrough" data-i18n-attr="title:fmt.strike"><s>S</s></button><button type="button" data-cmd="code" data-i18n-attr="title:fmt.code" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><span class="sep lsep" hidden></span><button type="button" data-cmd="ul" data-i18n-attr="title:fmt.ul;aria-label:fmt.ul" hidden><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"/></svg></button><button type="button" data-cmd="ol" data-i18n-attr="title:fmt.ol;aria-label:fmt.ol" hidden><svg class="i" viewBox="0 0 24 24"><path d="M11 6h9M11 12h9M12 18h8M4 16a2 2 0 1 1 4 0c0 .6-.5 1-1 1.5L4 20h4M6 10V4L4 6"/></svg></button><span class="sep"></span><button type="button" class="act" data-act="copy" data-i18n-attr="title:fmt.copy.title"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span data-i18n="common.copy"></span></button><button type="button" class="act" data-act="new" data-i18n-attr="title:block.newBelow;aria-label:block.newBelow"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="block.short"></span></button><button type="button" class="act" data-act="done" data-i18n="common.done" data-i18n-attr="title:edit.done.title"></button><button type="button" class="more" data-act="more" data-i18n-attr="title:fmt.moreButtons;aria-label:fmt.moreButtons" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
+<div class="bubble" id="bubble" hidden role="toolbar" data-i18n-attr="aria-label:fmt.toolbar"><button type="button" data-cmd="bold" data-i18n-attr="title:fmt.bold"><b>B</b></button><button type="button" data-cmd="italic" data-i18n-attr="title:fmt.italic"><i>I</i></button><button type="button" data-cmd="underline" data-i18n-attr="title:fmt.underline"><u>U</u></button><button type="button" data-cmd="strikeThrough" data-i18n-attr="title:fmt.strike"><s>S</s></button><button type="button" data-cmd="code" data-i18n-attr="title:fmt.code" style="font-family:var(--mono);font-size:12px">&lt;/&gt;</button><button type="button" data-act="link" data-i18n-attr="title:link.button;aria-label:link.button"><svg class="i" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button><span class="sep lsep" hidden></span><button type="button" data-cmd="ul" data-i18n-attr="title:fmt.ul;aria-label:fmt.ul" hidden><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"/></svg></button><button type="button" data-cmd="ol" data-i18n-attr="title:fmt.ol;aria-label:fmt.ol" hidden><svg class="i" viewBox="0 0 24 24"><path d="M11 6h9M11 12h9M12 18h8M4 16a2 2 0 1 1 4 0c0 .6-.5 1-1 1.5L4 20h4M6 10V4L4 6"/></svg></button><span class="sep"></span><button type="button" class="act" data-act="copy" data-i18n-attr="title:fmt.copy.title"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span data-i18n="common.copy"></span></button><button type="button" class="act" data-act="new" data-i18n-attr="title:block.newBelow;aria-label:block.newBelow"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="block.short"></span></button><button type="button" class="act" data-act="done" data-i18n="common.done" data-i18n-attr="title:edit.done.title"></button><button type="button" class="more" data-act="more" data-i18n-attr="title:fmt.moreButtons;aria-label:fmt.moreButtons" aria-haspopup="true" aria-expanded="false" hidden>⋯</button></div>
 <div class="bmore" id="bubbleMore" hidden role="toolbar" data-i18n-attr="aria-label:fmt.more"></div>
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
@@ -757,6 +798,15 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   back:'<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   broom:'<svg class="i" viewBox="0 0 24 24"><path d="M21 3l-7.5 7.5"/><path d="M11.4 8.4l4.2 4.2"/><path d="M11.4 8.4 3.6 12.6 11.4 20.4 15.6 12.6"/><path d="M12.8 9.8 6.2 15.2M14.2 11.2 8.8 17.8"/></svg>',   // clearing the sheet: the note stays, its blocks go
   chev:'<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  link:'<svg class="i" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
+  note:'<svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+  lines:'<svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  code:'<svg class="i" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg>',
+  area:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/></svg>',
+  plus:'<svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  right:'<svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+  left:'<svg class="i" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>',
+  inbound:'<svg class="i" viewBox="0 0 24 24"><path d="M17 7 7 17"/><path d="M15 17H7V9"/></svg>',
   more:'<svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>'};
 const RZ=t=>'<div class="rz" title="'+t+'"><svg viewBox="0 0 10 10"><path d="M9 1L1 9M9 6L6 9"/></svg></div>';
 /* шапка картки (код і область) збирається однією функцією: ліворуч необовʼязкова кнопка мови, назва, праворуч дії.
@@ -767,7 +817,7 @@ function cardBar(o){ const btn=a=>'<button class="cb '+a.cls+'" title="'+a.title
     +ov.map(a=>btn({...a, cls:a.cls+' ov'})).join('')+(o.actions||[]).map(btn).join('')
     +(ov.length? btn({cls:'cmore', title:loc('card.more',{list:ov.map(a=>a.title.toLowerCase()).join(', ')}), label:loc('card.more',{list:ov.map(a=>a.title.toLowerCase()).join(', ')}), html:'⋯', popup:true}) : '')+'</span></div>'; }
 function cardMore(card){ const more=card.querySelector('.cmore'); if(!more) return; more.addEventListener('pointerdown',e=>e.stopPropagation());
-  more.addEventListener('click',()=>popMenu(more, card, 'cm', [...card.querySelectorAll('.cb.ov')].map(bt=>({label:bt.title, small: loc(bt.getAttribute('aria-pressed')==='true'? 'common.on' : 'common.off'), act:()=>bt.click()})))); }
+  more.addEventListener('click',()=>popMenu(more, card, 'cm', [...card.querySelectorAll('.cb.ov')].map(bt=>({label:bt.title, small: bt.hasAttribute('aria-pressed')? loc(bt.getAttribute('aria-pressed')==='true'? 'common.on' : 'common.off') : '', act:()=>bt.click()})))); }   // a plain action (copy a link) has no on/off
 const GRIP='<div class="grip" title="'+locA('block.grip')+'"><svg viewBox="0 0 10 16"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg></div>';
 const COLLAPSE_AT=14, SHOW=12;
 const cssN=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
@@ -932,6 +982,9 @@ function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]');
 /* ══ форматування тексту: жирний, курсив, підкреслення, перекреслення. Зберігається як html лише з тегів b/i/u/s (переноси — \n),
    поруч завжди чистий text — для пошуку, списку нотаток і майбутнього злиття. Усе інше (стилі, скрипти, чужі теги) вичищається ══ */
 const RICH_TAG={B:'b',STRONG:'b',I:'i',EM:'i',U:'u',S:'s',STRIKE:'s',DEL:'s',CODE:'code',KBD:'code',TT:'code'};
+// a link (docs/LINKS-PLAN.md): <a data-to="note">label</a> or data-to="note/block". The label is the target's name when the text was last saved: it shows
+// while the target is gone, and it is what search, the note list and copying see. Older versions keep the label as plain text
+const LINK_RE=/^[\w-]{1,64}(\/[\w-]{1,64})?$/;
 const escHtml=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 // the list type of an element: our list line <div data-l> (or <li data-l> in stored html), or a foreign <li> inside <ul>/<ol>
 const listOf=c=>{ const l=c.getAttribute('data-l'); if((l==='ul'||l==='ol') && (c.tagName==='DIV'||c.tagName==='LI')) return l; return c.tagName==='LI'? (c.parentElement&&c.parentElement.tagName==='OL'? 'ol' : 'ul') : ''; };
@@ -940,18 +993,20 @@ function richOf(root){ let out='', nl=false; const brk=()=>{ if(out && !out.ends
     if(tag==='BR'){ if(nl) brk(); out+='\n'; continue; } if(/^(SCRIPT|STYLE|TEMPLATE)$/.test(tag)) continue;
     const lt=listOf(c); if(lt){ brk(); out+='<li data-l="'+lt+'">'; walk(c); out=out.replace(/\n((?:<\/(?:b|i|u|s|code)>)*)$/,'$1')+'</li>'; nl=true; continue; }   // a trailing <br> in a line is the browser's placeholder, not a line break
     if(/^(DIV|P|H[1-6]|BLOCKQUOTE|PRE|TR)$/.test(tag)) brk(); else if(nl && c.textContent.replace(/\u200b/g,'')) brk();
+    if(tag==='A'){ const to=c.getAttribute('data-to')||''; if(LINK_RE.test(to)){ const raw=c.textContent, lab=raw.replace(/[\u200b\ue000\ue001]/g,'').replace(/\s+/g,' ').trim();   // a link is one piece: selection marks inside it go to its edges
+      out+=(raw.includes(M0)? M0 : '')+'<a data-to="'+to+'">'+escHtml(lab||to)+'</a>'+(raw.includes(M1)? M1 : ''); continue; } }   // a foreign <a> keeps only its text
     const wrap=[]; if(RICH_TAG[tag]) wrap.push(RICH_TAG[tag]); else if(c.style){ const st=c.style; if(/bold|^[6-9]00$/.test(st.fontWeight)) wrap.push('b'); if(st.fontStyle==='italic') wrap.push('i'); const td=st.textDecorationLine||st.textDecoration||''; if(/underline/.test(td)) wrap.push('u'); if(/line-through/.test(td)) wrap.push('s'); }
     out+=wrap.map(w=>'<'+w+'>').join(''); walk(c); out+=wrap.slice().reverse().map(w=>'</'+w+'>').join(''); } };
   walk(root); out=out.replace(/\n$/,''); let prev; do{ prev=out; out=out.replace(/<(b|i|u|s|code)><\/\1>/g,''); }while(out!==prev); return out; }
-const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>|<li data-l="\w+">|<\/li>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-const hasRich=h=>/<(b|i|u|s|code)>|<li /.test(h);
+const plainOf=h=>h.replace(/<\/?(b|i|u|s|code)>|<li data-l="\w+">|<\/li>|<a data-to="[^"]*">|<\/a>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+const hasRich=h=>/<(b|i|u|s|code)>|<li |<a data-to=/.test(h);
 function cleanRich(h){ const t=document.createElement('template'); t.innerHTML=String(h||''); return richOf(t.content); }
 /* lists: a list is a property of a line, as in Quill and Google Docs. In the stored html a list line is <li data-l="ul|ol">…</li> standing on its own line
    (lines are still joined by \n); the plain text has no markers, so search and the note list do not change. A block with a list is drawn one <div> per line:
    the marker is CSS, the numbers are counted here. Older versions read such html as plain lines */
 // rich html → lines {l, h}: l is the list type or '', h the line's inline html. A tag open across a line break is closed at the end of the line and opened again on the next one
 function linesOf(h){ const L=[], open=[]; let li='', cur={l:'',h:''};
-  for(const [m,lt,cl,tag] of String(h||'').matchAll(/<li data-l="(ul|ol)">|<\/li>|<(\/?)(b|i|u|s|code)>|\n|[^<\n]+/g)){
+  for(const [m,lt,cl,tag] of String(h||'').matchAll(/<li data-l="(ul|ol)">|<\/li>|<(\/?)(b|i|u|s|code)>|<a data-to="[^"]*">[^<]*<\/a>|\n|[^<\n]+/g)){   // a link is one token
     if(lt){ li=lt; cur.l=lt; } else if(m==='</li>') li='';
     else if(m==='\n'){ cur.h+=open.map(t=>'</'+t+'>').reverse().join(''); L.push(cur); cur={l:li, h:open.map(t=>'<'+t+'>').join('')}; }
     else { if(tag){ if(cl){ const k=open.lastIndexOf(tag); if(k>=0) open.splice(k,1); } else open.push(tag); } cur.h+=m; } }
@@ -961,15 +1016,16 @@ const hasList=h=>/<li /.test(h||'');
 const lineVis=h=>plainOf(h).replace(/[\u200b\ue000\ue001]/g,'').trim();   // the visible text of a line; selection marks do not count
 // copying: plain text gets «• » and «1. », html gets real <ul>/<ol>, so a list pastes as a list into a chat or another editor
 function listText(h){ if(!hasList(h)) return plainOf(h); let n=0; return linesOf(h).map(x=>{ n=x.l==='ol'? n+1 : 0; return (x.l==='ul'? '• ' : x.l==='ol'? n+'. ' : '')+plainOf(x.h); }).join('\n'); }
-function listHtml(h){ if(!hasList(h)) return h.replace(/\n/g,'<br>'); let out='', open='', prev=false;
+function listHtml(h){ const links=s=>s.replace(/<a data-to="([^"]*)">/g,(m,to)=>'<a href="'+esc(linkHref(to))+'">');   // a link goes out as a real address of this site
+  if(!hasList(h)) return links(h.replace(/\n/g,'<br>')); let out='', open='', prev=false;
   for(const x of linesOf(h)){ if(x.l!==open){ if(open) out+='</'+open+'>'; open=x.l; if(open) out+='<'+open+'>'; prev=false; }
     if(open) out+='<li>'+x.h+'</li>'; else { if(prev) out+='<br>'; out+=x.h; prev=true; } }
-  return out+(open? '</'+open+'>' : ''); }
+  return links(out+(open? '</'+open+'>' : '')); }
 // numbers of numbered lines: they run on through consecutive lines and start again after any other line, an empty one included
 function numberLists(txt){ let n=0; for(const c of txt.childNodes){ if(c.nodeType===1 && c.getAttribute('data-l')==='ol'){ c.setAttribute('data-n', ++n); continue; }
   if(c.nodeType===1){ c.removeAttribute('data-n'); n=0; } else if(c.nodeType===3 && /[^\s\u200b]/.test(c.nodeValue)) n=0; } }
 function paint(txt, h, text){ if(hasList(h)) txt.innerHTML=linesOf(h).map(x=>'<div'+(x.l? ' data-l="'+x.l+'"' : '')+'>'+x.h+(plainOf(x.h).replace(/[\u200b\ue000\ue001]/g,'')? '' : '<br>')+'</div>').join('');
-  else if(h) txt.innerHTML=h; else txt.textContent=text||''; numberLists(txt); splitChipLines(txt); padChips(txt); }
+  else if(h) txt.innerHTML=h; else txt.textContent=text||''; numberLists(txt); splitChipLines(txt); liveLinks(txt); padChips(txt); }
 function showTxt(b){ paint(b.txt, b.html, b.text); }
 /* the selection by lines: marks M0 and M1 go in at its ends (in a copy of the field, or in the field itself right before it is redrawn), and the line a mark lands on is the line it is on */
 const M0='\ue000', M1='\ue001';
@@ -1005,7 +1061,7 @@ function splitChipLines(txt){ txt.querySelectorAll('code').forEach(c=>{ if(c.chi
   c.textContent.split('\n').forEach((p,i)=>{ if(i) f.appendChild(document.createTextNode('\n')); if(p){ const k=document.createElement('code'); k.textContent=p; f.appendChild(k); } }); c.replaceWith(f); }); }
 // після кожного чипа — нульовий пробіл (не зберігається): без нього браузер ставить курсор і вводить текст одразу за чипом усередину чипа.
 // Перед чипом він потрібен, лише коли зліва немає тексту (початок рядка) — інакше курсор не стане перед чипом
-function padChips(txt){ dropEmptyChips(txt); txt.querySelectorAll('code').forEach(c=>{ const p=c.previousSibling; if(!p || p.nodeType!==3) c.parentNode.insertBefore(document.createTextNode('\u200b'),c); else if(!p.nodeValue) p.nodeValue='\u200b';
+function padChips(txt){ dropEmptyChips(txt); txt.querySelectorAll('code,a[data-to]').forEach(c=>{ const p=c.previousSibling; if(!p || p.nodeType!==3) c.parentNode.insertBefore(document.createTextNode('\u200b'),c); else if(!p.nodeValue) p.nodeValue='\u200b';   // a link chip too: the caret cannot stand inside it, so it needs text on both sides
   const n=c.nextSibling; if(n && n.nodeType===3){ if(!n.nodeValue.startsWith('\u200b')) n.insertData(0,'\u200b'); } else c.parentNode.insertBefore(document.createTextNode('\u200b'),n); }); }
 // порожній чип (усе стерли, обгорнули сусіда) прибираємо — інакше лишається рамка з кнопкою копіювання
 function dropEmptyChips(txt){ txt.querySelectorAll('code').forEach(c=>{ if(c.textContent.replace(/\u200b/g,'')) return; const sel=getSelection(), inside=sel&&sel.rangeCount&&c.contains(sel.anchorNode), r=document.createRange(); r.setStartBefore(c); c.remove(); if(inside){ sel.removeAllRanges(); sel.addRange(r); } }); }
@@ -1068,6 +1124,164 @@ function backtickChip(txt){ const sel=getSelection(); if(!sel||!sel.isCollapsed|
 function inCopyZone(c, e){ const rs=c.getClientRects(), l=rs[rs.length-1]; return !!l && e.clientX>=l.right-22 && e.clientX<=l.right && e.clientY>=l.top && e.clientY<=l.bottom; }
 async function copyChip(code){ const t=code.textContent.replace(/\u200b/g,''); const ok=await copyBoth(t, escHtml(t)); if(!ok){ say(loc('copy.failed')); return; } say(loc('copy.done')); code.classList.add('done'); setTimeout(()=>code.classList.remove('done'),1200); }
 try{ document.execCommand('styleWithCSS',false,false); }catch(_){}
+/* ══ links between notes and to blocks (docs/LINKS-PLAN.md). A link is <a data-to="note[/block]"> in a text block's html, drawn as a chip with the target's
+   name of now: a renamed note shows its new name everywhere, and the notes that link to it do not change. «[[» or the link button of the formatting bar opens
+   the picker (notes; → the blocks of one). «Копіювати посилання» puts the address of a note or a block into the clipboard; that address pasted into a text
+   becomes a link. Following a link opens the note, shows the block and leaves «back» in the header and in the browser history. The note's address is in the
+   location hash. Under the blocks — the notes that link here, found anew from the notes in memory, with no index to keep ══ */
+const linkHref=to=>location.origin+location.pathname+'#'+to;
+let hashNow='';   // the address of what is open; a step back through an overlay's history entry (menu, panel) lands on an older address, so it is put back
+const setHash=h=>{ hashNow=h; try{ if(location.hash!=='#'+h) history.replaceState(history.state,'','#'+h); }catch(_){} };   // replace: opening a note is not a step of the browser history
+const hashTo=()=>{ let h=''; try{ h=decodeURIComponent(location.hash.slice(1)); }catch(_){} return LINK_RE.test(h)? h : null; };
+const unesc=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+// the target of a link: the note, and the block's data (the open note's blocks are live, the others are as saved)
+function linkTarget(to){ const [nid,bid]=String(to).split('/'), n=notes.find(x=>x.id===nid)||null; let d=null;
+  if(n && bid){ const b=n===cur? byId(bid) : null; d=b? serBlock(b) : n.blocks.find(x=>x.id===bid)||null; }
+  return {to, nid, bid, n, d}; }
+const cutName=(s,k=60)=>s.length>k? s.slice(0,k)+'…' : s;
+// a block's name: the title of a code block or an area, otherwise the first line
+function blockName(d){ const first=s=>(s||'').split('\n').map(l=>l.trim()).find(Boolean)||'';
+  const t=d.kind==='code'? (d.title||first(d.text)) : d.kind==='area'? (d.title||loc('area.untitled')) : first(d.text); return cutName((t||loc('block.noText')).replace(/[\u200b\ue000\ue001]/g,''),48); }
+const linkName=t=>t.n? cutName(titleOf(t.n))+(t.bid && t.d? ' › '+blockName(t.d) : '') : '';
+// the blocks of a note in reading order, as in the note list: an area's blocks right after it
+function noteBlocks(n){ const L=n===cur? serialize() : n.blocks, row=d=>{ if(!d.parent) return d.row; const p=L.find(x=>x.id===d.parent); return (p? p.row : 0)+0.5+d.row*1e-3; };
+  return L.filter(d=>d.kind || (d.text||'').trim()).sort((a,b)=>(row(a)-row(b))||((a.fx||0)-(b.fx||0))); }
+/* the chip: the target's name of now, «note › block» for a block. States: the note in the trash (struck through), gone (the last known name, dashed:
+   deleted for good or not on this device yet), the block gone (the same). Not editable inside: the caret stands before or after it */
+function linkChip(a){ const to=a.getAttribute('data-to')||''; if(!LINK_RE.test(to)){ a.replaceWith(...a.childNodes); return; }
+  const t=linkTarget(to), st=!t.n? 'gone' : t.n.deleted? 'trash' : (t.bid && !t.d)? 'nob' : '';
+  a.className='lnk'+(st? ' '+st : ''); a.contentEditable='false'; a.draggable=false; a.href='#'+to;
+  if(st==='gone' || st==='nob'){ a.textContent=a.textContent.replace(/\u200b/g,''); return; }
+  a.textContent=cutName(titleOf(t.n)); if(t.bid){ const s=document.createElement('span'); s.className='lsep'; s.textContent=' › '; a.append(s, blockName(t.d)); } }
+function liveLinks(root){ root.querySelectorAll('a[data-to]').forEach(linkChip); }
+// put a link where the selection is (in place of it), with a space after it unless a space or a punctuation mark follows; the caret goes after it
+function linkInsert(b, to){ const s=getSelection(); let r=s&&s.rangeCount? s.getRangeAt(0) : null; if(!r || !b.txt.contains(r.startContainer)){ r=document.createRange(); r.selectNodeContents(b.txt); r.collapse(false); }
+  r.deleteContents(); const code=codeAncestor(r.startContainer,b.txt); if(code){ r.setStartAfter(code); r.collapse(true); }   // not inside a code chip
+  const a=document.createElement('a'); a.setAttribute('data-to',to); a.textContent=to; linkChip(a); r.insertNode(a);
+  const pv=a.previousSibling; if(pv && pv.nodeType===3 && /[\p{L}\p{N}]\u200b*$/u.test(pv.nodeValue)) pv.appendData(' ');   // right after a word: a space between
+  let t=a.nextSibling, at=1; if(t && t.nodeType===3 && /^\u200b*[\s.,;:!?)\]»”]/.test(t.nodeValue)) at=t.nodeValue.match(/^\u200b*/)[0].length; else { t=document.createTextNode(' '); a.after(t); }
+  const c=document.createRange(); c.setStart(t,at); c.collapse(true); s.removeAllRanges(); s.addRange(c); b.api.changed(); return a; }
+// an address of a note of this site (or of one this device has, from the other site) → «note[/block]»
+function linkFromUrl(t){ t=t.trim(); if(!t || /\s/.test(t)) return null; let u; try{ u=new URL(t); }catch(_){ return null; } let h=''; try{ h=decodeURIComponent(u.hash.slice(1)); }catch(_){ return null; }
+  if(!LINK_RE.test(h)) return null; const here=u.origin===location.origin && u.pathname===location.pathname; return here || notes.some(n=>n.id===h.split('/')[0])? h : null; }
+async function copyLink(to){ const t=linkTarget(to), url=linkHref(to), name=linkName(t)||to; const ok=await copyBoth(url, '<a href="'+esc(url)+'">'+esc(name)+'</a>'); say(loc(ok? 'link.copied' : 'copy.failed')); }
+
+/* the picker: «[[» typed in a text block (or the link button, which types it) lists the notes for what follows; → or the arrow button lists the blocks of one
+   (the typed text becomes «Name › », what follows filters the blocks), ← goes back. Enter or a click puts the link in place of «[[…»; Esc leaves the text as it is */
+let LP=null;   // {b, el, m (the «[[…» typed: node, at, off, q), note (its blocks are listed), pre («Name › »), q0 (the query before →), items, i, key}
+function linkQuery(b){ const s=getSelection(); if(!s||!s.rangeCount||!s.isCollapsed) return null; const node=s.anchorNode, off=s.anchorOffset;
+  if(!node || node.nodeType!==3 || !b.txt.contains(node) || codeAncestor(node,b.txt) || node.parentElement.closest('a')) return null;
+  const before=node.nodeValue.slice(0,off), at=before.lastIndexOf('[['); if(at<0) return null; const q=before.slice(at+2).replace(/\u200b/g,'');
+  return /[\[\]\n]/.test(q) || q.length>80? null : {node, at, off, q}; }
+function pickOpen(b){ pickClose(); if(!linkQuery(b)) return; const p=document.createElement('div'); p.className='lpick'; p.setAttribute('role','listbox'); p.setAttribute('aria-label',loc('link.list'));
+  p.addEventListener('pointerdown',e=>e.preventDefault());   // the caret stays in the text, the keyboard stays open
+  p.addEventListener('click',e=>{ if(!LP) return; if(e.target.closest('.lp-back')){ pickUndrill(); return; } const it=e.target.closest('.lp-i'); if(!it) return; const x=LP.items[+it.dataset.k]; if(e.target.closest('.lp-x')) pickDrill(x); else pickChoose(x); });
+  document.body.appendChild(p); LP={b, el:p, note:null, pre:'', q0:'', items:[], i:0, key:null}; pickSync(); }
+function pickClose(){ if(!LP) return; LP.el.remove(); LP=null; }
+function pickSync(){ if(!LP) return; const m=linkQuery(LP.b); if(!m){ pickClose(); return; } LP.m=m;
+  if(LP.note && !(m.q.startsWith(LP.pre) && notes.includes(LP.note))) LP.note=null;   // the «Name › » was erased: the notes again
+  const key=(LP.note? LP.note.id+'\n' : '')+m.q; if(key!==LP.key){ LP.key=key; LP.i=0; LP.items=LP.note? blockItems(LP.note, m.q.slice(LP.pre.length)) : noteItems(m.q); pickDraw(); } pickPlace(); }
+// notes as the search of the panel finds them: all the words, in the title first; empty — the latest. Not the trash. «Створити нотатку» when no title is exactly the query
+function noteItems(q){ const T=norm(q).split(/\s+/).filter(Boolean), qq=norm(q).trim(), pool=notes.filter(n=>!n.deleted); let res;
+  if(!T.length) res=[...pool].sort((a,b)=>b.updated-a.updated).map(n=>({n}));
+  else { res=[]; for(const n of pool){ const t=norm(titleOf(n)); if(T.every(w=>t.includes(w))) res.push({n, r:t.startsWith(qq)? 0 : t.includes(qq)? 1 : 2}); else if(n!==cur){ const x=norm(noteText(n)); if(T.every(w=>t.includes(w)||x.includes(w))) res.push({n, r:3, snip:true}); } }   // the open note is found by its title only: its text has the query being typed
+    res.sort((a,b)=>(a.r-b.r)||(b.n.updated-a.n.updated)); }
+  const out=res.slice(0,7).map(it=>({kind:'note', n:it.n, html:hl(titleOf(it.n),T), sub:it.snip? snip(noteText(it.n),T) : hl(previewOf(it.n),T), small:it.n===cur? loc('link.thisNote') : it.n.archived? loc('link.archived') : fmtDate(it.n.updated)}));
+  if(qq && !pool.some(n=>norm(titleOf(n))===qq)) out.push({kind:'new', title:q.trim()});
+  return out; }
+function blockItems(n, q){ const T=norm(q).split(/\s+/).filter(Boolean), L=noteBlocks(n), out=T.length? [] : [{kind:'note', n, html:esc(loc('link.wholeNote'))}];
+  for(const d of L){ const name=blockName(d), sub=d.kind==='code'? loc('link.kindCode')+(d.lang? ' · '+langName(d.lang) : '') : d.kind==='area'? loc('link.kindArea')+' · '+loc('blocks.count',{n:L.filter(x=>x.parent===d.id).length}) : loc('link.kindText');
+    if(T.length && !T.every(w=>norm(name+'\n'+(d.title||'')+'\n'+(d.text||'')).includes(w))) continue; out.push({kind:'block', n, d, html:hl(name,T), sub:esc(sub)}); }
+  return out.slice(0,40); }
+function pickDraw(){ const it=LP.items; let h=LP.note? '<div class="lp-h"><button class="lp-back" type="button" title="'+locA('link.backToNotes')+'" aria-label="'+locA('link.backToNotes')+'">'+ICO.left+'</button><span>'+esc(titleOf(LP.note))+'</span></div>'
+    : '<div class="lp-h"><span>'+esc(loc('link.toNote'))+'</span></div>';
+  if(!it.length) h+='<div class="lp-none">'+esc(loc('link.none'))+'</div>'; let grp=false;
+  it.forEach((x,k)=>{ if(x.kind==='block' && !grp){ grp=true; h+='<div class="lp-g">'+esc(loc('link.blocks'))+'</div>'; }
+    const ico=x.kind==='new'? ICO.plus : x.kind==='block'? (x.d.kind==='code'? ICO.code : x.d.kind==='area'? ICO.area : ICO.lines) : ICO.note;
+    const body=x.kind==='new'? '<span class="lp-t">'+esc(loc('link.create',{title:x.title}))+'</span>' : '<span class="lp-t">'+x.html+'</span>'+(x.sub? '<span class="lp-s">'+x.sub+'</span>' : '');
+    const drill=x.kind==='note' && !LP.note? '<button class="lp-x" type="button" tabindex="-1" title="'+locA('link.toBlocks')+'" aria-label="'+locA('link.toBlocks')+'">'+ICO.right+'</button>' : '';
+    h+='<div class="lp-i'+(x.kind==='new'? ' lp-new' : '')+'" role="option" id="lp'+k+'" data-k="'+k+'" aria-selected="false">'+ico+'<span class="lp-b">'+body+'</span>'+(x.small? '<small>'+esc(x.small)+'</small>' : '')+drill+'</div>'; });
+  if(!TOUCH) h+='<div class="lp-f">'+esc(loc(LP.note? 'link.hintBlocks' : 'link.hint'))+'</div>';
+  LP.el.innerHTML=h; pickMark(); }
+function pickMark(){ LP.el.querySelectorAll('.lp-i').forEach(e=>{ const on=+e.dataset.k===LP.i; e.classList.toggle('on',on); e.setAttribute('aria-selected',String(on)); if(on) e.scrollIntoView({block:'nearest'}); }); }
+// under the caret (above it when there is no room); on touch — across the screen right above the formatting bar, so the keyboard stays and the text is seen
+function pickPlace(){ if(!LP) return; const p=LP.el;
+  if(TOUCH){ const bar=bubble.hidden? 0 : bubble.offsetHeight+(bubbleMore.hidden? 0 : bubbleMore.offsetHeight), vh=window.visualViewport? window.visualViewport.height : innerHeight;
+    p.style.left='8px'; p.style.right='8px'; p.style.top='auto'; p.style.bottom=(cssN('--kb')+bar+8)+'px'; p.style.maxHeight=Math.max(150, Math.min(420, vh-bar-96))+'px'; return; }
+  const s=getSelection(); let r=s&&s.rangeCount? s.getRangeAt(0).getBoundingClientRect() : null; if(!r || (!r.width && !r.height)) r=LP.b.txt.getBoundingClientRect();
+  const w=p.offsetWidth, h=p.offsetHeight; p.style.left=Math.max(8, Math.min(innerWidth-w-8, r.left-12))+'px'; p.style.top=(r.bottom+6+h<=innerHeight-8 || r.top-h-6<8? r.bottom+6 : r.top-h-6)+'px'; }
+function pickKey(e){ if(!LP || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return false; const n=LP.items.length, k=e.key, x=LP.items[LP.i];
+  if(k==='ArrowDown'||k==='ArrowUp'){ if(!n) return false; e.preventDefault(); LP.i=(LP.i+(k==='ArrowDown'? 1 : n-1))%n; pickMark(); return true; }
+  if(k==='Enter' && !e.shiftKey){ if(!x){ pickClose(); return false; } e.preventDefault(); pickChoose(x); return true; }
+  if(k==='Tab' && !e.shiftKey && x){ e.preventDefault(); if(x.kind==='note' && !LP.note) pickDrill(x); else pickChoose(x); return true; }
+  if(k==='ArrowRight' && !e.shiftKey && x && x.kind==='note' && !LP.note){ e.preventDefault(); pickDrill(x); return true; }
+  if(k==='ArrowLeft' && !e.shiftKey && LP.note && LP.m && LP.m.q===LP.pre){ e.preventDefault(); pickUndrill(); return true; }
+  if(k==='Escape'){ e.preventDefault(); e.stopPropagation(); pickClose(); return true; }
+  return false; }
+// the typed query after «[[» is replaced: «Name › » to list the blocks, the query again to go back
+function pickReplace(q){ const {node, at, off}=LP.m; node.replaceData(at+2, off-at-2, q); const r=document.createRange(); r.setStart(node, at+2+q.length); r.collapse(true); const s=getSelection(); s.removeAllRanges(); s.addRange(r); LP.b.api.changed(); pickSync(); }
+function pickDrill(x){ if(!LP || !x || x.kind!=='note' || LP.note) return; LP.q0=LP.m.q; LP.note=x.n; LP.pre=titleOf(x.n).replace(/[\[\]\n]/g,' ').slice(0,60)+' › '; pickReplace(LP.pre); }
+function pickUndrill(){ if(!LP || !LP.note) return; LP.note=null; pickReplace(LP.q0); }
+function pickChoose(x){ if(!LP || !x) return; const b=LP.b, m=LP.m; let to;
+  if(x.kind==='new'){ const n=newNote(); n.title=x.title.slice(0,200); n.updated=now(); writeNote(n); renderList(); storageUI(); to=n.id; }   // a new empty note with this title; this one stays open
+  else to=x.kind==='block'? x.n.id+'/'+x.d.id : x.n.id;
+  histRec(b.txt,'cmd'); const r=document.createRange(); r.setStart(m.node, m.at); r.setEnd(m.node, m.off); const s=getSelection(); s.removeAllRanges(); s.addRange(r); pickClose(); linkInsert(b, to); }
+// the link button: «[[» at the caret; a selected piece of text becomes the query
+function linkStart(b){ if(document.activeElement!==b.txt) b.txt.focus(); const s=getSelection(); if(!s||!s.rangeCount||!b.txt.contains(s.anchorNode)) return;
+  const pre=s.isCollapsed? '' : s.toString().replace(/[\[\]\s]+/g,' ').trim().slice(0,60); histRec(b.txt,'cmd'); document.execCommand('insertText',false,'[['+pre); pickOpen(b); }
+document.addEventListener('selectionchange',()=>{ if(LP) pickSync(); });   // the caret left «[[…»: the picker goes
+window.addEventListener('scroll',()=>{ if(LP && !TOUCH) pickPlace(); },{passive:true});
+window.addEventListener('resize',()=>{ if(LP) pickPlace(); });
+
+/* following a link: the note opens (the one we left goes into hops: «back» in the header, and an entry in the browser history, so the system Back returns too),
+   the block is scrolled to the middle and lit for a moment; a folded area unfolds. Ctrl, ⌘ or the middle button — a new tab */
+const hops=[];   // {id, y, tag}: the notes left by following links, newest last
+function linkGo(to, o={}){ if(!to || !LINK_RE.test(to)) return; prevHide();
+  const t=linkTarget(to); if(!t.n){ say(loc('link.gone')); return; } if(o.tab){ window.open(linkHref(to),'_blank','noopener'); return; }
+  if(t.n!==cur){ if(cur && !o.noHop){ const tag='link'+(hops.length+1); hops.push({id:cur.id, y:window.scrollY, tag}); nav.open(tag, ()=>hopBack(tag)); } openNote(t.n, {link:true}); }
+  if(t.bid) setHash(to); showBlock(t); }
+function showBlock(t){ if(!t.bid) return; const b=byId(t.bid); if(!b){ say(loc('link.noBlock')); return; }
+  const a=ctn(b); if(a && a.collapsed) a.card.querySelector('.fold').click();
+  const c=b.kind? b.card : b.txt; c.classList.remove('lflash'); void c.offsetWidth; c.classList.add('lflash'); clearTimeout(c._lf); c._lf=setTimeout(()=>c.classList.remove('lflash'),2000);
+  b.el.scrollIntoView({block:'center'}); }
+function hopBack(tag){ const i=hops.findIndex(h=>h.tag===tag); if(i<0) return; const h=hops[i]; hops.length=i; const n=notes.find(x=>x.id===h.id); if(n){ openNote(n, {link:true}); window.scrollTo(0,h.y); } else backUI(); }
+function backUI(){ const h=hops[hops.length-1], n=h&&notes.find(x=>x.id===h.id); linkBack.hidden=!n; if(!n) return; const t=titleOf(n); linkBackT.textContent=t; linkBack.title=loc('link.back',{title:t}); linkBack.setAttribute('aria-label',linkBack.title); }
+linkBack.addEventListener('click',()=>{ const h=hops[hops.length-1]; if(!h) return; nav.close(h.tag); hopBack(h.tag); });
+window.addEventListener('hashchange',()=>{ const to=hashTo(); if(!to || !cur) return; const t=linkTarget(to); if(t.n===cur && !t.bid) return; linkGo(to,{noHop:true}); });   // an address typed or opened in this tab
+
+/* the notes that link here, under the lowest block: the line of each link, with the link in bold */
+const blinks=el('section','blinks'); blinks.hidden=true; blinks.addEventListener('pointerdown',e=>e.stopPropagation());
+blinks.addEventListener('click',e=>{ const it=e.target.closest('.bl-i'); if(!it || e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); linkGo(it.dataset.go); });   // with a modifier the browser opens it in a new tab
+function backlinksOf(id){ const re=new RegExp('<a data-to="'+id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?:/[\\w-]+)?">'), out=[];
+  for(const n of notes){ if(n.id===id || n.deleted) continue; for(const d of n.blocks){ if(!d.html || !re.test(d.html) || !LINK_RE.test(n.id+'/'+d.id)) continue; const L=linesOf(d.html).find(x=>re.test(x.h)); out.push({n, d, h:L? L.h : ''}); } }
+  return out.sort((a,b)=>b.n.updated-a.n.updated); }
+function blSnip(h, id){ const parts=[]; for(const [m,to,lab] of h.matchAll(/<a data-to="([^"]*)">([^<]*)<\/a>|<[^>]+>|[^<]+/g)){ if(to!==undefined){ const me=to===id || to.startsWith(id+'/'); parts.push({t:(me && linkName(linkTarget(to)))||unesc(lab), me}); } else if(m[0]!=='<') parts.push({t:unesc(m)}); }
+  const k=Math.max(0, parts.findIndex(p=>p.me)), before=parts.slice(0,k).map(p=>p.t).join(''); let out=esc(before.length>60? '…'+before.slice(-60) : before), room=140;   // ~60 characters before the first link here, ~140 from it on
+  for(const p of parts.slice(k)){ if(room<=0){ out+='…'; break; } const t=p.me? p.t : p.t.slice(0,room)+(p.t.length>room? '…' : ''); out+=p.me? '<b>'+esc(t)+'</b>' : esc(t); room-=p.t.length; }
+  return out; }
+function renderBacklinks(){ const L=cur? backlinksOf(cur.id) : []; blinks.hidden=!L.length;
+  blinks.innerHTML=L.length? '<div class="bl-h">'+ICO.inbound+'<span>'+esc(loc('link.backlinks',{n:L.length}))+'</span></div>'
+    +L.slice(0,50).map(x=>'<a class="bl-i" href="#'+x.n.id+'/'+x.d.id+'" data-go="'+x.n.id+'/'+x.d.id+'"><span class="bl-t">'+ICO.note+'<span>'+esc(titleOf(x.n))+'</span></span><span class="bl-s">'+blSnip(x.h, cur.id)+'</span></a>').join('') : '';
+  growSheet(); }
+function placeBacklinks(bottom){ if(blinks.hidden) return bottom; const g=G(), left=xlOf(cMinCol(null),null)+CL(), top=bottom? bottom+g : 2*g;
+  blinks.style.left=left+'px'; blinks.style.top=top+'px'; blinks.style.width=Math.max(200, Math.min(26*g, W()-left-PAD()))+'px'; return top+blinks.offsetHeight; }
+
+/* the preview of a link on a computer: after a short hover, the target's name, date and its first lines */
+const lprev=el('div','lprev',document.body); lprev.hidden=true; lprev.setAttribute('role','tooltip');
+let prevT=null, prevA=null;
+function prevHide(){ clearTimeout(prevT); prevT=null; prevA=null; lprev.hidden=true; }
+const firstLines=(s,k)=>{ const L=(s||'').split('\n').filter(l=>l.trim()); return L.slice(0,k).join('\n')+(L.length>k? '\n…' : ''); };
+function prevShow(a){ if(!a.isConnected) return; const t=linkTarget(a.getAttribute('data-to')); let h;
+  if(!t.n) h='<div class="lv-h"><span>'+esc(loc('link.gone'))+'</span></div>';
+  else { h='<div class="lv-h">'+ICO.note+'<b>'+esc(titleOf(t.n))+'</b><span>'+esc(t.n.deleted? loc('link.inTrash') : t.n.archived? loc('link.archived') : fmtDate(t.n.updated))+'</span></div>';
+    if(t.bid && !t.d) h+='<div class="lv-b lv-m">'+esc(loc('link.noBlockTitle'))+'</div>';
+    else if(t.d && t.d.kind==='code') h+='<pre class="lv-c">'+esc(firstLines(t.d.text,8))+'</pre>';
+    else h+='<div class="lv-b">'+esc(firstLines(t.d? (t.d.kind==='area'? noteBlocks(t.n).filter(x=>x.parent===t.d.id).map(x=>x.text||'').join('\n') : t.d.text) : noteText(t.n), 6))+'</div>';
+    h+='<div class="lv-f">'+esc(loc('link.previewHint'))+'</div>'; }
+  lprev.innerHTML=h; lprev.hidden=false; const r=a.getBoundingClientRect(), w=lprev.offsetWidth, hh=lprev.offsetHeight;
+  lprev.style.left=Math.max(8, Math.min(innerWidth-w-8, r.left))+'px'; lprev.style.top=(r.bottom+6+hh<=innerHeight-8? r.bottom+6 : Math.max(8, r.top-hh-6))+'px'; }
+if(!TOUCH){ document.addEventListener('mouseover',e=>{ const a=e.target.closest&&e.target.closest('a.lnk'); if(a===prevA) return; prevHide(); if(!a || sheet.classList.contains('history')) return; prevA=a; prevT=setTimeout(()=>prevShow(a),450); });
+  ['scroll','pointerdown','keydown'].forEach(t=>window.addEventListener(t,prevHide,{capture:true, passive:true})); }
 function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.parent=b.parent; d.col=b.col; } else d.fx=b.fx;
   if(!b.kind){ if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.html) d.html=b.html; }
   if(b.kind==='code'){ d.kind='code'; if(b.lang) d.lang=b.lang; d.wrap=!!b.wrap; d.num=!!b.num; if(b.cw) d.cw=b.cw; if(b.ch) d.ch=b.ch; if(b.open) d.open=true; if(b.title) d.title=b.title; }
@@ -1095,13 +1309,14 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
+function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
+  if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
   drawNote(n);
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function drawNote(n){ drawBlocks(n.blocks);
-  ttl.textContent=n.title; document.title=docTitle(n); roSync(); }
+  ttl.textContent=n.title; document.title=docTitle(n); roSync(); renderBacklinks(); }
 function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; makeAll(list); }
 function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }   // areas first: their blocks go inside
 /* ══ trash (docs/TRASH-PLAN.md): a deleted note keeps its record with `deleted` (ms) for TRASH_DAYS, then goes for good with its versions.
@@ -1109,7 +1324,7 @@ function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)
 const TRASH_DAYS=30, listed=n=>!n.deleted && !n.archived, trashed=n=>!!n.deleted, archived=n=>!n.deleted && !!n.archived;   // a trashed note keeps `archived`: a restore takes it back there
 const daysLeft=n=>Math.max(1, Math.ceil((n.deleted+TRASH_DAYS*864e5-now())/864e5));
 let section='notes';   // what the panel lists: 'notes', 'archive' or 'trash'
-const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashed : archived)) setSection('notes'); else renderList(); };   // an emptied section gives way to the notes
+const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashed : archived)) setSection('notes'); else renderList(); renderBacklinks(); };   // an emptied section gives way to the notes; a note that links here may have gone or come back
 const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||newNote();
 /* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
    The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
@@ -1156,11 +1371,11 @@ function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.i
   if(n===cur && busy(n)){ if(db.backend==='idb') vcapture(n.id, {title:r.title, blocks:r.blocks, updated:r.updated}, 'conflict'); if(!dirty) markDirty(); say(loc('tabs.conflict')); return; }
   if(busy(n)) return;
   Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
-  if(n===cur){ closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); }
+  if(n===cur){ closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); } else { liveLinks(sheet); renderBacklinks(); }   // another note may be renamed, or link here now
   renderList(); }
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n)) return;   // edits here keep the note: its next save writes it back
   notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
-  if(cur===n){ cur=null; openNote(firstNote()); } renderList(); storageUI(); }
+  if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); };
 async function syncTabs(){ if(!cur) return; const m=await storedNotes(); for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r); }
 
@@ -1185,7 +1400,7 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
   const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now()}); }
   if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
-  notes.sort((a,b)=>b.updated-a.updated); renderList(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
+  notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ const m=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) m.set(n.id,n); }   // localStorage fallback first, IndexedDB wins
   if(db.backend==='idb'){ try{ for(const n of await idb.all()) if(validNote(n)) m.set(n.id,n); }catch(_){} } return m; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
@@ -1225,7 +1440,7 @@ const nav={ stack:[], skip:0, busy:false, queue:[], skipT:null,
   flush(){ const q=this.queue; this.queue=[]; q.forEach(e=>{ if(this.stack.includes(e)) this.push(e); }); },
   onPop(e){ if(this.skip>0){ this.skip--; if(!this.skip){ clearTimeout(this.skipT); this.flush(); } return; } const d=(e.state && e.state.d)||0; this.busy=true; try{ while(this.stack.length>d){ const top=this.stack[this.stack.length-1]; try{ top.close(); }catch(_){} if(this.stack[this.stack.length-1]===top) this.stack.pop(); } } finally{ this.busy=false; } } };
 try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточний запис — основа без накладень (і після перезавантаження з «застарілим» станом)
-window.addEventListener('popstate',e=>nav.onPop(e));
+window.addEventListener('popstate',e=>{ nav.onPop(e); if(e.state && 'd' in e.state && hashNow) setHash(hashNow); });   // our own entry (an overlay, a link step): the address stays the open note's, before hashchange reads it
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
 function setSide(open, o={}){ if(!open) setMenu(false); if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
@@ -1316,7 +1531,7 @@ function resolve(fixed){
 let fullH=0;
 /* room below the lowest block: 5 rows, and on touch no less than the bottom panels + 8px (bar, «⋯» row, «Скасувати» toast), or revealCaret cannot lift a caret in the last line above them; set by layoutBottom, it only grows while the caret is in a field, so the page does not jump when the toast hides */
 let sheetRoom=0;
-function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); sheet.style.minHeight=Math.max(fullH, window.innerHeight, bottom+Math.max(5*G(), sheetRoom))+'px'; field(); }
+function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); bottom=placeBacklinks(bottom); sheet.style.minHeight=Math.max(fullH, window.innerHeight, bottom+Math.max(5*G(), sheetRoom))+'px'; field(); }
 function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
 
@@ -1330,7 +1545,8 @@ function make(d, focus){
   if(b.col===undefined) b.col=colOfX((b.fx||0)*cW(a), a, b); if(b.fx===undefined && !a) b.fx=xOf(b.col,null)/W();
   if(b.kind==='code') buildCode(b); else if(b.kind==='area') buildArea(b); else buildText(b);
   (a? a.abody : sheet).appendChild(b.el);
-  blocks.push(b); b.el.addEventListener('pointerdown',e=>e.stopPropagation()); drag(b, b.el.querySelector('.grip'));
+  blocks.push(b); b.el.addEventListener('pointerdown',e=>e.stopPropagation()); const grip=b.el.querySelector('.grip'); drag(b, grip);
+  grip.addEventListener('contextmenu',e=>{ if(e.defaultPrevented || TOUCH) return; e.preventDefault(); if(!ro() && !H.view) popMenu(grip, b.card, 'bm gm', blockMenu(b)); });   // the right button on ⋮⋮: the block's menu (on touch it is «⋯»); not when the button cancelled a drag
   const bar=b.el.querySelector('.cbar'); if(bar){ drag(b, bar, {hold:true, quiet:true, skip:e=>!!(e.target.closest('button,.lmenu,.cpick,.amenu') || (e.target.closest('.ctitle') && (e.pointerType==='mouse' || document.activeElement===e.target.closest('.ctitle'))))});   // шапка картки — ручка: мишею одразу (крім кнопок і назви), пальцем після утримання (назва теж, якщо не в правці)
     bar.addEventListener('contextmenu',e=>{ const t=e.target.closest('.ctitle'); if(!(t && document.activeElement===t)) e.preventDefault(); }); }
   resolve(b); update(); if(focus) focusBlock(b); return b;
@@ -1376,22 +1592,25 @@ function buildText(b){
   b.txt.addEventListener('focus',()=>{ b.el.classList.add('focus'); padChips(b.txt); });
   selHoldOn(b);
   const bm=b.el.querySelector('.bact'); bm.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); });   // ні курсора в текст, ні утримання
-  bm.addEventListener('click',()=>{ popMenu(bm, b.card, 'bm', [
-    {ico:ICO.copy, label:loc('block.copy'), act:()=>copyBlock(b)},
-    ...(selBlk===b? [] : [{ico:ICO_SEL, label:loc('block.select'), small:loc('block.select.hint'), act:()=>enterSel(b)}]),   // у режимі положення блок уже виділено
-    ...(b.parent? [{label:loc('block.pullOut'), small:loc('block.pullOut.hint'), act:()=>pullOut(b)}] : (areas().length? [{label:loc('block.moveInto'), small:loc('areas.count',{n:areas().length}), act:()=>pickArea(b)}] : [])),   // альтернатива перетягуванню
-    {label:loc('block.size'), small:loc('block.size.hint'), act:()=>sizeMenu(b)},
-    {ico:ICO.trash, label:loc('common.delete'), danger:true, act:()=>removeWithUndo(b)} ]); });
-  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
+  bm.addEventListener('click',()=>popMenu(bm, b.card, 'bm', blockMenu(b)));
+  b.txt.addEventListener('blur',()=>{ b.el.classList.remove('focus'); if(LP && LP.b===b) pickClose(); if(TOUCH){ const s=getSelection(); if(s && s.rangeCount && b.txt.contains(s.anchorNode)) s.removeAllRanges(); }   // на дотику виділення без курсора лишало б системні маркери й меню
     if(!blocks.includes(b)) return; if(!b.txt.textContent.replace(/\u200b/g,'').trim()) dropText(b); else { readTxt(); flushSave(); } });
   const readTxt=()=>{ const h=richOf(b.txt); b.html=hasRich(h)? h : ''; b.text=plainOf(h); return b.text; };   // з DOM: переноси рядків (<br>, <div>) → \n, стилі → b/i/u/s
-  b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); else if(e.inputType==='insertText' && e.data===' ') mdList(b.txt); if(!e.isComposing) padChips(b.txt); numberLists(b.txt); readTxt(); relayout(b); markDirty(); });   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
+  b.txt.addEventListener('input',e=>{ if(e.inputType==='insertText' && e.data==='`') backtickChip(b.txt); else if(e.inputType==='insertText' && e.data===' ') mdList(b.txt); if(!e.isComposing) padChips(b.txt); numberLists(b.txt); readTxt(); relayout(b); markDirty();   // padChips: після правки за чипом знову нульовий пробіл, порожній чип зникає
+    if(LP && LP.b===b) pickSync(); else if(/\[$/.test(e.data||'') && (linkQuery(b)||{}).q==='') pickOpen(b); });   // «[[» opens the link picker (typed or composed: phone keyboards)
   const fmt=cmd=>{ b.txt.focus(); histRec(b.txt,'cmd'); if(cmd==='code') toggleCode(b.txt); else if(cmd==='ul'||cmd==='ol') setList(b.txt,cmd); else { try{ document.execCommand(cmd,false,null); }catch(_){} } readTxt(); relayout(b); markDirty(); bubbleState(); };
   b.txt.addEventListener('dblclick',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && inCopyZone(c,e)) return; setTimeout(()=>{ expandToken(b.txt,e.clientX,e.clientY); placeBubble(); },0); });   // подвійний клік по іконці чипа — лише копіювання
   b.txt.addEventListener('pointerdown',e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)){ e.preventDefault(); e.stopPropagation(); copyChip(c); } });   // клік по іконці в кінці чипа — копіювання (і на дотику, без клавіатури); по тексту чипа — звичайний курсор
   ['mousedown','mouseup','click'].forEach(t=>b.txt.addEventListener(t,e=>{ const c=e.target.closest&&e.target.closest('code'); if(c && b.txt.contains(c) && inCopyZone(c,e)) e.preventDefault(); }));   // якщо браузер усе ж надішле «мишачі» події після скасованого pointerdown — курсор у блок не ставиться і виділення не починається
-  b.api={fmt};
+  b.api={fmt, changed:()=>{ padChips(b.txt); readTxt(); relayout(b); markDirty(); }};   // changed: the field was edited by code, not by typing
+  // a link chip: a click or a tap opens its target (Ctrl, ⌘ or the middle button — a new tab); the caret does not go into the text
+  let lnkDown=null;
+  b.txt.addEventListener('pointerdown',e=>{ const a=e.target.closest&&e.target.closest('a.lnk'); lnkDown=null; if(!a || !b.txt.contains(a) || e.button>1) return; e.preventDefault(); lnkDown={a, id:e.pointerId, x:e.clientX, y:e.clientY, t:now()}; },true);   // before the touch gesture: it sees the touch as handled
+  b.txt.addEventListener('pointerup',e=>{ const d=lnkDown; lnkDown=null; if(!d || e.pointerId!==d.id || now()-d.t>HOLD_MS || Math.abs(e.clientX-d.x)+Math.abs(e.clientY-d.y)>10) return; const a=e.target.closest&&e.target.closest('a.lnk'); if(a!==d.a) return;   // a hold is the position mode, not a tap
+    e.preventDefault(); linkGo(a.getAttribute('data-to'), {tab:e.button===1 || e.ctrlKey || e.metaKey}); });
+  ['mousedown','click','auxclick'].forEach(t=>b.txt.addEventListener(t,e=>{ if(e.target.closest&&e.target.closest('a.lnk')) e.preventDefault(); }));
   b.txt.addEventListener('keydown',e=>{
+    if(LP && LP.b===b && pickKey(e)) return;   // the link picker is open: arrows, Enter, Tab and Esc are its own
     if((e.ctrlKey||e.metaKey) && !e.altKey){ const k=hotkey(e); const cmd=(!e.shiftKey&&k==='b')?'bold':(!e.shiftKey&&k==='i')?'italic':(!e.shiftKey&&k==='u')?'underline':(e.shiftKey&&(k==='s'||k==='x'))?'strikeThrough':null;
       if(cmd){ e.preventDefault(); fmt(cmd); return; } if(!e.shiftKey && k==='e'){ e.preventDefault(); fmt('code'); return; }
       if(e.shiftKey && (e.code==='Digit7'||e.code==='Digit8')){ e.preventDefault(); fmt(e.code==='Digit7'? 'ol' : 'ul'); return; } }   // as in Google Docs and Slack; by key position, so any layout works
@@ -1411,6 +1630,7 @@ function buildText(b){
   b.txt.addEventListener('copy',clip); b.txt.addEventListener('cut',clip);
   // вставка: у порожній блок код стає блоком коду; інакше — простий текст
   b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); e.preventDefault(); if(!t) return;
+    const to=linkFromUrl(t); if(to){ histRec(b.txt,'cmd'); const a=linkInsert(b, to); chip(b, locA('paste.asLink'), locA('paste.keepUrl'), ()=>{ if(!a.isConnected) return; histRec(b.txt,'cmd'); a.replaceWith(document.createTextNode(t.trim())); b.api.changed(); }); return; }   // an address of a note here becomes a link
     const wasEmpty=!b.txt.textContent.trim();
     if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,locA('paste.asCode'),locA('paste.makeText'),()=>toText(nb)); return; }
     histRec(b.txt,'cmd'); document.execCommand('insertText',false,t); if(t.includes('\n') && b.txt.querySelector(':scope>[data-l]')){ repaint(b.txt); numberLists(b.txt); }   // lines pasted into a list item become items
@@ -1432,7 +1652,7 @@ function chip(b, label, btnLabel, onSwap){ sheet.querySelectorAll('.chip').forEa
 /* блок коду: замок («тільки читання») типово, копіювати можна завжди */
 function buildCode(b){
   b.el=el('div','blk is-code'); b.el.innerHTML=GRIP+'<div class="cblk locked">'+cardBar({lang:true, ph:locA('code.title.ph'), label:locA('code.title.label'),
-      overflow:[{cls:'num',title:locA('code.lineNumbers'),html:'#',pressed:false},{cls:'wrapb',title:locA('code.wrap'),html:ICO.wrap,pressed:false}],
+      overflow:[{cls:'num',title:locA('code.lineNumbers'),html:'#',pressed:false},{cls:'wrapb',title:locA('code.wrap'),html:ICO.wrap,pressed:false},{cls:'linkb',title:locA('link.copy'),html:ICO.link}],
       actions:[{cls:'copy',title:locA('code.copy.title'),html:ICO.copy+'<span>'+locA('common.copy')+'</span>'},{cls:'lock',title:locA('code.readOnly.title'),html:ICO.lockC+ICO.lockO,pressed:true}]})
     +'<pre class="code" spellcheck="false" aria-readonly="true" tabindex="0"><code data-ph="'+locA('code.placeholder')+'"></code></pre><div class="fade"></div><button class="more" hidden></button>'
     +RZ(locA('code.resize'))+'</div>';
@@ -1481,6 +1701,7 @@ function buildCode(b){
     copyB.innerHTML=(ok?ICO.check:ICO.copy)+'<span>'+locA(ok?'copy.done':'copy.failedShort')+'</span>'; copyB.classList.toggle('done',ok); clearTimeout(copyB._t); copyB._t=setTimeout(()=>{ copyB.innerHTML=ICO.copy+'<span>'+locA('common.copy')+'</span>'; copyB.classList.remove('done'); },1500); }
   lockB.addEventListener('click',()=>{ b.editing? lock() : unlock(); });
   copyB.addEventListener('click',copy);
+  card.querySelector('.linkb').addEventListener('click',()=>copyLink(cur.id+'/'+b.id));
   card.querySelector('.wrapb').addEventListener('click',e=>{ b.wrap=!b.wrap; card.classList.toggle('wrapped',b.wrap); e.currentTarget.setAttribute('aria-pressed',b.wrap); relayout(b); markDirty(); });
   card.querySelector('.num').addEventListener('click',e=>{ b.num=!b.num; card.classList.toggle('num',b.num); e.currentTarget.setAttribute('aria-pressed',b.num); relayout(b); markDirty(); });
   cardMore(card);
@@ -1620,9 +1841,11 @@ function buildArea(b){
   const closeAll=()=>{ closeMenu(); closePick(); };
   moreB.addEventListener('click',()=>{ if(menu){ closeMenu(); return; } closePick(); const n=blocks.filter(o=>o.parent===b.id).length;
     menu=document.createElement('div'); menu.className='amenu'; menu.setAttribute('role','menu');
-    menu.innerHTML='<button class="mi ungroup" role="menuitem" type="button">'+ICO.ungroup+locA('area.ungroup')+'<small>'+locA('area.ungroup.hint')+'</small></button>'
+    menu.innerHTML='<button class="mi lnkc" role="menuitem" type="button">'+ICO.link+locA('link.copy')+'</button>'
+      +'<button class="mi ungroup" role="menuitem" type="button">'+ICO.ungroup+locA('area.ungroup')+'<small>'+locA('area.ungroup.hint')+'</small></button>'
       +'<button class="mi del danger" role="menuitem" type="button">'+ICO.trash+(n? locA('area.deleteWith',{n}) : locA('area.delete'))+'<small>'+locA(n? 'area.delete.withContent' : 'area.delete.empty')+'</small></button>';   // кількість — в основному підписі (план 3.6)
     card.appendChild(menu); moreB.setAttribute('aria-expanded','true');
+    menu.querySelector('.lnkc').addEventListener('click',()=>{ closeMenu(); copyLink(cur.id+'/'+b.id); });
     menu.querySelector('.ungroup').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b); ungroup(b); offerUndo(loc('undo.ungrouped'), ()=>restoreArea(snap), {size:JSON.stringify(snap).length}); });
     menu.querySelector('.del').addEventListener('click',()=>{ closeMenu(); const snap=snapshot(b), name=b.title||loc('area.untitledLower'); remove(b); offerUndo(loc('undo.areaDeleted',{name})+(n? loc('undo.withBlocks',{n}) : ''), ()=>restoreArea(snap), {big:n>0, size:JSON.stringify(snap).length}); });   // з блоками — плашка без таймера
     menu.addEventListener('pointerdown',e=>e.stopPropagation()); const onDoc=e=>{ if(!menu.contains(e.target) && e.target!==moreB && !moreB.contains(e.target)) closeMenu(); }; document.addEventListener('pointerdown',onDoc,true); menu._onDoc=onDoc;
@@ -1704,6 +1927,14 @@ function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===ancho
   const onDoc=e=>{ if(!menu.contains(e.target) && !anchor.contains(e.target)) closePop(); }; document.addEventListener('pointerdown',onDoc,true);
   const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
   popOpen={menu,anchor,onDoc,onKey}; nav.open('menu', closePop); if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
+// the block's menu: «⋯» of a text block on touch, the right button on ⋮⋮ of any block. A code card and an area keep their other actions in their header
+function blockMenu(b){ const copy={ico:ICO.copy, label:loc('block.copy'), act:()=>copyBlock(b)}, link={ico:ICO.link, label:loc('link.copy'), act:()=>copyLink(cur.id+'/'+b.id)};
+  if(b.kind) return [copy, link];
+  return [copy, link,
+    ...(selBlk===b? [] : [{ico:ICO_SEL, label:loc('block.select'), small:loc('block.select.hint'), act:()=>enterSel(b)}]),   // у режимі положення блок уже виділено
+    ...(b.parent? [{label:loc('block.pullOut'), small:loc('block.pullOut.hint'), act:()=>pullOut(b)}] : (areas().length? [{label:loc('block.moveInto'), small:loc('areas.count',{n:areas().length}), act:()=>pickArea(b)}] : [])),   // альтернатива перетягуванню
+    {label:loc('block.size'), small:loc('block.size.hint'), act:()=>sizeMenu(b)},
+    {ico:ICO.trash, label:loc('common.delete'), danger:true, act:()=>removeWithUndo(b)} ]; }
 function removeWithUndo(b){ const d=serBlock(b), label=blockLabel(b), big=(b.text||'').trim().includes('\n'); remove(b); offerUndo(loc('undo.blockDeleted',{label}), ()=>{ if(byId(d.id)) return; make(d,false); markDirty(); }, {big, size:JSON.stringify(d).length}); }
 /* альтернативи перетягуванню з меню «⋯» блока (план 3.3/PR C): в область, з області, висота пресетом; усе скасовується зі стека */
 const areas=()=>blocks.filter(o=>o.kind==='area');
@@ -1728,6 +1959,7 @@ moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), '
   {label:loc('grid.title'), small: loc(sheet.classList.contains('nogrid')? 'common.off' : 'common.on'), act:()=>gridBtn.click()},
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
   {node:textStepper()},
+  ...(cur? [{ico:ICO.link, label:loc('link.copyNote'), act:()=>copyLink(cur.id)}] : []),
   ...(ro()? [] : [cur && cur.archived? {ico:ICO.back, label:loc('archive.unarchive'), act:()=>unarchive(cur)} : {ico:ICO.box, label:loc('archive.move'), act:()=>archiveNote(cur)}]),
   ...(ro()? [] : [{ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()}]) ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
@@ -1764,9 +1996,9 @@ function placeBubble(){ const b=curTextBlock(); if(!b){ if(!bubble.hidden){ bubb
 document.addEventListener('selectionchange',()=>{ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); });
 document.addEventListener('focusin',()=>{ if(TOUCH){ clearTimeout(placeBubble._t); placeBubble._t=setTimeout(placeBubble,60); } });
 bubble.addEventListener('pointerdown',e=>e.preventDefault()); bubbleMore.addEventListener('pointerdown',e=>e.preventDefault());   // не втрачати виділення
-/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, списки, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю.
+/* панель на вузькому екрані чи при великому тексті: кнопки за пріоритетом («Готово», «Блок», B, I, списки, посилання, U, S, </>), молодші йдуть у «⋯» — ряд над панеллю; рахуємо за виміряною шириною, не за кількістю.
    The list buttons show only for a selection over several lines, and there they matter more than U; the two go to «⋯» together */
-const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,ul:4,ol:4,underline:5,strikeThrough:6,code:7};
+const BUBBLE_ORDER=[...bubble.children], PRI={done:0,new:1,bold:2,italic:3,ul:4,ol:4,link:4.5,underline:5,strikeThrough:6,code:7};
 function fitBubble(){ const more=bubble.querySelector('.more'); BUBBLE_ORDER.forEach(el=>bubble.appendChild(el)); bubbleMore.hidden=true; more.hidden=true; more.setAttribute('aria-expanded','false'); LSEP.hidden=LIST_BTNS.every(x=>x.hidden);
   const vis=()=>[...bubble.children].filter(e=>!e.hidden && getComputedStyle(e).display!=='none'), width=()=>{ const v=vis(); return v.length? v[v.length-1].getBoundingClientRect().right-v[0].getBoundingClientRect().left : 0; }, avail=window.innerWidth-12;
   if(width()<=avail) return; more.hidden=false;
@@ -1788,7 +2020,8 @@ async function copyBlock(b, grip){ const ok=await copyBoth(blockText(b), blockHt
 const bubbleAct=async e=>{ const a=e.target.closest('button[data-act]'); if(!a) return false; const act=a.dataset.act;
   if(act==='more'){ bubbleMore.hidden=!bubbleMore.hidden; a.setAttribute('aria-expanded',String(!bubbleMore.hidden)); layoutBottom(); revealCaret(); return true; }
   if(act==='done'){ const f=document.activeElement; if(f&&f.blur) f.blur(); const sl=getSelection(); if(sl) sl.removeAllRanges(); placeBubble(); return true; }
-  if(act==='new'){ if(bubbleBlk) createAfter(bubbleBlk); return true; } return false; };
+  if(act==='new'){ if(bubbleBlk) createAfter(bubbleBlk); return true; }
+  if(act==='link'){ if(bubbleBlk) linkStart(bubbleBlk); return true; } return false; };
 bubbleMore.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
 bubble.addEventListener('click',async e=>{ if(await bubbleAct(e)) return; const act=e.target.closest('button[data-act="copy"]'); if(act){ const ok=await copySelection(); const sp=act.querySelector('span'); sp.textContent=loc(ok? 'copy.done' : 'copy.failedShort'); act.classList.add('done'); setTimeout(()=>{ sp.textContent=loc('common.copy'); act.classList.remove('done'); },1200); return; }
   const bt=e.target.closest('button[data-cmd]'); if(!bt||!bubbleBlk) return; bubbleBlk.api.fmt(bt.dataset.cmd); });
@@ -2151,7 +2384,10 @@ async function start(){
   purgeOld(); setInterval(purgeOld, 36e5);
   if(!notes.some(listed)) newNote();
   notes.sort((a,b)=>b.updated-a.updated);
-  renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted); openNote(byId(tabCur.get())||byId(S.current)||firstNote(), {restore:true}); field(); storageUI();
+  const how=((performance.getEntriesByType && performance.getEntriesByType('navigation')[0])||{}).type;   // a reload keeps this tab's note (its address names it anyway)
+  renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload'? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins
+  openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
+  if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();

@@ -23,7 +23,7 @@ ok('0 область з двома блоками, все збережено', (
 // 1 меню «⋯»
 await area().locator('.ablk').hover(); await area().locator('.cb.more').click(); await pg.waitForTimeout(120);
 const menu=area().locator('.amenu');
-ok('1a «⋯» відкриває меню з двома пунктами: розгрупувати і видалити (з кількістю блоків)', (await menu.count())===1 && (await menu.locator('.mi').count())===2 && /Розгрупувати/.test(await menu.innerText()) && /Видалити область і 2 блоки/.test(await menu.innerText()) && (await area().locator('.cb.more').getAttribute('aria-expanded'))==='true');
+ok('1a «⋯» відкриває меню з трьома пунктами: посилання, розгрупувати і видалити (з кількістю блоків)', (await menu.count())===1 && (await menu.locator('.mi').count())===3 && /Копіювати посилання/.test(await menu.innerText()) && /Розгрупувати/.test(await menu.innerText()) && /Видалити область і 2 блоки/.test(await menu.innerText()) && (await area().locator('.cb.more').getAttribute('aria-expanded'))==='true');
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(100);
 ok('1b Esc закриває меню', (await menu.count())===0 && (await area().locator('.cb.more').getAttribute('aria-expanded'))==='false');
 await area().locator('.cb.more').click(); await pg.waitForTimeout(100); await pg.mouse.click(400,820); await pg.waitForTimeout(100);
