@@ -257,6 +257,7 @@
   "undo.menu": "Undo: {msg}",
   "undo.untilReload": "until reload",
   "undo.blockDeleted": "Block «{label}» deleted",
+  "undo.blockPasted": "Block «{label}» pasted",
   "undo.blockMoved": "Block «{label}» moved",
   "undo.blockMovedInto": "Block «{label}» moved into the area «{area}»",
   "undo.blockPulledOut": "Block «{label}» moved out of the area",
