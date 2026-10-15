@@ -1632,7 +1632,7 @@ function buildText(b){
   b.txt.addEventListener('paste',e=>{ const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); e.preventDefault(); if(!t) return;
     const to=linkFromUrl(t); if(to){ histRec(b.txt,'cmd'); const a=linkInsert(b, to); chip(b, locA('paste.asLink'), locA('paste.keepUrl'), ()=>{ if(!a.isConnected) return; histRec(b.txt,'cmd'); a.replaceWith(document.createTextNode(t.trim())); b.api.changed(); }); return; }   // an address of a note here becomes a link
     const wasEmpty=!b.txt.textContent.trim();
-    if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); chip(nb,locA('paste.asCode'),locA('paste.makeText'),()=>toText(nb)); return; }
+    if(wasEmpty && looksLikeCode(t)){ const nb=toCode(b,t); pastedUndo(nb); chip(nb,locA('paste.asCode'),locA('paste.makeText'),()=>toText(nb)); return; }
     histRec(b.txt,'cmd'); document.execCommand('insertText',false,t); if(t.includes('\n') && b.txt.querySelector(':scope>[data-l]')){ repaint(b.txt); numberLists(b.txt); }   // lines pasted into a list item become items
     b.text=readTxt(); if(wasEmpty && maybeCode(t)) chip(b,locA('paste.asText'),locA('paste.makeCode'),()=>toCode(b,b.text)); });
   /* ручка розміру (resizer): фіксована ширина в клітинках і мінімальна висота в рядах; текст завжди видно повністю */
@@ -1749,7 +1749,7 @@ function buildCode(b){
    Повертають по одному: кнопка плашки, Ctrl+Z поза полями, «Скасувати: …» у меню «⋯» шапки. Перехід до іншої нотатки лише ховає плашку — стек нотатки лишається. Пересування стрілками — тихий запис, без плашки. */
 const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStacks=new Map(); let undoT=null, undoRaf=0;
 function undoStack(id){ id=id||(cur&&cur.id); if(!undoStacks.has(id)) undoStacks.set(id,[]); return undoStacks.get(id); }
-function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now()}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); }
+function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now()}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
 function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st) bytes+=e.size; if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES)) return; oldest.shift(); } }   // найстаріші записи витісняються першими, з будь-якої нотатки
 function showUndo(msg, big){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
 function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
@@ -1936,6 +1936,8 @@ function blockMenu(b){ const copy={ico:ICO.copy, label:loc('block.copy'), act:()
     {label:loc('block.size'), small:loc('block.size.hint'), act:()=>sizeMenu(b)},
     {ico:ICO.trash, label:loc('common.delete'), danger:true, act:()=>removeWithUndo(b)} ]; }
 function removeWithUndo(b){ const d=serBlock(b), label=blockLabel(b), big=(b.text||'').trim().includes('\n'); remove(b); offerUndo(loc('undo.blockDeleted',{label}), ()=>{ if(byId(d.id)) return; make(d,false); markDirty(); }, {big, size:JSON.stringify(d).length}); }
+// a block made by a paste: a silent entry, so Ctrl+Z takes the block away. The chip swaps text and code under the same id; once edited, it goes with the Undo toast that brings the edit back
+function pastedUndo(b){ const id=b.id, was=b.text; offerUndo(loc('undo.blockPasted',{label:blockLabel(b)}), ()=>{ const x=byId(id); if(!x) return; if(x.text===was && !x.html) remove(x); else removeWithUndo(x); }, {quiet:true}); }
 /* альтернативи перетягуванню з меню «⋯» блока (план 3.3/PR C): в область, з області, висота пресетом; усе скасовується зі стека */
 const areas=()=>blocks.filter(o=>o.kind==='area');
 function areaName(a){ if(a.title) return a.title; const all=areas(); return all.length>1? loc('area.untitledN',{n:all.indexOf(a)+1}) : loc('area.untitled'); }
@@ -2093,7 +2095,7 @@ areaBtn.addEventListener('click',()=>{ closeHist(); const row=Math.max(2, ...liv
 document.addEventListener('paste',e=>{ if(H.view || ro()) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
-  const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty();
+  const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty(); pastedUndo(b);
   if(isCode) chip(b,locA('paste.asCode'),locA('paste.makeText'),()=>toText(b)); else if(maybeCode(t)) chip(b,locA('paste.asText'),locA('paste.makeCode'),()=>toCode(b,b.text));
   b.el.scrollIntoView({block:'nearest'}); });
 
