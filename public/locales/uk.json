@@ -257,6 +257,7 @@
   "undo.menu": "Скасувати: {msg}",
   "undo.untilReload": "до перезавантаження",
   "undo.blockDeleted": "Блок «{label}» видалено",
+  "undo.blockPasted": "Блок «{label}» вставлено",
   "undo.blockMoved": "Блок «{label}» пересунуто",
   "undo.blockMovedInto": "Блок «{label}» перенесено в область «{area}»",
   "undo.blockPulledOut": "Блок «{label}» винесено з області",
