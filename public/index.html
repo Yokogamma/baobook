@@ -625,7 +625,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="backdrop" id="backdrop"></div>
 
   <main class="main">
-    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button></span></div></div>
+    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button><button class="fbtn" id="roExport" type="button" hidden data-i18n="lock.export"></button><button class="fbtn" id="roReload" type="button" hidden data-i18n="lock.reload"></button></span></div></div>
     <header class="top">
       <div class="left">
         <button class="tb" id="sideBtn" data-i18n-attr="title:panel.label" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -722,7 +722,7 @@ const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubb
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
-const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge');
+const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const TEXT_CW=26;                                   // a text block without a set width wraps at 26 cells (624px): about 75 characters, the text column of an A4 page
@@ -839,32 +839,59 @@ const store={
 const NK='sheet:note:', SK='sheet:settings';
 /* ══ сховище нотаток: IndexedDB (запас місця, асинхронно); localStorage — запасний варіант і місце для налаштувань ══ */
 const IDB_NAME='sheet';
+/* ══ the database version is the data format (docs/SYNC-PLAN.md, PR 0): this code writes v2. The database opens without a version, so a newer
+   app's data (a larger version, e.g. after rolling the site back) still opens, but only to view and export: LOCK stops every write, the
+   localStorage fallback included. On a new device that open makes an empty v1, and the stores come with v2.
+   LOCK: null; 'newer' (the data is newer than this code); 'updated' (another tab upgraded the database while this one was open);
+   'blocked' (another tab keeps this one from creating the stores) ══ */
+const IDB_VER=2, IDB_STORES=['notes','versions','blobs'];
+let LOCK=null;
 const idb={ db:null,
-  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB')); let r; try{ r=indexedDB.open(IDB_NAME,2); }catch(e){ return rej(e); }
-    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
-      if(!d.objectStoreNames.contains('versions')){ const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
-      if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']}); };   // тіла блоків за хешем вмісту
-    r.onsuccess=()=>{ idb.db=r.result; idb.db.onversionchange=()=>{ idb.db.close(); idb.db=null; }; idb.db.onclose=()=>{ idb.db=null; }; res(); };
-    r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error('blocked')); }); },
-  async run(mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
+  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
+    const go=v=>{ let r; try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
+      r.onupgradeneeded=()=>{ if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('versions')){ const s=d.createObjectStore('versions',{keyPath:'id'}); s.createIndex('note_t',['note','t']); s.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
+        if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']}); };   // тіла блоків за хешем вмісту
+      r.onsuccess=()=>{ const d=r.result;
+        if(d.version>IDB_VER) LOCK=LOCK||'newer';   // checked first, before the fallback copies move or anything is cleaned up
+        else if(!LOCK && IDB_STORES.some(s=>!d.objectStoreNames.contains(s))){ d.close(); return go(Math.max(d.version+1, IDB_VER)); }   // a new device (an empty v1 from the open without a version) or a damaged database: create what is missing
+        idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
+      r.onerror=()=>{ if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
+      r.onblocked=()=>{ LOCK=LOCK||'blocked'; rej(new Error('blocked')); }; };
+    go(0); }); },
+  async run(mode,fn){ if(mode==='readwrite' && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
-  async tx(stores,mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
+  async tx(stores,mode,fn){ if(mode==='readwrite' && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q&&q.result!==undefined? q.result : q); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? loc('save.reason.full') : loc('save.reason.error',{name:n||loc('save.reason.unknown')}); };
+/* a fallback copy (localStorage, written when IndexedDB refused a save) never goes silently: one that differs from the stored note
+   is kept as a note of its own. fbPut → the notes to store for one fallback copy n, given the stored one ex */
+const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);
+const backupOf=n=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});
+const fbPut=(ex,n)=>!ex? [n] : noteSig(ex)===noteSig(n)? [] : (n.updated||0)>(ex.updated||0)? [n, backupOf(ex)] : [backupOf(n)];
+const FELL=new Set();   // notes this tab wrote to the fallback: its next IndexedDB save of the same note supersedes that copy
 const db={ backend:'local',
-  // старт: відкриваємо IndexedDB; нотатки з localStorage (так зберігала перша версія) переносимо (новіша копія перемагає) і прибираємо, щоб не було двох сховищ
+  // at start: open IndexedDB, move the notes from localStorage (the fallback, and where the first version kept them) and drop their keys, so there are no two stores. Nothing moves while LOCK
   async init(){ try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; return; }
-    const keys=store.keys(NK); if(!keys.length) return; let have; try{ have=await idb.all(); }catch(_){ return; } const byId=new Map(have.map(n=>[n.id,n]));
-    for(const k of keys){ const n=store.get(k); if(validNote(n)){ const ex=byId.get(n.id); if(!ex || (n.updated||0)>(ex.updated||0)){ try{ await idb.put(n); }catch(_){ continue; } } } store.del(k); } },
+    const keys=store.keys(NK); if(!keys.length || LOCK) return; let have; try{ have=await idb.all(); }catch(_){ return; } const byId=new Map(have.map(n=>[n.id,n]));
+    for(const k of keys){ const n=store.get(k); if(validNote(n)){ try{ for(const x of fbPut(byId.get(n.id), n)) await idb.put(x); }catch(_){ continue; } } store.del(k); } },
   async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return store.keys(NK).map(k=>store.get(k)).filter(validNote); },
-  async save(n){ if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null; if(db.backend==='idb'){ try{ await idb.put(n); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
-    const e2=store.put(NK+n.id,n); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; },
-  async remove(id){ store.del(NK+id); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
+  async save(n){ if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
+    if(db.backend==='idb'){ try{ await idb.put(n); if(FELL.delete(n.id)) store.del(NK+n.id); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
+    if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
+    const e2=store.put(NK+n.id,n); if(!e2 && db.backend==='idb') FELL.add(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; },
+  async remove(id){ if(LOCK) return; store.del(NK+id); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
   settings(){ return store.get(SK,{})||{}; },
   setSettings(p){ const s={...db.settings(),...p}; store.set(SK,s); return s; }   // merge into what is stored now: another tab may have saved its own settings since this one started
 };
+/* another tab opens the database with a larger version (a newer app) or deletes it. A newer app: write what is on the screen while the
+   connection is still open (close() waits for those writes), then close and stay view-only, with whatever did not get written exportable.
+   A delete, or an upgrade by an app of this same version: close and open again on the next write */
+function idbLost(e){ const d=idb.db, newer=!!e && e.newVersion!=null && e.newVersion>IDB_VER;
+  if(newer && !LOCK){ try{ retrySave(); }catch(_){} LOCK='updated'; }
+  if(d) d.close(); idb.db=null; if(newer) lockUI(); }
 /* ══ версії нотаток (VERSIONS-PLAN, PR 1: лише сховище, без інтерфейсу) ═══════════════════════════════════════
    versions: {id, note, t (час вмісту), w (час запису), reason: base|auto|import|manual|restore, name?, title, sig, from?, size, sum:{ch,add,del,mv,ttl}, blocks:[запис маніфесту…]}
    blobs: {note, h, s (тіло: html з форматуванням, інакше text; код — код), r (1 = html), z (байти)}; тіло з тим самим хешем пишеться один раз; колізія → ключ h~1.
@@ -922,7 +949,7 @@ function vsweep(){ if(vsweeping) return vsweeping; vsweeping=(async()=>{ try{ co
     for(const v of left){ if(size<=budget*0.9) break; if(v.name || newest.get(v.note)===v) continue; if(!goneBy.has(v.note)) goneBy.set(v.note,[]); goneBy.get(v.note).push(v); size-=v.size||0; }   // найстаріші без імені, крім найновішої кожної нотатки
     for(const [note,gone] of goneBy){ const ids=new Set(gone.map(v=>v.id)); await vdelete(note, gone, left.filter(v=>v.note===note && !ids.has(v.id))); } }
   catch(e){ DEBUG.vers.errors++; } finally{ vsweeping=null; } })(); return vsweeping; }
-function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb') return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due) saveS({versSwept:now()}); }).catch(()=>{}); };
+function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb' || LOCK) return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due) saveS({versSwept:now()}); }).catch(()=>{}); };
   if(window.requestIdleCallback) requestIdleCallback(go,{timeout:3000}); else setTimeout(go,3000); }   // на старті: раз на добу прорідження й бюджет, інакше лише підрахунок розміру
 Object.assign(DEBUG.vers,{ force:(reason,name)=>{ if(!cur) return Promise.resolve(); flushSave(); return vcapture(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated},reason||'manual',name,undefined,{force:true}); },
   list:note=>vlist(note||(cur&&cur.id)), bodies:note=>vbodies(note||(cur&&cur.id)), thin:note=>vthin(note||(cur&&cur.id)), sweep:()=>vsweep(), last:note=>VLAST.get(note||(cur&&cur.id)), queue:note=>VQ.get(note||(cur&&cur.id))||Promise.resolve(), budget:()=>vbudget() });
@@ -934,7 +961,7 @@ const TK='sheet:tab-current', tabCur={ get(){ try{ return sessionStorage.getItem
 const saveS=p=>{ Object.assign(S,p); db.setSettings(p); };   // only the keys this tab changed, never its whole copy
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
-function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); writeNote(n); return n; }
+function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); if(!LOCK) writeNote(n); return n; }   // view-only: an empty note to show, never stored
 function lines(n){ const rowOf=b=>{ if(!b.parent) return b.row; const p=n.blocks.find(x=>x.id===b.parent); return (p? p.row : 0)+0.5+b.row*1e-3; };   // діти області — одразу після неї
   return [...n.blocks].sort((a,b)=>(rowOf(a)-rowOf(b))||((a.fx||0)-(b.fx||0))).flatMap(b=>((b.kind==='code'||b.kind==='area')&&b.title? [b.title] : []).concat((b.text||'').split('\n'))).map(l=>l.trim()).filter(Boolean); }
 function noteText(n){ return lines(n).join('\n'); }
@@ -1302,7 +1329,7 @@ function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflig
     saveUI(); storageUI(); if(r.ok && db.backend==='idb') vafter(n); }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
 function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n); } saveUI(); }
-function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(!k) return;
+function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(LOCK) roSync(); if(!k) return;
   const names=[...unsaved.keys()].map(id=>{ const x=notes.find(y=>y.id===id); return x? '«'+titleOf(x)+'»' : ''; }).filter(Boolean), first=unsaved.get(cur&&unsaved.has(cur.id)? cur.id : [...unsaved.keys()][0]);
   saveErrMsg.innerHTML='<b>'+escHtml(loc('save.failedReason',{reason:first.reason}))+'.</b> '+escHtml(k===1? loc('save.unsavedOne',{name:names[0]}) : loc('save.unsavedMany',{n:k, names:names.join(', ')}))+' '+escHtml(loc('save.memoryOnly')); }
 saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('click',()=>exportAll()); saveWarn.addEventListener('click',()=>{ setSide(true); saveErr.scrollIntoView({block:'nearest'}); });
@@ -1328,34 +1355,39 @@ const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashe
 const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||newNote();
 /* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
    The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
-async function delNote(n){ if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
+async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
   if(!notes.includes(n) || n.deleted) return;   // another tab deleted it meanwhile
   if(bare){ purgeNote(n); return; }
   const was=cur===n; n.deleted=now(); n.updated=now(); writeNote(n); if(was) openNote(firstNote()); relist(); storageUI();
   offerUndo(loc('trash.moved',{title:titleOf(n)}), ()=>restoreNote(n, was)); }
-function restoreNote(n, open){ if(!notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
+function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
-function purgeNote(n){ notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+function purgeNote(n){ if(LOCK) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); }
-async function purgeAsk(n){ if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
-function purgeOld(){ const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
+async function purgeAsk(n){ if(held()) return; if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
+function purgeOld(){ if(LOCK) return; const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
 function setSection(s){ if(section===s) return; section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
-function archiveNote(n){ if(!notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n);
+function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n);
   if(was) openNote(firstNote()); renderList(); storageUI(); offerUndo(loc('archive.moved',{title:titleOf(n)}), ()=>unarchive(n, was)); }
-function unarchive(n, open){ if(!notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n);
+function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n);
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
-trashEmpty.addEventListener('click',async()=>{ const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
+trashEmpty.addEventListener('click',async()=>{ if(held()) return; const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
-const ro=()=>!!(cur && cur.deleted);
+const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
 /* the strip under the header: a trashed note is read-only, an archived one only says where it is */
-function roSync(){ const r=ro(), a=!r && !!(cur && cur.archived); sheet.inert=r; ttl.contentEditable=r? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); roStrip.hidden=!r && !a; roPurge.hidden=!r;
-  if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
+function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived); sheet.inert=r; ttl.contentEditable=r? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
+  roStrip.hidden=!r && !a; roPurge.hidden=!r || L; roRestore.hidden=L; roExport.hidden=!L; roReload.hidden=!L;
+  if(L){ roMsg.textContent=loc(LOCK==='newer'? 'lock.newer' : LOCK==='blocked'? 'lock.blocked' : unsaved.size? 'lock.unsaved' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
+  else if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
 roRestore.addEventListener('click',()=>{ if(!cur) return; if(cur.deleted) restoreNote(cur, true); else unarchive(cur); }); roPurge.addEventListener('click',()=>{ if(cur) purgeAsk(cur); });
-newBtn.addEventListener('click',()=>{ flushSave(); setSection('notes'); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
+roExport.addEventListener('click',()=>exportAll({hist:true})); roReload.addEventListener('click',()=>location.reload());   // view-only: everything this tab has, the history as stored
+function held(){ if(!LOCK) return false; say(loc('lock.say')); return true; }   // an action that would write, while the data is view-only
+function lockUI(){ roSync(); saveUI(); renderList(); storageUI(); fabSync(); }
+newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection('notes'); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
 /* ══ other tabs: every tab keeps its notes in memory, so a save or a delete in one tab is sent to the others, and a tab never writes an old copy over a newer one ══
    A note this tab has no unwritten edits of takes the other tab's copy (the open one is redrawn in place). If the open note has unwritten edits here,
@@ -1387,8 +1419,8 @@ let persistAsked=false;
 function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
 const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
-async function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
-  if($('exportHist').checked && db.backend==='idb'){ const h=await historyOf(); if(h) data.history=h; }   // older versions of the app ignore the field
+async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
+  if((o.hist || $('exportHist').checked) && db.backend==='idb'){ const h=await historyOf(); if(h) data.history=h; }   // older versions of the app ignore the field
   const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ saveS({lastExport:now()}); storageUI(); };
   const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
   try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:loc('export.shareTitle')}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
@@ -1410,7 +1442,7 @@ function applySettings(s){ if(!s || typeof s!=='object') return false; const p={
   const any=Object.keys(p).length>0; if(any) saveS(p); return any; }
 exportBtn.addEventListener('click',exportAll);
 importBtn.addEventListener('click',()=>importFile.click());
-importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
+importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f || held()) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
   const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say(loc('import.notExport')); return; }
   const r=await importNotes(list, Array.isArray(data)? null : data.settings), hv=Array.isArray(data)? 0 : await importHistory(data.history);
   say(loc('import.done',{n:r.added, updated:r.updated, skipped:r.skipped})+(r.failed? loc('import.failed',{n:r.failed}) : '')+(r.settings? loc('import.settings') : '')+(hv? loc('import.history',{n:hv}) : '')); });
@@ -2379,7 +2411,8 @@ function textStepper(){ const d=document.createElement('div'); d.className='mi-s
 async function start(){
   await db.init(); notes=await db.all(); vstart();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-  if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
+  if(LOCK) for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) for(const x of fbPut(notes.find(y=>y.id===n.id), n)){ const i=notes.findIndex(y=>y.id===x.id); if(i<0) notes.push(x); else notes[i]=x; } }   // view-only: the fallback copies show and export, in memory
+  if(!notes.length && !LOCK){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
   if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') saveS({spell:true});

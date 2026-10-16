@@ -69,6 +69,8 @@ One-time setup of the production Worker in the Cloudflare dashboard: create the 
 
 Notes live in the IndexedDB database `sheet` (stores `notes`, `versions`, `blobs`); settings live in localStorage under `sheet:settings` (the text size fields `textSys`, `textSheet`, `textUi` are optional and stay on the device). The names come from «Чистий аркуш» and are kept on purpose, because renaming storage needs a migration. Export files look like `{app, format: 1, exported, settings, notes}`.
 
+The database opens without a fixed version. Data written by a newer version of the app (a larger database version, for example after the site was rolled back) opens view-only: notes can be read and exported, nothing is written. If another tab upgrades the database, the open tab writes what it has first and then stays view-only too. A copy in the localStorage fallback that differs from the stored note is kept as a separate note «… (резервна копія)».
+
 ## History
 
 The code was extracted from [Yokogamma/mockups](https://github.com/Yokogamma/mockups) (folder `sheet/`) on 2026-10-08 together with its commit history. See [docs/HISTORY.md](docs/HISTORY.md).

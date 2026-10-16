@@ -52,7 +52,7 @@ Moving out of `mockups`, with no new features. Steps:
 - **Trash and archive (`docs/TRASH-PLAN.md`):** PR 1 (the in-app `ask()` dialog instead of `confirm()`, a broom for «Очистити аркуш», undo after clearing) PR 2 (a 30-day trash, read-only view, restore, delete forever) and PR 3 (the archive: a section without a time limit, editable notes, a search group) are done.
 - **Links between notes (`docs/LINKS-PLAN.md`):** done: `[[` and the link button, links to notes and to blocks, «Копіювати посилання», following with «back», the address of the open note, the notes that link here, the hover preview.
 - **Secret links with Matamata:** A0 → A1 → A2; the plan lives in the private `payee-private-docs`.
-- **Sync and sign-in (`docs/SYNC-PLAN.md`):** waiting for the owner's Firebase config and answers.
+- **Sync and sign-in (`docs/SYNC-PLAN.md`):** plan approved on 2026-10-16 after five review rounds. PR 0 (storage groundwork: opening without a fixed version, view-only mode for newer data, fallback copies kept) goes to production on its own first; then PR 1 (sync core) to PR 5. The owner's Firebase setup (section 6 of the plan) is needed for PR 3.
 
 ## After the move
 
