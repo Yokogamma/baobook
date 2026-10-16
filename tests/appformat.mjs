@@ -32,6 +32,10 @@ const FAILS=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototy
   if(this.name==='notes' && (f==='all' || (f==='backup' && v && /резервна копія/.test(v.title||'')))) throw new DOMException('test failure','UnknownError');
   if(this.name==='notes' && f==='slow'){ const st=this, end=Date.now()+1500, r=put.apply(this, arguments); const spin=()=>{ if(Date.now()<end){ const q=st.count(); q.onsuccess=spin; } }; spin(); return r; }
   return put.apply(this, arguments); }; };
+// localStorage refusing the backup copy of a note (as when it is full): __lsfail = 'backup'
+const LSFAIL=()=>{ const set=Storage.prototype.setItem; Storage.prototype.setItem=function(k,v){
+  if(String(k).startsWith('sheet:note:') && this.getItem('__lsfail')==='backup' && /резервна копія/.test(String(v))) throw new DOMException('full','QuotaExceededError');
+  return set.apply(this, arguments); }; };
 const bigV3=T=>new Promise(res=>{ const r=indexedDB.open('sheet',3); r.onupgradeneeded=()=>{ const d=r.result;
     d.createObjectStore('notes',{keyPath:'id'}); const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t');
     d.createObjectStore('blobs',{keyPath:['note','h']}); d.createObjectStore('sync',{keyPath:'k'}); };
@@ -254,17 +258,41 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('8c the export carries the three notes', data.notes.length===3 && has(data.notes,/стара локальна/) && has(data.notes,/новіша з резерву/) && has(data.notes,/тільки тут/));
   ok('8d no page errors', !pg.errs.length); await ctx.close(); }
 
+/* ── 8e. without IndexedDB, and the backup of the older copy does not fit: both copies stay, the plain key keeps the older one through an edit ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); await ctx.addInitScript(LSFAIL); const pg=await fresh(ctx);
+  await go(pg,SITE+'blank.html');
+  const T=Date.now();
+  await pg.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x3',{id:'x3',title:'Третій',blocks:[{id:'a',fx:0.1,row:2,text:'текст А'}],created:T-9e5,updated:T-5000});
+    put('x3~tabq~5',{id:'x3',title:'Третій',blocks:[{id:'a',fx:0.1,row:2,text:'текст Б'}],created:T-9e5,updated:T-100});
+    localStorage.setItem('__lsfail','backup'); }, T);
+  await go(pg,SITE); await ready(pg);
+  const items=await pg.locator('#list .item').allInnerTexts(), plain=()=>pg.evaluate(()=>localStorage.getItem('sheet:note:x3'));
+  ok('8e the backup could not be stored: both keys stay and the list shows the newer copy and «Третій (резервна копія)» of the older', /текст А/.test(await plain()) && (await fbKeys(pg)).some(([k])=>k==='sheet:note:x3~tabq~5') && items.some(t=>/Третій/.test(t) && !/резервна/.test(t)) && items.some(t=>/Третій \(резервна копія\)/.test(t)));
+  await pg.locator('#list .item').filter({hasText:'текст Б'}).first().click(); await pg.waitForTimeout(200);
+  await typeAt(pg,950,300,'правка Б'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
+  const keys=await fbKeys(pg);
+  ok('8f an edit of the newer copy goes under a key of its own; the plain key still holds the older text', /текст А/.test(await plain()) && keys.some(([k,v])=>/~/.test(k) && k!=='sheet:note:x3~tabq~5' && /правка Б/.test(v)));
+  await pg.locator('#setBtn').click(); const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#exportBtn').click()]); const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
+  ok('8g the export carries both: the older text and the edit', has(data.notes,/текст А/) && has(data.notes,/правка Б/));
+  await pg.evaluate(()=>localStorage.removeItem('__lsfail')); await pg.reload(); await ready(pg);
+  const k2=await fbKeys(pg);
+  ok('8h once there is room, the next start joins them: no fallback keys left, x3 has the edit, the older text is kept as a note of its own', !k2.some(([k])=>/~/.test(k)) && k2.some(([k,v])=>k==='sheet:note:x3' && /правка Б/.test(v)) && k2.some(([k,v])=>k!=='sheet:note:x3' && /текст А/.test(v) && /резервна копія/.test(v)));
+  ok('8i no page errors', !pg.errs.length); await ctx.close(); }
+
 /* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // an empty v1 held open: the start waits for it
   await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'});
-  await a.locator('#newBtn').click(); await a.waitForTimeout(400);
-  ok('9 «Нова» during the wait wrote nothing to localStorage', !(await fbKeys(a)).length);
+  await a.locator('#newBtn').click(); await a.mouse.click(500,400); await a.keyboard.type('під час запуску'); await a.waitForTimeout(400);
+  ok('9 during the wait «Нова» makes no note, the sheet and the title take no text, nothing goes to localStorage', !(await fbKeys(a)).length && !/під час запуску/.test(await sheetText(a)) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false' && !(await a.locator('#list .item').count()));
   await a.waitForTimeout(3600);
   ok('9b once the block lasts, the tab is view-only and still nothing went to the fallback', /Закрийте інші вкладки Baobook/.test(await strip(a)) && !(await fbKeys(a)).length);
+  ok('9c nothing typed during the wait was taken and lost: nothing waits to be saved (plain «Експорт»)', /^Експорт$/.test((await a.locator('#roExport').innerText()).trim()));
   await b.evaluate(()=>window.__hold.close());
-  ok('9c no page errors', !a.errs.length); await ctx.close(); }
+  ok('9d no page errors', !a.errs.length); await ctx.close(); }
 
 /* ── 10. a record under a note key that is not a note stays where it is ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await fresh(ctx);
