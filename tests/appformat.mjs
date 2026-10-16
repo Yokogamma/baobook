@@ -305,6 +305,33 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('8l with room, «Видалити назавжди» first stores the backup on its own: after a reload the older text is a note, the newer copy is gone', items.some(t=>/Четвертий \(резервна копія\)/.test(t)) && k2.some(([,v])=>/стара копія Ч/.test(v)) && !k2.some(([,v])=>/нова копія Ч/.test(v)));
   ok('8m no page errors', !pg.errs.length); await ctx.close(); }
 
+/* ── 8n. across tabs: A (IndexedDB) deletes a note for good while B (no IndexedDB) shows its older copy as a backup that lives only in a shared key ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); await ctx.addInitScript(FAILS); await ctx.addInitScript(LSFAIL);
+  const a=await fresh(ctx), b=await fresh(ctx); await b.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); });
+  await go(a,SITE); await ready(a);
+  const T=Date.now();
+  await a.evaluate(T=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('notes','readwrite');
+    t.objectStore('notes').put({id:'x6',title:'Шостий',blocks:[{id:'a',fx:0.1,row:2,text:'новий шостий'}],created:T-9e5,updated:T-100,deleted:T-100}); t.oncomplete=()=>{ d.close(); res(); }; }; }), T);
+  await a.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x6',{id:'x6',title:'Шостий',blocks:[{id:'a',fx:0.1,row:2,text:'старий шостий'}],created:T-9e5,updated:T-5000});
+    put('x6~tabq~8',{id:'x6',title:'Шостий',blocks:[{id:'a',fx:0.1,row:2,text:'новий шостий'}],created:T-9e5,updated:T-100,deleted:T-100});
+    localStorage.setItem('__fail','backup'); localStorage.setItem('__lsfail','backup'); }, T);   // no backup fits anywhere: neither tab can join the copies
+  await go(b,SITE); await ready(b);
+  ok('8n B (no IndexedDB) shows the older copy as «Шостий (резервна копія)», kept only in the plain key', (await b.locator('#list .item').allInnerTexts()).some(t=>/Шостий \(резервна копія\)/.test(t)));
+  await a.bringToFront(); await a.reload(); await ready(a);
+  const purgeA=async()=>{ await a.bringToFront(); if(await a.locator('#trashRow').isVisible()){ await a.locator('#trashRow').click(); await a.waitForTimeout(200); }   // already in the trash after a refused try
+     const it=a.locator('#list .item').filter({hasText:'новий шостий'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(200); await a.locator('#askYes').click(); await a.waitForTimeout(400); };
+  await purgeA();
+  ok('8o A cannot store B\'s older copy on its own, so «Видалити назавжди» is refused with the reason and the shared key stays', /немає місця/.test(await a.locator('#toast').innerText()) && /старий шостий/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x6'))));
+  await b.bringToFront(); await b.reload(); await ready(b);
+  ok('8p after B reloads, the older text is still there (the start of A removed the key that matched its own note, so B now shows the older copy as the note itself)', (await b.locator('#list .item').allInnerTexts()).some(t=>/старий шостий/.test(t)) && /старий шостий/.test(await b.evaluate(()=>localStorage.getItem('sheet:note:x6'))));
+  await a.evaluate(()=>{ localStorage.removeItem('__fail'); localStorage.removeItem('__lsfail'); });
+  await purgeA();
+  await b.bringToFront(); await b.reload(); await ready(b);
+  const kb=await fbKeys(b);
+  ok('8q with room, A first keeps the older copy as a note of its own, then deletes: after B reloads the older text is there, the deleted note is not', (await b.locator('#list .item').allInnerTexts()).some(t=>/Шостий \(резервна копія\)/.test(t)) && kb.some(([,v])=>/старий шостий/.test(v)) && !kb.some(([,v])=>/новий шостий/.test(v)));
+  ok('8r no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+
 /* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');

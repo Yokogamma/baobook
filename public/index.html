@@ -892,9 +892,16 @@ const MEMSRC=new Map();   // a backup copy in memory → {id, k}: the note and t
 function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push({k,n}); }
   const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.n.updated||0)-(a.n.updated||0)); const seen=new Set([noteSig(list[0].n)]); out.push(list[0].n);
     for(const x of list.slice(1)) if(!seen.has(noteSig(x.n))){ seen.add(noteSig(x.n)); const c=backupOf(x.n); MEM.add(c.id); MEMSRC.set(c.id,{id:x.n.id, k:x.k}); out.push(c); } } return out; }
-// before the keys of a note go, its backup copies shown from them are stored on their own; false: one did not fit, so the keys must stay
-function keepBackups(id){ for(const [bid,src] of [...MEMSRC]) if(src.id===id){ const b=notes.find(x=>x.id===bid); if(!b){ MEMSRC.delete(bid); continue; }
-  if(store.put(NK+bid,b)) return false; MEM.delete(bid); MEMSRC.delete(bid); } return true; }
+/* before the keys of a note go (deleting it for good), every copy stored in them that differs from the note being deleted is kept as a
+   note of its own, under a plain key (a later start moves it into IndexedDB). The keys are shared by all tabs, so this goes by what is
+   in them, not by what this tab shows; a backup this tab shows from one of them keeps its id. false: a copy did not fit, the keys stay */
+const KEPT=new Map();   // key → its content already kept as a note by an earlier try (a refused delete is not repeated into duplicates)
+function fbKeep(n){ const done=new Set(), sig=noteSig(n);
+  for(const [bid,src] of [...MEMSRC]) if(src.id===n.id){ const b=notes.find(x=>x.id===bid); if(b){ if(store.put(NK+bid,b)) return false; MEM.delete(bid); } MEMSRC.delete(bid); done.add(src.k); }
+  for(const k of store.keys(NK+n.id)){ if(!(k===NK+n.id || k.startsWith(NK+n.id+'~')) || done.has(k)) continue; const raw=store.raw(k), c=store.get(k);
+    if(!validNote(c) || noteSig(c)===sig || KEPT.get(k)===raw) continue;
+    const b=backupOf(c); if(store.put(NK+b.id,b)) return false; KEPT.set(k,raw); notes.push(b); }
+  return true; }
 const db={ backend:'local', inited:false, ready:null,
   // at start: open IndexedDB, move the notes from localStorage (the fallback, and where the first version kept them) and drop their keys, so there are no two stores.
   // Nothing moves while LOCK; a record that is not a note stays for whoever can read it. Saves wait until this is done (db.ready)
@@ -1392,7 +1399,7 @@ async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bar
 function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
-function purgeNote(n){ if(LOCK) return; if(!keepBackups(n.id)){ say(loc('storage.purgeBlocked',{title:titleOf(n)})); return; } notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+function purgeNote(n){ if(LOCK) return; if(!fbKeep(n)){ say(loc('storage.purgeBlocked',{title:titleOf(n)})); return; } notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); }
 async function purgeAsk(n){ if(held()) return; if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
 function purgeOld(){ if(LOCK) return; const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
