@@ -887,18 +887,20 @@ function fbDrop(id, g){ const p=NK+id+'~'+TAB+'~'; for(const k of fbOwn(id)) if(
 function fbLocal(){ for(const k of store.keys(NK)){ if(!fbOnce(k)) continue; const n=store.get(k); if(!validNote(n)) continue; const ex=store.get(NK+n.id);
   if(![...fbPut(validNote(ex)? ex : null, n)].reverse().some(x=>store.put(NK+x.id,x))) store.del(k); } }
 const MEM=new Set();   // notes that live only in this tab's memory (fallback copies not stored yet, an empty view-only note to show); a tab sync keeps them
-const MEMSRC=new Map();   // a backup copy in memory → {id, k}: the note and the key its only stored copy is in
+const MEMSRC=new Map();   // a backup copy in memory → {id, k, raw}: the note, the key its only stored copy is in, and what that key held then
 // without IndexedDB: the newest copy of each note, and every other different copy as a backup copy in memory, until fbLocal can store it
 function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push({k,n}); }
   const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.n.updated||0)-(a.n.updated||0)); const seen=new Set([noteSig(list[0].n)]); out.push(list[0].n);
-    for(const x of list.slice(1)) if(!seen.has(noteSig(x.n))){ seen.add(noteSig(x.n)); const c=backupOf(x.n); MEM.add(c.id); MEMSRC.set(c.id,{id:x.n.id, k:x.k}); out.push(c); } } return out; }
+    for(const x of list.slice(1)) if(!seen.has(noteSig(x.n))){ seen.add(noteSig(x.n)); const c=backupOf(x.n); MEM.add(c.id); MEMSRC.set(c.id,{id:x.n.id, k:x.k, raw:store.raw(x.k)}); out.push(c); } } return out; }
 /* before the keys of a note go (deleting it for good), every copy stored in them that differs from the note being deleted is kept as a
    note of its own, under a plain key (a later start moves it into IndexedDB). The keys are shared by all tabs, so this goes by what is
    in them, not by what this tab shows; a backup this tab shows from one of them keeps its id. false: a copy did not fit, the keys stay */
-const KEPT=new Map();   // key → its content already kept as a note by an earlier try (a refused delete is not repeated into duplicates)
-function fbKeep(n){ const done=new Set(), sig=noteSig(n);
-  for(const [bid,src] of [...MEMSRC]) if(src.id===n.id){ const b=notes.find(x=>x.id===bid); if(b){ if(store.put(NK+bid,b)) return false; MEM.delete(bid); } MEMSRC.delete(bid); done.add(src.k); }
-  for(const k of store.keys(NK+n.id)){ if(!(k===NK+n.id || k.startsWith(NK+n.id+'~')) || done.has(k)) continue; const raw=store.raw(k), c=store.get(k);
+const KEPT=new Map();   // key → the content of it already kept as a note (by either part below, also in an earlier refused try): only that exact content counts as kept
+function fbKeep(n){ const sig=noteSig(n);
+  // a backup this tab shows: stored under its id, and the content it was made from counts as kept. A key rewritten since (another tab joined
+  // newer copies into it) holds something else, so the loop below checks it like any other key. A backup deleted for good before is not stored again
+  for(const [bid,src] of [...MEMSRC]) if(src.id===n.id){ const b=notes.find(x=>x.id===bid); if(b){ if(store.put(NK+bid,b)) return false; MEM.delete(bid); } MEMSRC.delete(bid); KEPT.set(src.k, src.raw); }
+  for(const k of store.keys(NK+n.id)){ if(!(k===NK+n.id || k.startsWith(NK+n.id+'~'))) continue; const raw=store.raw(k), c=store.get(k);
     if(!validNote(c) || noteSig(c)===sig || KEPT.get(k)===raw) continue;
     const b=backupOf(c); if(store.put(NK+b.id,b)) return false; KEPT.set(k,raw); notes.push(b); }
   return true; }

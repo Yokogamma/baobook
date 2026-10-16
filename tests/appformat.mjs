@@ -332,6 +332,30 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('8q with room, A first keeps the older copy as a note of its own, then deletes: after B reloads the older text is there, the deleted note is not', (await b.locator('#list .item').allInnerTexts()).some(t=>/Шостий \(резервна копія\)/.test(t)) && kb.some(([,v])=>/старий шостий/.test(v)) && !kb.some(([,v])=>/новий шостий/.test(v)));
   ok('8r no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
+/* ── 8s. across tabs without IndexedDB: A shows a backup made from the plain key; before A confirms a delete, B joins newer copies and puts a newer C into that key ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); await ctx.addInitScript(LSFAIL);
+  const a=await fresh(ctx), b=await fresh(ctx);
+  await go(a,SITE+'blank.html'); const T=Date.now();
+  await a.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x7',{id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'сьомий А0'}],created:T-9e5,updated:T-5000});
+    put('x7~tabq~9',{id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'сьомий Б'}],created:T-9e5,updated:T-300,deleted:T-300});
+    localStorage.setItem('__lsfail','backup'); }, T);   // A starts while no backup fits: it shows Б (in the trash) and «Сьомий (резервна копія)» made from the plain key
+  await go(a,SITE); await ready(a);
+  ok('8s A shows the older copy as a backup made from the plain key', (await a.locator('#list .item').allInnerTexts()).some(t=>/Сьомий \(резервна копія\)/.test(t)));
+  await a.locator('#trashRow').click(); await a.waitForTimeout(200);
+  const it=a.locator('#list .item').filter({hasText:'сьомий Б'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(200);   // A asks «Видалити назавжди?» and waits
+  await a.evaluate(T=>{ localStorage.setItem('sheet:note:x7~tabr~10', JSON.stringify({id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'сьомий В новий'}],created:T-9e5,updated:T-100})); localStorage.removeItem('__lsfail'); }, T);
+  await go(b,SITE); await ready(b);   // meanwhile B starts and joins the copies: the older ones become backup notes, the plain key now holds the newest, В
+  ok('8t B joined the copies: the plain key now holds the newer В', /сьомий В новий/.test(await b.evaluate(()=>localStorage.getItem('sheet:note:x7'))));
+  await a.locator('#askYes').click(); await a.waitForTimeout(400);   // A confirms from the background, with what it showed before
+  const all=await a.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')).map(k=>localStorage.getItem(k)).join('\n'));
+  ok('8u A deleted Б for good: the newer В that B put into the key meanwhile is kept as a note of its own, and so is А0', /сьомий В новий/.test(all) && /сьомий А0/.test(all));
+  await b.bringToFront(); await b.reload(); await ready(b);
+  const texts=(await b.locator('#list .item').allInnerTexts()).join('\n');
+  ok('8v after B reloads, В and А0 are both in the list', /сьомий В новий/.test(texts) && /сьомий А0/.test(texts));
+  ok('8w no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+
 /* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');
