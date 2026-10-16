@@ -288,29 +288,23 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('8h once there is room, the next start joins them: no fallback keys left, x3 has the edit, the older text is kept as a note of its own', !k2.some(([k])=>/~/.test(k)) && k2.some(([k,v])=>k==='sheet:note:x3' && /правка Б/.test(v)) && k2.some(([k,v])=>k!=='sheet:note:x3' && /текст А/.test(v) && /резервна копія/.test(v)));
   ok('8i no page errors', !pg.errs.length); await ctx.close(); }
 
-/* ── 8j. without IndexedDB: the newer copy is deleted for good while the older one is a backup that lives only in its key ── */
+/* ── 8j. without IndexedDB nothing is deleted for good: «Видалити назавжди» and «Очистити кошик» say so, the note stays in the trash ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
-  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); await ctx.addInitScript(LSFAIL); const pg=await fresh(ctx);
-  await go(pg,SITE+'blank.html');
-  const T=Date.now();
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); const pg=await fresh(ctx);
+  await go(pg,SITE+'blank.html'); const T=Date.now();
   await pg.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
-    put('x4',{id:'x4',title:'Четвертий',blocks:[{id:'a',fx:0.1,row:2,text:'стара копія Ч'}],created:T-9e5,updated:T-5000});
-    put('x4~tabq~6',{id:'x4',title:'Четвертий',blocks:[{id:'a',fx:0.1,row:2,text:'нова копія Ч'}],created:T-9e5,updated:T-100,deleted:T-100});   // the newer one is in the trash
-    put('keep',{id:'keep',title:'Інша',blocks:[{id:'k',fx:0.1,row:2,text:'інша нотатка'}],created:T-9e5,updated:T-50});
-    localStorage.setItem('__lsfail','backup'); }, T);
+    put('x4',{id:'x4',title:'Четвертий',blocks:[{id:'a',fx:0.1,row:2,text:'у кошику Ч'}],created:T-9e5,updated:T-100,deleted:T-40*864e5});   // in the trash for 40 days: the automatic purge would take it
+    put('keep',{id:'keep',title:'Інша',blocks:[{id:'k',fx:0.1,row:2,text:'інша нотатка'}],created:T-9e5,updated:T-50}); }, T);
   await go(pg,SITE); await ready(pg);
-  const purge=async()=>{ await pg.locator('#trashRow').click(); await pg.waitForTimeout(200); const it=pg.locator('#list .item').filter({hasText:'нова копія Ч'}).first(); await it.hover(); await it.locator('.it-x').click(); await pg.waitForTimeout(200); await pg.locator('#askYes').click(); await pg.waitForTimeout(400); };
-  await purge();
-  const keys=await fbKeys(pg);
-  ok('8j the backup cannot be stored on its own, so «Видалити назавжди» is refused with the reason and both keys stay', /немає місця/.test(await pg.locator('#toast').innerText()) && keys.some(([k,v])=>k==='sheet:note:x4' && /стара копія Ч/.test(v)) && keys.some(([k])=>k==='sheet:note:x4~tabq~6'));
+  ok('8j without IndexedDB the note in the trash for 40 days is not purged at start', /у кошику Ч/.test(await pg.evaluate(()=>localStorage.getItem('sheet:note:x4')||'')));
+  await pg.locator('#trashRow').click(); await pg.waitForTimeout(200);
+  const it=pg.locator('#list .item').filter({hasText:'у кошику Ч'}).first(); await it.hover(); await it.locator('.it-x').click(); await pg.waitForTimeout(300);
+  ok('8k the bin of a trashed note says notes stay in the trash without the browser database, before any dialog, and the note stays', /не видаляються назавжди/.test(await pg.locator('#toast').innerText()) && !(await pg.locator('#ask').isVisible()) && /у кошику Ч/.test(await pg.evaluate(()=>localStorage.getItem('sheet:note:x4')||'')));
+  await it.click(); await pg.waitForTimeout(300);
+  ok('8l no «Очистити кошик» and no «Видалити назавжди» on the strip of a trashed note', !(await pg.locator('#trashEmpty').isVisible()) && await pg.locator('#roRestore').isVisible() && !(await pg.locator('#roPurge').isVisible()));
   await pg.reload(); await ready(pg);
-  ok('8k after a reload the older copy is still there', (await pg.locator('#list .item').allInnerTexts()).some(t=>/Четвертий \(резервна копія\)/.test(t)));
-  await pg.evaluate(()=>localStorage.removeItem('__lsfail'));   // now there is room, while this tab (started without it) still shows the backup only from memory
-  await purge();
-  await pg.reload(); await ready(pg);
-  const items=await pg.locator('#list .item').allInnerTexts(), k2=await fbKeys(pg);
-  ok('8l with room, «Видалити назавжди» first stores the backup on its own: after a reload the older text is a note, the newer copy is gone', items.some(t=>/Четвертий \(резервна копія\)/.test(t)) && k2.some(([,v])=>/стара копія Ч/.test(v)) && !k2.some(([,v])=>/нова копія Ч/.test(v)));
-  ok('8m no page errors', !pg.errs.length); await ctx.close(); }
+  ok('8m after a reload the note is still in the trash', /у кошику Ч/.test(await pg.evaluate(()=>localStorage.getItem('sheet:note:x4')||'')) && /deleted/.test(await pg.evaluate(()=>localStorage.getItem('sheet:note:x4')||'')));
+  ok('8m2 no page errors', !pg.errs.length); await ctx.close(); }
 
 /* ── 8n. across tabs: A (IndexedDB) deletes a note for good while B (no IndexedDB) shows its older copy as a backup that lives only in a shared key ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); await ctx.addInitScript(FAILS); await ctx.addInitScript(LSFAIL);
@@ -326,63 +320,49 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   await go(b,SITE); await ready(b);
   ok('8n B (no IndexedDB) shows the older copy as «Шостий (резервна копія)», kept only in the plain key', (await b.locator('#list .item').allInnerTexts()).some(t=>/Шостий \(резервна копія\)/.test(t)));
   await a.bringToFront(); await a.reload(); await ready(a);
-  const purgeA=async()=>{ await a.bringToFront(); if(await a.locator('#trashRow').isVisible()){ await a.locator('#trashRow').click(); await a.waitForTimeout(200); }   // already in the trash after a refused try
-     const it=a.locator('#list .item').filter({hasText:'новий шостий'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(200); await a.locator('#askYes').click(); await a.waitForTimeout(400); };
-  await purgeA();
-  ok('8o A cannot store B\'s older copy on its own, so «Видалити назавжди» is refused with the reason and the shared key stays', /немає місця/.test(await a.locator('#toast').innerText()) && /старий шостий/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x6'))));
+  await a.locator('#trashRow').click(); await a.waitForTimeout(200);
+  const it=a.locator('#list .item').filter({hasText:'новий шостий'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(200); await a.locator('#askYes').click(); await a.waitForTimeout(400);
+  ok('8o A deletes the note for good and leaves the shared key that is not its own', !(await a.locator('#list .item').filter({hasText:'новий шостий'}).count()) && /старий шостий/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x6')||'')));
   await b.bringToFront(); await b.reload(); await ready(b);
-  ok('8p after B reloads, the older text is still there (the start of A removed the key that matched its own note, so B now shows the older copy as the note itself)', (await b.locator('#list .item').allInnerTexts()).some(t=>/старий шостий/.test(t)) && /старий шостий/.test(await b.evaluate(()=>localStorage.getItem('sheet:note:x6'))));
+  ok('8p after B reloads, the older text is still there', (await b.locator('#list .item').allInnerTexts()).some(t=>/старий шостий/.test(t)));
   await a.evaluate(()=>{ localStorage.removeItem('__fail'); localStorage.removeItem('__lsfail'); });
-  await purgeA();
-  await b.bringToFront(); await b.reload(); await ready(b);
-  const kb=await fbKeys(b);
-  ok('8q with room, A first keeps the older copy as a note of its own, then deletes: after B reloads the older text is there, the deleted note is not', (await b.locator('#list .item').allInnerTexts()).some(t=>/Шостий \(резервна копія\)/.test(t)) && kb.some(([,v])=>/старий шостий/.test(v)) && !kb.some(([,v])=>/новий шостий/.test(v)));
   ok('8r no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
-/* ── 8s. across tabs without IndexedDB: A shows a backup made from the plain key; before A confirms a delete, B joins newer copies and puts a newer C into that key ── */
+/* ── 8r2. a tab with IndexedDB starts while a tab without it writes: it moves the plain keys in, but leaves them to that tab ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
-  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); await ctx.addInitScript(LSFAIL);
-  const a=await fresh(ctx), b=await fresh(ctx);
-  await go(a,SITE+'blank.html'); const T=Date.now();
-  await a.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
-    put('x7',{id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'сьомий А0'}],created:T-9e5,updated:T-5000});
-    put('x7~tabq~9',{id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'сьомий Б'}],created:T-9e5,updated:T-300,deleted:T-300});
-    localStorage.setItem('__lsfail','backup'); }, T);   // A starts while no backup fits: it shows Б (in the trash) and «Сьомий (резервна копія)» made from the plain key
+  const a=await fresh(ctx), b=await fresh(ctx); await b.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); });
+  await go(b,SITE); await ready(b); await typeAt(b,500,300,'пише вкладка без бази'); await b.keyboard.press('Escape'); await b.waitForTimeout(600);   // B writes the plain key and holds the writer lock
   await go(a,SITE); await ready(a);
-  ok('8s A shows the older copy as a backup made from the plain key', (await a.locator('#list .item').allInnerTexts()).some(t=>/Сьомий \(резервна копія\)/.test(t)));
-  await a.locator('#trashRow').click(); await a.waitForTimeout(200);
-  const it=a.locator('#list .item').filter({hasText:'сьомий Б'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(200);   // A asks «Видалити назавжди?» and waits
-  await a.evaluate(T=>{ localStorage.setItem('sheet:note:x7~tabr~10', JSON.stringify({id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'сьомий В новий'}],created:T-9e5,updated:T-100})); localStorage.removeItem('__lsfail'); }, T);
-  await go(b,SITE); await ready(b);   // meanwhile B starts and joins the copies: the older ones become backup notes, the plain key now holds the newest, В
-  ok('8t B joined the copies: the plain key now holds the newer В', /сьомий В новий/.test(await b.evaluate(()=>localStorage.getItem('sheet:note:x7'))));
-  await a.locator('#askYes').click(); await a.waitForTimeout(400);   // A confirms from the background, with what it showed before
-  const all=await a.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')).map(k=>localStorage.getItem(k)).join('\n'));
-  ok('8u A deleted Б for good: the newer В that B put into the key meanwhile is kept as a note of its own, and so is А0', /сьомий В новий/.test(all) && /сьомий А0/.test(all));
-  await b.bringToFront(); await b.reload(); await ready(b);
-  const texts=(await b.locator('#list .item').allInnerTexts()).join('\n');
-  ok('8v after B reloads, В and А0 are both in the list', /сьомий В новий/.test(texts) && /сьомий А0/.test(texts));
-  ok('8w no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+  const d=await dump(a), plain=Object.entries(d.ls).find(([k,v])=>!/~/.test(k) && /пише вкладка без бази/.test(v));
+  ok('8r2 A moved the note into IndexedDB and left the plain key that B is writing', has(d.stores.notes,/пише вкладка без бази/) && !!plain);
+  await b.close(); await a.reload(); await ready(a);
+  ok('8r3 once B is gone, A\'s next start drops the plain key it moved', !Object.keys((await dump(a)).ls).length);
+  ok('8r4 no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
-/* ── 8x. across tabs without IndexedDB: A checks a note's keys and is about to delete them; B saves the same note into its plain key right then ── */
+/* ── 8r5. without IndexedDB, a browser that refuses the lock request still starts and writes ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); if(navigator.locks) navigator.locks.request=()=>Promise.reject(new DOMException('refused','SecurityError')); });
+  const pg=await fresh(ctx);
+  await go(pg,SITE); await ready(pg); await typeAt(pg,500,300,'без замка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
+  ok('8r5 a refused lock request leaves no blank screen: the app starts, writes, and is not view-only', !(await strip(pg)) && (await fbKeys(pg)).some(([,v])=>/без замка/.test(v)));
+  ok('8r6 no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 8s. two tabs without IndexedDB: only one writes; the other is view-only until it is the only one ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true});
   await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); });
-  const a=await fresh(ctx), b=await fresh(ctx); await b.addInitScript(()=>{ window.BroadcastChannel=undefined; });   // B hears nothing from A: it still has the note open, live
-  await go(a,SITE+'blank.html'); const T=Date.now();
-  await a.evaluate(T=>{ localStorage.setItem('sheet:note:x8', JSON.stringify({id:'x8',title:'Восьмий',blocks:[{id:'a',fx:0.1,row:2,text:'восьмий 1'}],created:T-9e5,updated:T-1000}));
-    const st=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); st.current='x8'; localStorage.setItem('sheet:settings', JSON.stringify(st)); }, T);
-  await go(b,SITE); await ready(b);   // B opens «Восьмий»
-  await go(a,SITE); await ready(a);
-  const it=a.locator('#list .item').filter({hasText:'восьмий 1'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(500);   // A moves it to the trash
-  await a.evaluate(()=>{ window.sheetDebug.purgeWait=new Promise(r=>{ window.__go=r; }); });   // the test barrier: A will hold the lock between the check and the delete
-  await a.locator('#trashRow').click(); await a.waitForTimeout(200);
-  const it2=a.locator('#list .item').filter({hasText:'восьмий 1'}).first(); await it2.hover(); await it2.locator('.it-x').click(); await a.waitForTimeout(200); await a.locator('#askYes').click(); await a.waitForTimeout(300);
-  await typeAt(b,950,300,'восьмий C'); await b.keyboard.press('Escape'); await b.waitForTimeout(900);   // B saves the note while A holds the lock
-  ok('8x while A holds the lock between its check and its delete, B\'s save of the same note waits (the key still has A\'s checked content)', !/восьмий C/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x8')||'')));
-  await a.evaluate(()=>window.__go()); await a.waitForTimeout(800);
-  ok('8y A deletes the keys it checked, then B\'s save goes in: the key holds B\'s text', /восьмий C/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x8')||'')));
-  await b.bringToFront(); await b.reload(); await ready(b);
-  ok('8z after B reloads, the note is in the list and B\'s text is stored in it', (await b.locator('#list .item').allInnerTexts()).some(t=>/Восьмий/.test(t)) && /восьмий C/.test(await b.evaluate(()=>localStorage.getItem('sheet:note:x8')||'')));
-  ok('8za no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+  const a=await fresh(ctx), b=await fresh(ctx);
+  await go(a,SITE); await ready(a); await typeAt(a,500,300,'пише перша вкладка'); await a.keyboard.press('Escape'); await a.waitForTimeout(600);
+  await go(b,SITE); await ready(b);
+  const msg=await strip(b);
+  ok('8s the second tab without IndexedDB is view-only and says why ('+msg+')', /відкритий в іншій вкладці/.test(msg) && await b.locator('#sheet').evaluate(e=>e.inert) && await b.locator('#roExport').isVisible());
+  await tryType(b,500,500,'друга вкладка'); await b.waitForTimeout(600);
+  ok('8t typing there changes nothing and writes nothing', !/друга вкладка/.test(await sheetText(b)) && !(await fbKeys(b)).some(([,v])=>/друга вкладка/.test(v)));
+  const [dl]=await Promise.all([b.waitForEvent('download'), b.locator('#roExport').click()]); const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
+  ok('8u its export carries the notes the writing tab saved', has(data.notes,/пише перша вкладка/));
+  await a.close(); await b.bringToFront(); await b.reload(); await ready(b);
+  await typeAt(b,500,420,'тепер пише друга'); await b.keyboard.press('Escape'); await b.waitForTimeout(600);
+  ok('8v once the first tab is closed, a reload makes the second the writing tab', !(await strip(b)) && (await fbKeys(b)).some(([,v])=>/тепер пише друга/.test(v)));
+  ok('8w no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
 /* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
