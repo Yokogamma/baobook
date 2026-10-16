@@ -26,9 +26,11 @@ const tryType=async(pg,x,y,t)=>{ await pg.mouse.click(x,y); await pg.keyboard.ty
 const go=async(pg,url)=>{ await pg.bringToFront(); await pg.goto(url); };   // a page left in the background may never finish loading
 const sheetText=pg=>pg.locator('#sheet').innerText();
 const has=(list,re)=>list.some(n=>re.test(JSON.stringify(n)));
-// a controllable IndexedDB failure: localStorage __fail = 'all' (every write of a note) or 'backup' (only a «(резервна копія)» copy)
+// a controllable IndexedDB failure: localStorage __fail = 'all' (every write of a note), 'backup' (only a «(резервна копія)» copy)
+// or 'slow' (the write goes through but its transaction stays open for 1.5 s, so a later save can start and end first)
 const FAILS=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototype.put=function(v){ let f=''; try{ f=localStorage.getItem('__fail')||''; }catch(_){}
   if(this.name==='notes' && (f==='all' || (f==='backup' && v && /резервна копія/.test(v.title||'')))) throw new DOMException('test failure','UnknownError');
+  if(this.name==='notes' && f==='slow'){ const st=this, end=Date.now()+1500, r=put.apply(this, arguments); const spin=()=>{ if(Date.now()<end){ const q=st.count(); q.onsuccess=spin; } }; spin(); return r; }
   return put.apply(this, arguments); }; };
 const bigV3=T=>new Promise(res=>{ const r=indexedDB.open('sheet',3); r.onupgradeneeded=()=>{ const d=r.result;
     d.createObjectStore('notes',{keyPath:'id'}); const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t');
@@ -206,6 +208,69 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('6c A writes to IndexedDB again and removes only its own key; B\'s copy stays', k2.length===1 && /рядок від B/.test(k2[0][1]) && has(d.stores.notes,/знову A/));
   await b.bringToFront(); await b.reload(); await ready(b); const d2=await dump(b);
   ok('6d B\'s next start moves its copy in (the note has B\'s line, no keys left)', has(d2.stores.notes,/рядок від B/) && !Object.keys(d2.ls).length);
-  ok('6e no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+  // a third tab starts while B still cannot write: it moves B's key in; B's next copy is a new key that nobody removes
+  await a.evaluate(()=>localStorage.setItem('__fail','all'));
+  await typeAt(b,950,300,'ще від B'); await b.keyboard.press('Escape'); await b.waitForTimeout(700);
+  const c=await fresh(ctx); await a.evaluate(()=>localStorage.removeItem('__fail')); await go(c,SITE); await ready(c); await a.evaluate(()=>localStorage.setItem('__fail','all'));
+  const d3=await dump(c);
+  ok('6e a tab starting meanwhile moves B\'s copy in and removes only that key', has(d3.stores.notes,/ще від B/) && !Object.keys(d3.ls).length);
+  await typeAt(b,950,420,'і ще раз B'); await b.keyboard.press('Escape'); await b.waitForTimeout(700);
+  const k3=await fbKeys(b);
+  ok('6f B\'s next copy goes under a new key of its own and stays ('+k3.map(x=>x[0].replace('sheet:note:','')).join(', ')+')', k3.length===1 && /і ще раз B/.test(k3[0][1]));
+  await a.evaluate(()=>localStorage.removeItem('__fail'));
+  ok('6g no page errors', !a.errs.length && !b.errs.length && !c.errs.length); await ctx.close(); }
+
+/* ── 7. an older save that finishes late does not remove the fallback copy of a newer save of the same tab ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); await ctx.addInitScript(FAILS); const pg=await fresh(ctx);
+  await go(pg,SITE); await ready(pg); await typeAt(pg,500,300,'перший рядок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
+  await pg.evaluate(()=>localStorage.setItem('__fail','slow'));
+  await typeAt(pg,500,420,'повільний запис'); await pg.waitForTimeout(450);   // its save started 300 ms after the last key and is still running
+  await pg.evaluate(()=>localStorage.setItem('__fail','all'));
+  await typeAt(pg,500,540,'новіший рядок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(2200);   // this save goes to the fallback, then the slow one ends
+  const d=await dump(pg), k=Object.entries(d.ls);
+  ok('7 the slow older save ended after the newer one fell back: the fallback copy with the newer text stays ('+k.length+' key)', k.length===1 && /новіший рядок/.test(k[0][1]) && has(d.stores.notes,/повільний запис/) && !has(d.stores.notes,/новіший рядок/));
+  await pg.evaluate(()=>localStorage.removeItem('__fail'));
+  await typeAt(pg,500,660,'знову пишеться'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
+  const d2=await dump(pg);
+  ok('7b the next save that reaches IndexedDB holds the newer text and removes the older key', !Object.keys(d2.ls).length && has(d2.stores.notes,/новіший рядок/) && has(d2.stores.notes,/знову пишеться/));
+  ok('7c no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 8. without IndexedDB: fallback keys left from a time it worked join the plain keys at start; the copies stay through a tab sync ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); const pg=await fresh(ctx);
+  await go(pg,SITE+'blank.html');
+  const T=Date.now();
+  await pg.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x1',{id:'x1',title:'Локальна',blocks:[{id:'a',fx:0.1,row:2,text:'стара локальна'}],created:T-9e5,updated:T-5000});
+    put('x1~tabq~3',{id:'x1',title:'Локальна',blocks:[{id:'a',fx:0.1,row:2,text:'новіша з резерву'}],created:T-9e5,updated:T-100});
+    put('x2~tabq~4',{id:'x2',title:'Лише в резерві',blocks:[{id:'b',fx:0.1,row:2,text:'тільки тут'}],created:T-9e5,updated:T-200}); }, T);
+  await go(pg,SITE); await ready(pg);
+  const keys=await fbKeys(pg), byText=re=>keys.filter(([,v])=>re.test(v));
+  ok('8 the fallback keys joined the plain ones: x1 has the newer text, the older one is «Локальна (резервна копія)», x2 is a plain key', !keys.some(([k])=>/~/.test(k)) && byText(/новіша з резерву/).some(([k])=>k==='sheet:note:x1') && byText(/стара локальна/).some(([k,v])=>k!=='sheet:note:x1' && /Локальна \(резервна копія\)/.test(v)) && byText(/тільки тут/).some(([k])=>k==='sheet:note:x2'));
+  const n0=await pg.locator('#list .item').count();
+  await pg.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await pg.waitForTimeout(500);
+  ok('8b the list keeps all three notes after the tab comes back ('+n0+' → '+(await pg.locator('#list .item').count())+')', n0===3 && (await pg.locator('#list .item').count())===3);
+  await pg.locator('#setBtn').click(); const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#exportBtn').click()]); const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
+  ok('8c the export carries the three notes', data.notes.length===3 && has(data.notes,/стара локальна/) && has(data.notes,/новіша з резерву/) && has(data.notes,/тільки тут/));
+  ok('8d no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
+  await go(b,SITE+'blank.html');
+  await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // an empty v1 held open: the start waits for it
+  await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'});
+  await a.locator('#newBtn').click(); await a.waitForTimeout(400);
+  ok('9 «Нова» during the wait wrote nothing to localStorage', !(await fbKeys(a)).length);
+  await a.waitForTimeout(3600);
+  ok('9b once the block lasts, the tab is view-only and still nothing went to the fallback', /Закрийте інші вкладки Baobook/.test(await strip(a)) && !(await fbKeys(a)).length);
+  await b.evaluate(()=>window.__hold.close());
+  ok('9c no page errors', !a.errs.length); await ctx.close(); }
+
+/* ── 10. a record under a note key that is not a note stays where it is ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await fresh(ctx);
+  await go(pg,SITE); await ready(pg);
+  await pg.evaluate(()=>localStorage.setItem('sheet:note:broken','{"hello":1}')); await pg.reload(); await ready(pg);
+  ok('10 a fallback key that is not a note is kept for whoever can read it', (await pg.evaluate(()=>localStorage.getItem('sheet:note:broken')))==='{"hello":1}');
+  ok('10b no page errors', !pg.errs.length); await ctx.close(); }
 
 await br.close(); await srv.close(); process.exit(fails?1:0);
