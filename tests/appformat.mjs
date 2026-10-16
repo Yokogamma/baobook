@@ -339,13 +339,74 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('8r3 once B is gone, A\'s next start drops the plain key it moved', !Object.keys((await dump(a)).ls).length);
   ok('8r4 no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
-/* ── 8r5. without IndexedDB, a browser that refuses the lock request still starts and writes ── */
-{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+/* ── 8r5. without IndexedDB, a browser that refuses the lock request opens view-only, says why, and exports ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true});
   await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); if(navigator.locks) navigator.locks.request=()=>Promise.reject(new DOMException('refused','SecurityError')); });
   const pg=await fresh(ctx);
-  await go(pg,SITE); await ready(pg); await typeAt(pg,500,300,'без замка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
-  ok('8r5 a refused lock request leaves no blank screen: the app starts, writes, and is not view-only', !(await strip(pg)) && (await fbKeys(pg)).some(([,v])=>/без замка/.test(v)));
-  ok('8r6 no page errors', !pg.errs.length); await ctx.close(); }
+  await go(pg,SITE+'blank.html'); const T=Date.now();
+  await pg.evaluate(T=>localStorage.setItem('sheet:note:r5', JSON.stringify({id:'r5',title:'Збережена',blocks:[{id:'a',fx:0.1,row:2,text:'збережена раніше'}],created:T-9e5,updated:T-100})), T);
+  await go(pg,SITE); await ready(pg);
+  const msg=await strip(pg);
+  ok('8r5 a refused lock request: the app starts view-only and says why ('+msg+')', /не дає переконатися/.test(msg) && await pg.locator('#sheet').evaluate(e=>e.inert) && await pg.locator('#roExport').isVisible());
+  await tryType(pg,500,500,'без замка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
+  const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#roExport').click()]); const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
+  const keys=await fbKeys(pg);
+  ok('8r6 it writes nothing, and its export carries the stored note', keys.length===1 && !keys.some(([,v])=>/без замка/.test(v)) && has(data.notes,/збережена раніше/));
+  ok('8r6b no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 8r7. without IndexedDB, a lock request that never answers: after 3 s the start goes on, view-only ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); if(navigator.locks) navigator.locks.request=()=>new Promise(()=>{}); });
+  const pg=await fresh(ctx); await go(pg,SITE); await ready(pg);
+  ok('8r7 a lock request with no answer leaves no blank screen: the app starts view-only', /не дає переконатися/.test(await strip(pg)) && await pg.locator('#sheet').evaluate(e=>e.inert));
+  ok('8r8 no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 8r9. two tabs without IndexedDB in a browser without the Web Locks API: neither writes ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); Object.defineProperty(navigator,'locks',{value:undefined,configurable:true}); });
+  const a=await fresh(ctx), b=await fresh(ctx);
+  await go(a,SITE); await ready(a); await go(b,SITE); await ready(b);
+  ok('8r9 both tabs are view-only and say why', /не дає переконатися/.test(await strip(a)) && /не дає переконатися/.test(await strip(b)));
+  await a.bringToFront(); await tryType(a,500,300,'перша без замка'); await a.keyboard.press('Escape'); await b.bringToFront(); await tryType(b,500,300,'друга без замка'); await b.keyboard.press('Escape'); await b.waitForTimeout(600);
+  ok('8r10 neither of them writes a note', !(await fbKeys(a)).length);
+  ok('8r11 no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+
+/* ── 8r12. with IndexedDB but no confirmed lock: a plain key moves in only when newer, and stays; a later start under the lock joins the rest ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ let f=''; try{ f=localStorage.getItem('__nolock')||''; }catch(_){} if(f && navigator.locks) navigator.locks.request=()=>Promise.reject(new DOMException('refused','SecurityError')); });
+  const pg=await fresh(ctx); await go(pg,SITE); await ready(pg);   // makes the database
+  await go(pg,SITE+'blank.html'); const T=Date.now();
+  await pg.evaluate(T=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('notes','readwrite');
+    t.objectStore('notes').put({id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'новий сьомий'}],created:T-9e5,updated:T-100}); t.oncomplete=()=>{ d.close(); res(); }; }; }), T);
+  await pg.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x7',{id:'x7',title:'Сьомий',blocks:[{id:'a',fx:0.1,row:2,text:'старий сьомий'}],created:T-9e5,updated:T-5000});
+    put('x8',{id:'x8',title:'Восьмий',blocks:[{id:'a',fx:0.1,row:2,text:'лише в ключі'}],created:T-9e5,updated:T-200});
+    localStorage.setItem('__nolock','1'); }, T);
+  await go(pg,SITE); await ready(pg); await pg.reload(); await ready(pg);
+  let d=await dump(pg);
+  ok('8r12 without a confirmed lock, a note only in a plain key moves in, and the key stays', has(d.stores.notes,/лише в ключі/) && /лише в ключі/.test(d.ls['sheet:note:x8']||''));
+  ok('8r13 an older plain copy waits in its key: two starts make no backup copy of it', !has(d.stores.notes,/старий сьомий/) && /старий сьомий/.test(d.ls['sheet:note:x7']||''));
+  await pg.evaluate(()=>localStorage.removeItem('__nolock')); await pg.reload(); await ready(pg);
+  d=await dump(pg);
+  ok('8r14 the next start under the lock keeps the older copy as one backup copy and drops both keys', d.stores.notes.filter(n=>/старий сьомий/.test(JSON.stringify(n))).length===1 && has(d.stores.notes,/новий сьомий/) && !Object.keys(d.ls).length);
+  ok('8r15 no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 8r16. a tab without IndexedDB starts while a tab with it holds the lock to move plain keys in: it is view-only, and the notes moved are kept ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); await ctx.addInitScript(FAILS);
+  const a=await fresh(ctx), b=await fresh(ctx); await b.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); });
+  await go(a,SITE); await ready(a); await go(a,SITE+'blank.html'); const T=Date.now();
+  await a.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x9',{id:'x9',title:'Девʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'перший простий ключ'}],created:T-9e5,updated:T-200});
+    put('x10',{id:'x10',title:'Десятий',blocks:[{id:'a',fx:0.1,row:2,text:'другий простий ключ'}],created:T-9e5,updated:T-300});
+    localStorage.setItem('__fail','slow'); }, T);   // each move keeps its transaction open for 1.5 s, and A holds the lock meanwhile
+  await go(a,SITE);
+  const held=await a.evaluate(async()=>{ for(let i=0;i<100;i++){ const q=await navigator.locks.query(); if(q.held.some(l=>l.name==='baobook:writer')) return true; await new Promise(r=>setTimeout(r,10)); } return false; });
+  await go(b,SITE); await ready(b); const msg=await strip(b);
+  ok('8r16 B starts after A took the writer lock to move the keys in: B is view-only ('+msg+')', held && /відкритий в іншій вкладці/.test(msg));
+  await a.bringToFront(); await ready(a); await a.waitForTimeout(3500); await a.evaluate(()=>localStorage.removeItem('__fail'));
+  const d=await dump(a);
+  ok('8r17 A moved both notes in and dropped the keys under the lock; B wrote nothing', has(d.stores.notes,/перший простий ключ/) && has(d.stores.notes,/другий простий ключ/) && !Object.keys(d.ls).length);
+  ok('8r18 no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
 /* ── 8s. two tabs without IndexedDB: only one writes; the other is view-only until it is the only one ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true});

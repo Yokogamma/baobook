@@ -844,7 +844,8 @@ const IDB_NAME='sheet';
    app's data (a larger version, e.g. after rolling the site back) still opens, but only to view and export: LOCK stops every write, the
    localStorage fallback included. On a new device that open makes an empty v1, and the stores come with v2.
    LOCK: null; 'newer' (the data is newer than this code); 'updated' (another tab upgraded the database while this one was open);
-   'blocked' (another tab keeps this one from creating the stores); 'other' (no IndexedDB, and another tab is the one that writes) ══ */
+   'blocked' (another tab keeps this one from creating the stores); 'other' (no IndexedDB, and another tab is the one that writes);
+   'nolock' (no IndexedDB, and the browser cannot confirm that this tab is the only one that writes) ══ */
 const IDB_VER=2, IDB_STORES=['notes','versions','blobs'];
 let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
 function setLock(k){ if(LOCK) return; LOCK=k; if(STARTED) lockUI(); }
@@ -884,12 +885,16 @@ const TAB=Math.random().toString(36).slice(2,8), FELL=new Set();   // FELL: note
 let GEN=0;   // the generation of every save in this tab, in the order the saves start
 const fbOwn=id=>store.keys(NK+id+'~'+TAB+'~');
 function fbDrop(id, g){ const p=NK+id+'~'+TAB+'~'; for(const k of fbOwn(id)) if(+k.slice(p.length)<g) store.del(k); if(!fbOwn(id).length) FELL.delete(id); }   // only older generations: a newer one may hold the only copy
-/* without IndexedDB the plain keys are the store, and only one tab writes them (writerLock): the others are view-only. So nothing here
-   races with another tab. At start the writing tab joins the fallback keys left from a time IndexedDB worked into the plain keys, the
-   backup of the older copy first; a copy that does not fit stays in its key and shows as a backup copy in memory (fbAll) */
-function writerLock(){ if(!navigator.locks || !navigator.locks.request) return Promise.resolve(true);   // without the Web Locks API every tab writes, as before
-  return new Promise(res=>{ try{ navigator.locks.request('baobook:writer',{ifAvailable:true},lock=>{ res(!!lock); return lock? new Promise(()=>{}) : null; }).catch(()=>res(true)); }catch(_){ res(true); } }); }   // held while the tab is open; a refused request writes as before rather than leave the start hanging
-function writerFree(){ return navigator.locks && navigator.locks.request? navigator.locks.request('baobook:writer',{ifAvailable:true},lock=>!!lock).catch(()=>true) : Promise.resolve(true); }   // no tab without IndexedDB is writing right now
+/* without IndexedDB the plain keys are the store, and only the tab holding the writer lock writes them: any other tab, and every tab when
+   the lock cannot be confirmed, is view-only. So nothing here races with another tab. At start the writing tab joins the fallback keys left
+   from a time IndexedDB worked into the plain keys, the backup of the older copy first; a copy that does not fit stays in its key and shows
+   as a backup copy in memory (fbAll) */
+const hasLocks=()=>!!(navigator.locks && navigator.locks.request);
+// the writer lock (baobook:writer): a tab without IndexedDB holds it while it is open, a tab with IndexedDB while it moves the plain keys in
+// and drops them. Resolves to the function that lets it go; false when another tab holds it; null when it cannot be confirmed (no Web Locks
+// API, a refused request, no answer in 3 s): the start goes on either way
+function writerLock(){ return new Promise(res=>{ let done=false; const end=v=>{ if(done) return false; done=true; clearTimeout(tm); res(v); return true; }, tm=setTimeout(()=>end(null),3000);
+  try{ navigator.locks.request('baobook:writer',{ifAvailable:true},lock=>{ if(!lock){ end(false); return null; } let rel; const p=new Promise(r=>rel=r); return end(rel)? p : null; }).catch(()=>end(null)); }catch(_){ end(null); } }); }   // a lock granted after the 3 s goes at once
 function fbLocal(){ for(const k of store.keys(NK)){ if(!fbOnce(k)) continue; const n=store.get(k); if(!validNote(n)) continue; const ex=store.get(NK+n.id);
   if(![...fbPut(validNote(ex)? ex : null, n)].reverse().some(x=>store.put(NK+x.id,x))) store.del(k); } }
 const MEM=new Set();   // notes that live only in this tab's memory (copies not stored on their own yet, an empty view-only note to show); a tab sync keeps them
@@ -900,11 +905,14 @@ const db={ backend:'local', inited:false, ready:null,
   // at start: open IndexedDB, move the notes from localStorage (the fallback, and where the first version kept them) and drop their keys, so there are no two stores.
   // Nothing moves while LOCK; a record that is not a note stays for whoever can read it. Saves wait until this is done (db.ready)
   init(){ return db.ready=(async()=>{ try{
-    try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; if(LOCK) return; if(await writerLock()) fbLocal(); else setLock('other'); return; }
-    const plainOk=!store.keys(NK).some(k=>!fbOnce(k)) || await writerFree();   // a tab without IndexedDB may be writing the plain keys: then they are moved in but stay
-    for(const k of store.keys(NK)){ if(LOCK) return; const raw=store.raw(k), n=store.get(k); if(!validNote(n)) continue;
-      try{ await idb.tx(['notes'],'readwrite',t=>{ const s=t.objectStore('notes'), g=s.get(n.id); g.onsuccess=()=>{ try{ for(const x of fbPut(g.result, n)) s.put(x); }catch(_){ t.abort(); } }; }); }catch(_){ if(LOCK) return; continue; }   // the stored note is read in the same transaction: the copy and its backup go in together or not at all
-      if(LOCK) return; if(fbOnce(k) || (plainOk && store.raw(k)===raw)) store.del(k); }   // a key written once cannot have changed; a plain one rewritten meanwhile (by a tab without IndexedDB, or an app from before PR 0) stays for the next start
+    try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; if(LOCK) return; const w=await writerLock(); if(w) fbLocal(); else setLock(w===false? 'other' : 'nolock'); return; }
+    // a plain key is written by a tab without IndexedDB, only under the writer lock, and by an app from before PR 0. So this tab drops one only
+    // while it holds the lock (or the browser has no Web Locks, and then no tab without IndexedDB writes), and only if the key did not change
+    const w=hasLocks() && store.keys(NK).some(k=>!fbOnce(k))? await writerLock() : null, mine=!!w || !hasLocks();
+    try{ for(const k of store.keys(NK)){ if(LOCK) return; const raw=store.raw(k), n=store.get(k), once=fbOnce(k); if(!validNote(n)) continue;
+      try{ await idb.tx(['notes'],'readwrite',t=>{ const s=t.objectStore('notes'), g=s.get(n.id); g.onsuccess=()=>{ try{ if(!once && !mine && g.result && (n.updated||0)<=(g.result.updated||0)) return; for(const x of fbPut(g.result, n)) s.put(x); }catch(_){ t.abort(); } }; }); }catch(_){ if(LOCK) return; continue; }   // the stored note is read in the same transaction: the copy and its backup go in together or not at all. A plain key that stays moves in only when it is newer: an older copy waits for a start under the lock, so no start stacks another backup of it
+      if(LOCK) return; if(once || (mine && store.raw(k)===raw)) store.del(k); }   // a key written once cannot have changed; a plain one stays without the lock, or if it was rewritten meanwhile
+    }finally{ if(w) w(); }
     }finally{ db.inited=true; } })(); },
   async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return fbAll(); },
   async save(n){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
@@ -1415,7 +1423,7 @@ const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note i
 // nothing is editable before the start is done (off), the strip and the classes follow ro()
 function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=r || !STARTED; sheet.inert=off; ttl.contentEditable=off? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
   roStrip.hidden=!r && !a; roPurge.hidden=!r || L; roRestore.hidden=L; roExport.hidden=!L; roReload.hidden=!L;
-  if(L){ roMsg.textContent=loc(LOCK==='blocked'? 'lock.blocked' : LOCK==='other'? 'lock.other' : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
+  if(L){ roMsg.textContent=loc(LOCK==='blocked'? 'lock.blocked' : LOCK==='other'? 'lock.other' : LOCK==='nolock'? 'lock.nolock' : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
   else if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
 roRestore.addEventListener('click',()=>{ if(!cur) return; if(cur.deleted) restoreNote(cur, true); else unarchive(cur); }); roPurge.addEventListener('click',()=>{ if(cur) purgeAsk(cur); });
 roExport.addEventListener('click',()=>exportAll({hist:true})); roReload.addEventListener('click',()=>location.reload());   // view-only: everything this tab has, the history as stored
