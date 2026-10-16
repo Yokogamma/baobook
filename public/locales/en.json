@@ -71,6 +71,7 @@
   "storage.fallback": "(fallback storage)",
   "storage.export": "export: {when}",
   "storage.exportNever": "never",
+  "storage.purgeBlocked": "Could not delete «{title}» for good: its backup copy has to be saved first, and there is no room for it. Free some space or export your notes.",
   "storage.backupTitle": "{title} (backup copy)",
   "lock.newer": "This version of Baobook is older than your data. You can view and export; reload the page to edit.",
   "lock.updated": "Baobook was updated in another tab. Reload the page to continue.",

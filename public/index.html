@@ -887,10 +887,14 @@ function fbDrop(id, g){ const p=NK+id+'~'+TAB+'~'; for(const k of fbOwn(id)) if(
 function fbLocal(){ for(const k of store.keys(NK)){ if(!fbOnce(k)) continue; const n=store.get(k); if(!validNote(n)) continue; const ex=store.get(NK+n.id);
   if(![...fbPut(validNote(ex)? ex : null, n)].reverse().some(x=>store.put(NK+x.id,x))) store.del(k); } }
 const MEM=new Set();   // notes that live only in this tab's memory (fallback copies not stored yet, an empty view-only note to show); a tab sync keeps them
+const MEMSRC=new Map();   // a backup copy in memory → {id, k}: the note and the key its only stored copy is in
 // without IndexedDB: the newest copy of each note, and every other different copy as a backup copy in memory, until fbLocal can store it
-function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push(n); }
-  const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.updated||0)-(a.updated||0)); const seen=new Set([noteSig(list[0])]); out.push(list[0]);
-    for(const x of list.slice(1)) if(!seen.has(noteSig(x))){ seen.add(noteSig(x)); const c=backupOf(x); MEM.add(c.id); out.push(c); } } return out; }
+function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push({k,n}); }
+  const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.n.updated||0)-(a.n.updated||0)); const seen=new Set([noteSig(list[0].n)]); out.push(list[0].n);
+    for(const x of list.slice(1)) if(!seen.has(noteSig(x.n))){ seen.add(noteSig(x.n)); const c=backupOf(x.n); MEM.add(c.id); MEMSRC.set(c.id,{id:x.n.id, k:x.k}); out.push(c); } } return out; }
+// before the keys of a note go, its backup copies shown from them are stored on their own; false: one did not fit, so the keys must stay
+function keepBackups(id){ for(const [bid,src] of [...MEMSRC]) if(src.id===id){ const b=notes.find(x=>x.id===bid); if(!b){ MEMSRC.delete(bid); continue; }
+  if(store.put(NK+bid,b)) return false; MEM.delete(bid); MEMSRC.delete(bid); } return true; }
 const db={ backend:'local', inited:false, ready:null,
   // at start: open IndexedDB, move the notes from localStorage (the fallback, and where the first version kept them) and drop their keys, so there are no two stores.
   // Nothing moves while LOCK; a record that is not a note stays for whoever can read it. Saves wait until this is done (db.ready)
@@ -905,7 +909,7 @@ const db={ backend:'local', inited:false, ready:null,
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
     if(db.backend==='idb'){ try{ await idb.put(n); if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
-    if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
+    if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2){ MEM.delete(n.id); MEMSRC.delete(n.id); } return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
     const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true}; },
   async remove(id){ if(!db.inited && db.ready) await db.ready; if(LOCK) return; for(const k of store.keys(NK+id)) if(k===NK+id || k.startsWith(NK+id+'~')) store.del(k); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
   settings(){ return store.get(SK,{})||{}; },
@@ -1388,7 +1392,7 @@ async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bar
 function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
-function purgeNote(n){ if(LOCK) return; notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+function purgeNote(n){ if(LOCK) return; if(!keepBackups(n.id)){ say(loc('storage.purgeBlocked',{title:titleOf(n)})); return; } notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); }
 async function purgeAsk(n){ if(held()) return; if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
 function purgeOld(){ if(LOCK) return; const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
@@ -1404,7 +1408,8 @@ trashEmpty.addEventListener('click',async()=>{ if(held()) return; const k=notes.
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
 /* the strip under the header: a trashed note is read-only, an archived one only says where it is */
-function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived); sheet.inert=r; ttl.contentEditable=r? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
+// nothing is editable before the start is done (off), the strip and the classes follow ro()
+function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=r || !STARTED; sheet.inert=off; ttl.contentEditable=off? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
   roStrip.hidden=!r && !a; roPurge.hidden=!r || L; roRestore.hidden=L; roExport.hidden=!L; roReload.hidden=!L;
   if(L){ roMsg.textContent=loc(LOCK==='blocked'? 'lock.blocked' : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
   else if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
@@ -1433,7 +1438,9 @@ function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.i
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM.has(id) || LOCK) return;   // edits here keep the note (its next save writes it back); view-only, memory may hold the last copy left
   notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
   if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
-if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); };
+const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
+function tabMsg(m){ if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); }
+if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
 async function syncTabs(){ if(!cur) return; const m=await storedNotes(); for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r); }
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
@@ -2148,8 +2155,8 @@ sheet.addEventListener('pointermove',e=>{
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
-areaBtn.addEventListener('click',()=>{ closeHist(); const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
-document.addEventListener('paste',e=>{ if(H.view || ro()) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
+areaBtn.addEventListener('click',()=>{ if(!STARTED) return; closeHist(); const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
+document.addEventListener('paste',e=>{ if(H.view || ro() || !STARTED) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
   const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty(); pastedUndo(b);
@@ -2436,7 +2443,7 @@ function textStepper(){ const d=document.createElement('div'); d.className='mi-s
 async function start(){
   await db.init(); notes=await db.all(); vstart();
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-  if(LOCK){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
+  if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
   if(!notes.length && !LOCK){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
@@ -2448,14 +2455,14 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload'? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
-  STARTED=true;   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once
+  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg);   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
 spell=S.spell===true; spellUI();
 app.classList.toggle('open', isMobile()? false : S.side!==false); sideBtn.setAttribute('aria-expanded', app.classList.contains('open')?'true':'false');
-sheet.inert=true; ttl.contentEditable='false';   // until start() opens a note (roSync sets them then)
+sheet.inert=true; ttl.contentEditable='false';   // until start() is done (roSync opens them then)
 applyMode(); start();
 
 /* ══ language: the choice is saved in settings and applied by reloading, so every string comes from one file ══ */

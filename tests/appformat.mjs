@@ -281,18 +281,60 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('8h once there is room, the next start joins them: no fallback keys left, x3 has the edit, the older text is kept as a note of its own', !k2.some(([k])=>/~/.test(k)) && k2.some(([k,v])=>k==='sheet:note:x3' && /правка Б/.test(v)) && k2.some(([k,v])=>k!=='sheet:note:x3' && /текст А/.test(v) && /резервна копія/.test(v)));
   ok('8i no page errors', !pg.errs.length); await ctx.close(); }
 
+/* ── 8j. without IndexedDB: the newer copy is deleted for good while the older one is a backup that lives only in its key ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); }); await ctx.addInitScript(LSFAIL); const pg=await fresh(ctx);
+  await go(pg,SITE+'blank.html');
+  const T=Date.now();
+  await pg.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x4',{id:'x4',title:'Четвертий',blocks:[{id:'a',fx:0.1,row:2,text:'стара копія Ч'}],created:T-9e5,updated:T-5000});
+    put('x4~tabq~6',{id:'x4',title:'Четвертий',blocks:[{id:'a',fx:0.1,row:2,text:'нова копія Ч'}],created:T-9e5,updated:T-100,deleted:T-100});   // the newer one is in the trash
+    put('keep',{id:'keep',title:'Інша',blocks:[{id:'k',fx:0.1,row:2,text:'інша нотатка'}],created:T-9e5,updated:T-50});
+    localStorage.setItem('__lsfail','backup'); }, T);
+  await go(pg,SITE); await ready(pg);
+  const purge=async()=>{ await pg.locator('#trashRow').click(); await pg.waitForTimeout(200); const it=pg.locator('#list .item').filter({hasText:'нова копія Ч'}).first(); await it.hover(); await it.locator('.it-x').click(); await pg.waitForTimeout(200); await pg.locator('#askYes').click(); await pg.waitForTimeout(400); };
+  await purge();
+  const keys=await fbKeys(pg);
+  ok('8j the backup cannot be stored on its own, so «Видалити назавжди» is refused with the reason and both keys stay', /немає місця/.test(await pg.locator('#toast').innerText()) && keys.some(([k,v])=>k==='sheet:note:x4' && /стара копія Ч/.test(v)) && keys.some(([k])=>k==='sheet:note:x4~tabq~6'));
+  await pg.reload(); await ready(pg);
+  ok('8k after a reload the older copy is still there', (await pg.locator('#list .item').allInnerTexts()).some(t=>/Четвертий \(резервна копія\)/.test(t)));
+  await pg.evaluate(()=>localStorage.removeItem('__lsfail'));   // now there is room, while this tab (started without it) still shows the backup only from memory
+  await purge();
+  await pg.reload(); await ready(pg);
+  const items=await pg.locator('#list .item').allInnerTexts(), k2=await fbKeys(pg);
+  ok('8l with room, «Видалити назавжди» first stores the backup on its own: after a reload the older text is a note, the newer copy is gone', items.some(t=>/Четвертий \(резервна копія\)/.test(t)) && k2.some(([,v])=>/стара копія Ч/.test(v)) && !k2.some(([,v])=>/нова копія Ч/.test(v)));
+  ok('8m no page errors', !pg.errs.length); await ctx.close(); }
+
 /* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // an empty v1 held open: the start waits for it
   await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'});
-  await a.locator('#newBtn').click(); await a.mouse.click(500,400); await a.keyboard.type('під час запуску'); await a.waitForTimeout(400);
-  ok('9 during the wait «Нова» makes no note, the sheet and the title take no text, nothing goes to localStorage', !(await fbKeys(a)).length && !/під час запуску/.test(await sheetText(a)) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false' && !(await a.locator('#list .item').count()));
+  await a.locator('#newBtn').click(); await a.mouse.click(500,400); await a.keyboard.type('під час запуску');
+  await a.evaluate(()=>{ const dt=new DataTransfer(); dt.setData('text/plain','вставлено під час запуску'); document.body.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); });   // a paste outside any field
+  await b.evaluate(()=>{ const c=new BroadcastChannel('sheet:notes'); c.postMessage({t:'put', n:{id:'nNb',title:'Від сусіда',blocks:[{id:'s1',fx:0.1,row:2,text:'нотатка з іншої вкладки'}],created:Date.now(),updated:Date.now()}}); c.close(); });
+  await a.waitForTimeout(400);
+  ok('9 during the wait «Нова» makes no note, the sheet and the title take no text, a paste makes no block, nothing goes to localStorage', !(await fbKeys(a)).length && !/під час запуску/.test(await sheetText(a)) && !(await a.locator('#sheet .blk').count()) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
+  ok('9a a note another tab sent during the wait does not show yet: nothing to open and edit before the start is done', !(await a.locator('#list .item').count()));
   await a.waitForTimeout(3600);
   ok('9b once the block lasts, the tab is view-only and still nothing went to the fallback', /Закрийте інші вкладки Baobook/.test(await strip(a)) && !(await fbKeys(a)).length);
   ok('9c nothing typed during the wait was taken and lost: nothing waits to be saved (plain «Експорт»)', /^Експорт$/.test((await a.locator('#roExport').innerText()).trim()));
+  ok('9e after the start the other tab\'s note shows (its message was kept and applied), view-only', (await a.locator('#list .item').allInnerTexts()).some(t=>/Від сусіда/.test(t)) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
   await b.evaluate(()=>window.__hold.close());
   ok('9d no page errors', !a.errs.length); await ctx.close(); }
+
+/* ── 9g. a blocked start with two different copies of a note in the fallback keys: one backup copy, not two ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
+  await go(b,SITE+'blank.html'); const T=Date.now();
+  await b.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
+    put('x5',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'старий пʼятий'}],created:T-9e5,updated:T-5000});
+    put('x5~tabq~7',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'новий пʼятий'}],created:T-9e5,updated:T-100}); }, T);
+  await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));
+  await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await a.waitForTimeout(3800);
+  const items=await a.locator('#list .item').allInnerTexts();
+  ok('9g blocked, two copies in the fallback keys: the newer note and exactly one backup copy ('+items.length+' items)', items.length===2 && items.filter(t=>/резервна копія/.test(t)).length===1);
+  await b.evaluate(()=>window.__hold.close());
+  ok('9h no page errors', !a.errs.length); await ctx.close(); }
 
 /* ── 10. a record under a note key that is not a note stays where it is ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await fresh(ctx);
