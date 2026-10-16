@@ -60,6 +60,13 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   await typeAt(pg,500,300,'після порожньої v1'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const d1=await dump(pg);
   ok('1c an empty v1 database gets its stores (v'+d1.version+') and the note is saved', d1.version===2 && ['notes','versions','blobs'].every(s=>s in d1.stores) && has(d1.stores.notes,/після порожньої v1/) && !(await strip(pg)));
+  // a v2 that lacks a store is opened as it is: mending it would need v3, which would read as a newer app's data and lock the app out
+  await go(pg,SITE+'blank.html'); await pg.evaluate(delDb);
+  await pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet',2); q.onupgradeneeded=()=>{ q.result.createObjectStore('notes',{keyPath:'id'}); const v=q.result.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); }; q.onsuccess=()=>{ q.result.close(); r(); }; }));   // no «blobs»
+  await go(pg,SITE); await ready(pg);
+  await typeAt(pg,500,300,'v2 без blobs'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
+  const d2=await dump(pg);
+  ok('1i a v2 without «blobs» stays v'+d2.version+', the app is not view-only and the note is saved', d2.version===2 && !(await strip(pg)) && has(d2.stores.notes,/v2 без blobs/));
   ok('1d no page errors', !pg.errs.length); await ctx.close(); }
 
 /* ── 1e. two tabs start together on a new device: both get the v2 stores and both can write ── */
@@ -355,6 +362,27 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   const texts=(await b.locator('#list .item').allInnerTexts()).join('\n');
   ok('8v after B reloads, В and А0 are both in the list', /сьомий В новий/.test(texts) && /сьомий А0/.test(texts));
   ok('8w no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
+
+/* ── 8x. across tabs without IndexedDB: A checks a note's keys and is about to delete them; B saves the same note into its plain key right then ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+  await ctx.addInitScript(()=>{ Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true}); });
+  const a=await fresh(ctx), b=await fresh(ctx); await b.addInitScript(()=>{ window.BroadcastChannel=undefined; });   // B hears nothing from A: it still has the note open, live
+  await go(a,SITE+'blank.html'); const T=Date.now();
+  await a.evaluate(T=>{ localStorage.setItem('sheet:note:x8', JSON.stringify({id:'x8',title:'Восьмий',blocks:[{id:'a',fx:0.1,row:2,text:'восьмий 1'}],created:T-9e5,updated:T-1000}));
+    const st=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); st.current='x8'; localStorage.setItem('sheet:settings', JSON.stringify(st)); }, T);
+  await go(b,SITE); await ready(b);   // B opens «Восьмий»
+  await go(a,SITE); await ready(a);
+  const it=a.locator('#list .item').filter({hasText:'восьмий 1'}).first(); await it.hover(); await it.locator('.it-x').click(); await a.waitForTimeout(500);   // A moves it to the trash
+  await a.evaluate(()=>{ window.sheetDebug.purgeWait=new Promise(r=>{ window.__go=r; }); });   // the test barrier: A will hold the lock between the check and the delete
+  await a.locator('#trashRow').click(); await a.waitForTimeout(200);
+  const it2=a.locator('#list .item').filter({hasText:'восьмий 1'}).first(); await it2.hover(); await it2.locator('.it-x').click(); await a.waitForTimeout(200); await a.locator('#askYes').click(); await a.waitForTimeout(300);
+  await typeAt(b,950,300,'восьмий C'); await b.keyboard.press('Escape'); await b.waitForTimeout(900);   // B saves the note while A holds the lock
+  ok('8x while A holds the lock between its check and its delete, B\'s save of the same note waits (the key still has A\'s checked content)', !/восьмий C/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x8')||'')));
+  await a.evaluate(()=>window.__go()); await a.waitForTimeout(800);
+  ok('8y A deletes the keys it checked, then B\'s save goes in: the key holds B\'s text', /восьмий C/.test(await a.evaluate(()=>localStorage.getItem('sheet:note:x8')||'')));
+  await b.bringToFront(); await b.reload(); await ready(b);
+  ok('8z after B reloads, the note is in the list and B\'s text is stored in it', (await b.locator('#list .item').allInnerTexts()).some(t=>/Восьмий/.test(t)) && /восьмий C/.test(await b.evaluate(()=>localStorage.getItem('sheet:note:x8')||'')));
+  ok('8za no page errors', !a.errs.length && !b.errs.length); await ctx.close(); }
 
 /* ── 9. a save made while the start still waits for the database waits too: it does not go to the fallback ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
