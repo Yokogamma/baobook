@@ -78,3 +78,7 @@ Scenarios write screenshots and temporary files to `<tmpdir>/sheet-tests/`, not 
 To reset state between steps, run `localStorage.clear()` + `indexedDB.deleteDatabase('sheet')` after a pause of at least 400 ms (autosave has a 300 ms delay).
 
 The notes panel is 280px wide (17.5rem at the default text size), so clicks on the sheet start at x≈400.
+
+## Lab scripts
+
+`tests/lab/` holds scripts that measure behaviour without asserting it, so CI does not run them (it runs `tests/*.mjs` only). `node tests/lab/layout-probes.mjs` reproduces the numbers in `docs/LAYOUT-MODEL.md` §6.
