@@ -73,6 +73,8 @@ GitHub Actions (`.github/workflows/tests.yml`) runs the same scenarios on every 
 
 Run scenarios one at a time. `appdrop` 5a/5b (mouse drag with coordinate checks) failed once while two other scenarios ran in parallel and passes reliably on its own. This may be test flakiness under load; an app bug is not proven.
 
+Wait for a condition, not for a fixed pause: a pause that is long enough on a quiet machine can be too short on a busy one. `lib/wait.mjs` has `ready` (the app has started and drawn the note list), `frames`, `still` (no CSS transition left in an element), `resize` (a new viewport size has reached the page and its resize timers), `armClick`/`clicked` (the click a tap causes on an element has been handled) and `until` (polls a value; the check after it still decides). To shake out such races, run a scenario while three or four others run in parallel, or with the renderer slowed down through a CDP session (`Emulation.setCPUThrottlingRate`).
+
 Scenarios write screenshots and temporary files to `<tmpdir>/sheet-tests/`, not into the repository.
 
 To reset state between steps, run `localStorage.clear()` + `indexedDB.deleteDatabase('sheet')` after a pause of at least 400 ms (autosave has a 300 ms delay).

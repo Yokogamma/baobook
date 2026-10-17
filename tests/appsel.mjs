@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
+import { ready, frames, still, armClick, clicked, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
@@ -8,84 +9,96 @@ let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n);
 const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'sheet-tests'); (await import('node:fs')).mkdirSync(OUT,{recursive:true});
 const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)} : null; };
 const touch=async(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
-const tap=async(x,y)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(60); await touch('touchEnd',[]); };
+// the release is sent right behind the touch: with a pause between them, a slow round trip could make a tap last past the 450 ms hold
+const tap=async(x,y)=>{ await Promise.all([touch('touchStart',[{x,y}]), touch('touchEnd',[])]); };
 const tapEl=async(loc)=>{ const b=await box(loc); await tap(b.x+b.w/2, b.y+b.h/2); };
-const hold=async(x,y,ms=650)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(ms); await touch('touchEnd',[]); };
+// a button tapped and its click handled (the click comes a moment after the touch)
+const tapBtn=async(loc)=>{ await armClick(loc); await tapEl(loc); await clicked(pg); };
+// the finger stays down until the hold has taken effect (a new block, or the frame of position mode), and at least ms: released at a fixed
+// moment, it could come before a hold timer that runs late on a busy machine (input goes first), and the hold would be a tap
+const hold=async(x,y,ms=650)=>{ const n=await pg.locator('#sheet .blk').count(); await touch('touchStart',[{x,y}]); await pg.waitForTimeout(ms);
+  await until(async()=>(await pg.locator('#sheet .blk').count())!==n || (await pg.locator('.blk.sel').count())>0, 3000); await touch('touchEnd',[]); };
 const dragTo=async(x,y,tx,ty)=>{ await touch('touchStart',[{x,y}]); for(let i=1;i<=10;i++){ await pg.waitForTimeout(40); await touch('touchMove',[{x:x+(tx-x)*i/10,y:y+(ty-y)*i/10}]); } await pg.waitForTimeout(120); await touch('touchMove',[{x:tx,y:ty}]); await pg.waitForTimeout(150); await touch('touchEnd',[]); };   // контур відстає на крок: останній рух окремо, з паузою
 const focusedTxt=()=>pg.evaluate(()=>!!document.activeElement && document.activeElement.classList.contains('txt'));
 const blk=t=>pg.locator('#sheet > .blk').filter({hasText:t});
+const isSel=t=>blk(t).evaluate(e=>e.classList.contains('sel')), caretIn=()=>pg.evaluate(()=>{ const s=getSelection(); const n=s.anchorNode; return !!(n && (n.nodeType===1? n : n.parentElement).closest('.txt')); });
+// a hold makes a block and puts the caret into it on release: type once it is there (Esc leaves the block, which writes it at once)
+const holdType=async(x,y,t)=>{ await hold(x,y); await until(focusedTxt); await pg.keyboard.type(t); await pg.keyboard.press('Escape'); await frames(pg); };
 const model=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); const all=t.result.flatMap(n=>n.blocks); res(Object.fromEntries(all.map(b=>[b.text,{row:b.row,fx:+(b.fx||0).toFixed(3),parent:b.parent||null}]))); }; }; }));
 const near=(a,b,d=3)=>Math.abs(a-b)<=d;
-await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+// a move and its way to storage: the autosave writes 300 ms after it, later on a busy machine
+const stored=async(act)=>{ const m0=JSON.stringify(await model()); await act(); await until(async()=>JSON.stringify(await model())!==m0); };
+const tapMoved=loc=>stored(()=>tapBtn(loc));
+await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg);
 // the positions below are measured on the 24px grid of 16px text; a phone's own 18px text on 27px rows is checked by appflow and apptextsize
-await pg.evaluate(()=>localStorage.setItem('sheet:settings', JSON.stringify({textSys:false, textSheet:16, textUi:1}))); await pg.reload(); await pg.waitForTimeout(400);
+await pg.evaluate(()=>localStorage.setItem('sheet:settings', JSON.stringify({textSys:false, textSheet:16, textUi:1}))); await pg.reload(); await ready(pg);
 // 1 утримання створює блок саме там, де палець — і по горизонталі, і по вертикалі
-await hold(200,300); await pg.waitForTimeout(250); await pg.keyboard.type('Правий'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
-await hold(60,500); await pg.waitForTimeout(250); await pg.keyboard.type('Лівий внизу'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500);
+await holdType(200,300,'Правий');
+await holdType(60,500,'Лівий внизу');
 { const a=await box(blk('Правий').locator('.txt')), b=await box(blk('Лівий внизу').locator('.txt')); const m=await model();
   ok('1 блоки стоять там, де утримували: «Правий» '+a.x+','+a.y+' (ряд '+m['Правий'].row+', fx '+m['Правий'].fx+'), «Лівий внизу» '+b.x+','+b.y+' (ряд '+m['Лівий внизу'].row+')', near(a.x,198) && near(a.y,300) && near(b.x,54) && near(b.y,492) && m['Правий'].row===12 && m['Лівий внизу'].row===20 && m['Правий'].fx>0.45 && m['Лівий внизу'].fx<0.2); }
 // 2 утримання на тексті блока — режим положення без клавіатури й без системного виділення
-{ const b=await box(blk('Лівий внизу').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250);
+{ const b=await box(blk('Лівий внизу').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await until(()=>isSel('Лівий внизу')); await frames(pg);
   ok('2 утримання на тексті: рамка, панель стрілок, курсора й виділення немає, «+» схований', await blk('Лівий внизу').evaluate(e=>e.classList.contains('sel')) && await pg.locator('#blockbar').isVisible() && !(await focusedTxt()) && (await pg.evaluate(()=>getSelection().toString()))==='' && !(await pg.locator('#fab').isVisible())); }
 // 3 → до правого краю
-await tapEl(pg.locator('#blockbar [data-mv="right"]')); await pg.waitForTimeout(400);
+await tapMoved(pg.locator('#blockbar [data-mv="right"]'));
 { const c=await box(blk('Лівий внизу').locator('.tcard')); const m=await model();
   ok('3 «→»: правий край картки біля правого поля ('+(c.x+c.w)+' з 374), ряд той самий, fx '+m['Лівий внизу'].fx, c.x+c.w<=374 && c.x+c.w>=374-24 && near(c.y,492) && m['Лівий внизу'].fx>0.5 && m['Лівий внизу'].row===20); }
 // 4 ↑ впритул під блок вище, з яким є конфлікт по горизонталі
-await tapEl(pg.locator('#blockbar [data-mv="up"]')); await pg.waitForTimeout(400);
+await tapMoved(pg.locator('#blockbar [data-mv="up"]'));
 { const t=await box(blk('Лівий внизу').locator('.txt')), a=await box(blk('Правий').locator('.txt')); const m=await model();
   ok('4 «↑»: блок став одразу під «Правий» ('+t.y+' = '+(a.y+a.h)+'), ряд '+m['Лівий внизу'].row, near(t.y, a.y+a.h, 4) && m['Лівий внизу'].row===13); }
 // 5 ← до лівого поля
-await tapEl(pg.locator('#blockbar [data-mv="left"]')); await pg.waitForTimeout(400);
+await tapMoved(pg.locator('#blockbar [data-mv="left"]'));
 { const t=await box(blk('Лівий внизу').locator('.txt')); const m=await model(); ok('5 «←»: текст від лівого поля ('+t.x+'), ряд той самий', near(t.x,30) && m['Лівий внизу'].row===13 && m['Лівий внизу'].fx<0.15); }
 // 6 ↓ без сусіда нижче нічого не робить; з сусідом — впритул над ним
-await tapEl(pg.locator('#blockbar [data-mv="down"]')); await pg.waitForTimeout(300);
+await tapBtn(pg.locator('#blockbar [data-mv="down"]')); await frames(pg);
 { const t=await box(blk('Лівий внизу').locator('.txt')); ok('6a «↓» без блока нижче лишає на місці ('+t.y+')', near(t.y,324)); }
-await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300);
-await hold(60,700); await pg.waitForTimeout(250); await pg.keyboard.type('Третій'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500);
-{ const b=await box(blk('Лівий внизу').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250); await tapEl(pg.locator('#blockbar [data-mv="down"]')); await pg.waitForTimeout(400);
+await tapBtn(pg.locator('#blockbar [data-mv="done"]')); await frames(pg);
+await holdType(60,700,'Третій');
+{ const b=await box(blk('Лівий внизу').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await until(()=>isSel('Лівий внизу')); await tapMoved(pg.locator('#blockbar [data-mv="down"]'));
   const t=await box(blk('Лівий внизу').locator('.txt')), c=await box(blk('Третій').locator('.txt')); const m=await model();
   ok('6b «↓»: блок впритул над «Третій» ('+(t.y+t.h)+' = '+c.y+'), ряд '+m['Лівий внизу'].row, near(t.y+t.h, c.y, 4) && m['Лівий внизу'].row===m['Третій'].row-1); }
 // 6c «↓» без сусіда по горизонталі — під найнижчий блок
-{ const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300); await tapEl(pg.locator('#blockbar [data-mv="down"]')); await pg.waitForTimeout(400);
+{ const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await until(()=>isSel('Правий')); await tapMoved(pg.locator('#blockbar [data-mv="down"]'));
   const t=await box(blk('Правий').locator('.txt')), c=await box(blk('Третій').locator('.txt')); const m=await model();
   ok('6c «↓» без сусіда: «Правий» під найнижчим «Третій» ('+t.y+' = '+(c.y+c.h)+'), ряд '+m['Правий'].row, near(t.y, c.y+c.h, 4) && m['Правий'].row===m['Третій'].row+1); }
 // 7 «Готово» знімає режим; дотик по тексту ставить курсор, як і раніше
-await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(400);
+await tapBtn(pg.locator('#blockbar [data-mv="done"]')); await until(()=>pg.locator('#fab').isVisible());   // «+» comes back 150 ms after the bar goes
 ok('7a «Готово»: рамки й панелі немає, «+» повернувся', (await pg.locator('.blk.sel').count())===0 && !(await pg.locator('#blockbar').isVisible()) && await pg.locator('#fab').isVisible());
-{ const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(300);
+{ const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await until(focusedTxt); await frames(pg);
   ok('7b короткий дотик по тексту ставить курсор без режиму положення', await focusedTxt() && (await pg.locator('.blk.sel').count())===0); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300); }
 // 7c текст неактивного блока для системи невиділюваний (довге натискання — наш жест), з курсором — виділюваний; дотик по ручці — теж режим положення
-{ const us=await blk('Правий').locator('.txt').evaluate(e=>getComputedStyle(e).userSelect); const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(250); const usF=await blk('Правий').locator('.txt').evaluate(e=>getComputedStyle(e).userSelect);
-  const caretIn=await pg.evaluate(()=>{ const s=getSelection(); const n=s.anchorNode; return !!(n && (n.nodeType===1? n : n.parentElement).closest('.txt')); });
-  ok('7c без курсора user-select='+us+', з курсором '+usF+', курсор поставлено в блок', us==='none' && usF==='text' && caretIn); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
-  const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300);
+{ const us=await blk('Правий').locator('.txt').evaluate(e=>getComputedStyle(e).userSelect); const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await until(caretIn); const usF=await blk('Правий').locator('.txt').evaluate(e=>getComputedStyle(e).userSelect);
+  const inBlk=await caretIn();
+  ok('7c без курсора user-select='+us+', з курсором '+usF+', курсор поставлено в блок ('+inBlk+')', us==='none' && usF==='text' && inBlk); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await until(()=>isSel('Правий')); await frames(pg);
   ok('7d дотик по ручці ⋮⋮ вмикає режим положення, нічого не копіює', await blk('Правий').evaluate(e=>e.classList.contains('sel')) && await pg.locator('#blockbar').isVisible() && !/Скопійовано/.test(await pg.locator('#toast').innerText()));
-  await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
+  await tapBtn(pg.locator('#blockbar [data-mv="done"]')); await frames(pg); }
 // 7e короткий блок «→»: сторінка не стає ширшою за екран; 7f дотик по аркушу знімає системне виділення слова
-{ await hold(60,420); await pg.waitForTimeout(250); await pg.keyboard.type('Ок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
-  const g=await box(blk('Ок').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300); await tapEl(pg.locator('#blockbar [data-mv="right"]')); await pg.waitForTimeout(400);
+{ await holdType(60,420,'Ок');
+  const g=await box(blk('Ок').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await until(()=>isSel('Ок')); await tapMoved(pg.locator('#blockbar [data-mv="right"]'));
   const bb=await box(blk('Ок')); const sw=await pg.evaluate(()=>document.documentElement.scrollWidth), sheetW=await pg.locator('#sheet').evaluate(e=>e.clientWidth);
-  ok('7e короткий блок «→»: правий край блока '+(bb.x+bb.w)+' ≤ '+sheetW+', сторінка не ширша за екран ('+sw+')', bb.x+bb.w<=sheetW && sw<=390); await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
-{ const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await pg.waitForTimeout(300); await pg.keyboard.press('Shift+Home'); await pg.waitForTimeout(200); const selBefore=await pg.evaluate(()=>getSelection().toString());
-  await tap(300,600); await pg.waitForTimeout(400);
+  ok('7e короткий блок «→»: правий край блока '+(bb.x+bb.w)+' ≤ '+sheetW+', сторінка не ширша за екран ('+sw+')', bb.x+bb.w<=sheetW && sw<=390); await tapBtn(pg.locator('#blockbar [data-mv="done"]')); await frames(pg); }
+{ const a=await box(blk('Правий').locator('.txt')); await tap(a.x+a.w/2, a.y+a.h/2); await until(focusedTxt); await pg.keyboard.press('Shift+Home'); await pg.waitForTimeout(200); const selBefore=await pg.evaluate(()=>getSelection().toString());
+  await tap(300,600); await until(async()=>!(await focusedTxt()) && !(await pg.locator('#bubble').isVisible())); await pg.waitForTimeout(150);
   ok('7f виділили слово («'+selBefore+'»), дотик по порожньому місцю: виділення знято, панелі немає, курсора немає', selBefore.length>0 && (await pg.evaluate(()=>getSelection().toString()))==='' && !(await pg.locator('#bubble').isVisible()) && !(await focusedTxt())); }
 // 7g у режимі положення видно ручку розміру, нею можна тягнути (ширина кратна клітинці), поза режимом ручки немає
-{ const rzIdle=await blk('Правий').locator('.rz').evaluate(e=>({op:getComputedStyle(e).opacity, pe:getComputedStyle(e).pointerEvents}));
-  const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await pg.waitForTimeout(300);
+{ await still(blk('Правий')); const rzIdle=await blk('Правий').locator('.rz').evaluate(e=>({op:getComputedStyle(e).opacity, pe:getComputedStyle(e).pointerEvents}));
+  const g=await box(blk('Правий').locator('.grip')); await tap(g.x+g.w/2, g.y+g.h/2); await until(()=>isSel('Правий')); await still(blk('Правий'));   // the handle fades in (opacity .12s)
   const rz=await blk('Правий').locator('.rz').evaluate(e=>{ const r=e.getBoundingClientRect(); return {op:getComputedStyle(e).opacity, pe:getComputedStyle(e).pointerEvents, x:r.left, y:r.top, w:r.width, h:r.height}; });
-  const w0=(await box(blk('Правий').locator('.tcard'))).w; await dragTo(rz.x+rz.w/2, rz.y+rz.h/2, rz.x+rz.w/2+40, rz.y+rz.h/2+30); await pg.waitForTimeout(500);   // ширина не менша за мінімальну (140px), тож тягнемо вправо
+  const w0=(await box(blk('Правий').locator('.tcard'))).w; await dragTo(rz.x+rz.w/2, rz.y+rz.h/2, rz.x+rz.w/2+40, rz.y+rz.h/2+30); await frames(pg); await still(blk('Правий'));   // ширина не менша за мінімальну (140px), тож тягнемо вправо
   const c=await box(blk('Правий').locator('.tcard')); const m=await model(); const stillSel=await blk('Правий').evaluate(e=>e.classList.contains('sel'));
   ok('7g без режиму ручки немає (opacity '+rzIdle.op+'), у режимі є ('+rz.w+'×'+rz.h+', pointer-events '+rz.pe+'); потягнули — ширина '+w0+'→'+c.w+' (кратна 24), режим лишився', rzIdle.op==='0' && rzIdle.pe==='none' && rz.op==='1' && rz.pe==='auto' && rz.w>=28 && c.w>w0 && c.w%24===0 && m['Правий'] && stillSel);
-  await tapEl(pg.locator('#blockbar [data-mv="done"]')); await pg.waitForTimeout(300); }
+  await tapBtn(pg.locator('#blockbar [data-mv="done"]')); await frames(pg); }
 // 8 дотик по аркушу в режимі положення лише знімає його, блок не створюється
-{ const b=await box(blk('Третій').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await pg.waitForTimeout(250); const n=await pg.locator('#sheet > .blk').count(); await tap(300,600); await pg.waitForTimeout(300);
+{ const b=await box(blk('Третій').locator('.txt')); await hold(b.x+b.w/2, b.y+b.h/2); await until(()=>isSel('Третій')); const n=await pg.locator('#sheet > .blk').count(); await tap(300,600); await until(async()=>(await pg.locator('.blk.sel').count())===0); await pg.waitForTimeout(300);
   ok('8 дотик по аркушу знімає режим, блоків стільки ж ('+n+')', (await pg.locator('.blk.sel').count())===0 && (await pg.locator('#sheet > .blk').count())===n); }
 // 9 перенос за ручку лишається вільним
-{ const g=await box(blk('Третій').locator('.grip')); await dragTo(g.x+g.w/2, g.y+g.h/2, 250, 420); await pg.waitForTimeout(500); const m=await model(); const t=await box(blk('Третій').locator('.txt'));
+{ const g=await box(blk('Третій').locator('.grip')); await stored(()=>dragTo(g.x+g.w/2, g.y+g.h/2, 250, 420)); await still(blk('Третій')); const m=await model(); const t=await box(blk('Третій').locator('.txt'));
   ok('9 перенос за ручку: «Третій» став туди, куди принесли (ряд '+m['Третій'].row+', fx '+m['Третій'].fx+', x '+t.x+')', m['Третій'].row>=15 && m['Третій'].row<=18 && m['Третій'].fx>0.45 && t.x>200); }
 // 10 після перезавантаження позиції ті самі
-await pg.reload(); await pg.waitForTimeout(500);
+await pg.reload(); await ready(pg);
 { const a=await box(blk('Правий').locator('.txt')), b=await box(blk('Лівий внизу').locator('.txt'));
   ok('10 після перезавантаження: «Правий» '+a.x+','+a.y+', «Лівий внизу» '+b.x+','+b.y, near(a.x,198) && near(a.y,708) && near(b.x,30) && near(b.y,660)); }
 await pg.screenshot({path:OUT+'/appsel-final.png'});

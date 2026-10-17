@@ -3,6 +3,7 @@
 // the address of the open note, states of the target (trash, gone), the preview, a new tab; on touch: the link button, the picker above the bar, a tap
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
+import { ready, armClick, clicked, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const fs=await import('node:fs');
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -21,10 +22,14 @@ const NOTES=[
   {id:'n3',title:'Чекліст релізу',blocks:[{id:'d1',row:2,fx:0.2,text:'Повернутися до Деплой і відкрити PR',html:'Повернутися до <a data-to="n1">Деплой</a> і відкрити PR'}],created:1,updated:T0-120000},
   {id:'n4',title:'Архів старий',blocks:[{id:'e1',row:2,text:'старе',fx:0.2}],created:1,updated:T0-180000,deleted:T0-1000}];
 const file=notes=>({name:'n.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({app:'baobook',format:1,notes}))});
-const fresh=async(pg)=>{ await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); sessionStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.goto(SITE); await pg.waitForTimeout(400);
-  await pg.setInputFiles('#importFile',file(NOTES)); await pg.waitForTimeout(800);
-  await pg.evaluate(ids=>document.querySelectorAll('#list .item').forEach(d=>{ if(!ids.includes(d.dataset.id)) d.querySelector('.it-x').click(); }), NOTES.map(n=>n.id)); await pg.waitForTimeout(500); };   // the empty note of the first start goes for good
+// the import is done when its report is in the toast («Імпортовано: …»: the notes are written and read back)
+const fresh=async(pg)=>{ await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); sessionStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.goto(SITE); await ready(pg);
+  await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await pg.setInputFiles('#importFile',file(NOTES)); await pg.waitForFunction(()=>/Імпортовано/.test(document.getElementById('toast').textContent),null,{timeout:15000});
+  const ids=NOTES.map(n=>n.id); await pg.evaluate(ids=>document.querySelectorAll('#list .item').forEach(d=>{ if(!ids.includes(d.dataset.id)) d.querySelector('.it-x').click(); }), ids);
+  await until(()=>pg.evaluate(ids=>[...document.querySelectorAll('#list .item')].every(d=>ids.includes(d.dataset.id)), ids)); await pg.waitForTimeout(200); };   // the empty note of the first start goes for good
 const stored=(pg,id)=>pg.evaluate(id=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('notes','readonly').objectStore('notes').get(id); g.onsuccess=()=>{ d.close(); res(g.result||null); }; }; }), id);
+// the stored copy once it has the edit, or the last one read: the autosave writes 300 ms after the last change, later on a busy machine
+const storedWhen=async(pg,id,has)=>{ let r=null; await until(async()=>{ r=await stored(pg,id); try{ return !!r && has(r); }catch(_){ return false; } }); return r; };
 const open=(pg,id)=>pg.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"]').click(), id);
 const cur=pg=>pg.evaluate(()=>window.sheetDebug.cur());
 const hash=pg=>pg.evaluate(()=>location.hash);
@@ -42,7 +47,7 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
   await pg.keyboard.type('серв'); await pg.waitForTimeout(150); const p1=await pick(pg), pb=await box(pg.locator('.lpick')), cb=await box(pg.locator('#sheet .blk .txt').filter({hasText:'Конфіг тут'}));
   ok('1b «серв»: '+p1.items.join(' | ')+', first «'+p1.on+'»; under the text ('+pb.y+' ≥ '+(cb.y+cb.h-4)+')', p1.on==='Сервер matamata' && p1.items.at(-1)==='Створити нотатку «серв»' && pb.y>=cb.y+cb.h-4);
   await pg.screenshot({path:OUT+'/applinks-picker.png'});
-  await pg.keyboard.press('Enter'); await pg.waitForTimeout(700); let r1=await stored(pg,'n1');
+  await pg.keyboard.press('Enter'); let r1=await storedWhen(pg,'n1',r=>r.blocks[0].html.includes('<a data-to="n2">'));
   ok('1c Enter: the chip «Сервер matamata», the picker closed; stored html '+JSON.stringify(r1.blocks[0].html)+', text «'+r1.blocks[0].text+'»', (await chips(pg)).includes('n2=Сервер matamata') && !(await pick(pg)) && r1.blocks[0].html==='Конфіг тут <a data-to="n2">Сервер matamata</a> ' && r1.blocks[0].text.trim()==='Конфіг тут Сервер matamata');
   // Ctrl+Z brings «[[серв» back, Ctrl+Shift+Z the link again
   await pg.keyboard.press('Control+z'); await pg.waitForTimeout(200); const u1=await pg.locator('#sheet .blk .txt').first().innerText();
@@ -57,21 +62,23 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
   ok('2b «conf»: '+p3.items.join(' | '), p3.items.join('|')==='baobook.conf');
   await pg.keyboard.press('Backspace'); await pg.keyboard.press('Backspace'); await pg.keyboard.press('Backspace'); await pg.keyboard.press('Backspace'); await pg.keyboard.press('ArrowLeft'); await pg.waitForTimeout(150); const p4=await pick(pg);
   ok('2c ← with an empty filter goes back to the notes ('+p4.head+', «'+p4.on+'»)', p4.head==='Посилання на нотатку' && p4.on==='Сервер matamata');
-  await pg.keyboard.press('ArrowRight'); await pg.keyboard.type('conf'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(700);
-  ok('2d the block link: '+(await chips(pg)).join(' · '), (await chips(pg)).includes('n2/c2=Сервер matamata › baobook.conf') && (await stored(pg,'n1')).blocks[0].html.includes('<a data-to="n2/c2">Сервер matamata › baobook.conf</a>'));
+  await pg.keyboard.press('ArrowRight'); await pg.keyboard.type('conf'); await pg.keyboard.press('Enter'); const r2=await storedWhen(pg,'n1',r=>r.blocks[0].html.includes('data-to="n2/c2"'));
+  ok('2d the block link: '+(await chips(pg)).join(' · '), (await chips(pg)).includes('n2/c2=Сервер matamata › baobook.conf') && r2.blocks[0].html.includes('<a data-to="n2/c2">Сервер matamata › baobook.conf</a>'));
 
   // 3 Esc leaves the text; a new note from the picker; the note stays open
   await pg.keyboard.type('[[abc'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
   const t3=await pg.locator('#sheet .blk .txt').first().innerText(), f3=await pg.evaluate(()=>!!document.activeElement.closest('.txt'));
   ok('3a Esc: the picker closed, «[[abc» stays, the caret stays in the block', !(await pick(pg)) && /\[\[abc$/.test(t3.replace(/​/g,'').trim()) && f3);
   for(let i=0;i<5;i++) await pg.keyboard.press('Backspace');
-  await pg.keyboard.type('[[Відпустка 2027'); await pg.waitForTimeout(150); const p5=await pick(pg); await pg.keyboard.press('Enter'); await pg.waitForTimeout(800);
+  await pg.keyboard.type('[[Відпустка 2027'); await pg.waitForTimeout(150); const p5=await pick(pg); await pg.keyboard.press('Enter'); await until(()=>pg.evaluate(()=>[...document.querySelectorAll('#list .item .it-t')].some(e=>e.textContent==='Відпустка 2027')));
   const made=await pg.evaluate(()=>[...document.querySelectorAll('#list .item .it-t')].map(e=>e.textContent)), nid=await pg.evaluate(()=>document.querySelector('#sheet .txt a.lnk[data-to]:last-of-type').getAttribute('data-to'));
   ok('3b «Створити нотатку»: '+p5.items.join(' | ')+' → the list has «Відпустка 2027», the chip links to it, «Деплой» is still open', p5.items.join('|')==='Створити нотатку «Відпустка 2027»' && made.includes('Відпустка 2027') && (await chips(pg)).includes(nid+'=Відпустка 2027') && await cur(pg)==='n1' && (await stored(pg,nid)).title==='Відпустка 2027');
 
   // 4 live names: a renamed note shows its new name; the note that links to it does not change
+  // the link to the new note is in storage first (the autosave comes 300 ms after it), so that a later save of «Деплой» would show
+  await storedWhen(pg,'n1',r=>r.blocks[0].html.includes('data-to="'+nid+'"'));
   const before=(await stored(pg,'n1')).updated; await open(pg,'n2'); await pg.waitForTimeout(300);
-  await pg.click('#ttl'); await pg.keyboard.press('Control+a'); await pg.keyboard.type('Сервер VPS'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(700);
+  await pg.click('#ttl'); await pg.keyboard.press('Control+a'); await pg.keyboard.type('Сервер VPS'); await pg.keyboard.press('Enter');   // Enter leaves the title, which writes it at once
   await open(pg,'n1'); await pg.waitForTimeout(400); const c4=await chips(pg);
   ok('4 renamed «Сервер VPS»: '+c4.slice(0,2).join(' · ')+'; «Деплой» not saved again', c4.includes('n2=Сервер VPS') && c4.includes('n2/c2=Сервер VPS › baobook.conf') && (await stored(pg,'n1')).updated===before);
 
@@ -81,7 +88,7 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
   ok('5b a gone note: the toast «'+await pg.locator('#toast').innerText()+'», nothing opens', await cur(pg)==='n1' && /Нотатки немає/.test(await pg.locator('#toast').innerText()));
 
   // 6 hover: the preview of the target
-  await pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]').hover(); await pg.waitForTimeout(700); const pv=await pg.locator('.lprev').innerText();
+  await pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]').hover(); await until(()=>pg.locator('.lprev').isVisible()); const pv=await pg.locator('.lprev').innerText();
   ok('6 the preview: «'+pv.replace(/\s+/g,' ').slice(0,90)+'…»', /Сервер VPS/.test(pv) && /listen 443/.test(pv) && /Ctrl\+клік/.test(pv));
   await pg.mouse.move(5,790); await pg.waitForTimeout(100);
 
@@ -92,7 +99,7 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
   await pg.screenshot({path:OUT+'/applinks-follow.png'});
   await pg.click('#linkBack'); await pg.waitForTimeout(500);
   ok('7b «back»: «Деплой» again, '+await hash(pg)+', the button hidden', await cur(pg)==='n1' && await hash(pg)==='#n1' && await pg.locator('#linkBack').isHidden());
-  await pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]').click(); await pg.waitForTimeout(400); await pg.goBack(); await pg.waitForTimeout(500);
+  await pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]').click(); await pg.waitForTimeout(400); await pg.goBack(); await until(async()=>await cur(pg)==='n1');
   ok('7c the browser\'s Back returns to «Деплой» ('+await cur(pg)+')', await cur(pg)==='n1' && await pg.locator('#linkBack').isHidden());
   await pg.locator('#sheet .txt a.lnk[data-to="n2/t1"]').click(); await pg.waitForTimeout(500);
   const unf=await pg.evaluate(()=>({folded:document.querySelector('#sheet .ablk').classList.contains('collapsed'), lit:[...document.querySelectorAll('#sheet .txt')].find(t=>/Після правки/.test(t.textContent)).classList.contains('lflash')}));
@@ -108,28 +115,28 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
 
   // 9 «Копіювати посилання»: the right button on ⋮⋮, the code card button; the address pasted into a text becomes a link, «Залишити адресою» undoes it
   await pg.locator('#sheet .blk.is-code .grip').click({button:'right'}); await pg.waitForTimeout(250); const gm=await pg.locator('.amenu.gm .mi').allInnerTexts();
-  await pg.locator('.amenu.gm .mi').filter({hasText:'Копіювати посилання'}).click(); await pg.waitForTimeout(400); const clip=await pg.evaluate(()=>navigator.clipboard.readText());
+  await pg.locator('.amenu.gm .mi').filter({hasText:'Копіювати посилання'}).click(); await until(async()=>/Посилання скопійовано/.test(await pg.locator('#toast').innerText())); const clip=await pg.evaluate(()=>navigator.clipboard.readText());
   ok('9a ⋮⋮ right button: '+gm.join(' | ')+' → «'+clip+'», toast «'+await pg.locator('#toast').innerText()+'»', gm.join('|')==='Копіювати блок|Копіювати посилання' && clip===SITE+'#n2/c2' && /Посилання скопійовано/.test(await pg.locator('#toast').innerText()));
-  await pg.evaluate(()=>navigator.clipboard.writeText('')); await pg.locator('#sheet .blk.is-code .cblk').hover(); await pg.locator('#sheet .blk.is-code .linkb').click(); await pg.waitForTimeout(300);
+  await pg.evaluate(()=>navigator.clipboard.writeText('')); await pg.locator('#sheet .blk.is-code .cblk').hover(); await pg.locator('#sheet .blk.is-code .linkb').click(); await until(async()=>await pg.evaluate(()=>navigator.clipboard.readText())!=='');
   ok('9b the code card\'s link button copies the same', await pg.evaluate(()=>navigator.clipboard.readText())===SITE+'#n2/c2');
-  await open(pg,'n3'); await pg.waitForTimeout(300); await endOf(pg,'Повернутися'); await pg.keyboard.type(' '); await pg.keyboard.press('Control+v'); await pg.waitForTimeout(700);
+  await open(pg,'n3'); await pg.waitForTimeout(300); await endOf(pg,'Повернутися'); await pg.keyboard.type(' '); await pg.keyboard.press('Control+v'); await until(()=>pg.locator('#sheet .chip').isVisible()); const r9=await storedWhen(pg,'n3',r=>r.blocks[0].html.includes('data-to="n2/c2"'));
   const c9=await chips(pg), pc=await pg.locator('#sheet .chip').innerText();
-  ok('9c the pasted address is a link: '+c9.join(' · ')+'; the hint «'+pc.replace(/\s+/g,' ')+'»', c9.includes('n2/c2=Сервер VPS › baobook.conf') && /Вставлено як посилання/.test(pc) && (await stored(pg,'n3')).blocks[0].html.includes('<a data-to="n2/c2">'));
-  await pg.locator('#sheet .chip .swap').click(); await pg.waitForTimeout(700);
-  ok('9d «Залишити адресою»: the address as text', !(await chips(pg)).some(c=>c.startsWith('n2/c2')) && (await stored(pg,'n3')).blocks[0].text.includes(SITE+'#n2/c2'));
-  await open(pg,'n1'); await pg.waitForTimeout(300); await endOf(pg,'Конфіг тут'); await pg.keyboard.press('Control+a'); await pg.keyboard.press('Control+c'); await pg.waitForTimeout(200);
+  ok('9c the pasted address is a link: '+c9.join(' · ')+'; the hint «'+pc.replace(/\s+/g,' ')+'»', c9.includes('n2/c2=Сервер VPS › baobook.conf') && /Вставлено як посилання/.test(pc) && r9.blocks[0].html.includes('<a data-to="n2/c2">'));
+  await pg.locator('#sheet .chip .swap').click(); const r9d=await storedWhen(pg,'n3',r=>r.blocks[0].text.includes(SITE+'#n2/c2'));
+  ok('9d «Залишити адресою»: the address as text', !(await chips(pg)).some(c=>c.startsWith('n2/c2')) && r9d.blocks[0].text.includes(SITE+'#n2/c2'));
+  await open(pg,'n1'); await pg.waitForTimeout(300); await endOf(pg,'Конфіг тут'); await pg.keyboard.press('Control+a'); await pg.keyboard.press('Control+c'); await until(()=>pg.evaluate(async()=>{ try{ return (await navigator.clipboard.read())[0].types.includes('text/html'); }catch(_){ return false; } }));
   const html=await pg.evaluate(async()=>{ const it=(await navigator.clipboard.read())[0]; return it.types.includes('text/html')? await (await it.getType('text/html')).text() : ''; });
   ok('9e copying text with a link: text/html carries a real address ('+(html.match(/<a href="[^"]*">/)||['none'])[0]+')', html.includes('<a href="'+SITE+'#n2">'));
   await pg.keyboard.press('Escape');
 
   // 10 a new tab: Ctrl+click; an address with a block opens it there
-  const [tab]=await Promise.all([ctx.waitForEvent('page'), pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]').click({modifiers:['Control']})]); await tab.waitForTimeout(900);
+  const [tab]=await Promise.all([ctx.waitForEvent('page'), pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]').click({modifiers:['Control']})]); await ready(tab);
   const t10=await tab.evaluate(()=>({cur:window.sheetDebug.cur(), hash:location.hash, lit:!!document.querySelector('#sheet .blk.is-code .cblk.lflash')}));
   ok('10 Ctrl+click: a new tab on «Сервер VPS» at the code block ('+t10.hash+'), this tab stays', t10.cur==='n2' && t10.hash==='#n2/c2' && t10.lit && await cur(pg)==='n1');
   await tab.close();
 
   // 11 the address of the open note: a reload keeps it; the header «⋯» is touch only, so no other UI is needed on a computer
-  await pg.reload(); await pg.waitForTimeout(900);
+  await pg.reload(); await ready(pg);
   ok('11 the address names the open note ('+await hash(pg)+'), a reload opens it', await hash(pg)==='#n1' && await cur(pg)==='n1');
   ok('12 no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
   await ctx.close(); }
@@ -138,22 +145,23 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
 { const ctx=await br.newContext({...CTX, viewport:{width:390,height:844}, hasTouch:true, isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
   const touch=async(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
-  const tap=async(x,y)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(60); await touch('touchEnd',[]); };
+  const tap=async(x,y)=>{ await Promise.all([touch('touchStart',[{x,y}]), touch('touchEnd',[])]); };   // the release right behind the touch: a tap, never a hold
   const tapEl=async(loc)=>{ const b=await box(loc); await tap(b.x+b.w/2, b.y+b.h/2); };
+  const tapBtn=async(loc)=>{ await armClick(loc); await tapEl(loc); await clicked(pg); };   // the click comes a moment after the touch
   await fresh(pg); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n1"]').click()); await pg.waitForTimeout(500);
-  const t1=pg.locator('#sheet .blk .txt').filter({hasText:'Конфіг тут'}); const tb=await box(t1); await tap(tb.x+tb.w-4, tb.y+tb.h/2); await pg.waitForTimeout(400);
+  const t1=pg.locator('#sheet .blk .txt').filter({hasText:'Конфіг тут'}); const tb=await box(t1); await tap(tb.x+tb.w-4, tb.y+tb.h/2); await until(async()=>await pg.evaluate(()=>!!document.activeElement.closest('.txt')) && await pg.locator('#bubble').isVisible()); await pg.waitForTimeout(100);
   const lb=pg.locator('#bubble [data-act="link"], #bubbleMore [data-act="link"]').first(); const lbb=await box(lb);
   ok('T1 a caret in a block: the bar has the link button '+(lbb? lbb.w+'×'+lbb.h : 'none'), lbb && lbb.w>=44 && lbb.h>=44);
-  await tapEl(lb); await pg.waitForTimeout(300); const p=await pick(pg), pb=await box(pg.locator('.lpick')), bub=await box(pg.locator('#bubble')), rows=await pg.evaluate(()=>[...document.querySelectorAll('.lpick .lp-i')].map(e=>Math.round(e.getBoundingClientRect().height)));
+  await tapBtn(lb); await until(()=>pick(pg)); const p=await pick(pg), pb=await box(pg.locator('.lpick')), bub=await box(pg.locator('#bubble')), rows=await pg.evaluate(()=>[...document.querySelectorAll('.lpick .lp-i')].map(e=>Math.round(e.getBoundingClientRect().height)));
   ok('T2 the button types «[[» and opens the picker above the bar ('+(pb.y+pb.h)+' ≤ '+bub.y+'), rows '+rows.join('/')+', keyboard focus kept', p && p.head==='Посилання на нотатку' && pb.y+pb.h<=bub.y && rows.every(h=>h>=44) && await pg.evaluate(()=>!!document.activeElement.closest('.txt')));
   await pg.screenshot({path:OUT+'/applinks-touch-picker.png'});
-  const row=pg.locator('.lpick .lp-i').filter({hasText:'Сервер matamata'}); await tapEl(row.locator('.lp-x')); await pg.waitForTimeout(300); const p2=await pick(pg);
-  await tapEl(pg.locator('.lpick .lp-i').filter({hasText:'baobook.conf'})); await pg.waitForTimeout(600);
+  const row=pg.locator('.lpick .lp-i').filter({hasText:'Сервер matamata'}); await tapBtn(row.locator('.lp-x')); await until(async()=>((await pick(pg))||{}).head==='Сервер matamata'); const p2=await pick(pg);
+  await tapBtn(pg.locator('.lpick .lp-i').filter({hasText:'baobook.conf'})); await until(async()=>(await chips(pg)).some(c=>c.startsWith('n2/c2')));
   ok('T3 the arrow lists the blocks («'+p2.head+'»), a tap links to one: '+(await chips(pg)).filter(c=>c.startsWith('n2')).join(' · '), p2.head==='Сервер matamata' && (await chips(pg)).includes('n2/c2=Сервер matamata › baobook.conf'));
   await pg.evaluate(()=>{ document.activeElement.blur(); getSelection().removeAllRanges(); }); await pg.waitForTimeout(300);
-  await tapEl(pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]')); await pg.waitForTimeout(600);
+  await tapEl(pg.locator('#sheet .txt a.lnk[data-to="n2/c2"]')); await until(async()=>await cur(pg)==='n2'); await pg.waitForTimeout(200);
   ok('T4 a tap on the chip follows it, without a caret: '+await cur(pg)+', «back» «'+await pg.locator('#linkBack').innerText()+'»', await cur(pg)==='n2' && !(await pg.evaluate(()=>!!document.activeElement.closest('.txt'))) && await pg.locator('#linkBack').isVisible());
-  await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const hm=await pg.locator('.amenu.hm .mi').allInnerTexts(); await tapEl(pg.locator('.amenu.hm .mi').filter({hasText:'Копіювати посилання на нотатку'})); await pg.waitForTimeout(400);
+  await tapBtn(pg.locator('#moreBtn')); const hm=await pg.locator('.amenu.hm .mi').allInnerTexts(); await tapBtn(pg.locator('.amenu.hm .mi').filter({hasText:'Копіювати посилання на нотатку'})); await until(async()=>await pg.evaluate(()=>navigator.clipboard.readText())===SITE+'#n2');
   ok('T5 the header «⋯» copies the link to the note: «'+await pg.evaluate(()=>navigator.clipboard.readText())+'»', hm.some(t=>/Копіювати посилання на нотатку/.test(t)) && await pg.evaluate(()=>navigator.clipboard.readText())===SITE+'#n2');
   ok('T6 no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
   await ctx.close(); }
