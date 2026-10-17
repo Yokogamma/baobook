@@ -511,6 +511,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 @media (max-width:640px){ .app.ro .rostrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:96px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower */
 @media (hover:none){ .rostrip .fbtn{height:40px} }
 .app.ro #clearBtn,.app.ro #areaBtn,.app.ro #histBtn{display:none}
+.app.local #roPurge,.app.local #trashEmpty{display:none}   /* without IndexedDB nothing is deleted for good */
 
 /* ══ дотик (hover:none): усі правила для сенсорних екранів зібрано в одному блоці (план 3.9); порядок — як був у файлі, бо пізніше правило перекриває раніше ══ */
 @media (hover:none){
@@ -625,7 +626,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="backdrop" id="backdrop"></div>
 
   <main class="main">
-    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button></span></div></div>
+    <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button><button class="fbtn" id="roExport" type="button" hidden data-i18n="lock.export"></button><button class="fbtn" id="roReload" type="button" hidden data-i18n="lock.reload"></button></span></div></div>
     <header class="top">
       <div class="left">
         <button class="tb" id="sideBtn" data-i18n-attr="title:panel.label" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -722,7 +723,7 @@ const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubb
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
-const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge');
+const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const TEXT_CW=26;                                   // a text block without a set width wraps at 26 cells (624px): about 75 characters, the text column of an A4 page
@@ -839,32 +840,99 @@ const store={
 const NK='sheet:note:', SK='sheet:settings';
 /* ══ сховище нотаток: IndexedDB (запас місця, асинхронно); localStorage — запасний варіант і місце для налаштувань ══ */
 const IDB_NAME='sheet';
+/* ══ the database version is the data format (docs/SYNC-PLAN.md, PR 0): this code writes v2. The database opens without a version, so a newer
+   app's data (a larger version, e.g. after rolling the site back) still opens, but only to view and export: LOCK stops every write, the
+   localStorage fallback included. On a new device that open makes an empty v1, and the stores come with v2.
+   LOCK: null; 'newer' (the data is newer than this code); 'updated' (another tab upgraded the database while this one was open);
+   'blocked' (another tab keeps this one from creating the stores); 'other' (no IndexedDB, and another tab is the one that writes);
+   'nolock' (no IndexedDB, and the browser cannot confirm that this tab is the only one that writes) ══ */
+const IDB_VER=2, IDB_STORES=['notes','versions','blobs'];
+let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
+function setLock(k){ if(LOCK) return; LOCK=k; if(STARTED) lockUI(); }
 const idb={ db:null,
-  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB')); let r; try{ r=indexedDB.open(IDB_NAME,2); }catch(e){ return rej(e); }
-    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
-      if(!d.objectStoreNames.contains('versions')){ const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
-      if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']}); };   // тіла блоків за хешем вмісту
-    r.onsuccess=()=>{ idb.db=r.result; idb.db.onversionchange=()=>{ idb.db.close(); idb.db=null; }; idb.db.onclose=()=>{ idb.db=null; }; res(); };
-    r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error('blocked')); }); },
-  async run(mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
+  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
+    const go=v=>{ let r, bt=0; try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
+      r.onupgradeneeded=()=>{ if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('versions')){ const s=d.createObjectStore('versions',{keyPath:'id'}); s.createIndex('note_t',['note','t']); s.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
+        if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']}); };   // тіла блоків за хешем вмісту
+      r.onsuccess=()=>{ clearTimeout(bt); const d=r.result;
+        if(d.version>IDB_VER) setLock('newer');   // checked first, before the fallback copies move or anything is cleaned up
+        else if(!LOCK && d.version<IDB_VER && IDB_STORES.some(s=>!d.objectStoreNames.contains(s))){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: v2 creates what is missing. A v2 is never bumped past IDB_VER to mend a missing store: that would read as a newer app's data and lock this app out
+        idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
+      r.onerror=()=>{ clearTimeout(bt); if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
+      r.onblocked=()=>{ clearTimeout(bt); bt=setTimeout(()=>{ setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block stops the writes
+    go(0); }); },
+  async run(mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
-  async tx(stores,mode,fn){ if(!idb.db) await idb.open(); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
+  async tx(stores,mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q&&q.result!==undefined? q.result : q); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? loc('save.reason.full') : loc('save.reason.error',{name:n||loc('save.reason.unknown')}); };
-const db={ backend:'local',
-  // старт: відкриваємо IndexedDB; нотатки з localStorage (так зберігала перша версія) переносимо (новіша копія перемагає) і прибираємо, щоб не було двох сховищ
-  async init(){ try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; return; }
-    const keys=store.keys(NK); if(!keys.length) return; let have; try{ have=await idb.all(); }catch(_){ return; } const byId=new Map(have.map(n=>[n.id,n]));
-    for(const k of keys){ const n=store.get(k); if(validNote(n)){ const ex=byId.get(n.id); if(!ex || (n.updated||0)>(ex.updated||0)){ try{ await idb.put(n); }catch(_){ continue; } } } store.del(k); } },
-  async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return store.keys(NK).map(k=>store.get(k)).filter(validNote); },
-  async save(n){ if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null; if(db.backend==='idb'){ try{ await idb.put(n); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
-    const e2=store.put(NK+n.id,n); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; },
-  async remove(id){ store.del(NK+id); if(db.backend==='idb'){ try{ await idb.del(id); }catch(_){} } },
+/* a fallback copy (localStorage, written when IndexedDB refused a save) never goes silently: one that differs from the stored note
+   is kept as a note of its own. fbPut → the notes to store for one fallback copy n, given the stored one ex.
+   A fallback key is written once and never rewritten: sheet:note:<id>~<tab>~<generation>, the generation of the save taken before any
+   wait. A tab removes only its own keys of older generations (a later save of the same tab holds everything they had), so neither an
+   older save finishing late nor another tab can remove a copy that may be the only one. Plain sheet:note:<id> keys belong to the first
+   version and to the mode without IndexedDB (§4.14 of docs/SYNC-PLAN.md) */
+const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);
+const backupOf=n=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});
+const fbPut=(ex,n)=>!ex? [n] : noteSig(ex)===noteSig(n)? [] : (n.updated||0)>(ex.updated||0)? [n, backupOf(ex)] : [backupOf(n)];
+const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
+const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
+const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=store.get(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
+const TAB=Math.random().toString(36).slice(2,8), FELL=new Set();   // FELL: notes with fallback keys of this tab
+let GEN=0;   // the generation of every save in this tab, in the order the saves start
+const fbOwn=id=>store.keys(NK+id+'~'+TAB+'~');
+function fbDrop(id, g){ const p=NK+id+'~'+TAB+'~'; for(const k of fbOwn(id)) if(+k.slice(p.length)<g) store.del(k); if(!fbOwn(id).length) FELL.delete(id); }   // only older generations: a newer one may hold the only copy
+/* without IndexedDB the plain keys are the store, and only the tab holding the writer lock writes them: any other tab, and every tab when
+   the lock cannot be confirmed, is view-only. So nothing here races with another tab. At start the writing tab joins the fallback keys left
+   from a time IndexedDB worked into the plain keys, the backup of the older copy first; a copy that does not fit stays in its key and shows
+   as a backup copy in memory (fbAll) */
+const hasLocks=()=>!!(navigator.locks && navigator.locks.request);
+// the writer lock (baobook:writer): a tab without IndexedDB holds it while it is open, a tab with IndexedDB while it moves the plain keys in
+// and drops them. Resolves to the function that lets it go; false when another tab holds it; null when it cannot be confirmed (no Web Locks
+// API, a refused request, no answer in 3 s): the start goes on either way
+function writerLock(){ return new Promise(res=>{ let done=false; const end=v=>{ if(done) return false; done=true; clearTimeout(tm); res(v); return true; }, tm=setTimeout(()=>end(null),3000);
+  try{ navigator.locks.request('baobook:writer',{ifAvailable:true},lock=>{ if(!lock){ end(false); return null; } let rel; const p=new Promise(r=>rel=r); return end(rel)? p : null; }).catch(()=>end(null)); }catch(_){ end(null); } }); }   // a lock granted after the 3 s goes at once
+function fbLocal(){ for(const k of store.keys(NK)){ if(!fbOnce(k)) continue; const n=store.get(k); if(!validNote(n)) continue; const ex=store.get(NK+n.id);
+  if(![...fbPut(validNote(ex)? ex : null, n)].reverse().some(x=>store.put(NK+x.id,x))) store.del(k); } }
+const MEM=new Set();   // notes that live only in this tab's memory (copies not stored on their own yet, an empty view-only note to show); a tab sync keeps them
+function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push(n); }   // the newest copy of each note, every other different copy as a backup copy in memory
+  const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.updated||0)-(a.updated||0)); const seen=new Set([noteSig(list[0])]); out.push(list[0]);
+    for(const x of list.slice(1)) if(!seen.has(noteSig(x))){ seen.add(noteSig(x)); const c=backupOf(x); MEM.add(c.id); out.push(c); } } return out; }
+const db={ backend:'local', inited:false, ready:null,
+  // at start: open IndexedDB, move the notes from localStorage (the fallback, and where the first version kept them) and drop their keys, so there are no two stores.
+  // Nothing moves while LOCK; a record that is not a note stays for whoever can read it. Saves wait until this is done (db.ready)
+  init(){ return db.ready=(async()=>{ try{
+    try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; if(LOCK) return; const w=await writerLock(); if(w) fbLocal(); else setLock(w===false? 'other' : 'nolock'); return; }
+    // a plain key is written by a tab without IndexedDB, only under the writer lock, and by an app from before PR 0. So this tab drops one only
+    // while it holds the lock (or the browser has no Web Locks, and then no tab without IndexedDB writes), and only if the key did not change
+    const w=hasLocks() && store.keys(NK).some(k=>!fbOnce(k))? await writerLock() : null, mine=!!w || !hasLocks();
+    try{ for(const k of store.keys(NK)){ if(LOCK) return; const raw=store.raw(k), n=store.get(k), once=fbOnce(k); if(!validNote(n)) continue;
+      try{ await idb.tx(['notes'],'readwrite',t=>{ const s=t.objectStore('notes'), g=s.get(n.id); g.onsuccess=()=>{ try{ if(!once && !mine && g.result && (n.updated||0)<=(g.result.updated||0)) return; for(const x of fbPut(g.result, n)) s.put(x); }catch(_){ t.abort(); } }; }); }catch(_){ if(LOCK) return; continue; }   // the stored note is read in the same transaction: the copy and its backup go in together or not at all. A plain key that stays moves in only when it is newer: an older copy waits for a start under the lock, so no start stacks another backup of it
+      if(LOCK) return; if(once || (mine && store.raw(k)===raw)) store.del(k); }   // a key written once cannot have changed; a plain one stays without the lock, or if it was rewritten meanwhile
+    }finally{ if(w) w(); }
+    }finally{ db.inited=true; } })(); },
+  async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return fbAll(); },
+  async save(n){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
+    if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
+    if(db.backend==='idb'){ try{ await idb.put(n); if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
+    if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
+    if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2) MEM.delete(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
+    const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true}; },
+  // deleting for good (only with IndexedDB): the note and this tab's own fallback keys of it. Another tab's key is left alone: if it holds a
+  // copy not moved in yet, the note comes back at the next start rather than that copy being lost
+  async remove(id){ if(!db.inited && db.ready) await db.ready; if(LOCK || db.backend!=='idb') return; fbDrop(id, Infinity); try{ await idb.del(id); }catch(_){} },
   settings(){ return store.get(SK,{})||{}; },
   setSettings(p){ const s={...db.settings(),...p}; store.set(SK,s); return s; }   // merge into what is stored now: another tab may have saved its own settings since this one started
 };
+/* another tab opens the database with a larger version (a newer app) or deletes it. A newer app: write what is on the screen while the
+   connection is still open (close() waits for those writes), then close and stay view-only, with whatever did not get written exportable.
+   A delete, or an upgrade by an app of this same version: close and open again on the next write */
+function idbLost(e){ const d=idb.db, newer=!!e && e.newVersion!=null && e.newVersion>IDB_VER;
+  if(newer && !LOCK){ try{ retrySave(); }catch(_){} }
+  if(newer) setLock('updated'); if(d) d.close(); idb.db=null; }
 /* ══ версії нотаток (VERSIONS-PLAN, PR 1: лише сховище, без інтерфейсу) ═══════════════════════════════════════
    versions: {id, note, t (час вмісту), w (час запису), reason: base|auto|import|manual|restore, name?, title, sig, from?, size, sum:{ch,add,del,mv,ttl}, blocks:[запис маніфесту…]}
    blobs: {note, h, s (тіло: html з форматуванням, інакше text; код — код), r (1 = html), z (байти)}; тіло з тим самим хешем пишеться один раз; колізія → ключ h~1.
@@ -922,7 +990,7 @@ function vsweep(){ if(vsweeping) return vsweeping; vsweeping=(async()=>{ try{ co
     for(const v of left){ if(size<=budget*0.9) break; if(v.name || newest.get(v.note)===v) continue; if(!goneBy.has(v.note)) goneBy.set(v.note,[]); goneBy.get(v.note).push(v); size-=v.size||0; }   // найстаріші без імені, крім найновішої кожної нотатки
     for(const [note,gone] of goneBy){ const ids=new Set(gone.map(v=>v.id)); await vdelete(note, gone, left.filter(v=>v.note===note && !ids.has(v.id))); } }
   catch(e){ DEBUG.vers.errors++; } finally{ vsweeping=null; } })(); return vsweeping; }
-function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb') return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due) saveS({versSwept:now()}); }).catch(()=>{}); };
+function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb' || LOCK) return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due) saveS({versSwept:now()}); }).catch(()=>{}); };
   if(window.requestIdleCallback) requestIdleCallback(go,{timeout:3000}); else setTimeout(go,3000); }   // на старті: раз на добу прорідження й бюджет, інакше лише підрахунок розміру
 Object.assign(DEBUG.vers,{ force:(reason,name)=>{ if(!cur) return Promise.resolve(); flushSave(); return vcapture(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated},reason||'manual',name,undefined,{force:true}); },
   list:note=>vlist(note||(cur&&cur.id)), bodies:note=>vbodies(note||(cur&&cur.id)), thin:note=>vthin(note||(cur&&cur.id)), sweep:()=>vsweep(), last:note=>VLAST.get(note||(cur&&cur.id)), queue:note=>VQ.get(note||(cur&&cur.id))||Promise.resolve(), budget:()=>vbudget() });
@@ -934,7 +1002,7 @@ const TK='sheet:tab-current', tabCur={ get(){ try{ return sessionStorage.getItem
 const saveS=p=>{ Object.assign(S,p); db.setSettings(p); };   // only the keys this tab changed, never its whole copy
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
-function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); writeNote(n); return n; }
+function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); if(LOCK) MEM.add(n.id); else writeNote(n); return n; }   // view-only: an empty note to show, never stored
 function lines(n){ const rowOf=b=>{ if(!b.parent) return b.row; const p=n.blocks.find(x=>x.id===b.parent); return (p? p.row : 0)+0.5+b.row*1e-3; };   // діти області — одразу після неї
   return [...n.blocks].sort((a,b)=>(rowOf(a)-rowOf(b))||((a.fx||0)-(b.fx||0))).flatMap(b=>((b.kind==='code'||b.kind==='area')&&b.title? [b.title] : []).concat((b.text||'').split('\n'))).map(l=>l.trim()).filter(Boolean); }
 function noteText(n){ return lines(n).join('\n'); }
@@ -1290,7 +1358,7 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ if(H.view || ro()) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
+function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
@@ -1302,7 +1370,7 @@ function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflig
     saveUI(); storageUI(); if(r.ok && db.backend==='idb') vafter(n); }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
 function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n); } saveUI(); }
-function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(!k) return;
+function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(LOCK) roSync(); if(!k) return;
   const names=[...unsaved.keys()].map(id=>{ const x=notes.find(y=>y.id===id); return x? '«'+titleOf(x)+'»' : ''; }).filter(Boolean), first=unsaved.get(cur&&unsaved.has(cur.id)? cur.id : [...unsaved.keys()][0]);
   saveErrMsg.innerHTML='<b>'+escHtml(loc('save.failedReason',{reason:first.reason}))+'.</b> '+escHtml(k===1? loc('save.unsavedOne',{name:names[0]}) : loc('save.unsavedMany',{n:k, names:names.join(', ')}))+' '+escHtml(loc('save.memoryOnly')); }
 saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('click',()=>exportAll()); saveWarn.addEventListener('click',()=>{ setSide(true); saveErr.scrollIntoView({block:'nearest'}); });
@@ -1328,34 +1396,40 @@ const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashe
 const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||newNote();
 /* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
    The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
-async function delNote(n){ if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
+async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
   if(!notes.includes(n) || n.deleted) return;   // another tab deleted it meanwhile
-  if(bare){ purgeNote(n); return; }
+  if(bare && db.backend==='idb'){ purgeNote(n); return; }
   const was=cur===n; n.deleted=now(); n.updated=now(); writeNote(n); if(was) openNote(firstNote()); relist(); storageUI();
   offerUndo(loc('trash.moved',{title:titleOf(n)}), ()=>restoreNote(n, was)); }
-function restoreNote(n, open){ if(!notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
+function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
-function purgeNote(n){ notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
-  if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); }
-async function purgeAsk(n){ if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
-function purgeOld(){ const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
+function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+  if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); }   // without IndexedDB nothing is deleted for good: notes stay in the trash
+async function purgeAsk(n){ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
+function purgeOld(){ if(LOCK || db.backend!=='idb') return; const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
 function setSection(s){ if(section===s) return; section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
-function archiveNote(n){ if(!notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n);
+function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n);
   if(was) openNote(firstNote()); renderList(); storageUI(); offerUndo(loc('archive.moved',{title:titleOf(n)}), ()=>unarchive(n, was)); }
-function unarchive(n, open){ if(!notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n);
+function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n);
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
-trashEmpty.addEventListener('click',async()=>{ const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
+trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
-const ro=()=>!!(cur && cur.deleted);
+const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
 /* the strip under the header: a trashed note is read-only, an archived one only says where it is */
-function roSync(){ const r=ro(), a=!r && !!(cur && cur.archived); sheet.inert=r; ttl.contentEditable=r? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); roStrip.hidden=!r && !a; roPurge.hidden=!r;
-  if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
+// nothing is editable before the start is done (off), the strip and the classes follow ro()
+function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=r || !STARTED; sheet.inert=off; ttl.contentEditable=off? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
+  roStrip.hidden=!r && !a; roPurge.hidden=!r || L; roRestore.hidden=L; roExport.hidden=!L; roReload.hidden=!L;
+  if(L){ roMsg.textContent=loc(LOCK==='blocked'? 'lock.blocked' : LOCK==='other'? 'lock.other' : LOCK==='nolock'? 'lock.nolock' : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
+  else if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
 roRestore.addEventListener('click',()=>{ if(!cur) return; if(cur.deleted) restoreNote(cur, true); else unarchive(cur); }); roPurge.addEventListener('click',()=>{ if(cur) purgeAsk(cur); });
-newBtn.addEventListener('click',()=>{ flushSave(); setSection('notes'); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
+roExport.addEventListener('click',()=>exportAll({hist:true})); roReload.addEventListener('click',()=>location.reload());   // view-only: everything this tab has, the history as stored
+function held(){ if(!STARTED) return true; if(!LOCK) return false; say(loc('lock.say')); return true; }   // an action that would write before the start is done, or while the data is view-only
+function lockUI(){ roSync(); saveUI(); renderList(); storageUI(); fabSync(); }
+newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection('notes'); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
 /* ══ other tabs: every tab keeps its notes in memory, so a save or a delete in one tab is sent to the others, and a tab never writes an old copy over a newer one ══
    A note this tab has no unwritten edits of takes the other tab's copy (the open one is redrawn in place). If the open note has unwritten edits here,
@@ -1373,10 +1447,12 @@ function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.i
   Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
   if(n===cur){ closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); } else { liveLinks(sheet); renderBacklinks(); }   // another note may be renamed, or link here now
   renderList(); }
-function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n)) return;   // edits here keep the note: its next save writes it back
+function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM.has(id) || LOCK) return;   // edits here keep the note (its next save writes it back); view-only, memory may hold the last copy left
   notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
   if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
-if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); };
+const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
+function tabMsg(m){ if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); }
+if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
 async function syncTabs(){ if(!cur) return; const m=await storedNotes(); for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r); }
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
@@ -1387,8 +1463,8 @@ let persistAsked=false;
 function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
 const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
-async function exportAll(){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:[...notes].sort((a,b)=>b.updated-a.updated)};
-  if($('exportHist').checked && db.backend==='idb'){ const h=await historyOf(); if(h) data.history=h; }   // older versions of the app ignore the field
+async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:notes.filter(n=>!(MEM.has(n.id) && !n.title && !n.blocks.length)).sort((a,b)=>b.updated-a.updated)};   // an empty view-only note is only on the screen
+  if((o.hist || $('exportHist').checked) && db.backend==='idb'){ const h=await historyOf(); if(h) data.history=h; }   // older versions of the app ignore the field
   const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ saveS({lastExport:now()}); storageUI(); };
   const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
   try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:loc('export.shareTitle')}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
@@ -1401,16 +1477,16 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now()}); }
   if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
   notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
-async function storedNotes(){ const m=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) m.set(n.id,n); }   // localStorage fallback first, IndexedDB wins
+async function storedNotes(){ const m=fbNewest(store.keys(NK));   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
   if(db.backend==='idb'){ try{ for(const n of await idb.all()) if(validNote(n)) m.set(n.id,n); }catch(_){} } return m; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
   if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); }
   if(typeof s.grid==='boolean'){ p.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); }
   if(typeof s.spell==='boolean'){ p.spell=spell=s.spell; spellUI(); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); }
   const any=Object.keys(p).length>0; if(any) saveS(p); return any; }
-exportBtn.addEventListener('click',exportAll);
+exportBtn.addEventListener('click',()=>exportAll());
 importBtn.addEventListener('click',()=>importFile.click());
-importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
+importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f || held()) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
   const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say(loc('import.notExport')); return; }
   const r=await importNotes(list, Array.isArray(data)? null : data.settings), hv=Array.isArray(data)? 0 : await importHistory(data.history);
   say(loc('import.done',{n:r.added, updated:r.updated, skipped:r.skipped})+(r.failed? loc('import.failed',{n:r.failed}) : '')+(r.settings? loc('import.settings') : '')+(hv? loc('import.history',{n:hv}) : '')); });
@@ -1879,7 +1955,7 @@ function createAt(e, focus=true){
     setTimeout(()=>{ b.txt.removeEventListener('keydown',k); if(!keyed && document.activeElement!==b.txt) b.txt.focus(); },0); }   // the timer can run after queued input (typing and Esc): once a key went to the block, its focus was not stolen by the click, so do not take it back
   if(!toastShown){ toastShown=true; toast.innerHTML=HINT_HTML; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),4500); } return b; }
 // «+» на дотику: новий блок у наступному вільному ряду, у фокусі (клік — жест, тож клавіатура відкриється)
-function createNext(){ const row=Math.max(cMinRow(null), ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=make({col:cMinCol(null),row},false); markDirty(); b.el.scrollIntoView({block:'center'}); b.txt.focus(); return b; }
+function createNext(){ if(!STARTED) return; const row=Math.max(cMinRow(null), ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=make({col:cMinCol(null),row},false); markDirty(); b.el.scrollIntoView({block:'center'}); b.txt.focus(); return b; }
 fab.addEventListener('click',createNext);
 /* дотик: утримання ~0,45 с на тексті блока (не під час набору) — режим положення: рамка, стрілки ← ↑ ↓ → і «Готово». Стрілки притискають блок до лівого чи правого
    поля, під найближчий блок вище (чи в перший ряд) або над найближчий блок нижче; сусід «на тому ж ряду» — за тим самим правилом накладання, що й у виштовхування.
@@ -2091,8 +2167,8 @@ sheet.addEventListener('pointermove',e=>{
   ghost.classList.toggle('bad', !fits({col:c.col,row:c.row,lines:1,w:MINW})); sheet.classList.add('hov');
 });
 sheet.addEventListener('pointerleave',()=>sheet.classList.remove('hov'));
-areaBtn.addEventListener('click',()=>{ closeHist(); const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
-document.addEventListener('paste',e=>{ if(H.view || ro()) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
+areaBtn.addEventListener('click',()=>{ if(!STARTED) return; closeHist(); const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const b=createArea(1,row,Math.min(16,Math.max(12,maxColFor({kind:'area'},null))),4,true); b.el.scrollIntoView({block:'nearest'}); });
+document.addEventListener('paste',e=>{ if(H.view || ro() || !STARTED) return; const tg=e.target; if(tg && tg.closest && tg.closest('[contenteditable]:not([contenteditable="false"]),input,textarea')) return;
   const t=(e.clipboardData||window.clipboardData).getData('text').replace(/\r\n?/g,'\n'); if(!t||!t.trim()) return; e.preventDefault();
   const row=Math.max(2, ...live(null).map(o=>o.row+(o.lines||1)+1)); const isCode=looksLikeCode(t);
   const b=make({col:1,row,kind:isCode?'code':undefined,text:isCode? t : t.trim()},false); markDirty(); pastedUndo(b);
@@ -2377,9 +2453,10 @@ function textStepper(){ const d=document.createElement('div'); d.className='mi-s
   show(); return d; }
 
 async function start(){
-  await db.init(); notes=await db.all(); vstart();
+  await db.init(); notes=await db.all(); vstart(); app.classList.toggle('local', db.backend!=='idb');
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-  if(!notes.length){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
+  if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
+  if(!notes.length && !LOCK){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
   if(S.spell===undefined && store.raw('freeform-editor-v4:spell')==='1') saveS({spell:true});
@@ -2390,12 +2467,14 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload'? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
+  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg);   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
 spell=S.spell===true; spellUI();
 app.classList.toggle('open', isMobile()? false : S.side!==false); sideBtn.setAttribute('aria-expanded', app.classList.contains('open')?'true':'false');
+sheet.inert=true; ttl.contentEditable='false';   // until start() is done (roSync opens them then)
 applyMode(); start();
 
 /* ══ language: the choice is saved in settings and applied by reloading, so every string comes from one file ══ */
