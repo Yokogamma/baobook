@@ -54,11 +54,12 @@ function normBlock(raw, deps){ if(!isObj(raw)) return false; const b={...raw};
   if(b.parent!==undefined){ if(!isStr(b.parent,LIM.id) || !b.parent.length || !isNum(b.col)) return false; delete b.fx; } else { if(b.fx===undefined || b.fx===null) b.fx=0; if(!isNum(b.fx)) return false; delete b.col; }
   if(!KINDS.includes(b.kind)) return false; if(b.kind===undefined) delete b.kind;
   if(b.text===undefined || b.text===null) b.text=''; if(typeof b.text!=='string') return false;
+  // the fields are checked, not rewritten: a valid record is stored as given (an import keeps the file's shape); defaults are the canonical form's business
   if(b.html!==undefined){ if(typeof b.html!=='string') return false; if(b.kind || !b.html) delete b.html; else { const h=deps && deps.cleanRich? deps.cleanRich(b.html) : b.html; if(h) b.html=h; else delete b.html; } }
-  for(const k of ['wrap','num','open','collapsed']){ if(b[k]===undefined) continue; if(!isBool(b[k])) return false; if(!b[k] || (k==='collapsed'? b.kind!=='area' : b.kind!=='code')) delete b[k]; }
-  if(b.lang!==undefined){ if(!isStr(b.lang,LIM.lang)) return false; if(!b.lang || b.kind!=='code') delete b.lang; }
-  if(b.title!==undefined){ if(!isStr(b.title,LIM.title)) return false; if(!b.title || !b.kind) delete b.title; }
-  if(b.color!==undefined){ if(!isStr(b.color,LIM.color)) return false; if(!b.color || b.color==='neutral' || b.kind!=='area') delete b.color; }
+  for(const k of ['wrap','num','open','collapsed']){ if(b[k]===undefined) continue; if(!isBool(b[k])) return false; }
+  if(b.lang!==undefined && !isStr(b.lang,LIM.lang)) return false;
+  if(b.title!==undefined && !isStr(b.title,LIM.title)) return false;
+  if(b.color!==undefined && !isStr(b.color,LIM.color)) return false;
   for(const k of ['cw','ch']){ if(b[k]===undefined || b[k]===null) { delete b[k]; continue; } if(!isNum(b[k]) || b[k]<=0) return false; }
   return b; }
 // the blocks of a note or version: shape, duplicate ids, parents; the array order is kept (the canonical order is for hashing and comparing)
@@ -191,7 +192,7 @@ function makeSync(deps){
     cursor:{notes:null, versions:null}, quota:null, quotaDirty:false, jobs:new Map(), tries:new Map(), refetch:new Set(), err:new Map(), sends:new Map(), bytes:new Map(),
     inbox:[], listen:{notes:null, versions:null}, snapshot:{notes:false, versions:false}, lastDelivered:new Map(), catchup:{notes:null, versions:null}, catchupDone:{notes:false, versions:false}, everCaughtUp:false,
     totals:{notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}, scan:{notes:null, versions:null}, scanFound:0,
-    waiting:new Map(), netBusy:false, stepping:null, typed:new Map(), left:new Set(), lastStatus:null, retryAt:{notes:0, versions:0}, lastReconnect:0};
+    waiting:new Map(), netBusy:false, stepping:null, typed:new Map(), left:new Set(), lastStatus:null, retryAt:{notes:0, versions:0}, lastReconnect:0, rejected:new Set()};
   const LOG=[]; const log=ev=>{ ev.at=now(); LOG.push(ev); if(LOG.length>3000) LOG.shift(); emit(deps.log, ev); };
   const budgets=()=>deps.budgets||budgetOf(deps.env);
   const K={meta:(c,id)=>'meta:'+c+':'+id, out:(c,id)=>'out:'+c+':'+id, tr:(c,id)=>'try:'+c+':'+id, refetch:(c,id)=>'refetch:'+c+':'+id, seen:(c,id)=>'seen:'+c+':'+id, purged:id=>'purged:n:'+id, quarantine:(c,id)=>'quarantine:'+c+':'+id, cursor:col=>'cursor:'+col, scan:col=>'scan:'+col};
@@ -228,9 +229,10 @@ function makeSync(deps){
   function pauseDay(){ if(S.paused) return; S.paused=true; log({t:'limit', reads:S.quota.reads, writes:S.quota.writes}); }
   const budgetShare=()=>{ const q=quotaNow(), b=budgets(); return Math.max(q.reads/b.reads, q.writes/b.writes); };
   async function flushQuota(){ if(!S.quotaDirty || !S.quota) return; S.quotaDirty=false; try{ await db.tx(['sync'],'readwrite', async t=>{ t.put('sync', S.quota); }); }catch(_){ S.quotaDirty=true; } }
-  function sendDelay(id, t){ const q=quotaNow(); let next=q.lastSend+pace.dev; const sends=S.sends.get(id)||[]; if(sends.length) next=Math.max(next, sends[sends.length-1]+pace.note);
-    const bytes=S.bytes.get(id)||0; if(bytes>256*1024 && !S.left.has(id)) next=Math.max(next, (sends[sends.length-1]||0)+pace.huge); else if(bytes>64*1024) next=Math.max(next, (sends[sends.length-1]||0)+pace.big);
-    if(budgetShare()>=0.7) next=Math.max(next, q.lastSend+pace.slow); return next; }
+  // the pace is counted from time stamps clamped to now: a clock set back must not stall the queue for the difference
+  function sendDelay(id, t){ const q=quotaNow(), nowT=t||now(), last=Math.min(q.lastSend||0, nowT); let next=last+pace.dev; const sends=S.sends.get(id)||[], lastNote=sends.length? Math.min(sends[sends.length-1], nowT) : 0; if(sends.length) next=Math.max(next, lastNote+pace.note);
+    const bytes=S.bytes.get(id)||0; if(bytes>256*1024 && !S.left.has(id)) next=Math.max(next, lastNote+pace.huge); else if(bytes>64*1024) next=Math.max(next, lastNote+pace.big);
+    if(budgetShare()>=0.7) next=Math.max(next, last+pace.slow); return next; }
   const backoffMs=tries=>Math.min(pace.retryMax, pace.retryMin*Math.pow(2, Math.max(0,tries-1)));
 
   /* ── history records inside the engine's transactions (§4.6 incoming, §4.7 copies) ── */
@@ -275,7 +277,7 @@ function makeSync(deps){
     t.put('notes',stored); putMeta(t,meta,after); after(()=>{ S.bytes.set(id,bytes); });
     if(o.copies) await writeCopies(t, id, o.copies, o.t||now(), after);
     return {lrev:meta.lrev, note:stored}; }
-  async function writeLocal(id, delta){ await load();
+  async function writeLocal(id, delta){ if(!S.loaded) await load();
     try{ return await tx(['notes','sync','versions','blobs'], async(t, after)=>{
       if(await t.get('sync',K.purged(id))) return {ok:false, code:'purged'};
       const C=await t.get('notes',id), meta=await getMeta(t,'n',id), clock=(await t.get('sync','clock'))||{k:'clock', last:0};
@@ -379,19 +381,23 @@ function makeSync(deps){
 
   /* ── sending (§4.5) ── */
   async function net(fn){ if(!S.online) return {error:{code:'unavailable', message:'offline'}}; try{ return {value: await fn()}; }catch(e){ return {error: errOf(e)}; } }
-  async function backoff(id, error){ const job=S.jobs.get(id); if(!job) return; const j={...job, tries:(job.tries||0)+1, err:error.code}; j.next=now()+backoffMs(j.tries); log({t:'retry', id, code:error.code, next:j.next});
+  // the retry time is set in memory first: when storage itself fails, the job must still wait instead of being picked again at once
+  async function backoff(id, error){ const job=S.jobs.get(id); if(!job) return; const j={...job, tries:(job.tries||0)+1, err:error.code}; j.next=now()+backoffMs(j.tries); log({t:'retry', id, code:error.code, next:j.next}); S.jobs.set(id,j);
     try{ await tx(['sync'], async(t,after)=>{ if(await t.get('sync',K.out('n',id))) setJob(t,id,j,after); }); }catch(_){} }
+  // a storage or program error inside one send or attempt: logged, the job backs off, the step goes on (§4.5: nothing unsecured reaches the cloud)
+  async function guarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && e.code==='epoch') return; log({t:'step-error', kind, id, code:e && e.code, error:String(e && e.message || e)}); await backoff(id, {code:'storage'}); } }
   function pickJob(nowT){ if(S.netBusy || S.paused || !S.online || S.denied) return null;
-    for(const [id,job] of S.jobs){ if(S.tries.has(id)) continue; if((job.next||0)>nowT) continue; const err=S.err.get(id); if(err && !job.tomb) continue; if(sendDelay(id,nowT)>nowT) continue; return id; } return null; }
+    for(const [id,job] of S.jobs){ if(S.tries.has(id)) continue; if((job.next||0)>nowT+pace.retryMax){ job.next=nowT; } if((job.next||0)>nowT) continue; const err=S.err.get(id); if(err && !job.tomb) continue; if(sendDelay(id,nowT)>nowT) continue; return id; } return null; }   // a retry time past the longest backoff is a clock set back
   async function runSend(id){ S.netBusy=true; try{ for(let round=0; round<4; round++){
       const st=await db.tx(['notes','sync'],'readonly', async t=>({C:await t.get('notes',id), meta:await getMeta(t,'n',id), job:await t.get('sync',K.out('n',id)), tr:await t.get('sync',K.tr('n',id))}));
-      if(!st.job){ S.jobs.delete(id); return; } if(st.tr){ await runTry(id); return; }
+      if(!st.job){ S.jobs.delete(id); log({t:'send-nojob', id}); return; } if(st.tr){ await runTry(id); return; }
       const base=st.meta.base; let R;
-      if(S.snapshot.notes && base && S.lastDelivered.get(id)===base.rev) R=base; else { const got=await net(()=>S.cloud.get('notes',id)); if(got.error){ await backoff(id, got.error); return; } countRead(1); R=got.value; if(R && !R.id) R={...R, id}; }
+      // the read is skipped only while the listener's last delivery for the note is the base; after a rejection the document is read (§4.5 step 2)
+      if(S.snapshot.notes && base && S.lastDelivered.get(id)===base.rev && !S.rejected.has(id)) R=base; else { const got=await net(()=>S.cloud.get('notes',id)); if(got.error){ await backoff(id, got.error); return; } countRead(1); R=got.value; if(R && !R.id) R={...R, id}; S.rejected.delete(id); }
       if(R && (!base || R.rev>base.rev)){ const out=await mergeTx(id, R); if(out==='again') continue; return; }
       if(R && base && R.rev<base.rev){ const out=await invariantTx(id, R); if(out==='again') continue; return; }
       if(!R && base){ await vanishedTx(id); continue; }
-      const ins=await insureTx(id); if(ins==='insured'){ await runTry(id); return; } if(ins==='again') continue; return; } }
+      const ins=await insureTx(id); log({t:'insure', id, ins}); if(ins==='insured'){ await runTry(id); return; } if(ins==='again') continue; return; } }
     finally{ S.netBusy=false; } }
   // §4.5 step 2 when the cloud moved ahead: one transaction, R is a server read
   async function mergeTx(id, R){ return tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyNote(t, R, 'server', after); return res; }); }
@@ -407,12 +413,13 @@ function makeSync(deps){
       if(meta.err==='size'){ return 'blocked'; }
       const tr={k:K.tr('n',id), op:'o'+now().toString(36)+random().toString(36).slice(2,8), expect: base? base.rev : 0, result:wireBody(Srec), sentLrev:meta.lrev, epoch:S.epoch}; setTry(t,id,tr,after); return 'insured'; }); }
   // §4.5 step 4: the cloud transaction; the callback has no side effects and may run more than once
-  async function runTry(id){ const tr=S.tries.get(id); if(!tr || !S.online) return; S.netBusy=true; try{
+  async function runTry(id){ const tr=S.tries.get(id); if(!tr || !S.online){ log({t:'try-skip', id, has:!!tr, online:S.online}); return; } S.netBusy=true; try{
       const res=await net(()=>S.cloud.txn('notes', id, D=>{ if(D && D.rcpt && D.rcpt[devId]===tr.op) return null; if((D? D.rev : 0)!==tr.expect) return null; const w={...tr.result, v:1, rev:tr.expect+1, op:tr.op, dev:devId, rcpt:{...(D && D.rcpt || {}), [devId]:tr.op}}; if(devName) w.dn=devName; return w; }));
       if(res.error){ const code=res.error.code; if(isNetErr(code)){ await backoff(id, res.error); return; } if(code==='permission-denied'){ S.denied=true; log({t:'denied', id}); emit(deps.onStatus,'denied'); return; } if(code==='resource-exhausted'){ pauseDay(); return; }
         await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op) return; dropTry(t,id,after); const meta=await getMeta(t,'n',id); meta.err=code==='too-large'? 'size' : 'invalid'; putMeta(t,meta,after); log({t:'rejected-write', id, code}); }); return; }
       const {read:D, wrote}=res.value; countRead(1); if(wrote) countWrite(1);
-      let outcome; if(wrote) outcome={kind:'accepted', rev:tr.expect+1, srv:null}; else if(D && D.rcpt && D.rcpt[devId]===tr.op) outcome={kind:'accepted', rev:D.rev, srv:D.srv||null}; else if(D && D.rev>tr.expect) outcome={kind:'rejected'}; else outcome={kind:'invariant', D};
+      // accepted by the receipt: the own write is rev expect+1; the document read may already be later (another device wrote on top) and is then applied as a server read
+      let outcome; if(wrote) outcome={kind:'accepted', rev:tr.expect+1, srv:null}; else if(D && D.rcpt && D.rcpt[devId]===tr.op) outcome=D.rev===tr.expect+1? {kind:'accepted', rev:D.rev, srv:D.srv||null, echo:D} : {kind:'accepted', rev:tr.expect+1, srv:null, later:{...D, id}}; else if(D && D.rev>tr.expect) outcome={kind:'rejected'}; else outcome={kind:'invariant', D};
       await tx(['notes','sync','versions','blobs'], async(t,after)=>finishCore(t, id, tr, outcome, after)); }
     finally{ S.netBusy=false; } }
   // §4.5 step 5: the finish, only if the attempt is still the same one
@@ -428,8 +435,8 @@ function makeSync(deps){
       setSeen(t,'n',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
       if(meta.lrev===tr.sentLrev){ meta.baseLrev=meta.lrev; dropJob(t,id,after); } else if(job){ setJob(t,id,{...job, tries:0, next:0},after); }
       if(sends.length>pace.loopN && !(S.typed.get(id)>now()-pace.loopWindow)){ meta.err='loop'; log({t:'loop', id}); }
-      putMeta(t,meta,after); dropTry(t,id,after); log({t:'accepted', id, rev}); return 'done'; }
-    if(outcome.kind==='rejected'){ dropTry(t,id,after); if(job) setJob(t,id,{...job, tries:0, next:0},after); log({t:'rejected', id, expect:tr.expect}); return 'done'; }
+      putMeta(t,meta,after); dropTry(t,id,after); log({t:'accepted', id, rev}); if(outcome.later) return applyNote(t, outcome.later, 'server', after); return 'done'; }
+    if(outcome.kind==='rejected'){ dropTry(t,id,after); if(job) setJob(t,id,{...job, tries:0, next:0},after); after(()=>S.rejected.add(id)); log({t:'rejected', id, expect:tr.expect}); return 'done'; }
     // an invariant violation: a resolved outcome (§4.5 step 4)
     dropTry(t,id,after); const D=outcome.D; log({t:'invariant', id, kind:D? 'older' : 'vanished', rev:D? D.rev : null});
     if(!D){ meta.base=null; meta.baseLrev=0; putMeta(t,meta,after); t.del('sync',K.seen('n',id)); if(job && job.tomb) dropJob(t,id,after); return 'done'; }
@@ -486,24 +493,30 @@ function makeSync(deps){
   function nextWake(nowT){ let next=Infinity; for(const [id,job] of S.jobs){ const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
     for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }
     if(S.inbox.length || S.refetch.size) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); return next; }
-  async function stepOnce(){ await load(); const nowT=now(); quotaNow();
+  async function stepOnce(){ if(!S.loaded) await load(); const nowT=now(); quotaNow();
     if(!S.started || !S.cloud || !S.owner){ return {did:'idle', next:Infinity, status:status()}; }
+    if((S.errorUntil||0)>nowT) return {did:'idle', next:S.errorUntil, status:status()};
+    // no space (§4.6): receiving stops for an hour, deliveries meanwhile are dropped (the totals check finds them later); then the listener and catch-up start over
+    if(S.nospace){ if(nowT<(S.nospaceAt||0)+3600000){ S.inbox.length=0; return {did:'idle', next:S.nospaceAt+3600000, status:status()}; } S.nospace=false; S.sweptOnce=false; log({t:'nospace-over'}); reconnect(); }
     if((!S.jobs.size && !S.tries.size) || nowT-(S.queueAt||0)>60000) await reloadQueue();
     try{
       if(S.inbox.length){ const m=S.inbox.shift(); await applyIncoming(m.col, m.doc, m.source); return {did:'inbox', next:nowT}; }
-      if(S.online && !S.denied){ for(const [id,tr] of S.tries){ const job=S.jobs.get(id); if(job && (job.next||0)>nowT) continue; if(S.paused && !(tr.result && tr.result.purged)) continue; await runTry(id); return {did:'try', next:nowT}; } }
+      if(S.online && !S.denied){ for(const [id,tr] of S.tries){ const job=S.jobs.get(id); if(job && (job.next||0)>nowT+pace.retryMax) job.next=nowT; if(job && (job.next||0)>nowT) continue; if(S.paused && !(tr.result && tr.result.purged)) continue; await guarded('try', id, ()=>runTry(id)); return {did:'try', next:nowT}; } }
       for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active && S.online && !S.paused && !S.denied && (col==='notes' || !(S.catchup.notes && S.catchup.notes.active))){ if(await fetchPage(col)) return {did:'page', next:nowT}; } }
       if(S.online && !S.paused && !S.denied && !(S.refetchRetry>nowT)){ for(const id of S.refetch){ if(S.tries.has(id)) continue; await doRefetch(id); return {did:'refetch', next:nowT}; } }
-      const pick=pickJob(nowT); if(pick){ await runSend(pick); return {did:'send', next:nowT}; }
+      const pick=pickJob(nowT); if(pick){ await guarded('send', pick, ()=>runSend(pick)); return {did:'send', next:nowT}; }
       const tcol=totalsDue(nowT); if(tcol){ await runTotals(tcol); return {did:'totals', next:nowT}; }
       const scol=scanReady(nowT); if(scol && !(S.scan[scol].retryAt>nowT)){ await scanPage(scol); return {did:'scan', next:nowT}; }
       return {did:'idle', next:nextWake(nowT), status:status()}; }
     finally{ await flushQuota(); } }
-  function step(){ if(S.stepping) return S.stepping; S.stepping=(async()=>{ try{ return await stepOnce(); } finally{ S.stepping=null; } })(); return S.stepping; }
+  // an error outside a send or an attempt (a page, the totals, a scan, the inbox) pauses the engine for a growing while instead of failing the step
+  function step(){ if(S.stepping) return S.stepping; S.stepping=(async()=>{ try{ const r=await stepOnce(); if(r.did!=='idle') S.stepErrors=0; return r; }
+      catch(e){ S.stepErrors=(S.stepErrors||0)+1; S.errorUntil=now()+backoffMs(S.stepErrors); log({t:'step-error', kind:'step', code:e && e.code, error:String(e && e.message || e), next:S.errorUntil}); return {did:'error', next:S.errorUntil, status:status()}; }
+      finally{ S.stepping=null; } })(); return S.stepping; }
   async function idle(limit=200){ let r; for(let i=0;i<limit;i++){ r=await step(); if(r.did==='idle') break; } return r; }
 
   /* ── owner, start, stop (the hook of PR 1; sign-in comes with PR 3) ── */
-  async function setOwner(owner){ await load(); const same=S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
+  async function setOwner(owner){ if(!S.loaded) await load(); const same=S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
     await db.tx(['notes','versions','sync'],'readwrite', async t=>{ if(same){ t.put('sync',{k:'owner', ...owner}); return; }
       const epoch={k:'epoch', id:'e'+now().toString(36)+random().toString(36).slice(2,8)}; t.put('sync',epoch);
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'\uffff')) t.del('sync',r.k);
@@ -511,16 +524,16 @@ function makeSync(deps){
       else { t.del('sync','owner'); for(const n of await t.range('notes','','\uffff')) t.del('notes',n.id); for(const v of await t.range('versions','','\uffff')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],[ '\uffff','\uffff'])) t.del('blobs',[b.note,b.h]); }
       S.loaded=false; });
     S.jobs.clear(); S.tries.clear(); S.refetch.clear(); S.err.clear(); S.sends.clear(); S.cursor={notes:null, versions:null}; S.scan={notes:null, versions:null}; S.catchupDone={notes:false, versions:false}; S.everCaughtUp=false; S.lastDelivered.clear(); S.waiting.clear(); S.snapshot={notes:false, versions:false}; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}};
-    await load(); if(S.started) connectCloud(); }
+    if(!S.loaded) await load(); if(S.started) connectCloud(); }
   function connectCloud(){ if(!S.cloud || !S.owner) return; startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); startListener('versions'); }
-  async function start(o={}){ await load(); if(o.cloud!==undefined) S.cloud=o.cloud; S.started=true;
+  async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; S.started=true;
     if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} connectCloud(); } }
   function stop(){ S.started=false; for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } } }
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; S.lastReconnect=now(); startListener('notes'); startListener('versions'); startCatchup('notes'); emit(deps.wake); }
 
   /* ── «forever» with an owner, an automatic tombstone, import (§4.4, §4.7, §4.14) ── */
-  async function purgeLocal(id){ await load(); try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const C=await t.get('notes',id); if(!C) return {ok:false, code:'missing'};
+  async function purgeLocal(id){ if(!S.loaded) await load(); try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const C=await t.get('notes',id); if(!C) return {ok:false, code:'missing'};
       const meta=await getMeta(t,'n',id), seen=await t.get('sync',K.seen('n',id)), tr=await t.get('sync',K.tr('n',id)), copies=(await versionsOf(t,id)).filter(v=>v.reason==='copy').length;
       await deleteRecord(t,id); after(()=>{ S.bytes.delete(id); S.sends.delete(id); S.err.delete(id); });
       const never=!S.owner || (!meta.base && !seen && !tr && S.everCaughtUp);   // nothing in the cloud to tombstone (decision 2 of the implementation plan)
@@ -528,9 +541,9 @@ function makeSync(deps){
       meta.lrev=(meta.lrev||0)+1; putMeta(t,meta,after); const prev=await t.get('sync',K.purged(id)); const p={k:K.purged(id), rev:0}; if(prev && prev.revivedAs) p.revivedAs=prev.revivedAs; t.put('sync',p);
       setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true},after); dropRefetch(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:true, copies}; }); }
     catch(e){ return {ok:false, code:e.code||'error'}; } }
-  async function tombstoneAuto(id){ await load(); return tx(['notes','sync'], async(t,after)=>{ const C=await t.get('notes',id); if(!C || !C.deleted) return {ok:false}; const job=await t.get('sync',K.out('n',id)); if(job && !job.tomb) return {ok:false, code:'busy'}; setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true, auto:true},after); return {ok:true}; }); }
-  async function countCopies(id){ await load(); return db.tx(['versions'],'readonly', async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
-  async function importNote(raw){ await load(); const nn=normNote(raw, deps); if(nn.bad) return {ok:false, code:'shape'};
+  async function tombstoneAuto(id){ if(!S.loaded) await load(); return tx(['notes','sync'], async(t,after)=>{ const C=await t.get('notes',id); if(!C || !C.deleted) return {ok:false}; const job=await t.get('sync',K.out('n',id)); if(job && !job.tomb) return {ok:false, code:'busy'}; setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true, auto:true},after); return {ok:true}; }); }
+  async function countCopies(id){ if(!S.loaded) await load(); return db.tx(['versions'],'readonly', async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
+  async function importNote(raw){ if(!S.loaded) await load(); const nn=normNote(raw, deps); if(nn.bad) return {ok:false, code:'shape'};
     try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const id=String(raw.id), body=nn.note, tt=now();
       if(await t.get('sync',K.purged(id))){ const target=await revive(t, id, body, {t:tt}, after); return {ok:true, kind:'revived', id:target}; }
       const C=await t.get('notes',id), meta=await getMeta(t,'n',id);
@@ -539,9 +552,9 @@ function makeSync(deps){
       const res=await putNote(t, id, body, meta, {t:tt}, after); await ensureJob(t, id, body, meta, after);
       return {ok:true, kind:C? 'updated' : 'added', id, note:res.note, lrev:res.lrev}; }); }
     catch(e){ return {ok:false, code:e.code||'error'}; } }
-  async function state(id){ await load(); return db.tx(['notes','sync','versions'],'readonly', async t=>({note:await t.get('notes',id), meta:await t.get('sync',K.meta('n',id)), job:await t.get('sync',K.out('n',id)), tr:await t.get('sync',K.tr('n',id)), seen:await t.get('sync',K.seen('n',id)), purged:await t.get('sync',K.purged(id)), refetch:await t.get('sync',K.refetch('n',id)), quarantine:await t.get('sync',K.quarantine('n',id)), versions:await t.byNote('versions',id)})); }
-  async function seenAll(){ await load(); return db.tx(['sync'],'readonly', async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
-  async function lrevOf(ids){ await load(); return db.tx(['sync'],'readonly', async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
+  async function state(id){ if(!S.loaded) await load(); return db.tx(['notes','sync','versions'],'readonly', async t=>({note:await t.get('notes',id), meta:await t.get('sync',K.meta('n',id)), job:await t.get('sync',K.out('n',id)), tr:await t.get('sync',K.tr('n',id)), seen:await t.get('sync',K.seen('n',id)), purged:await t.get('sync',K.purged(id)), refetch:await t.get('sync',K.refetch('n',id)), quarantine:await t.get('sync',K.quarantine('n',id)), versions:await t.byNote('versions',id)})); }
+  async function seenAll(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
+  async function lrevOf(ids){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
   return {start, stop, step, idle, status, online, reconnect, setOwner, writeLocal, purgeLocal, tombstoneAuto, countCopies, importNote, state, seenAll, lrevOf,
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },

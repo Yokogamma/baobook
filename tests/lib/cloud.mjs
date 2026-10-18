@@ -18,14 +18,14 @@ export class TestCloud{
   constructor(o={}){ this.t=o.start||1_700_000_000_000; this.seq=0; this.docs={notes:new Map(), versions:new Map()}; this.subs=[]; this.faults=[]; this.events=[]; this.strict=o.strict!==false; this.auto=o.auto!==false; this.writesByDev=new Map(); }
   now(){ return this.t; } advance(ms){ this.t+=ms; }
   srvAt(ms){ const seq=++this.seq; return {s:Math.floor(ms/1000), ns:(ms%1000)*1e6+seq%1000}; }
-  // failures by name, consumed by the next operation they apply to
+  // failures by name, consumed by the next operation they apply to; with `dev` only that device's operations take them (the browser bridge names the device)
   fault(kind, o={}){ this.faults.push({kind, ...o}); }
-  take(kind){ const i=this.faults.findIndex(f=>f.kind===kind); if(i<0) return null; const f=this.faults[i]; if(f.n && --f.n>0) return f; this.faults.splice(i,1); return f; }
+  take(kind, dev){ const i=this.faults.findIndex(f=>f.kind===kind && (f.dev===undefined || f.dev===dev)); if(i<0) return null; const f=this.faults[i]; if(f.n && --f.n>0) return f; this.faults.splice(i,1); return f; }
   visible(col){ const now=this.t; return [...this.docs[col].values()].filter(d=>d.commitAt<=now); }   // for the srv-range queries only
   all(col){ return [...this.docs[col].values()]; }
   out(d){ if(!d) return null; const o=clone(d); delete o.commitAt; delete o.seq; return o; }
-  fails(){ const f=this.take('fail'); if(f) throw err(f.code||'unavailable','injected'); }
-  async get(col,id){ this.fails(); return this.out(this.docs[col].get(id)); }
+  fails(dev){ const f=this.take('fail',dev); if(f) throw err(f.code||'unavailable','injected'); }
+  async get(col,id,o={}){ this.fails(o.dev); return this.out(this.docs[col].get(id)); }
   // the rules of §4.16 as the test cloud applies them
   check(col, w, D){ const keys=Object.keys(w), has=k=>keys.includes(k);
     if(D && D.purged) throw err('permission-denied','a tombstone is final'); if(D && col==='versions' && D.deleted) throw err('permission-denied','a deleted version stays deleted');
@@ -43,7 +43,7 @@ export class TestCloud{
     if(col==='versions' && !tomb && w.note!==undefined){ const note=this.docs.notes.get(w.note); if(!note || note.purged) throw err('permission-denied','noteAlive'); }
     if(D && w.rev===D.rev+1 && bodyJson(w)===bodyJson(D) && !(tomb) && !(D.purged)) throw err('invalid','an empty write'); }
   // the server transaction: fn(D) → the document to write or null; it may run again on contention and with the `tworunners` fault
-  async txn(col,id,fn){ this.fails(); const two=this.take('tworunners'), other=this.take('other'), lost=this.take('lost'), delay=this.take('delay'), late=this.take('late');
+  async txn(col,id,fn,o={}){ this.fails(o.dev); const two=this.take('tworunners',o.dev), other=this.take('other',o.dev), lost=this.take('lost',o.dev), delay=this.take('delay',o.dev), late=this.take('late',o.dev);
     const reqAt=this.t; let attempts=0, D, w;
     for(;;){ if(++attempts>5) throw err('aborted','contention'); D=this.out(this.docs[col].get(id));
       w=fn(D? clone(D) : null); if(other && attempts===1){ this.write(other.col||col, other.doc, {dev:other.dev||'other', dn:other.dn}); continue; }   // another device wrote between the read and the commit
@@ -57,16 +57,16 @@ export class TestCloud{
   write(col, doc, o={}){ const D=this.out(this.docs[col].get(doc.id||o.id)); const id=doc.id||o.id; const w={...doc}; delete w.id; delete w.srv; delete w.commitAt;
     w.v=1; w.rev=(D? D.rev : 0)+1; w.op=o.op||'w'+(++this.seq); w.dev=o.dev||'other'; if(o.dn) w.dn=o.dn; w.rcpt={...(D? D.rcpt : {}), [w.dev]:w.op}; if(this.strict) this.check(col, w, D);
     const d={...w, id, srv:this.srvAt(o.at!==undefined? o.at : this.t), commitAt:o.commitAt!==undefined? o.commitAt : this.t, seq:++this.seq}; if(col==='notes' && !w.purged && 'deleted' in w && !(D && D.deleted===w.deleted && D.tsrv)) d.tsrv=d.srv; else if(D && D.tsrv && 'deleted' in w) d.tsrv=D.tsrv; this.docs[col].set(id,d); this.events.push({t:'commit', col, id, rev:d.rev, dev:d.dev, at:this.t}); if(this.auto) this.pump(); return this.out(d); }
-  async page(col, q, n){ this.fails(); let list=this.visible(col).sort((a,b)=>cmpSrv(a.srv,b.srv)||(a.id<b.id? -1 : a.id>b.id? 1 : 0));
+  async page(col, q, n, o={}){ this.fails(o.dev); let list=this.visible(col).sort((a,b)=>cmpSrv(a.srv,b.srv)||(a.id<b.id? -1 : a.id>b.id? 1 : 0));
     if(q.after) list=list.filter(d=>{ const c=cmpSrv(d.srv,q.after.srv); return c>0 || (c===0 && d.id>q.after.id); }); else if(q.from) list=list.filter(d=>cmpSrv(d.srv,q.from)>=0);
     return list.slice(0,n).map(d=>this.out(d)); }
-  listen(col, from, onDocs, onErr){ const sub={col, from, onDocs, onErr, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
+  listen(col, from, onDocs, onErr, o={}){ const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
   // deliver what changed to every listener: the first call is the server snapshot; `dup` repeats the batch, `reorder` shuffles it
   pump(){ for(const sub of this.subs){ if(!sub.live) continue; const docs=this.visible(sub.col).filter(d=>!sub.from || cmpSrv(d.srv,sub.from)>=0).filter(d=>sub.seen.get(d.id)!==d.seq);
-      if(!docs.length && !sub.first) continue; for(const d of docs) sub.seen.set(d.id,d.seq); let batch=docs.map(d=>this.out(d)); const dup=this.take('dup'), re=this.take('reorder');
+      if(!docs.length && !sub.first) continue; for(const d of docs) sub.seen.set(d.id,d.seq); let batch=docs.map(d=>this.out(d)); const dup=this.take('dup',sub.dev), re=this.take('reorder',sub.dev);
       if(re) batch=batch.slice().reverse(); if(dup) batch=batch.concat(batch.slice().reverse()); const first=sub.first; sub.first=false; sub.onDocs(batch, {snapshot:first}); } }
-  async totals(col){ this.fails(); const list=this.all(col).filter(d=>Number.isInteger(d.rev)); return {count:list.length, sum:list.reduce((a,d)=>a+d.rev,0)}; }
-  async scan(col, q, n){ this.fails(); return this.all(col).filter(d=>!q.afterId || d.id>q.afterId).sort((a,b)=>a.id<b.id? -1 : a.id>b.id? 1 : 0).slice(0,n).map(d=>this.out(d)); }
+  async totals(col, o={}){ this.fails(o.dev); const list=this.all(col).filter(d=>Number.isInteger(d.rev)); return {count:list.length, sum:list.reduce((a,d)=>a+d.rev,0)}; }
+  async scan(col, q, n, o={}){ this.fails(o.dev); return this.all(col).filter(d=>!q.afterId || d.id>q.afterId).sort((a,b)=>a.id<b.id? -1 : a.id>b.id? 1 : 0).slice(0,n).map(d=>this.out(d)); }
   // the console: changes past the rules
   vanish(col,id){ this.docs[col].delete(id); this.events.push({t:'vanish', col, id}); }
   rewrite(col,id,doc){ const cur=this.docs[col].get(id); const d={...clone(doc), id, srv:this.srvAt(this.t), commitAt:this.t, seq:++this.seq}; this.docs[col].set(id,d); this.events.push({t:'rewrite', col, id, rev:d.rev, was:cur? cur.rev : null}); if(this.auto) this.pump(); return this.out(d); }

@@ -876,6 +876,16 @@ const idb={ db:null, opening:null,
   async tx(stores,mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q&&q.result!==undefined? q.result : q); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
+/* SDB: the transactional store the sync core runs on (sync.js, docs/SYNC-PLAN.md PR 1). One IndexedDB transaction, created synchronously when the connection is
+   open, so a save made in idbLost still lands before close(); inside `fn` only the transaction's own requests may be awaited (a foreign await commits it early) */
+const SDB={ tx(stores, mode, fn){ const locked=()=>Object.assign(new Error('locked'),{code:'locked'}); if(mode==='readwrite' && LOCK) return Promise.reject(locked()); if(!idb.db) return idb.open().then(()=>SDB.tx(stores,mode,fn));
+    if(mode==='readwrite' && DEBUG.saveGate) return Promise.resolve().then(()=>DEBUG.saveGate(stores)).then(()=>SDB.run(stores,mode,fn)); return SDB.run(stores,mode,fn); },   // saveGate: a test's hand on every write (appsave): it waits for the promise, or fails with its error
+  run(stores, mode, fn){ return new Promise((res,rej)=>{ let t; try{ t=idb.db.transaction(stores.filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); }   // a store a damaged database lacks is left out: only a request to it fails
+    const req=r=>new Promise((ok,ko)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); });
+    const T={ get:(st,k)=>req(t.objectStore(st).get(k)), put:(st,v)=>{ t.objectStore(st).put(v); }, del:(st,k)=>{ t.objectStore(st).delete(k); },
+      range:(st,a,b)=>req(t.objectStore(st).getAll(IDBKeyRange.bound(a,b))), byNote:(st,n)=>req(t.objectStore(st).index('note_t').getAll(IDBKeyRange.bound([n,-Infinity],[n,Infinity]))), blobs:n=>req(t.objectStore('blobs').getAll(IDBKeyRange.bound([n,''],[n,'￿']))) };
+    let v, failed=null; Promise.resolve().then(()=>fn(T)).then(x=>{ v=x; }, e=>{ failed=e; try{ t.abort(); }catch(_){} });
+    t.oncomplete=()=>res(v); t.onerror=()=>rej(failed||t.error); t.onabort=()=>rej(failed||t.error||new Error('abort')); }); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? loc('save.reason.full') : loc('save.reason.error',{name:n||loc('save.reason.unknown')}); };
 /* a fallback copy (localStorage, written when IndexedDB refused a save) never goes silently: one that differs from the stored note
@@ -924,9 +934,12 @@ const db={ backend:'local', inited:false, ready:null,
     }finally{ if(w) w(); }
     }finally{ db.inited=true; } })(); },
   async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return fbAll(); },
-  async save(n){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
+  async save(n, delta){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
-    if(db.backend==='idb'){ try{ await idb.put(n); if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return {ok:true}; }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
+    // with IndexedDB every write goes through the sync core as a delta over the stored record (SYNC-PLAN 4.4): lrev, the monotonic clock, the queue with an owner
+    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta||editorDelta(n)); if(r.ok){ if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return r; }
+        if(r.code==='purged' || r.code==='nosnap' || r.code==='epoch' || r.code==='locked') return {ok:false, code:r.code, reason:loc('save.reason.error',{name:r.code})};   // a refusal, not a storage failure: no fallback copy
+        err=r.error||new Error(r.code); }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
     if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2) MEM.delete(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
     const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true}; },
@@ -950,7 +963,7 @@ function idbLost(e){ const d=idb.db, newer=!!e && e.newVersion!=null && e.newVer
    Прорідження за віком (до 24 год усе, до 7 днів по одній на годину, до 90 днів по одній на добу, старше — геть; іменовані й найновіша лишаються), ліміт V_MAX_NOTE,
    загальний бюджет min(V_BUDGET_MAX, 5% квоти) — найстаріші без імені, крім найновішої кожної нотатки; GC тіл після видалень. Помилка запису версії ковтається: статус збереження не чіпає. */
 const V_GAP=5*60000, V_MAX_NOTE=300, V_BUDGET_MAX=20*1024*1024;   // V_BODY_MAX comes from the sync core
-const SAVED=new Map(), VLAST=new Map(), VQ=new Map();   // SAVED: id → {title,blocks,updated} останній скинутий у нотатку стан; VLAST: id → {id,t,w,sig,reason} | null; VQ: id → ланцюжок обіцянок
+const VLAST=new Map(), VQ=new Map();   // VLAST: id → {id,t,w,sig,reason} | null; VQ: id → ланцюжок обіцянок (the editor snapshot ESNAP lives in the sync block below)
 DEBUG.vers={clock:0, estimate:null, fail:false, errors:0, size:0, view:null};
 const vnow=()=>Date.now()+(DEBUG.vers.clock||0);
 // hashOf, bodyOf, entryOf, manifestOf and sumOf live in sync.js (the sync core shares them)
@@ -961,9 +974,10 @@ function vqueue(note, fn){ const p=(VQ.get(note)||Promise.resolve()).then(fn).ca
 /* a named version is written with keep:1 and inline:1 (SYNC-PLAN 4.3): full bodies inside the record (`s`, `r` for rich text), no thinning, no budget,
    no plain «Очистити історію». Every record's t is at most vnow(), so a note with an `updated` far ahead cannot make vthin drop the rest as too old */
 function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); const inline=!!meta.name; let size=0, rec=null;
-  return idb.tx(['versions','blobs'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
+  return idb.tx(['versions','blobs','sync'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
     const finish=()=>{ if(--pending) return; const prev=prevQ&&prevQ.result? prevQ.result : null; const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
-      rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name){ rec.name=meta.name; rec.keep=1; rec.inline=1; } if(meta.from) rec.from=meta.from; V.put(rec); };
+      rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name){ rec.name=meta.name; rec.keep=1; rec.inline=1; } if(meta.from) rec.from=meta.from; V.put(rec);
+      if(meta.name && SYNC && SYNC.hasOwner()) t.objectStore('sync').put({k:'out:v:'+rec.id, tries:0, next:0}); };   // a named version is queued for the cloud (SYNC-PLAN 4.9); the sender for versions comes with PR 4
     if(prevQ){ pending++; prevQ.onsuccess=prevQ.onerror=()=>finish(); }   // the previous record is read before the record is built: with bodies inline there may be no other request to wait for
     m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); if(inline){ e.s=body; if(!d.kind && d.html) e.r=1; return; } pending++;
       const tryKey=(h,k)=>{ const g=B.get([note,h]); g.onsuccess=()=>{ const ex=g.result; if(!ex){ const z=new Blob([body]).size; B.put({note,h,s:body,r:(!d.kind&&d.html)?1:0,z}); e.h=h; size+=z; finish(); } else if(ex.s!==body) tryKey(e.h+'~'+(k+1),k+1); else { e.h=h; finish(); } }; };   // колізія хешу — сусідній ключ
@@ -985,7 +999,7 @@ function vdelete(note, gone, rest){ const keepH=new Set(); rest.forEach(v=>v.blo
   return idb.tx(['versions','blobs'],'readwrite',t=>{ const V=t.objectStore('versions'), B=t.objectStore('blobs'); gone.forEach(v=>{ V.delete(v.id); DEBUG.vers.size-=v.size||0; });
     const c=B.openCursor(IDBKeyRange.bound([note,''],[note,'\uffff'])); c.onsuccess=()=>{ const r=c.result; if(!r) return; if(!keepH.has(r.value.h)) r.delete(); r.continue(); }; })
     .then(()=>{ const L=VLAST.get(note); if(L && gone.some(v=>v.id===L.id)){ const top=rest.sort((a,b)=>b.t-a.t)[0]; VLAST.set(note, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); } storageUI(); }); }
-function vdrop(note){ VLAST.set(note,null); SAVED.delete(note); return vqueue(note, async()=>{ const list=await vlist(note); await vdelete(note, list, []); }); }   // видалення нотатки — разом із версіями й тілами
+function vdrop(note){ VLAST.set(note,null); ESNAP.delete(note); LREV.delete(note); return vqueue(note, async()=>{ const list=await vlist(note); await vdelete(note, list, []); }); }   // видалення нотатки — разом із версіями й тілами
 async function vbudget(){ let q=null; try{ q=DEBUG.vers.estimate || (navigator.storage&&navigator.storage.estimate? await navigator.storage.estimate() : null); }catch(_){} return Math.min(V_BUDGET_MAX, q&&q.quota? q.quota*0.05 : V_BUDGET_MAX); }
 let vsweeping=null;
 function vsweep(){ if(vsweeping) return vsweeping; vsweeping=(async()=>{ try{ const all=await idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()); const byNote=new Map(); all.forEach(v=>{ if(!byNote.has(v.note)) byNote.set(v.note,[]); byNote.get(v.note).push(v); });
@@ -1007,11 +1021,61 @@ const TK='sheet:tab-current', tabCur={ get(){ try{ return sessionStorage.getItem
 const saveS=p=>{ Object.assign(S,p); db.setSettings(p); };   // only the keys this tab changed, never its whole copy
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
 const now=()=>Date.now();
-function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); if(LOCK) MEM.add(n.id); else writeNote(n); return n; }   // view-only: an empty note to show, never stored
+function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); if(LOCK) MEM.add(n.id); else { setSnap(n.id, n, null); writeNote(n); } return n; }   // view-only: an empty note to show, never stored. Else the empty note is the snapshot its first edits merge against, even before the first write lands
+/* ══ sync (docs/SYNC-PLAN.md, PR 1): the core in sync.js, the store wrapper SDB above, this driver and the editor snapshot ══
+   The engine has no timers: syncWake() runs step() until it is idle and sleeps until the time it names (at most 5 s), woken again by the listener,
+   online/visibility events and local writes. The cloud comes only from the test hook in PR 1 (sheetDebug.sync.connect); sign-in is PR 3.
+   ESNAP: id → {note, lrev, at}, the stored state the screen (and the copy in memory) was drawn from, with the lrev of that record; it moves only
+   together with the copy in memory (§4.10): after a save it is the state saved (D) with the new lrev when the result equals D, else lrev null
+   (the shortcut is off until the sheet is redrawn at a safe point); LREV: id → lrev of every note; PENDING: notes changed in storage while busy;
+   ARRIVED: id → when a document with an `updated` ahead of this clock arrived (shown instead of that time) */
+const SYNC_ENV=location.hostname==='baobook.matamata.app'? 'app' : location.hostname==='baobook.matamata.dev'? 'dev' : null;
+const LREV=new Map(), ESNAP=new Map(), PENDING=new Set(), ARRIVED=new Map();
+DEBUG.sync={clock:0, status:{code:'none', n:0}};
+let SYNC=null, driveT=null, driving=false;
+const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; if(n.deleted) o.deleted=n.deleted; if(n.archived) o.archived=n.archived; if(n.revived) o.revived=n.revived; return o; };
+const snapFor=id=>{ const e=ESNAP.get(id); return e? {...e.note, at:e.at} : null; };   // for vcapture: the state before the edit
+function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow()}); if(lrev!=null) LREV.set(id,lrev); }
+// the editor's delta: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else merge3
+function editorDelta(n){ const D0=noteSnap(n); return (C,meta,t)=>{ const D={...D0, updated:t}; if(!C) return D; const E=ESNAP.get(n.id); if(E && E.lrev!=null && E.lrev===meta.lrev) return D;
+  if(!E) throw Object.assign(new Error('no editor snapshot'),{code:'nosnap'}); const m=SC.merge3(E.note, D, C, {dev:S.devId, t}); return {note:m.note, copies:m.copies}; }; }
+const fieldDelta=fn=>(C,meta,t)=>C? fn({...C}, t) : null;   // a field change over whatever the record is now
+function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : /OPR\//.test(u)? 'Opera' : /Firefox\//.test(u)? 'Firefox' : /Chrome\//.test(u)? 'Chrome' : /Safari\//.test(u)? 'Safari' : 'Browser', o=/Windows/.test(u)? 'Windows' : /iPhone|iPad/.test(u)? 'iOS' : /Android/.test(u)? 'Android' : /Mac OS/.test(u)? 'macOS' : /Linux/.test(u)? 'Linux' : ''; return o? b+' · '+o : b; }
+function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()});
+  return SC.makeSync({db:SDB, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets, pace:o.pace,
+    onChange:syncChanged, onStatus:(code,n)=>{ DEBUG.sync.status={code,n}; }, onHistory:syncHistory, wake:syncWake, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }}); }
+function syncWake(){ if(!SYNC || driving || LOCK) return; driving=true; clearTimeout(driveT);
+  (async()=>{ let r={did:'idle', next:Infinity}; try{ for(let i=0;i<500;i++){ r=await SYNC.step(); if(r.did==='idle') break; } }catch(e){ if(/[?&]debug=1/.test(location.search)) console.warn('sync:',e); } finally{ driving=false; }
+    if(r.next<Infinity){ const d=Math.min(5000, Math.max(50, r.next-(Date.now()+(DEBUG.sync.clock||0)))); driveT=setTimeout(syncWake, d); } })(); }
+// the record changed in storage behind the interface: take it unless this tab has unwritten edits of it (then its pending write merges, §4.10)
+async function takeStored(id){ const st=await SYNC.state(id); if(!st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
+  if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
+  if(n && busy(n)){ PENDING.add(id); return; }
+  if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
+  Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; if(!r.revived) delete n.revived; LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id);
+  if(n===cur){ setSnap(id, n, lrev); PENDING.delete(id); closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); } else { liveLinks(sheet); renderBacklinks(); }
+  relist(); storageUI(); }
+// a safe point: the open note is not being edited and nothing is in flight, so the sheet may be redrawn from the record (E := C)
+async function safePoint(id){ const n=notes.find(x=>x.id===id); if(!n || n!==cur || busy(n)) return; await takeStored(id); }
+async function removeStored(id){ const n=notes.find(x=>x.id===id); if(!n) return;
+  if(n===cur && dirty){ flushSave(); }   // the text typed into a note a tombstone just purged goes to the revived note, by the import contract (§4.7)
+  if(busy(n) || unsaved.has(id)){ const body=noteSnap(n); try{ await SYNC.importNote({id, ...body}); }catch(_){} }
+  notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id);
+  if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); }
+function syncChanged(ev){ if(!STARTED){ return; } if(ev.kind==='purged') removeStored(ev.id); else if(ev.kind==='note' || ev.kind==='revived') takeStored(ev.id); else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
+function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
+// the test hook of PR 1: a cloud and an owner from outside (sign-in comes with PR 3)
+Object.assign(DEBUG.sync,{ core:SC,
+  connect:async o=>{ SYNC.stop(); SYNC=makeEngine(o); if(o.devId) saveS({devId:o.devId}); if(o.devName) saveS({devName:o.devName}); await SYNC.setOwner(o.owner||null);
+    LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null;   // a change of owner clears the per-note metadata (§4.11): the snapshots' lrev is unknown until the next write
+    await SYNC.start({cloud:o.cloud||null}); SYNC.online(navigator.onLine!==false && !DEBUG.sync.offline); syncWake(); return SYNC.owner; },
+  disconnect:()=>{ SYNC.stop(); }, step:()=>SYNC.step(), idle:(n)=>SYNC.idle(n), online:on=>{ DEBUG.sync.offline=!on; SYNC.online(on); syncWake(); }, reconnect:()=>{ SYNC.reconnect(); syncWake(); }, wake:()=>syncWake(),
+  tombstone:(id,o)=>SYNC.tombstoneAuto(id,o), state:id=>SYNC.state(id), seen:()=>SYNC.seenAll(), jobs:()=>SYNC.jobs(), tries:()=>SYNC.tries(), lrev:()=>SYNC.lrevOf(), log:()=>SYNC? SYNC.log : [], engine:()=>SYNC, snap:id=>ESNAP.get(id), pending:()=>[...PENDING] });   // functions, not getters: Object.assign would copy a getter's value
 function lines(n){ const rowOf=b=>{ if(!b.parent) return b.row; const p=n.blocks.find(x=>x.id===b.parent); return (p? p.row : 0)+0.5+b.row*1e-3; };   // діти області — одразу після неї
   return [...n.blocks].sort((a,b)=>(rowOf(a)-rowOf(b))||((a.fx||0)-(b.fx||0))).flatMap(b=>((b.kind==='code'||b.kind==='area')&&b.title? [b.title] : []).concat((b.text||'').split('\n'))).map(l=>l.trim()).filter(Boolean); }
 function noteText(n){ return lines(n).join('\n'); }
 function titleOf(n){ return n.title.trim()||(lines(n)[0]||'').slice(0,80)||loc('note.untitled'); }
+const shownTime=n=>n.updated>now() && ARRIVED.has(n.id)? ARRIVED.get(n.id) : n.updated;   // a time ahead of this device's clock shows as the moment the document arrived here (SYNC-PLAN 4.4)
 const docTitle=n=>(IS_DEV? loc('dev.badge')+' · ' : '')+titleOf(n)+' · Baobook';
 function previewOf(n){ const L=lines(n); return (n.title.trim()? L[0]:L[1])||''; }
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1048,7 +1112,7 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived; c
   d.addEventListener('click',e=>{ if(e.target.closest('.it-r')){ e.stopPropagation(); side(); } else if(e.target.closest('.it-x')){ e.stopPropagation(); del(); } else openNote(n); });
   d.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ del(); } }); }
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
-  const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(n.updated); }
+  const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
 
 /* автозбереження: кожна зміна → через 300 мс запис; при перемиканні/закритті — одразу */
@@ -1363,18 +1427,23 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur) vcapture(cur.id, SAVED.get(cur.id), 'base'); }   // R1: стан до правки — у версію, ще до автозбереження
+function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено» */
-function writeNote(n){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, p=db.save(n); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
-  p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id); if(r.ok){ unsaved.delete(n.id); tellTabs({t:'put',n:snap}); } else unsaved.set(n.id,{reason:r.reason,since:now()});
+function writeNote(n, delta){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
+  p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
+    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ Object.assign(n, r.note); if(!r.note.deleted) delete n.deleted; if(!r.note.archived) delete n.archived; PENDING.add(n.id); }   // the stored result is the truth; the screen catches up at a safe point
+        setSnap(n.id, same? D : D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) updateItem(n); }
+      tellTabs({t:'put',n:{...snap, ...(r.note||{})}}); }
+    else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
+    else unsaved.set(n.id,{reason:r.reason,since:now(),delta});   // the same delta is retried later
     if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
-    saveUI(); storageUI(); if(r.ok && db.backend==='idb') vafter(n); }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
-function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); SAVED.set(cur.id,{title:cur.title,blocks:cur.blocks,updated:cur.updated,at:vnow()}); updateItem(cur); writeNote(cur); }   // at — коли стан скинуто, за годинником версій (у тестах зсувається)
-function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n); } saveUI(); }
+    saveUI(); storageUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null) safePoint(n.id); } }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
+function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here
+function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(n===cur && wasDirty) continue; writeNote(n, (unsaved.get(id)||{}).delta); } saveUI(); }   // the failed write is retried with the delta it had
 function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; if(LOCK) roSync(); if(!k) return;
   const names=[...unsaved.keys()].map(id=>{ const x=notes.find(y=>y.id===id); return x? '«'+titleOf(x)+'»' : ''; }).filter(Boolean), first=unsaved.get(cur&&unsaved.has(cur.id)? cur.id : [...unsaved.keys()][0]);
   saveErrMsg.innerHTML='<b>'+escHtml(loc('save.failedReason',{reason:first.reason}))+'.</b> '+escHtml(k===1? loc('save.unsavedOne',{name:names[0]}) : loc('save.unsavedMany',{n:k, names:names.join(', ')}))+' '+escHtml(loc('save.memoryOnly')); }
@@ -1382,10 +1451,10 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
+function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
   if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
-  if(!SAVED.has(n.id)) SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:n.updated}); if(db.backend==='idb') vload(n.id);   // історія назви — своя в кожної нотатки; незаписану — пробуємо записати ще раз
+  if(!ESNAP.has(n.id) || !busy(n)) setSnap(n.id, n, LREV.get(n.id)??0); if(db.backend==='idb') vload(n.id);   // the snapshot is taken synchronously from memory (equal to storage unless the note is busy, whose snapshot stays)
   drawNote(n);
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function drawNote(n){ drawBlocks(n.blocks);
@@ -1404,21 +1473,24 @@ const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||ne
 async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
   if(!notes.includes(n) || n.deleted) return;   // another tab deleted it meanwhile
   if(bare && db.backend==='idb'){ purgeNote(n); return; }
-  const was=cur===n; n.deleted=now(); n.updated=now(); writeNote(n); if(was) openNote(firstNote()); relist(); storageUI();
+  const was=cur===n; n.deleted=now(); n.updated=now(); writeNote(n, fieldDelta((C,t)=>C.deleted? null : {...C, deleted:t})); if(was) openNote(firstNote()); relist(); storageUI();
   offerUndo(loc('trash.moved',{title:titleOf(n)}), ()=>restoreNote(n, was)); }
-function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n);
+function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.deleted) return null; delete C.deleted; return C; }));
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
-function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } notes=notes.filter(x=>x!==n); db.remove(n.id); if(db.backend==='idb') vdrop(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } notes=notes.filter(x=>x!==n);
+  if(SYNC && SYNC.hasOwner()){ SYNC.purgeLocal(n.id).then(()=>syncWake()); VLAST.set(n.id,null); } else { db.remove(n.id); vdrop(n.id); }   // with an owner the core removes the record, its history and bodies and queues the tombstone (SYNC-PLAN 4.4)
+  ESNAP.delete(n.id); LREV.delete(n.id); ARRIVED.delete(n.id); PENDING.delete(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); }   // without IndexedDB nothing is deleted for good: notes stay in the trash
-async function purgeAsk(n){ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
-function purgeOld(){ if(LOCK || db.backend!=='idb') return; const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
+async function purgeAsk(n){ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } let copies=0; try{ copies=SYNC? await SYNC.countCopies(n.id) : 0; }catch(_){}   // conflict copies go only with an explicit «forever», and the dialog names how many
+  if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:copies? loc('trash.purgeTextCopies',{n:copies}) : loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
+function purgeOld(){ if(LOCK || db.backend!=='idb' || (SYNC && SYNC.hasOwner())) return; /* with an owner the automatic purge is a cloud transaction (SYNC-PLAN 4.8, PR 3) */ const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
 function setSection(s){ if(section===s) return; section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
-function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n);
+function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n, fieldDelta((C,t)=>C.archived || C.deleted? null : {...C, archived:t}));
   if(was) openNote(firstNote()); renderList(); storageUI(); offerUndo(loc('archive.moved',{title:titleOf(n)}), ()=>unarchive(n, was)); }
-function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n);
+function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.archived) return null; delete C.archived; return C; }));
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
@@ -1449,11 +1521,11 @@ function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.i
   VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
   if(n===cur && busy(n)){ if(db.backend==='idb') vcapture(n.id, {title:r.title, blocks:r.blocks, updated:r.updated}, 'conflict'); if(!dirty) markDirty(); say(loc('tabs.conflict')); return; }
   if(busy(n)) return;
-  Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; SAVED.set(n.id,{title:n.title,blocks:n.blocks,updated:n.updated,at:vnow()}); undoStacks.delete(n.id);   // undo steps were made on the old copy
+  Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; setSnap(n.id, n, null); undoStacks.delete(n.id);   // undo steps were made on the old copy; the snapshot's lrev is unknown here, so the next write merges
   if(n===cur){ closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y); } else { liveLinks(sheet); renderBacklinks(); }   // another note may be renamed, or link here now
   renderList(); }
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM.has(id) || LOCK) return;   // edits here keep the note (its next save writes it back); view-only, memory may hold the last copy left
-  notes=notes.filter(x=>x!==n); SAVED.delete(id); VLAST.delete(id); undoStacks.delete(id);
+  notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); undoStacks.delete(id);
   if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
 function tabMsg(m){ if(m.t==='put') takeNote(m.n); else if(m.t==='del') dropNote(m.id); }
@@ -1476,8 +1548,19 @@ async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
-  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; if(+raw.deleted>0) n.deleted=+raw.deleted; if(+raw.archived>0) n.archived=+raw.archived;   // only a trashed or archived note carries the field
-    const ex=notes.find(x=>x.id===n.id); if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ if(db.backend==='idb') await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import'); Object.assign(ex,n); if(!n.deleted) delete ex.deleted; if(!n.archived) delete ex.archived; SAVED.set(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated,at:vnow()}); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // R2: стан до перезапису — у версію
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; if(+raw.deleted>0) n.deleted=+raw.deleted; if(+raw.archived>0) n.archived=+raw.archived; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed or archived note carries the field
+    const ex=notes.find(x=>x.id===n.id);
+    if(db.backend==='idb' && !LOCK){   // the import contract (SYNC-PLAN 4.14): a local write through the core, keeping the file's `updated`; an id purged here goes into the revived note
+      if(ex && n.updated>ex.updated) await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import');   // R2: стан до перезапису — у версію
+      const importDelta=(C,meta,t)=>(!C || n.updated>C.updated)? {note:n, keepUpdated:true} : null;
+      const r=DEBUG.failSave? {ok:false, code:'test', reason:loc('save.reason.test')} : await SYNC.importNote(n);
+      if(!r.ok){ failed++; if(!ex) notes.push(n); unsaved.set(n.id,{reason:r.reason||loc('save.reason.error',{name:r.code}), since:now(), delta:importDelta}); continue; }   // kept in memory as unsaved: the warning, «Повторити» with the same delta, export
+      if(r.kind==='skipped' || r.kind==='same'){ skipped++; continue; }
+      if(r.kind==='revived'){ const st=await SYNC.state(r.id); if(st.note){ const rv=notes.find(x=>x.id===r.id); if(rv) Object.assign(rv, st.note); else notes.push(st.note); LREV.set(r.id, st.meta? st.meta.lrev : 0); updated++; wrote.push([st.note,'updated']); } continue; }
+      if(r.kind==='added'){ notes.push(r.note); LREV.set(n.id, r.lrev); added++; wrote.push([r.note,'added']); }
+      else { Object.assign(ex, r.note); if(!r.note.deleted) delete ex.deleted; if(!r.note.archived) delete ex.archived; LREV.set(n.id, r.lrev); setSnap(ex.id, ex, r.lrev); updated++; wrote.push([ex,'updated']); if(cur===ex){ dirty=false; openNote(ex); } }
+      if(SYNC) syncWake(); continue; }
+    if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ Object.assign(ex,n); if(!n.deleted) delete ex.deleted; if(!n.archived) delete ex.archived; if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // without IndexedDB: the plain write
   // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
   const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now()}); }
   if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
@@ -2463,6 +2546,8 @@ function textStepper(){ const d=document.createElement('div'); d.className='mi-s
 
 async function start(){
   await db.init(); notes=await db.all(); vstart(); app.classList.toggle('local', db.backend!=='idb');
+  SYNC=makeEngine(); if(db.backend==='idb' && !LOCK){ try{ for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); await SDB.tx(['sync'],'readwrite', async t=>{ t.put('sync',{k:'device', id:S.devId, name:S.devName}); }); await SYNC.start(); SYNC.online(navigator.onLine!==false); }catch(_){} }   // the sync core: lrev of every note, the device record, the engine (idle without an owner and a cloud)
+  window.addEventListener('online',()=>{ if(SYNC){ SYNC.online(true); syncWake(); } }); window.addEventListener('offline',()=>{ if(SYNC) SYNC.online(false); }); document.addEventListener('visibilitychange',()=>{ if(!document.hidden && SYNC) syncWake(); });
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
   if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
   if(!notes.length && !LOCK){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
@@ -2476,7 +2561,7 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload'? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
-  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg);   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once
+  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg); if(SYNC) syncWake();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
