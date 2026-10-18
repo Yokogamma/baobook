@@ -3,9 +3,9 @@ name: Baobook tests
 on:
   push:
     branches: [main]
-    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml']
+    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   pull_request:
-    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml']
+    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   workflow_dispatch:
 
 jobs:
@@ -38,3 +38,32 @@ jobs:
           name: tests-screenshots
           path: /tmp/sheet-tests
           if-no-files-found: ignore
+
+  # The Firestore security rules (firestore.rules, docs/SYNC-PLAN.md §4.16) on the emulator under the demo project id: no request
+  # reaches the real Firebase. firebase-tools, the rules test library and the SDK are pinned in tests/rules/package-lock.json.
+  firestore-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tests/rules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/rules/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: firebase-tools and the rules test library
+        run: npm ci
+      - name: Firestore emulator download cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('tests/rules/package-lock.json') }}
+      - name: Security rules on the Firestore emulator
+        run: npx firebase emulators:exec --only firestore --project demo-baobook "node firestore.mjs"
