@@ -1117,12 +1117,17 @@ function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI
    lock and never asks for it. Browsers without the freeze event (Safari, Firefox) release it when the tab is hidden and ask again when it is shown,
    so a suspended tab on a phone holds nothing. Without the Web Locks API the tab leads on its own. CLOUD is this tab's cloud adapter (the test hook
    in PR 2, Firebase in PR 3). Becoming the leader reloads the engine from the store: the previous leader moved on while this memory stood still */
-const LEAD={on:false, name:null, release:null, abort:null, engine:null, cloud:null, ready:null}; let CLOUD=null;
+const LEAD={on:false, name:null, release:null, abort:null, engine:null, cloud:null, ready:null, gen:0}; let CLOUD=null;   // gen: the generation of the leadership; leadOff() moves it on, so a start still in flight finds out it is over
 const leadName=()=>{ const o=SYNC && SYNC.owner; return o && o.env? 'baobook-sync:'+o.env : null; };
-function leadOff(){ const ac=LEAD.abort, rel=LEAD.release; LEAD.abort=null; LEAD.release=null; LEAD.name=null; LEAD.engine=null; LEAD.cloud=null; if(ac){ try{ ac.abort(); }catch(_){} } if(rel) rel();   // the holder's promise settles: the lock is released
-  if(LEAD.on){ LEAD.on=false; if(SYNC) SYNC.stop(); } clearTimeout(driveT); }
-async function leadOn(){ const eng=SYNC; LEAD.engine=eng; LEAD.cloud=CLOUD; try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(SYNC!==eng || LOCK || (hasLocks() && !LEAD.release)) return;   // the lock went or the engine changed while the store was read
-    await eng.start({cloud:CLOUD}); LEAD.on=true; syncWake(); }catch(e){ if(/[?&]debug=1/.test(location.search)) console.warn('lead:',e); leadOff(); } }   // online first: a reconnect after start would read the cloud twice
+function leadOff(){ LEAD.gen++; const ac=LEAD.abort, rel=LEAD.release; LEAD.abort=null; LEAD.release=null; LEAD.name=null; LEAD.engine=null; LEAD.cloud=null; if(ac){ try{ ac.abort(); }catch(_){} } if(rel) rel();   // the holder's promise settles: the lock is released
+  LEAD.on=false; if(SYNC) SYNC.stop(); clearTimeout(driveT); }   // the engine is stopped whether or not the start had finished: a start in flight sees the generation move and stops too
+// the engine starts leading: online first (a reconnect after start would read the cloud twice), then the state from the store (reload() refuses a store
+// whose owner changed while this tab waited for the lock: the tab is locked as «epoch» and lets the lock go), then the cloud. After every wait the
+// generation is checked: a pagehide, freeze or LOCK meanwhile has released the lock, and a start that finished anyway is undone
+async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
+  try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(over()) return;
+    await eng.start({cloud:CLOUD}); if(over()){ eng.stop(); return; } LEAD.on=true; syncWake(); }
+  catch(e){ if(e && e.code==='epoch'){ setLock('epoch'); return; } if(/[?&]debug=1/.test(location.search)) console.warn('lead:',e); if(!over()) leadOff(); } }
 // ask for the lock; resolves to whether this tab leads now (granted at once) or waits in the queue (false). Idempotent: a held lock is kept, the
 // engine restarted only when the engine or the cloud changed (connect); a request already queued is left alone. Returns false under LOCK or without an owner
 async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;
@@ -1611,7 +1616,8 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); undoStacks.delete(id);
   if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
-function tabMsg(m){ if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner') leadCheck();
+function tabMsg(m){ if(LOCK==='epoch') return;   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's is shown here
+  if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner') leadCheck();
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
   if(LEAD.on && SYNC && m.t!=='owner'){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not

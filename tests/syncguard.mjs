@@ -134,6 +134,26 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
   ok('5j another tab changed the owner: checkOwner of the old engine says so', await A.sync.checkOwner()===false && await B.sync.checkOwner()===true); }
 
+/* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  for(let i=0;i<3;i++){ cloud.advance(1000); cloud.write('notes',{id:'o'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'o'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }
+  const A=device(cloud,'A',{db}); A.online=false;   // the listener delivers nothing: the documents come by the catch-up page only
+  await A.sync.setOwner(owner); const hP=defer(); cloud.fault('hold',{dev:'A', op:'page', promise:hP.promise});
+  await A.sync.start(); const stepA=A.sync.step(); await tick();   // the first page of the catch-up is read and held
+  const B=device(cloud,'B',{db}); await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});   // another tab changed the owner meanwhile
+  hP.res(); await stepA; await A.sync.idle(20);
+  ok('5n the page came after the owner changed: no document applied, no cursor:notes left to the new owner, the catch-up not marked done, the status «reload»', !db.get('sync','cursor:notes') && !A.sync._S.catchupDone.notes && A.status.includes('reload') && !db.get('notes','o0') && db.all('notes').length===0);
+  // the same for a page of versions: the notes are caught up under the old owner, the versions page is held, the owner changes, the page comes
+  const cloud2=new TestCloud({start:1_700_000_000_000}); const db2=new MemStore(); db2.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  cloud2.write('notes',{id:'v0', title:'', blocks:[{id:'b',row:1,fx:0,text:'v0'}], created:cloud2.now(), updated:cloud2.now()},{dev:'phone'});
+  cloud2.write('versions',{id:'vv', note:'v0', t:cloud2.now(), name:'Назва', title:'', blocks:[{id:'b',row:1,fx:0,text:'v0'}]},{dev:'phone'});
+  const C=device(cloud2,'C',{db:db2}); C.online=false; await C.sync.setOwner(owner); const hV=defer(); cloud2.fault('hold',{dev:'C', op:'page', promise:hV.promise, skip:1});   // the second page call is the versions catch-up
+  await C.sync.start(); const idleC=C.sync.idle(20); await tick(); await tick();
+  ok('5o the notes are caught up and their cursor stored; the versions page is held', !!db2.get('notes','v0') && !!db2.get('sync','cursor:notes') && !db2.get('sync','cursor:versions'));
+  const D2=device(cloud2,'E',{db:db2}); await D2.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
+  hV.res(); await idleC; await C.sync.idle(20);
+  ok('5p the versions page came after the owner changed: no version stored, no cursor:versions, no cursor:notes written back, the status «reload»', !db2.get('versions','vv') && !db2.get('sync','cursor:versions') && !db2.get('sync','cursor:notes') && !C.sync._S.catchupDone.versions && C.status.includes('reload')); }
+
 /* ── 5k. reload(): a tab that spent yesterday's budget is not paused when it leads again today ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore();
   const G=await mk(cloud,'G',{db, budgets:{reads:40, writes:1000}}); await idle(G);

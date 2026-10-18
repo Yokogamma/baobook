@@ -212,8 +212,12 @@ function makeSync(deps){
     if(eid!==S.epoch || uid!==(S.owner? S.owner.uid : null) || env!==(S.owner? S.owner.env : null)){ setStatus('reload'); throw fail('epoch'); } }
   // one transaction with the epoch check; `after` queues work for after the commit (cache updates, UI events)
   async function tx(stores, fn){ const after=[]; const t0=await db.tx(stores,'readwrite', async t=>{ await check(t); return fn(t, f=>after.push(f)); }); for(const f of after) await f(); return t0; }
-  async function load(){ if(S.loaded) return; S.loaded=true;
-    await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); S.epoch=ep? ep.id : null; S.owner=ow||null; const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
+  // o.guard: the (epoch, env, uid) this engine had before; a store that moved to another owner meanwhile is not adopted (§4.4 step 1), the
+  // status «reload» goes out and the load fails with code `epoch`, inside the same transaction that would have read the state
+  async function load(o={}){ if(S.loaded) return; S.loaded=true; const guard=o.guard||null; try{
+    await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null;
+      if(guard && (eid!==guard.epoch || (ow? ow.uid : null)!==guard.uid || (ow? ow.env : null)!==guard.env)){ setStatus('reload'); throw fail('epoch'); }
+      S.epoch=eid; S.owner=ow||null; const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       S.cursor.notes=(await t.get('sync',K.cursor('notes')))||null; S.cursor.versions=(await t.get('sync',K.cursor('versions')))||null; S.quota=(await t.get('sync','quota'))||null;
       if(overBudget()){ S.paused=true; S.listenPaused=true; }   // the day's budget was spent before this start: the pause is restored from the stored quota, nothing is read until the next day
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j);
@@ -221,7 +225,7 @@ function makeSync(deps){
       for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10));
       for(const m of await t.range('sync','meta:n:','meta:n:\uffff')){ if(m.err) S.err.set(m.k.slice(7), m.err); if(m.sends) S.sends.set(m.k.slice(7), m.sends); }
       for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ if(m.wait) addWaiting(m.wait); }
-      for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); }
+      for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); S.everLoaded=true; }catch(e){ S.loaded=false; throw e; } }
   function addWaiting(doc){ const list=S.waiting.get(doc.note)||[]; const i=list.findIndex(d=>d.id===doc.id); if(i<0) list.push(doc); else if((doc.rev||0)>=(list[i].rev||0)) list[i]=doc; S.waiting.set(doc.note,list); }   // a later state of the same version replaces the earlier one
   // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work
   async function reloadQueue(){ S.queueAt=now(); await db.tx(['sync'],'readonly', async t=>{ S.jobs.clear(); S.tries.clear(); S.refetch.clear();
@@ -232,7 +236,8 @@ function makeSync(deps){
     if(o.owner){ S.everCaughtUp=false; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}; } S.loaded=false; }
   // a tab that becomes the leader (§4.10) starts from the store: the previous leader moved the cursor, resolved attempts and spent the budget while this
   // tab's memory stood still. The pause is reset too, since load() only ever sets it (a budget spent yesterday must not pause a leader of today)
-  async function reload(){ resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load(); }
+  async function reload(){ const guard=S.everLoaded? {epoch:S.epoch, uid:S.owner? S.owner.uid : null, env:S.owner? S.owner.env : null} : null;   // a tab that waited for the lock must not adopt an owner it never knew
+    resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load({guard}); }
   // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way
   async function checkOwner(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
     return (ep? ep.id : null)===S.epoch && (ow? ow.uid : null)===(S.owner? S.owner.uid : null) && (ow? ow.env : null)===(S.owner? S.owner.env : null); }); }
@@ -378,7 +383,7 @@ function makeSync(deps){
       if(source==='delivery') S.lastDelivered.set(doc.id, doc.rev);
       const w=S.waiting.get(doc.id); if(w && w.length && r!=='skipped'){ S.waiting.delete(doc.id); for(const d of w) S.inbox.unshift({col:'versions', doc:d, source:'wait'}); }
       return r; }
-    catch(e){ if(e.code==='epoch') return 'skipped'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
+    catch(e){ if(e.code==='epoch') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
   // the first document without space: thin the history once and read the document again later, the page goes on; the second: no space, receiving stops (§4.6)
   async function quotaTrouble(id){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,id,after); }); }catch(_){} return false; }
     S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); setStatus('nospace'); return true; }
@@ -400,7 +405,7 @@ function makeSync(deps){
       const blocks=m.blocks.map(e=>{ const d=src.get(e.id); const body=d.s!==undefined? d.s : bodyOf(d); size+=bytesOf(body); const x={...e, s:body}; if(d.r || (!d.kind && d.html)) x.r=1; return x; });
       t.put('versions',{id, note:v.note, t:Math.min(v.t, vnow()), w:now(), reason:'manual', name:v.name, keep:1, inline:1, title:v.title, sig:m.sig, blocks, size, sum:sumOf(m,null), dev:doc.dev, dn:doc.dn});
       meta.base=storeBase(doc); meta.baseLrev=meta.lrev; delete meta.wait; putMeta(t,meta,after); after(()=>emit(deps.onChange,{id, kind:'version', note:v.note})); if(source==='delivery') await bumpCursor(t,'versions',{srv:doc.srv, id},after); return 'done'; }); }
-    catch(e){ if(e.code==='epoch') return 'skipped'; log({t:'apply-error', col:'v', id:doc.id, error:String(e)}); return 'error'; } }
+    catch(e){ if(e.code==='epoch') return 'epoch'; log({t:'apply-error', col:'v', id:doc.id, error:String(e)}); return 'error'; } }
 
   /* ── sending (§4.5) ── */
   async function net(fn){ if(!S.online) return {error:{code:'unavailable', message:'offline'}}; try{ return {value: await fn()}; }catch(e){ return {error: errOf(e)}; } }
@@ -471,8 +476,8 @@ function makeSync(deps){
   async function fetchPage(col){ const c=S.catchup[col]; if(!c || c.retryAt>now()) return false; S.netBusy=true; try{
       const res=await net(()=>S.cloud.page(col, c.after? {after:c.after} : {from:c.from}, 200)); if(res.error){ c.retryAt=now()+backoffMs(++c.tries||1); log({t:'page-error', col, code:res.error.code}); return true; }
       const docs=res.value||[]; countRead(Math.max(1, docs.length)); let last=null;
-      for(const d of docs){ const r=await applyIncoming(col, d, 'delivery'); if(r==='nospace'){ c.retryAt=now()+3600000; return true; } last={srv:d.srv, id:d.id}; }
-      if(last){ c.after=last; const after=[]; await db.tx(['sync'],'readwrite', async t=>bumpCursor(t,col,last,f=>after.push(f))); for(const f of after) f(); }
+      for(const d of docs){ const r=await applyIncoming(col, d, 'delivery'); if(r==='epoch') return true; if(r==='nospace'){ c.retryAt=now()+3600000; return true; } last={srv:d.srv, id:d.id}; }   // epoch: the owner changed under this page (§4.4 step 1); nothing of it is kept, not even the cursor
+      if(last){ c.after=last; try{ await tx(['sync'], async(t,after)=>bumpCursor(t,col,last,after)); }catch(e){ if(e.code==='epoch') return true; throw e; } }   // with the owner check: a page of the old owner must not leave its cursor to the new one
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
   function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
@@ -499,10 +504,10 @@ function makeSync(deps){
       T.strikes=0; const day=dayKey(now()), sc=S.scan[col]; if(sc && (sc.startedDay===day || sc.active)){ log({t:'scan-skipped', col}); return; }
       const left=Math.max(0, budgets().reads-quotaNow().reads); S.scan[col]={k:K.scan(col), active:true, after:null, found:0, ids:[], startedDay:day, day, allow:Math.floor(left/2)}; await saveScan(col); log({t:'scan-start', col}); setStatus('checking',0); }
     finally{ S.netBusy=false; } }
-  async function saveScan(col){ const sc=S.scan[col]; await db.tx(['sync'],'readwrite', async t=>{ if(sc) t.put('sync',sc); else t.del('sync',K.scan(col)); }); }
+  async function saveScan(col){ const sc=S.scan[col]; await tx(['sync'], async t=>{ if(sc) t.put('sync',sc); else t.del('sync',K.scan(col)); }); }   // under the owner check, like every write of the owner's data
   function scanReady(nowT){ for(const col of ['notes','versions']){ const sc=S.scan[col]; if(!sc || !sc.active) continue; const day=dayKey(nowT); if(sc.day!==day){ sc.day=day; sc.allow=Math.floor(Math.max(0, budgets().reads-quotaNow().reads)/2); } if(sc.allow>=1 && S.online && !S.paused && !S.netBusy && !S.denied) return col; } return null; }
   async function scanPage(col){ const sc=S.scan[col]; S.netBusy=true; try{ const n=Math.min(200, sc.allow); const res=await net(()=>S.cloud.scan(col, {afterId:sc.after}, n)); if(res.error){ sc.retryAt=now()+backoffMs(1); return; }
-      const docs=res.value||[]; countRead(Math.max(1,docs.length)); sc.allow-=Math.max(1,docs.length); for(const d of docs){ await applyIncoming(col, d, 'server'); sc.ids.push(d.id); sc.found++; sc.after=d.id; } S.scanFound=sc.found; setStatus('checking',sc.found);
+      const docs=res.value||[]; countRead(Math.max(1,docs.length)); sc.allow-=Math.max(1,docs.length); for(const d of docs){ if(await applyIncoming(col, d, 'server')==='epoch') return; sc.ids.push(d.id); sc.found++; sc.after=d.id; } S.scanFound=sc.found; setStatus('checking',sc.found);
       if(docs.length<n){ await scanComplete(col); return; } await saveScan(col); } finally{ S.netBusy=false; } }
   async function scanComplete(col){ const sc=S.scan[col], c=COL[col], mine=await seenTotals(c), got=new Set(sc.ids), vanished=mine.ids.filter(id=>!got.has(id)); log({t:'scan-done', col, found:sc.found, vanished:vanished.length});
     if(vanished.length) await tx(['notes','sync'], async(t,after)=>{ for(const id of vanished){ t.del('sync',K.seen(c,id)); log({t:'vanished', col, id}); if(c==='n'){ const meta=await getMeta(t,'n',id); meta.base=null; meta.baseLrev=0; putMeta(t,meta,after); const rec=await t.get('notes',id); if(rec){ const job=await t.get('sync',K.out('n',id)); if(!job) setJob(t,id,{k:K.out('n',id), tries:0, next:0},after); } } else { const meta=await getMeta(t,'v',id); meta.base=null; putMeta(t,meta,after); } } });
@@ -558,7 +563,7 @@ function makeSync(deps){
     resetMemory({owner:true}); await load(); if(S.started) connectCloud(); }
   function connectCloud(){ if(!S.cloud || !S.owner) return; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); startListener('versions'); }
   async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; S.started=true;
-    if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} connectCloud(); } }
+    if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} if(!S.started) return; connectCloud(); } }   // stopped while the record was written (the tab lost the lead): no listeners
   function stop(){ S.started=false; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does

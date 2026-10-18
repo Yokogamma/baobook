@@ -63,7 +63,7 @@ export class TestCloud{
     const d={...w, id, srv:this.srvAt(o.at!==undefined? o.at : this.t), commitAt:o.commitAt!==undefined? o.commitAt : this.t, seq:++this.seq}; if(col==='notes' && !w.purged && 'deleted' in w && !(D && D.deleted===w.deleted && D.tsrv)) d.tsrv=d.srv; else if(D && D.tsrv && 'deleted' in w) d.tsrv=D.tsrv; this.docs[col].set(id,d); this.events.push({t:'commit', col, id, rev:d.rev, dev:d.dev, at:this.t}); if(this.auto) this.pump(); return this.out(d); }
   async page(col, q, n, o={}){ this.fails(o.dev,'page'); let list=this.visible(col).sort((a,b)=>cmpSrv(a.srv,b.srv)||(a.id<b.id? -1 : a.id>b.id? 1 : 0));
     if(q.after) list=list.filter(d=>{ const c=cmpSrv(d.srv,q.after.srv); return c>0 || (c===0 && d.id>q.after.id); }); else if(q.from) list=list.filter(d=>cmpSrv(d.srv,q.from)>=0);
-    return list.slice(0,n).map(d=>this.out(d)); }
+    const out=list.slice(0,n).map(d=>this.out(d)); const h=this.take('hold',o.dev,'page'); if(h) await h.promise; return out; }   // held after the read, like get
   listen(col, from, onDocs, onErr, o={}){ const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
   // deliver what changed to every listener: the first call is the server snapshot; `dup` repeats the batch, `reorder` shuffles it
   pump(){ for(const sub of this.subs){ if(!sub.live) continue; const docs=this.visible(sub.col).filter(d=>!sub.from || cmpSrv(d.srv,sub.from)>=0).filter(d=>sub.seen.get(d.id)!==d.seq);

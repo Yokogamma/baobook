@@ -95,11 +95,35 @@ await D.evaluate(()=>{ window.__old=sheetDebug.sync.engine(); }); await connect(
 await D.evaluate(()=>window.__old.writeLocal('zz',(C,m,t)=>({title:'x', blocks:[], created:t, updated:t}))); await D.waitForTimeout(200);
 ok('4h the replaced engine reported «reload»: the tab stays editable and leads', !(await locked(D)).strip && (await lead(D)).on && (await lead(D)).held);
 
+// 4e: the lock is granted to a tab that waited with the old owner, and no «owner» message reached it: the load refuses the store, the tab locks and lets the lock go
+const H=await newTab(A, SITE, {connect:false}), J=await newTab(A, SITE, {connect:false});
+await typeAt(H,500,780,'набрано у H під u5');
+ok('4i two more tabs wait in the queue with the stored owner; one of them wrote a note locally', (await lead(H)).queued && (await lead(J)).queued && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && (await stored(H,'notes')).some(n=>n.blocks.some(b=>b.text==='набрано у H під u5')));
+await D.evaluate(o=>sheetDebug.sync.engine().setOwner(o), owner('u6'));   // the owner changes without a word to the other tabs
+const K=await newTab(A, SITE, {connect:false}); ok('4j a tab opened after the change knows the new owner and waits last', (await K.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u6' && (await lead(K)).queued);
+await D.close(); const kl=await until(async()=>(await lead(K)).on, 10000);
+const k4i=await locked(H), l4i=await lead(H), k4j=await locked(J);
+ok('4k the lock reached the tabs that knew the old owner first: each refused the store, locked itself as «epoch» (the engine still names u5) and let the lock go; the tab that knows the new owner leads', kl && (await lead(K)).held && k4i.strip && /іншого облікового запису/.test(k4i.msg) && !l4i.on && !l4i.held && !l4i.queued && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && k4j.strip && !(await lead(J)).on);
+ok('4l the locked tab still shows its note and takes no new text into the store', (await H.evaluate(()=>document.getElementById('sheet').innerText)).includes('набрано у H під u5') && (await H.evaluate(()=>document.getElementById('sheet').inert)));
+// 4f: the lead is lost while the start is still running (the format record write is held): the start must not bring the engine up afterwards
+const L=await newTab(A, SITE, {connect:{owner:owner('u6'), pace:PACE}});   // with a cloud: the engine's start writes the format record, which the gate below holds
+await L.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });   // every write of L waits, the engine's start among them
+const M=await newTab(A, SITE, {connect:{owner:owner('u6'), pace:PACE}});
+ok('4m two tabs wait behind the leader', (await lead(L)).queued && (await lead(M)).queued);
+await K.close(); await until(async()=>(await lead(L)).started, 5000);   // L got the lock: its engine is marked started and waits inside start()
+ok('4n the next tab got the lock and is starting: the engine marked started, the lead not yet taken', (await lead(L)).held && (await lead(L)).started && !(await lead(L)).on);
+await fire(L,'freeze',true); const ml=await until(async()=>(await lead(M)).on, 5000);
+ok('4o frozen in the middle of the start: the lock went on to the last tab, which leads', ml && (await lead(M)).held && !(await lead(L)).held);
+await L.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await L.waitForTimeout(500); const lL=await lead(L);
+ok('4p the held start finished: the engine did not come up (not started, not leading, no listeners), the last tab keeps leading', !lL.on && !lL.started && !lL.held && (await L.evaluate(()=>{ const S=sheetDebug.sync.engine()._S; return !S.listen.notes && !S.listen.versions; })) && (await lead(M)).on);
+await fire(L,'resume',true); await L.waitForTimeout(300);
+ok('4q resumed, it waits in the queue behind the leader', (await lead(L)).queued && !(await lead(L)).on && (await lead(M)).on);
+
 /* ── 5. any view-only mode releases the lock: another tab opens the database with a newer version ── */
 const G=await newTab(A, SITE, {connect:false});
 await G.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgradeneeded=()=>{}; r.onsuccess=()=>{ r.result.close(); res('ok'); }; r.onblocked=()=>res('blocked'); r.onerror=()=>res('error'); }));
-const gone=await until(async()=>!(await lead(D)).held && !(await locks(G)).held.includes(LOCK), 5000);
-ok('5 the leader was locked out by the newer database («updated»): the lock is free, nobody leads', gone && (await locked(D)).strip && !(await lead(D)).on);
+const gone=await until(async()=>!(await lead(M)).held && !(await locks(G)).held.includes(LOCK), 5000);
+ok('5 the leader was locked out by the newer database («updated»): the lock is free, nobody leads', gone && (await locked(M)).strip && !(await lead(M)).on);
 
 const errs=A.errs; console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await A.close(); await br.close(); await srv.close(); process.exit(fails?1:0);
