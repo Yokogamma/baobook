@@ -9,6 +9,7 @@ export async function attachCloud(context, cloud, dev){
     get:(col,id)=>cloud.get(col,id,o), page:(col,q,n)=>cloud.page(col,q,n,o), totals:col=>cloud.totals(col,o), scan:(col,q,n)=>cloud.scan(col,q,n,o),
     txnBegin:async(col,id)=>{ cloud.fails(dev,'txn'); const D=await cloud.get(col,id); const token='t'+(++seq); tokens.set(token,{col,id,rev:D? D.rev : 0, at:cloud.now()}); return {token, D}; },
     txnCommit:async(token,w)=>{ const t=tokens.get(token); tokens.delete(token); if(!t) throw Object.assign(new Error('token expired'),{code:'aborted'});
+      const h=cloud.take('hold',dev,'txn'); if(h) await h.promise;   // the `hold` fault: the page's transaction stays in flight until the scenario lets go; the re-read below then sees what landed meanwhile
       const D=await cloud.get(t.col,t.id); if((D? D.rev : 0)!==t.rev) return {ok:false, contention:true};
       // the commit goes through the real txn so every fault and check applies; the callback just returns what the page decided
       const r=await cloud.txn(t.col, t.id, ()=>w, o); return {ok:true, read:r.read, wrote:r.wrote}; },
@@ -31,6 +32,11 @@ export async function settle(page, ms=250){ await page.waitForTimeout(ms); retur
 export async function newDevice(br, cloud, SITE, name, o={}){ const ctx=await br.newContext({...(o.ctx||{}), viewport:{width:1280,height:900}}); await attachCloud(ctx, cloud, name); if(o.init) await ctx.addInitScript(o.init); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push(name+': '+e.message));
   await pg.goto(SITE); await pg.waitForSelector('html[data-ready]',{state:'attached',timeout:10000}); await pg.waitForFunction(()=>document.querySelectorAll('#list .item').length>0,null,{timeout:10000}); await pg.waitForTimeout(200);
   if(o.connect!==false) await connect(pg,{devId:name, devName:'Device '+name, ...(o.connect||{})}); return {ctx, pg, name, errs, close:()=>ctx.close()}; }
+// a second tab of the same device: the same context (its storage, its locks, the cloud bridge), connected with the same device id; it leads only once the first lets go
+export async function newTab(dev, SITE, o={}){ const pg=await dev.ctx.newPage(); pg.on('pageerror',e=>dev.errs.push(dev.name+' tab: '+e.message)); await pg.goto(SITE); await pg.waitForSelector('html[data-ready]',{state:'attached',timeout:10000}); await pg.waitForFunction(()=>document.querySelectorAll('#list .item').length>0,null,{timeout:10000}); await pg.waitForTimeout(200);
+  if(o.connect!==false) await connect(pg,{devId:dev.name, devName:'Device '+dev.name, ...(o.connect||{})}); return pg; }
+export const lead=pg=>pg.evaluate(()=>sheetDebug.sync.lead());
+export const locks=pg=>pg.evaluate(()=>navigator.locks.query().then(q=>({held:q.held.map(l=>l.name), pending:q.pending.map(l=>l.name)})));
 // what the device stores
 export const stored=(pg,store,id)=>pg.evaluate(([store,id])=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction(store,'readonly').objectStore(store); const q=id===undefined? t.getAll() : t.get(id); q.onsuccess=()=>{ d.close(); res(q.result); }; q.onerror=()=>{ d.close(); res(null); }; }catch(_){ d.close(); res(null); } }; r.onerror=()=>res(null); }), [store,id]);
 export const syncRecs=async(pg,prefix)=>(await stored(pg,'sync')).filter(r=>r.k.startsWith(prefix));

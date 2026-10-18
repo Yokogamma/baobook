@@ -4,7 +4,9 @@
 // faults hold it back from the queries by an `srv` range (page, listen) for a while, as an index that lags would, so when it does
 // appear there its `srv` already lies below their window and only the totals check finds it. Writes are checked the way the security
 // rules of §4.16 will check them: key sets, rev = previous + 1, the device's own receipt, other devices' receipts untouched, a
-// tombstone final, a write equal to the previous document refused.
+// tombstone final, a write equal to the previous document refused. The `hold` fault (with `op`: get or txn, and a `promise` the test resolves)
+// keeps one call in flight: a get returns what it read before the wait, a transaction waits after its callback and reads the document again
+// before committing, as the SDK would on contention, so two runners of one attempt (§4.10) can be interleaved deterministically.
 const LIVE_ALL=['v','rev','op','dev','rcpt','title','blocks','created','updated'], LIVE_ONLY=[...LIVE_ALL,'dn','deleted','archived','revived','tsrv'];
 const TOMB_ALL=['v','rev','op','dev','rcpt','purged'], TOMB_ONLY=[...TOMB_ALL,'dn','auto'];
 const VLIVE_ALL=['v','rev','op','dev','rcpt','note','t','name','title','blocks'], VLIVE_ONLY=[...VLIVE_ALL,'dn'];
@@ -26,7 +28,7 @@ export class TestCloud{
   all(col){ return [...this.docs[col].values()]; }
   out(d){ if(!d) return null; const o=clone(d); delete o.commitAt; delete o.seq; return o; }
   fails(dev, op){ const f=this.take('fail',dev,op); if(f) throw err(f.code||'unavailable','injected'); }
-  async get(col,id,o={}){ this.fails(o.dev,'get'); return this.out(this.docs[col].get(id)); }
+  async get(col,id,o={}){ this.fails(o.dev,'get'); const r=this.out(this.docs[col].get(id)); const h=this.take('hold',o.dev,'get'); if(h) await h.promise; return r; }   // held after the read: the caller goes on with a stale answer
   // the rules of §4.16 as the test cloud applies them
   check(col, w, D){ const keys=Object.keys(w), has=k=>keys.includes(k);
     if(D && D.purged) throw err('permission-denied','a tombstone is final'); if(D && col==='versions' && D.deleted) throw err('permission-denied','a deleted version stays deleted');
@@ -44,10 +46,11 @@ export class TestCloud{
     if(col==='versions' && !tomb && w.note!==undefined){ const note=this.docs.notes.get(w.note); if(!note || note.purged) throw err('permission-denied','noteAlive'); }
     if(D && w.rev===D.rev+1 && bodyJson(w)===bodyJson(D) && !(tomb) && !(D.purged)) throw err('invalid','an empty write'); }
   // the server transaction: fn(D) → the document to write or null; it may run again on contention and with the `tworunners` fault
-  async txn(col,id,fn,o={}){ this.fails(o.dev,'txn'); const two=this.take('tworunners',o.dev), other=this.take('other',o.dev), lost=this.take('lost',o.dev), delay=this.take('delay',o.dev), late=this.take('late',o.dev);
-    const reqAt=this.t; let attempts=0, D, w;
+  async txn(col,id,fn,o={}){ this.fails(o.dev,'txn'); const two=this.take('tworunners',o.dev), other=this.take('other',o.dev), lost=this.take('lost',o.dev), delay=this.take('delay',o.dev), late=this.take('late',o.dev), hold=this.take('hold',o.dev,'txn');
+    const reqAt=this.t; let attempts=0, D, w, held=false;
     for(;;){ if(++attempts>5) throw err('aborted','contention'); D=this.out(this.docs[col].get(id));
       w=fn(D? clone(D) : null); if(other && attempts===1){ this.write(other.col||col, other.doc, {dev:other.dev||'other', dn:other.dn}); continue; }   // another device wrote between the read and the commit
+      if(hold && !held){ held=true; await hold.promise; const D2=this.docs[col].get(id); if((D2? D2.rev : 0)!==(D? D.rev : 0)) continue; }   // held after the callback: a document that moved meanwhile sends the callback round again
       break; }
     let wrote=false;
     if(w){ this.check(col, w, D); const commitAt=this.t+(delay? delay.ms : 0)+(late? late.ms : 0); const d={...clone(w), id, srv:this.srvAt(reqAt), commitAt, seq:++this.seq}; /* late: hidden from page and listen until commitAt */ if(w.tsrv===undefined && col==='notes' && !w.purged && 'deleted' in w && !(D && D.deleted===w.deleted && D.tsrv)) d.tsrv=this.srvAt(reqAt); this.docs[col].set(id,d); wrote=true; this.events.push({t:'commit', col, id, rev:d.rev, dev:d.dev, at:this.t}); if(this.auto) this.pump(); }
@@ -60,7 +63,7 @@ export class TestCloud{
     const d={...w, id, srv:this.srvAt(o.at!==undefined? o.at : this.t), commitAt:o.commitAt!==undefined? o.commitAt : this.t, seq:++this.seq}; if(col==='notes' && !w.purged && 'deleted' in w && !(D && D.deleted===w.deleted && D.tsrv)) d.tsrv=d.srv; else if(D && D.tsrv && 'deleted' in w) d.tsrv=D.tsrv; this.docs[col].set(id,d); this.events.push({t:'commit', col, id, rev:d.rev, dev:d.dev, at:this.t}); if(this.auto) this.pump(); return this.out(d); }
   async page(col, q, n, o={}){ this.fails(o.dev,'page'); let list=this.visible(col).sort((a,b)=>cmpSrv(a.srv,b.srv)||(a.id<b.id? -1 : a.id>b.id? 1 : 0));
     if(q.after) list=list.filter(d=>{ const c=cmpSrv(d.srv,q.after.srv); return c>0 || (c===0 && d.id>q.after.id); }); else if(q.from) list=list.filter(d=>cmpSrv(d.srv,q.from)>=0);
-    return list.slice(0,n).map(d=>this.out(d)); }
+    const out=list.slice(0,n).map(d=>this.out(d)); const h=this.take('hold',o.dev,'page'); if(h) await h.promise; return out; }   // held after the read, like get
   listen(col, from, onDocs, onErr, o={}){ const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
   // deliver what changed to every listener: the first call is the server snapshot; `dup` repeats the batch, `reorder` shuffles it
   pump(){ for(const sub of this.subs){ if(!sub.live) continue; const docs=this.visible(sub.col).filter(d=>!sub.from || cmpSrv(d.srv,sub.from)>=0).filter(d=>sub.seen.get(d.id)!==d.seq);

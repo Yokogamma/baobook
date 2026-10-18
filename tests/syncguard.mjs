@@ -3,7 +3,10 @@
 // note is applied in its latest state once the note comes (no quarantine of the earlier state); the listener's deliveries count as reads,
 // the budget stops the listeners (a reconnect or a restart on the same day does not bring them back, the next day does), and a paused engine
 // names the next day as its wake-up time whatever waits (a job, a page, a refetch); a fallback copy's
-// move decides over the stored record inside its own transaction.
+// move decides over the stored record inside its own transaction. Section 5 (§4.10, two tabs of one device over one store): both engines write
+// as the device of the store's `device` record; a runner that read the cloud before another insured an attempt does not insure a second one
+// over it; two runners of one attempt leave one commit; a late delivery by a runner with an old memory never moves the cursor back; a tab
+// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
@@ -87,4 +90,79 @@ const body=d=>{ const o={title:d.title, blocks:d.blocks, created:d.created, upda
   const n=A.db.get('notes','f1'), bk=A.db.get('notes','bk1');
   ok('4b the decision saw the stored record (B), the copy moved in and the backup holds B, not A', r.ok && r.results.length===2 && !!seen && seen.blocks[0].text==='стан B' && n.blocks[0].text==='стан C (резервна копія)' && !!bk && bk.blocks[0].text==='стан B' && JSON.stringify(A.db.all('notes')).includes('стан B'));
   await idle(A); ok('4c both reached the cloud', cloud.doc('notes','f1').blocks[0].text==='стан C (резервна копія)' && !!cloud.doc('notes','bk1') && cloud.doc('notes','bk1').blocks[0].text==='стан B'); }
+/* ── 5. two engines over one store (§4.10): the device record, has-try, two runners of one attempt, the cursor, reload() after a limit, checkOwner() ── */
+const defer=()=>{ let res; const promise=new Promise(r=>{ res=r; }); return {promise, res}; };
+const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  const A=await mk(cloud,'A',{db}), B=await mk(cloud,'B',{db});
+  ok('5 both engines take the device id and name from the store, not from their own deps ('+A.sync.devId+', '+B.sync.devId+')', A.sync.devId==='D' && B.sync.devId==='D' && A.sync.devName==='Device D');
+  // (a) has-try: A read the cloud before B insured an attempt; A must not insure a second one over it (§4.5 step 1)
+  await edit(A,'h1',(C,t)=>({title:'Два бігуни', blocks:[{id:'b',row:1,fx:0,text:'перша правка'}], created:t, updated:t}));
+  const hA=defer(), hB=defer(); cloud.fault('hold',{dev:'A', op:'get', promise:hA.promise}); cloud.fault('hold',{dev:'B', op:'txn', promise:hB.promise});
+  const stepA=A.sync.step(); await tick();   // A: the job → cloud.get, held after its (empty) read
+  const stepB=B.sync.step(); await tick();   // B: reads nothing, insures op_B and runs it → held inside the cloud transaction
+  const tr1=db.get('sync','try:n:h1');
+  ok('5a B insured an attempt while A still waits for its read', !!tr1 && tr1.expect===0 && !!A.sync._S.netBusy);
+  await edit(A,'h1',(C,t)=>({...C, blocks:[{...C.blocks[0], text:'друга правка'}], updated:t}));   // lrev 2 while both are in flight
+  hA.res(); await stepA;   // A goes on with its stale read: no document, no base → insureTx finds B's attempt
+  const tr2=db.get('sync','try:n:h1'), insA=A.logs.filter(e=>e.t==='insure' && e.id==='h1').map(e=>e.ins);
+  ok('5b A did not insure over it: the attempt is still B\'s (A\'s insure: '+insA.join(',')+')', !!tr2 && tr2.op===tr1.op && insA.includes('has-try') && !insA.includes('insured'));
+  hB.res(); await stepB; await idle(A,B);
+  const doc=cloud.doc('notes','h1'), commits=cloud.events.filter(e=>e.t==='commit' && e.id==='h1'), copies=db.all('versions').filter(v=>v.note==='h1' && v.reason==='copy');
+  ok('5c B\'s attempt was accepted and the second edit followed as a fast-forward: rev '+doc.rev+', '+commits.length+' commits, «'+doc.blocks[0].text+'», dev '+doc.dev+', no conflict copies ('+copies.length+'), nothing left in the queue', doc.rev===2 && commits.length===2 && doc.blocks[0].text==='друга правка' && doc.dev==='D' && doc.dn==='Device D' && !copies.length && !db.get('sync','try:n:h1') && !db.get('sync','out:n:h1'));
+  // (b) two runners of one attempt: A is held inside the cloud transaction, B runs the same try: to its end; A's finish then finds the attempt gone
+  await edit(A,'h2',(C,t)=>({title:'Та сама спроба', blocks:[{id:'b',row:1,fx:0,text:'спроба'}], created:t, updated:t}));
+  const h2=defer(); cloud.fault('hold',{dev:'A', op:'txn', promise:h2.promise});
+  const stepA2=A.sync.step(); await tick();
+  const trA=db.get('sync','try:n:h2'); ok('5d A insured op '+(trA||{}).op+' and is held in the cloud transaction', !!trA && !!A.sync._S.netBusy);
+  await idle(B);   // B finds the attempt in the store and runs it
+  const d1=cloud.doc('notes','h2'), m1=db.get('sync','meta:n:h2');
+  ok('5e B finished A\'s attempt: rev 1 with the receipt, the try is gone, the base is set, no job', !!d1 && d1.rev===1 && d1.rcpt.D===trA.op && !db.get('sync','try:n:h2') && !!m1 && !!m1.base && m1.base.rev===1 && !db.get('sync','out:n:h2'));
+  h2.res(); await stepA2; await idle(A,B);
+  const commits2=cloud.events.filter(e=>e.t==='commit' && e.id==='h2');
+  ok('5f A\'s run of the same attempt wrote nothing: one commit, rev 1, A forgot the attempt, nothing in the queue', commits2.length===1 && cloud.doc('notes','h2').rev===1 && !A.sync.tries().includes('h2') && !db.get('sync','out:n:h2') && !db.get('sync','try:n:h2') && (db.get('sync','seen:n:h2')||{}).rev===1);
+  // (c) the cursor never moves back: a late delivery applied by a runner whose memory is behind the store
+  for(let i=0;i<3;i++){ cloud.advance(10000); cloud.write('notes',{id:'c'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'c'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }
+  await idle(A,B); const cur0=db.get('sync','cursor:notes');
+  ok('5g three documents arrived, the stored cursor stands at the last one', !!cur0 && cur0.id==='c2' && !!db.get('notes','c2'));
+  A.sync._S.cursor.notes={srv:cloud.doc('notes','c0').srv, id:'c0'};   // an old leader's memory
+  A.sync._S.inbox.push({col:'notes', doc:cloud.doc('notes','c1'), source:'delivery'}); await A.sync.step();
+  const cur1=db.get('sync','cursor:notes');
+  ok('5h a late delivery of c1 by the runner with the old memory leaves the stored cursor at c2 and brings its memory forward ('+A.sync._S.cursor.notes.id+')', cur1.id==='c2' && A.sync._S.cursor.notes.id==='c2');
+  // (e) checkOwner(): the store against this engine's memory
+  ok('5i checkOwner: the store matches this engine', await A.sync.checkOwner()===true);
+  await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
+  ok('5j another tab changed the owner: checkOwner of the old engine says so', await A.sync.checkOwner()===false && await B.sync.checkOwner()===true); }
+
+/* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  for(let i=0;i<3;i++){ cloud.advance(1000); cloud.write('notes',{id:'o'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'o'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }
+  const A=device(cloud,'A',{db}); A.online=false;   // the listener delivers nothing: the documents come by the catch-up page only
+  await A.sync.setOwner(owner); const hP=defer(); cloud.fault('hold',{dev:'A', op:'page', promise:hP.promise});
+  await A.sync.start(); const stepA=A.sync.step(); await tick();   // the first page of the catch-up is read and held
+  const B=device(cloud,'B',{db}); await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});   // another tab changed the owner meanwhile
+  hP.res(); await stepA; await A.sync.idle(20);
+  ok('5n the page came after the owner changed: no document applied, no cursor:notes left to the new owner, the catch-up not marked done, the status «reload»', !db.get('sync','cursor:notes') && !A.sync._S.catchupDone.notes && A.status.includes('reload') && !db.get('notes','o0') && db.all('notes').length===0);
+  // the same for a page of versions: the notes are caught up under the old owner, the versions page is held, the owner changes, the page comes
+  const cloud2=new TestCloud({start:1_700_000_000_000}); const db2=new MemStore(); db2.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  cloud2.write('notes',{id:'v0', title:'', blocks:[{id:'b',row:1,fx:0,text:'v0'}], created:cloud2.now(), updated:cloud2.now()},{dev:'phone'});
+  cloud2.write('versions',{id:'vv', note:'v0', t:cloud2.now(), name:'Назва', title:'', blocks:[{id:'b',row:1,fx:0,text:'v0'}]},{dev:'phone'});
+  const C=device(cloud2,'C',{db:db2}); C.online=false; await C.sync.setOwner(owner); const hV=defer(); cloud2.fault('hold',{dev:'C', op:'page', promise:hV.promise, skip:1});   // the second page call is the versions catch-up
+  await C.sync.start(); const idleC=C.sync.idle(20); await tick(); await tick();
+  ok('5o the notes are caught up and their cursor stored; the versions page is held', !!db2.get('notes','v0') && !!db2.get('sync','cursor:notes') && !db2.get('sync','cursor:versions'));
+  const D2=device(cloud2,'E',{db:db2}); await D2.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
+  hV.res(); await idleC; await C.sync.idle(20);
+  ok('5p the versions page came after the owner changed: no version stored, no cursor:versions, no cursor:notes written back, the status «reload»', !db2.get('versions','vv') && !db2.get('sync','cursor:versions') && !db2.get('sync','cursor:notes') && !C.sync._S.catchupDone.versions && C.status.includes('reload')); }
+
+/* ── 5k. reload(): a tab that spent yesterday's budget is not paused when it leads again today ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore();
+  const G=await mk(cloud,'G',{db, budgets:{reads:40, writes:1000}}); await idle(G);
+  for(let i=0;i<38;i++){ cloud.advance(120000); cloud.write('notes',{id:'d'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'d'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }   // two minutes apart: the next day's windows hold only the last few
+  await idle(G); ok('5k the budget of the day is spent on the deliveries: paused', G.sync._S.paused && G.sync.status().code==='limit');
+  cloud.advance(86400e3);   // the next day: another tab leads first and stores today's quota
+  const H=device(cloud,'H',{db, budgets:{reads:40, writes:1000}}); await H.sync.setOwner(owner); await H.sync.start(); await idle(H); const q=db.get('sync','quota');
+  ok('5l the other tab led today within the budget and stored today\'s quota ('+q.reads+' reads)', !H.sync._S.paused && q.day===S.dayKey(cloud.now()) && q.reads<40);
+  H.sync.stop(); await G.sync.reload(); await G.sync.start(); await idle(G);
+  cloud.advance(1000); cloud.write('notes',{id:'today1', title:'', blocks:[{id:'b',row:1,fx:0,text:'сьогодні'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); await idle(G);
+  ok('5m the old tab leads again after reload(): not paused, it reads today\'s document ('+G.sync._S.quota.reads+' reads today)', !G.sync._S.paused && G.sync.status().code!=='limit' && !!db.get('notes','today1') && G.sync._S.quota.reads<40); }
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
