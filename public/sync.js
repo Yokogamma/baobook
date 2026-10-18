@@ -187,9 +187,9 @@ const fail=(code,msg)=>Object.assign(new Error(msg||code),{code});
 const srvMinus=(srv, ms)=>{ if(!srv) return null; const s=(+srv.s||0)-Math.ceil(ms/1000); return {s: Math.max(0,s), ns:+srv.ns||0}; };
 const cursorMax=(a,b)=>!a? b : !b? a : (cmpSrv(a.srv,b.srv)<0 || (cmpSrv(a.srv,b.srv)===0 && String(a.id)<String(b.id)))? b : a;
 
-/* ── the engine (§4.4–4.8, §4.17): one tab, driven by step() ───────────────────────────────────────────────────────────────── */
+/* ── the engine (§4.4–4.8, §4.17, §4.10): driven by step() in the leader tab; the other tabs only write locally through it ───────────────────────────────────────────────────────────────── */
 function makeSync(deps){
-  const {db, now, random}=deps, vnow=deps.vnow||now, devId=deps.devId||'dev', devName=deps.devName||'';
+  const {db, now, random}=deps, vnow=deps.vnow||now; let devId=deps.devId||'dev', devName=deps.devName||'';   // the store's `device` record once loaded (§4.3): every tab of one device writes as one device, so a receipt proves any tab's attempt
   const emit=(fn,...a)=>{ try{ if(typeof fn==='function') fn(...a); }catch(_){} };
   const pace={...PACE, ...(deps.pace||{})};
   const S={loaded:false, started:false, owner:null, epoch:null, cloud:deps.cloud||null, online:true, denied:false, paused:false, nospace:false,
@@ -213,7 +213,7 @@ function makeSync(deps){
   // one transaction with the epoch check; `after` queues work for after the commit (cache updates, UI events)
   async function tx(stores, fn){ const after=[]; const t0=await db.tx(stores,'readwrite', async t=>{ await check(t); return fn(t, f=>after.push(f)); }); for(const f of after) await f(); return t0; }
   async function load(){ if(S.loaded) return; S.loaded=true;
-    await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); S.epoch=ep? ep.id : null; S.owner=ow||null;
+    await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); S.epoch=ep? ep.id : null; S.owner=ow||null; const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       S.cursor.notes=(await t.get('sync',K.cursor('notes')))||null; S.cursor.versions=(await t.get('sync',K.cursor('versions')))||null; S.quota=(await t.get('sync','quota'))||null;
       if(overBudget()){ S.paused=true; S.listenPaused=true; }   // the day's budget was spent before this start: the pause is restored from the stored quota, nothing is read until the next day
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j);
@@ -226,6 +226,17 @@ function makeSync(deps){
   // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work
   async function reloadQueue(){ S.queueAt=now(); await db.tx(['sync'],'readonly', async t=>{ S.jobs.clear(); S.tries.clear(); S.refetch.clear();
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); }); }
+  // the memory that describes the owner's data and this engine's run; the device's own state (the quota, the pause) is reset only by reload()
+  function resetMemory(o={}){ S.jobs.clear(); S.tries.clear(); S.refetch.clear(); S.err.clear(); S.sends.clear(); S.waiting.clear(); S.lastDelivered.clear(); S.rejected.clear(); S.inbox.length=0;
+    S.cursor={notes:null, versions:null}; S.scan={notes:null, versions:null}; S.catchup={notes:null, versions:null}; S.catchupDone={notes:false, versions:false}; S.snapshot={notes:false, versions:false};
+    if(o.owner){ S.everCaughtUp=false; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}; } S.loaded=false; }
+  // a tab that becomes the leader (§4.10) starts from the store: the previous leader moved the cursor, resolved attempts and spent the budget while this
+  // tab's memory stood still. The pause is reset too, since load() only ever sets it (a budget spent yesterday must not pause a leader of today)
+  async function reload(){ resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load(); }
+  // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way
+  async function checkOwner(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
+    return (ep? ep.id : null)===S.epoch && (ow? ow.uid : null)===(S.owner? S.owner.uid : null) && (ow? ow.env : null)===(S.owner? S.owner.env : null); }); }
+  const nudge=()=>{ S.queueAt=0; };   // another tab wrote: the next step reads the queue again instead of waiting for its minute
 
   /* ── budget and pace ── */
   function quotaNow(){ const day=dayKey(now()); if(!S.quota || S.quota.day!==day){ S.quota={k:'quota', day, reads:0, writes:0, lastSend:0}; S.quotaDirty=true; S.paused=false; } return S.quota; }
@@ -312,10 +323,10 @@ function makeSync(deps){
       if(o.toList) delete note.deleted; else note.deleted=tt;
       const nmeta=defMeta('n',targetId); await putNote(t, targetId, note, nmeta, {t:tt}, after); await ensureJob(t, targetId, note, nmeta, after);
       for(const p of passed) p.revivedAs=targetId;
-      log({t:'moved', from:originId, to:targetId, existing:false}); after(()=>emit(deps.onChange,{id:targetId, kind:'revived', from:originId})); }
+      log({t:'moved', from:originId, to:targetId, existing:false}); after(()=>emit(deps.onChange,{id:targetId, kind:'revived', from:originId, dev:moved.dev, dn:moved.dn})); }
     for(const v of await versionsOf(t,originId)) if(v.reason==='copy'){ t.put('versions',{...v, note:targetId}); }   // the original's conflict copies follow its text
     if(!passed[0].revivedAs) passed[0].revivedAs=targetId; for(const p of passed) t.put('sync',p);
-    after(()=>emit(deps.onChange,{id:targetId, kind:'note'})); return targetId; }
+    after(()=>emit(deps.onChange,{id:targetId, kind:'note', dev:moved.dev, dn:moved.dn})); return targetId; }
   // a tombstone meets a local record: delete, or revive when the copy changed or has conflict copies
   async function tombstoneLocal(t, id, C, meta, doc, after){ const changed=meta.lrev!==meta.baseLrev, copies=C? await hasCopies(t,id) : false;
     const hashes=C? (C.blocks||[]).map(contentHash) : [];
@@ -350,18 +361,20 @@ function makeSync(deps){
       await revive(t, id, {...body, dev:doc.dev, dn:doc.dn}, {t:tt}, after); if(job){ meta.base=storeBase(doc); putMeta(t,meta,after); } log({t:'moved-in', id}); return job? 'again' : 'done'; }
     if(!C){ await putNote(t, id, body, meta, {baseEq:true}, after); meta.base=storeBase(doc); meta.arrived=tt; putMeta(t,meta,after); dropJob(t,id,after);
       if(body.revived){ const pr=await t.get('sync',K.purged(body.revived.from)); if(pr && !pr.revivedAs){ pr.revivedAs=id; t.put('sync',pr); } }   // an incoming revived note becomes this device's pointer
-      log({t:'applied', id, rev:doc.rev, fresh:true}); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev})); return 'done'; }
+      log({t:'applied', id, rev:doc.rev, fresh:true}); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'done'; }
     if(meta.lrev===meta.baseLrev && !recreated){ await writeIncoming(t, id, C, tt, after); await putNote(t, id, {...body}, meta, {baseEq:true}, after); meta.base=storeBase(doc); meta.arrived=tt; putMeta(t,meta,after); dropJob(t,id,after);
-      log({t:'applied', id, rev:doc.rev}); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev})); return 'done'; }
+      log({t:'applied', id, rev:doc.rev}); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'done'; }
     return mergeCore(t, id, C, meta, doc, body, tt, after); }
   // the local merge (§4.5 step 2, §4.6 rule 6): the state here goes into the history first, then merge3 over the base (or merge0 without one)
   async function mergeCore(t, id, C, meta, doc, body, tt, after){ await writeIncoming(t, id, C, tt, after);
     const ctx={dev:devId, t:tt}, R={...body, dev:doc.dev, dn:doc.dn}, m=meta.base? merge3(noteBody(meta.base), C, R, ctx) : merge0(C, R, ctx);
     meta.base=storeBase(doc); meta.arrived=tt; log({t:'merged', id, rev:doc.rev, trace:m.trace, same:m.same});
-    if(m.same){ await putNote(t, id, m.note, meta, {baseEq:true, copies:m.copies, t:tt}, after); dropJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev})); return 'done'; }
-    await putNote(t, id, m.note, meta, {copies:m.copies, t:tt}, after); await ensureJob(t, id, m.note, meta, after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev})); return 'again'; }
+    if(m.same){ await putNote(t, id, m.note, meta, {baseEq:true, copies:m.copies, t:tt}, after); dropJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'done'; }
+    await putNote(t, id, m.note, meta, {copies:m.copies, t:tt}, after); await ensureJob(t, id, m.note, meta, after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'again'; }
+  // the cursor never moves back (§4.6): the stored one decides, not this runner's memory, which may be behind another tab's leadership
+  async function bumpCursor(t, col, last, after){ const stored=await t.get('sync',K.cursor(col)), prev=stored? {srv:stored.srv, id:stored.id} : null, best=cursorMax(prev, last); if(best!==prev) t.put('sync',{k:K.cursor(col), ...best}); after(()=>{ S.cursor[col]=cursorMax(S.cursor[col], best); }); }
   async function applyIncoming(col, doc, source){ if(col==='versions') return applyVersionDoc(doc, source);
-    try{ const r=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyNote(t, doc, source, after); if(source==='delivery' && res!=='skipped'){ const cur=cursorMax(S.cursor.notes, {srv:doc.srv, id:doc.id}); if(cur!==S.cursor.notes){ t.put('sync',{k:K.cursor('notes'), ...cur}); after(()=>{ S.cursor.notes=cur; }); } } return res; });
+    try{ const r=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyNote(t, doc, source, after); if(source==='delivery' && res!=='skipped') await bumpCursor(t,'notes',{srv:doc.srv, id:doc.id},after); return res; });
       if(source==='delivery') S.lastDelivered.set(doc.id, doc.rev);
       const w=S.waiting.get(doc.id); if(w && w.length && r!=='skipped'){ S.waiting.delete(doc.id); for(const d of w) S.inbox.unshift({col:'versions', doc:d, source:'wait'}); }
       return r; }
@@ -386,14 +399,14 @@ function makeSync(deps){
       const v=nv.version, m=manifestOf(v.title, v.blocks), src=new Map(v.blocks.map(b=>[b.id,b])); let size=0;
       const blocks=m.blocks.map(e=>{ const d=src.get(e.id); const body=d.s!==undefined? d.s : bodyOf(d); size+=bytesOf(body); const x={...e, s:body}; if(d.r || (!d.kind && d.html)) x.r=1; return x; });
       t.put('versions',{id, note:v.note, t:Math.min(v.t, vnow()), w:now(), reason:'manual', name:v.name, keep:1, inline:1, title:v.title, sig:m.sig, blocks, size, sum:sumOf(m,null), dev:doc.dev, dn:doc.dn});
-      meta.base=storeBase(doc); meta.baseLrev=meta.lrev; delete meta.wait; putMeta(t,meta,after); after(()=>emit(deps.onChange,{id, kind:'version', note:v.note})); if(source==='delivery'){ const cur=cursorMax(S.cursor.versions,{srv:doc.srv, id}); t.put('sync',{k:K.cursor('versions'), ...cur}); after(()=>{ S.cursor.versions=cur; }); } return 'done'; }); }
+      meta.base=storeBase(doc); meta.baseLrev=meta.lrev; delete meta.wait; putMeta(t,meta,after); after(()=>emit(deps.onChange,{id, kind:'version', note:v.note})); if(source==='delivery') await bumpCursor(t,'versions',{srv:doc.srv, id},after); return 'done'; }); }
     catch(e){ if(e.code==='epoch') return 'skipped'; log({t:'apply-error', col:'v', id:doc.id, error:String(e)}); return 'error'; } }
 
   /* ── sending (§4.5) ── */
   async function net(fn){ if(!S.online) return {error:{code:'unavailable', message:'offline'}}; try{ return {value: await fn()}; }catch(e){ return {error: errOf(e)}; } }
   // the retry time is set in memory first: when storage itself fails, the job must still wait instead of being picked again at once
   async function backoff(id, error){ const job=S.jobs.get(id); if(!job) return; const j={...job, tries:(job.tries||0)+1, err:error.code}; j.next=now()+backoffMs(j.tries); log({t:'retry', id, code:error.code, next:j.next}); S.jobs.set(id,j);
-    try{ await tx(['sync'], async(t,after)=>{ if(await t.get('sync',K.out('n',id))) setJob(t,id,j,after); }); }catch(_){} }
+    try{ await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.out('n',id)); if(cur) setJob(t,id,{...cur, tries:j.tries, next:j.next, err:j.err},after); }); }catch(_){} }   // only the retry fields: another runner may have changed the rest
   // a storage or program error inside one send or attempt: logged, the job backs off, the step goes on (§4.5: nothing unsecured reaches the cloud)
   async function guarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && e.code==='epoch') return; log({t:'step-error', kind, id, code:e && e.code, error:String(e && e.message || e)}); await backoff(id, {code:'storage'}); } }
   function pickJob(nowT){ if(S.netBusy || S.paused || !S.online || S.denied) return null;
@@ -407,14 +420,14 @@ function makeSync(deps){
       if(R && (!base || R.rev>base.rev)){ const out=await mergeTx(id, R); if(out==='again') continue; return; }
       if(R && base && R.rev<base.rev){ const out=await invariantTx(id, R); if(out==='again') continue; return; }
       if(!R && base){ await vanishedTx(id); continue; }
-      const ins=await insureTx(id); log({t:'insure', id, ins}); if(ins==='insured'){ await runTry(id); return; } if(ins==='again') continue; return; } }
+      const ins=await insureTx(id); log({t:'insure', id, ins}); if(ins==='insured'){ await runTry(id); return; } if(ins==='has-try'){ await reloadQueue(); return; } if(ins==='again') continue; return; } }   // has-try: another runner insured an attempt while this one was reading the cloud; the next step runs that attempt
     finally{ S.netBusy=false; } }
   // §4.5 step 2 when the cloud moved ahead: one transaction, R is a server read
   async function mergeTx(id, R){ return tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyNote(t, R, 'server', after); return res; }); }
   async function invariantTx(id, R){ log({t:'invariant', id, kind:'older', rev:R.rev}); return tx(['notes','sync','versions','blobs'], async(t,after)=>applyNote(t, R, 'server', after)); }   // rule 1 decides: recreated → first merge, rewritten → quarantine
   async function vanishedTx(id){ log({t:'invariant', id, kind:'vanished'}); await tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id)); meta.base=null; meta.baseLrev=0; putMeta(t,meta,after); t.del('sync',K.seen('n',id)); if(job && job.tomb) dropJob(t,id,after); }); }
   // §4.5 step 3: the insured attempt, result and sentLrev from one read; a tombstone keeps its own emptiness rule
-  async function insureTx(id){ return tx(['notes','sync','versions'], async(t,after)=>{ let job=await t.get('sync',K.out('n',id)); if(!job) return 'dropped';
+  async function insureTx(id){ return tx(['notes','sync','versions'], async(t,after)=>{ let job=await t.get('sync',K.out('n',id)); if(!job) return 'dropped'; if(await t.get('sync',K.tr('n',id))) return 'has-try';   // §4.5 step 1: no new op while an attempt stands, whoever insured it
       const Srec=await t.get('notes',id), meta=await getMeta(t,'n',id), base=meta.base, tt=now();
       if(job.tomb){ const manual=!Srec; if(manual || (Srec.deleted && base && sameDoc(Srec, base) && !(await hasCopies(t,id)))){ const tr={k:K.tr('n',id), op:'o'+now().toString(36)+random().toString(36).slice(2,8), expect: base? base.rev : 0, result:{purged:tt}, sentLrev:meta.lrev, epoch:S.epoch}; if(job.auto) tr.result.auto=true; setTry(t,id,tr,after); return 'insured'; }
         job={...job}; delete job.tomb; delete job.auto; setJob(t,id,job,after); }
@@ -433,7 +446,7 @@ function makeSync(deps){
       await tx(['notes','sync','versions','blobs'], async(t,after)=>finishCore(t, id, tr, outcome, after)); }
     finally{ S.netBusy=false; } }
   // §4.5 step 5: the finish, only if the attempt is still the same one
-  async function finishCore(t, id, tr, outcome, after){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op) return 'stale';
+  async function finishCore(t, id, tr, outcome, after){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.tries.get(id)===tr) S.tries.delete(id); S.queueAt=0; }); return 'stale'; }   // another runner finished it (§4.5 step 5): this memory forgets the attempt and reads the queue again
     const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id)), Srec=await t.get('notes',id), seen=(await t.get('sync',K.seen('n',id)))||null;
     if(outcome.kind==='accepted'){ const rev=outcome.rev, after_=meta.base? meta.base.srv||null : null; const sends=(meta.sends||[]).filter(x=>x>now()-pace.loopWindow); sends.push(now()); meta.sends=sends;
       if(tr.result && tr.result.purged){ setSeen(t,'n',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
@@ -459,7 +472,7 @@ function makeSync(deps){
       const res=await net(()=>S.cloud.page(col, c.after? {after:c.after} : {from:c.from}, 200)); if(res.error){ c.retryAt=now()+backoffMs(++c.tries||1); log({t:'page-error', col, code:res.error.code}); return true; }
       const docs=res.value||[]; countRead(Math.max(1, docs.length)); let last=null;
       for(const d of docs){ const r=await applyIncoming(col, d, 'delivery'); if(r==='nospace'){ c.retryAt=now()+3600000; return true; } last={srv:d.srv, id:d.id}; }
-      if(last){ c.after=last; const cur=cursorMax(S.cursor[col], last); if(cur!==S.cursor[col]){ S.cursor[col]=cur; await db.tx(['sync'],'readwrite', async t=>{ t.put('sync',{k:K.cursor(col), ...cur}); }); } }
+      if(last){ c.after=last; const after=[]; await db.tx(['sync'],'readwrite', async t=>bumpCursor(t,col,last,f=>after.push(f))); for(const f of after) f(); }
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
   function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
@@ -542,12 +555,11 @@ function makeSync(deps){
       else { t.del('sync','owner'); for(const n of await t.range('notes','','\uffff')) t.del('notes',n.id); for(const v of await t.range('versions','','\uffff')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],[ '\uffff','\uffff'])) t.del('blobs',[b.note,b.h]); }
       S.loaded=false; });
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
-    S.jobs.clear(); S.tries.clear(); S.refetch.clear(); S.err.clear(); S.sends.clear(); S.cursor={notes:null, versions:null}; S.scan={notes:null, versions:null}; S.catchupDone={notes:false, versions:false}; S.everCaughtUp=false; S.lastDelivered.clear(); S.waiting.clear(); S.snapshot={notes:false, versions:false}; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}};
-    if(!S.loaded) await load(); if(S.started) connectCloud(); }
+    resetMemory({owner:true}); await load(); if(S.started) connectCloud(); }
   function connectCloud(){ if(!S.cloud || !S.owner) return; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); startListener('versions'); }
   async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; S.started=true;
     if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} connectCloud(); } }
-  function stop(){ S.started=false; for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } } }
+  function stop(){ S.started=false; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
     S.lastReconnect=now(); startListener('notes'); startListener('versions'); startCatchup('notes'); emit(deps.wake); }
@@ -585,7 +597,7 @@ function makeSync(deps){
   async function seenAll(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
   async function lrevOf(ids){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
-  return {start, stop, step, idle, status, online, reconnect, setOwner, writeLocal, purgeLocal, tombstoneAuto, countCopies, importNote, importMany, state, seenAll, lrevOf,
+  return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, tombstoneAuto, countCopies, importNote, importMany, state, seenAll, lrevOf, get devId(){ return devId; }, get devName(){ return devName; },
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
     left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], inboxSize:()=>S.inbox.length, _S:S};

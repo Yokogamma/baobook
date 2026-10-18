@@ -79,6 +79,7 @@
   "lock.nolock": "Without the browser database only one tab can edit, and this browser cannot confirm that this tab is the only one. Here you can view and export.",
   "lock.updated": "Baobook was updated in another tab. Reload the page to continue.",
   "lock.unsaved": "Baobook was updated in another tab, and the last edit could not be saved. Export it, then reload the page.",
+  "lock.epoch": "The notes on this device moved to another account in another tab. Reload the page to continue.",
   "lock.blocked": "Another Baobook tab keeps the storage from being set up. Close the other Baobook tabs and reload the page.",
   "lock.export": "Export",
   "lock.exportUnsaved": "Export unsaved",
