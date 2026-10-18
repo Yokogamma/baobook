@@ -7,7 +7,7 @@ export async function attachCloud(context, cloud, dev){
   const tokens=new Map(); let seq=0; const o={dev};
   const api={
     get:(col,id)=>cloud.get(col,id,o), page:(col,q,n)=>cloud.page(col,q,n,o), totals:col=>cloud.totals(col,o), scan:(col,q,n)=>cloud.scan(col,q,n,o),
-    txnBegin:async(col,id)=>{ cloud.fails(dev); const D=await cloud.get(col,id); const token='t'+(++seq); tokens.set(token,{col,id,rev:D? D.rev : 0, at:cloud.now()}); return {token, D}; },
+    txnBegin:async(col,id)=>{ cloud.fails(dev,'txn'); const D=await cloud.get(col,id); const token='t'+(++seq); tokens.set(token,{col,id,rev:D? D.rev : 0, at:cloud.now()}); return {token, D}; },
     txnCommit:async(token,w)=>{ const t=tokens.get(token); tokens.delete(token); if(!t) throw Object.assign(new Error('token expired'),{code:'aborted'});
       const D=await cloud.get(t.col,t.id); if((D? D.rev : 0)!==t.rev) return {ok:false, contention:true};
       // the commit goes through the real txn so every fault and check applies; the callback just returns what the page decided

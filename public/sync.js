@@ -357,9 +357,10 @@ function makeSync(deps){
       if(source==='delivery') S.lastDelivered.set(doc.id, doc.rev);
       const w=S.waiting.get(doc.id); if(w && w.length && r!=='skipped'){ S.waiting.delete(doc.id); for(const d of w) S.inbox.unshift({col:'versions', doc:d, source:'wait'}); }
       return r; }
-    catch(e){ if(e.code==='epoch') return 'skipped'; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(doc.id); return 'nospace'; } log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
-  async function quotaTrouble(id){ if(!S.sweptOnce){ S.sweptOnce=true; if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,id,after); }); }catch(_){} return; }
-    S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); emit(deps.onStatus,'nospace'); }
+    catch(e){ if(e.code==='epoch') return 'skipped'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
+  // the first document without space: thin the history once and read the document again later, the page goes on; the second: no space, receiving stops (§4.6)
+  async function quotaTrouble(id){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,id,after); }); }catch(_){} return false; }
+    S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); emit(deps.onStatus,'nospace'); return true; }
   // versions are received only in PR 1 (sending them comes with PR 4); a version waits for its note, one of a purged note is ignored
   async function applyVersionDoc(doc, source){ try{ return await tx(['notes','sync','versions'], async(t,after)=>{ const id=doc.id;
       if(!id || !Number.isInteger(doc.rev) || doc.rev<1 || !validSrv(doc.srv) || typeof doc.note!=='string'){ log({t:'malformed', col:'v', id}); return 'skipped'; }
@@ -455,7 +456,9 @@ function makeSync(deps){
     S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000);
     S.listen[col]=S.cloud.listen(col, from, (docs, info)=>{ if(info && info.snapshot) S.snapshot[col]=true; for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); }, err=>{ log({t:'listen-error', col, code:errOf(err).code}); S.snapshot[col]=false; S.listen[col]=null; }); }
   async function doRefetch(id){ S.netBusy=true; try{ const got=await net(()=>S.cloud.get('notes',id)); if(got.error){ log({t:'refetch-error', id, code:got.error.code}); S.refetchRetry=now()+backoffMs(1); return; } countRead(1);
-      await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropRefetch(t,id,after); const R=got.value; if(R) await applyNote(t, {...R, id}, 'server', after); }); } finally{ S.netBusy=false; } }
+      try{ await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropRefetch(t,id,after); const R=got.value; if(R) await applyNote(t, {...R, id}, 'server', after); }); }
+      catch(e){ if(e.code==='epoch') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id); return; } log({t:'apply-error', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }   // the record stays for the next try
+    finally{ S.netBusy=false; } }
 
   /* ── the totals check and the full pass (§4.6) ── */
   async function seenTotals(c){ const list=await db.tx(['sync'],'readonly', async t=>t.range('sync','seen:'+c+':','seen:'+c+':\uffff')); let sum=0; for(const s of list) sum+=+s.rev||0; return {count:list.length, sum, ids:list.map(s=>s.k.slice(7))}; }
