@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { doc, collection, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, limit, runTransaction, serverTimestamp,
-  Timestamp, getAggregateFromServer, count, sum, setLogLevel } from 'firebase/firestore';
+  Timestamp, getAggregateFromServer, count, sum, setLogLevel, updateDoc, collectionGroup } from 'firebase/firestore';
 
 setLogLevel('silent');   // refused requests are expected here; the SDK would log each one
 const OWNER = 'owner-test', OTHER = 'someone-else', DAY = 86_400_000, T0 = Date.UTC(2026, 9, 1);
@@ -260,6 +260,25 @@ const id64 = 'n'.repeat(64), id65 = 'n'.repeat(65);
 await allow('notes whose ids have 64 and 65 characters sync (the rules do not limit document ids)', async () => { await put(N(id64), { ...stamp(null), ...body() }); await put(N(id65), { ...stamp(null), ...body() }); });
 await allow('a version of the note whose id has 64 characters', () => put(V('v1'), { ...stamp(null), ...vbody(id64) }));
 await deny('a version of the note whose id has 65 characters', () => put(V('v2'), { ...stamp(null), ...vbody(id65) }));
+
+await scenario('found in review: «not in the trash» values, partial writes, other query shapes');
+await deny('a note with deleted: 0 and a server tsrv (a device reads 0 as «not in the trash»)', () => put(N('z0'), { ...stamp(null), ...body({ deleted: 0 }), tsrv: serverTimestamp() }));
+await deny('a note with a negative deleted and a server tsrv', () => put(N('z1'), { ...stamp(null), ...body({ deleted: -5 }), tsrv: serverTimestamp() }));
+await deny('a live note with archived: 0', () => put(N('z2'), { ...stamp(null), ...body({ archived: 0 }) }));
+await seed(N('z3'), stored({ deleted: 0, tsrv: old(31 * DAY) }));
+await deny('the automatic purge of a note stored with deleted: 0 and an old tsrv (it is not in the trash)', async () => put(N('z3'), { ...stamp(await read(N('z3'))), purged: T0, auto: true }));
+await seed(N('z4'), stored({ deleted: T0, tsrv: old(DAY) }));
+await deny('an update that keeps deleted but drops tsrv', async () => { const p = await read(N('z4')); const n = next(p); delete n.tsrv; return put(N('z4'), n); });
+await deny('a tombstone that carries tsrv', async () => { const p = await read(N('z4')); return put(N('z4'), { ...stamp(p), purged: T0, tsrv: serverTimestamp() }); });
+await seed(N('z5'), stored());
+await deny('a partial update without the stamp (updateDoc of one field)', () => updateDoc(doc(owner, N('z5')), { title: 'partial' }));
+await deny('a merge write without the stamp (setDoc with merge)', () => setDoc(doc(owner, N('z5')), { title: 'merged' }, { merge: true }));
+await deny('a collection-group query over notes by the owner (it could reach other accounts)', () => getDocs(collectionGroup(owner, 'notes')));
+await deny('a collection-group query over notes by another account', () => getDocs(collectionGroup(other, 'notes')));
+await deny('the owner reads an access/ document', () => getDoc(doc(owner, 'access/someone@example.com')));
+await deny('another account reads an access/ document', () => getDoc(doc(other, 'access/someone@example.com')));
+await allow('dn of 80 Cyrillic letters', () => put(N('z6'), { ...stamp(null), dn: 'Ж'.repeat(80), ...body() }));
+await deny('dn of 81 Cyrillic letters', () => put(N('z7'), { ...stamp(null), dn: 'Ж'.repeat(81), ...body() }));
 
 await env.cleanup();
 console.log(fails ? fails + ' failed' : 'all passed'); process.exit(fails ? 1 : 0);

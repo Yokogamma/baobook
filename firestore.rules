@@ -11,6 +11,7 @@ service cloud.firestore {
     function owner(env, uid) { return env in ['dev', 'app'] && allowed() && request.auth.uid == uid; }
     function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
     function optNum(d, k) { return !(k in d) || d[k] is number; }
+    function optPos(d, k) { return !(k in d) || (d[k] is number && d[k] > 0); }   // deleted, archived: a time, absent when not; 0 would read as «not» on a device
     function receipts(d, o) {                 // own receipt == this op; other devices' receipts untouched
       return d.rcpt is map && d.rcpt.size() <= 200 && d.rcpt[d.dev] == d.op
         && (o == null ? d.rcpt.keys().hasOnly([d.dev])
@@ -26,13 +27,13 @@ service cloud.firestore {
         return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','title','blocks','created','updated'])
           && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','title','blocks','created','updated','deleted','archived','revived','tsrv'])
           && d.title is string && d.title.size() <= 2000 && d.blocks is list && d.blocks.size() <= 5000
-          && d.created is number && d.updated is number && optNum(d, 'deleted') && optNum(d, 'archived')
+          && d.created is number && d.updated is number && optPos(d, 'deleted') && optPos(d, 'archived')
           && (!('revived' in d) || d.revived is map) && (!('tsrv' in d) || (d.tsrv is timestamp && 'deleted' in d));
       }
       function tomb(d, o) {
         return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','purged'])
           && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','purged','auto']) && d.purged is number
-          && (!('auto' in d) || (d.auto == true && o != null && 'deleted' in o && 'tsrv' in o
+          && (!('auto' in d) || (d.auto == true && o != null && 'deleted' in o && o.deleted is number && o.deleted > 0 && 'tsrv' in o
                                  && request.time > o.tsrv + duration.value(30, 'd')));   // the server checks the age
       }
       function trashDated(d, o) {            // entering or extending the trash is dated by the server
