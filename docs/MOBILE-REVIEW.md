@@ -1,6 +1,6 @@
-# Review of the mobile UI/UX of «Чистый лист»
+# Review of the mobile UI/UX of «Чистий аркуш»
 
-[now Baobook: `public/index.html`]
+Historical document, written in Russian for «Чистий аркуш» in `Yokogamma/mockups/sheet` and translated; the app is now Baobook, `public/index.html`.
 
 Date: 2026-10-03. Subject: [MOBILE-PLAN.md](./MOBILE-PLAN.md), branch `claude/clever-gates-ex73jv`.
 
@@ -55,7 +55,7 @@ Basis: [patterns and work with the keyboard](https://github.com/Yokogamma/mockup
 - Keep an accessible «⋯» actions button, or a visible handle with a clear purpose, on every block in reading mode.
 - A short tap on text must predictably place the caret; a tap on a separate control opens the block actions. A hold can be a shortcut, but not the only way.
 - Remove the automatic deselection after a 40 px scroll: the user may scroll to reach the edge of a long block or its panel. The panel can be repositioned or hidden for a while, keeping the block selected.
-- Describe the exit explicitly: "Done", a tap on another block or on empty space, Esc for a hardware keyboard. Do not require Esc on a phone.
+- Describe the exit explicitly: «Готово», a tap on another block or on empty space, Esc for a hardware keyboard. Do not require Esc on a phone.
 - Resolve the contradiction: item 3.1 removes copying from the mobile formatting panel, while item 3.3 still lists it as a way to copy.
 
 **Acceptance:** a new user who does not know the gestures finds copy and delete; scrolling a long note does not reset the selection unexpectedly; switching to typing hides the frame and the handles at once.

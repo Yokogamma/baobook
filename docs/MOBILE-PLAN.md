@@ -1,6 +1,6 @@
-# Mobile version of «Чистый лист»: improvement plan, revision 2 (after the review)
+# Mobile version of «Чистий аркуш»: improvement plan, revision 2 (after the review)
 
-[now Baobook: `public/index.html`]
+Historical document, written in Russian for «Чистий аркуш» in `Yokogamma/mockups/sheet` and translated; the app is now Baobook, `public/index.html`.
 
 Date: 2026-10-03. Revision 1 (commit `68fbe9c`) was reviewed; the review text is next to this file: [MOBILE-REVIEW.md](./MOBILE-REVIEW.md). This revision answers every remark and rewrites the plan in the recommended order: **saving and input → accessible actions and recovery → gestures and refactoring**.
 
