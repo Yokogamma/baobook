@@ -59,6 +59,25 @@ const T0=Date.now();
   const tn=await stored(A.pg,'notes',id);
   ok('2f the trash delta over the record that arrived meanwhile: deleted set and the phone\'s text kept', !!tn.deleted && tn.blocks.some(b=>b.text==='перший блок (A, phone)'));
   ok('2g lrev grew with every change ('+(await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id]+')', (await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id]>=4);
+  // the safe point waits for the caret: a change from another device must not redraw the sheet under the typing hand
+  await typeAt(A.pg,500,560,'безпечна точка'); const id2=await curId(A.pg); await settle(A.pg,300); await settle(A.pg,300);
+  const f=A.pg.locator('#sheet .blk .txt').filter({hasText:'безпечна точка'}); await f.click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' (A2)'); await A.pg.waitForTimeout(900); await settle(A.pg,0);   // the autosave is done and sent; the caret stays in the block
+  cloudWrite(cloud, id2, {...cloud.doc('notes',id2), title:'Назва з телефону'}, {dev:'phone'}); await settle(A.pg,400); await settle(A.pg,0);
+  const focus1=await A.pg.evaluate(()=>!!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet .blk .txt'))), pend1=await A.pg.evaluate(id=>sheetDebug.sync.pending().includes(id), id2), ttl1=await A.pg.locator('#ttl').innerText();
+  await A.pg.keyboard.type(' далі'); await A.pg.waitForTimeout(700); await settle(A.pg,300); const n2=await stored(A.pg,'notes',id2);
+  ok('2i an incoming title change while the caret is in a block: no redraw yet (the focus kept, the note pending, the old title shown), the text typed after it is stored together with the new title', focus1 && pend1 && ttl1!=='Назва з телефону' && n2.title==='Назва з телефону' && n2.blocks.some(b=>b.text==='безпечна точка (A2) далі'));
+  await A.pg.keyboard.press('Escape'); await A.pg.waitForTimeout(400);
+  ok('2j the caret left: the sheet shows the phone\'s title and the typed text, nothing pending', (await A.pg.locator('#ttl').innerText())==='Назва з телефону' && /безпечна точка \(A2\) далі/.test(await A.pg.locator('#sheet').innerText()) && !(await A.pg.evaluate(id=>sheetDebug.sync.pending().includes(id), id2)));
+  // a write that misses IndexedDB lands in localStorage; at the next start it moves in through the sync core: lrev, the queue, the cloud
+  await A.pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
+  await f.click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' FALLBACK'); await A.pg.keyboard.press('Escape'); await A.pg.waitForTimeout(700);
+  const fbKeys=await A.pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:'))), l3=(await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id2], rev3=cloud.doc('notes',id2).rev;
+  ok('2k the write missed IndexedDB and went to localStorage ('+fbKeys.length+' key); the cloud is untouched', fbKeys.length===1 && !JSON.stringify(cloud.doc('notes',id2)).includes('FALLBACK'));
+  await A.pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await A.pg.reload(); await A.pg.waitForSelector('html[data-ready]',{state:'attached'}); await A.pg.waitForTimeout(800);
+  const after=await stored(A.pg,'notes',id2), l4=(await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id2], job2=(await syncRecs(A.pg,'out:n:')).find(r=>r.k==='out:n:'+id2), keysAfter=await A.pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
+  ok('2l at the next start the copy moved in through the core: the record has the text, lrev grew ('+l3+' → '+l4+'), a job waits, the key is gone', !!after && after.blocks.some(b=>/FALLBACK$/.test(b.text)) && l4>l3 && !!job2 && !keysAfter.length);
+  await connect(A.pg,{devId:'A'}); await settle(A.pg,400); await settle(A.pg,300);
+  ok('2m connected again, the edit reached the cloud (rev '+rev3+' → '+cloud.doc('notes',id2).rev+'), the queue is empty', JSON.stringify(cloud.doc('notes',id2)).includes('FALLBACK') && cloud.doc('notes',id2).rev===rev3+1 && !(await syncRecs(A.pg,'out:n:')).length);
   ok('2h no page errors', !A.errs.length && !B.errs.length); await A.close(); await B.close(); }
 
 /* ── 3. import keeps the file's updated; a future updated shows as the arrival time; the size limit; cleanRich idempotent ── */

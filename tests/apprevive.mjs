@@ -32,9 +32,11 @@ const text=n=>n.blocks.map(b=>b.text).join(' | ');
 const allText=async(d,id)=>{ const n=await stored(d.pg,'notes',id); const vs=(await stored(d.pg,'versions')).filter(v=>v.note===id); return (n? text(n) : '')+' // '+vs.map(v=>v.blocks.map(e=>e.s||'').join(' ')).join(' / '); };   // the note and the bodies kept in its history (conflict copies)
 const logOf=(d,re,id)=>d.pg.evaluate(([re,id])=>sheetDebug.sync.log().filter(e=>new RegExp(re).test(e.t) && (!id || e.id===id)), [re,id]);
 const note=(i,t)=>({title:'', blocks:[{id:'b',row:1,fx:0,text:t||('x'+i)}]});
-const A=await newDevice(br, cloud, SITE, 'A', {ctx:CTX, connect:{pace:PACE}}), B=await newDevice(br, cloud, SITE, 'B', {ctx:CTX, connect:{pace:PACE}});
-for(const i of [1,3,4,5,6,7,8,9,10,11]) cloudWrite(cloud,'x'+i,note(i)); await quiet([A,B],3);
-ok('0 both devices hold the notes from the phone', (await notesOf(A)).filter(n=>/^x\d+$/.test(n.id)).length===10 && (await notesOf(B)).filter(n=>/^x\d+$/.test(n.id)).length===10);
+// a storage fault by flag: while localStorage.__failRevived is set, a put of a revived note throws QuotaExceededError
+const PATCH=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototype.put=function(v){ let f=''; try{ f=localStorage.getItem('__failRevived')||''; }catch(_){} if(this.name==='notes' && f && v && v.revived) throw new DOMException('full','QuotaExceededError'); return put.apply(this, arguments); }; };
+const A=await newDevice(br, cloud, SITE, 'A', {ctx:CTX, connect:{pace:PACE}, init:PATCH}), B=await newDevice(br, cloud, SITE, 'B', {ctx:CTX, connect:{pace:PACE}});
+for(const i of [1,3,4,5,6,7,8,9,10,11,12]) cloudWrite(cloud,'x'+i,note(i)); await quiet([A,B],3);
+ok('0 both devices hold the notes from the phone', (await notesOf(A)).filter(n=>/^x\d+$/.test(n.id)).length===11 && (await notesOf(B)).filter(n=>/^x\d+$/.test(n.id)).length===11);
 
 /* ── 1. two devices revive one note: two revived notes, nothing lost ── */
 await off(A,false); await off(B,false); await edit(A,'x1','x1 (A офлайн)'); await edit(B,'x1','x1 (B офлайн)'); tomb('x1');
@@ -100,5 +102,12 @@ ok('11 the cloud has one tombstone (rev '+revT+'); B\'s purged record carries th
 await A.pg.bringToFront(); await openNote(A.pg,'x11'); const t12=A.pg.locator('#sheet .blk .txt').first(); await t12.click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' набір'); tomb('x11'); await A.pg.waitForTimeout(1500); await quiet(A,3);
 const an12=await notesOf(A), r12=revivedFrom(an12,'x11');
 ok('12 the typed text is in a revived note ('+(r12[0]? text(r12[0]) : '—')+'), x11 is gone, the revived note is in the cloud', r12.length===1 && /набір/.test(text(r12[0])) && !an12.find(n=>n.id==='x11') && !!cloud.doc('notes',r12[0].id));
+/* ── 12b. the revival fails (no space for the revived note): the typed text stays on the screen and in memory with the warning; «Повторити» revives it later ── */
+await openNote(A.pg,'x12'); const t12b=A.pg.locator('#sheet .blk .txt').first(); await t12b.click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' без місця'); await A.pg.evaluate(()=>localStorage.setItem('__failRevived','1')); tomb('x12'); await A.pg.waitForTimeout(1500); await quiet(A,2);
+const an12b=await notesOf(A), ui12=await A.pg.evaluate(()=>({inList:!!document.querySelector('#list .item[data-id="x12"]'), warn:!document.getElementById('saveWarn').hidden, msg:document.getElementById('saveErrMsg').innerText, sheet:document.getElementById('sheet').innerText, cur:sheetDebug.cur()}));
+ok('12b the revived note could not be written: x12 is still open with the typed text and in the list, the warning names it and the reason; storage has neither x12 nor a revived note', !an12b.find(n=>n.id==='x12') && !revivedFrom(an12b,'x12').length && ui12.inList && ui12.cur==='x12' && /x12 без місця/.test(ui12.sheet) && ui12.warn && /без місця/.test(ui12.msg) && /переповнене/.test(ui12.msg));
+await A.pg.evaluate(()=>localStorage.removeItem('__failRevived')); await A.pg.evaluate(()=>document.getElementById('saveRetry').click()); await A.pg.waitForTimeout(600); await quiet(A,3);
+const an12c=await notesOf(A), r12b=revivedFrom(an12c,'x12');
+ok('12c «Повторити» revives it: the text is in a revived note that reached the cloud, x12 left memory, the warning is gone', r12b.length===1 && /x12 без місця/.test(text(r12b[0])) && !!cloud.doc('notes',r12b[0].id) && !(await A.pg.evaluate(()=>!!document.querySelector('#list .item[data-id="x12"]'))) && (await A.pg.evaluate(()=>document.getElementById('saveWarn').hidden)));
 ok('13 no page errors', !A.errs.length && !B.errs.length && !C.errs.length);
 await br.close(); await srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

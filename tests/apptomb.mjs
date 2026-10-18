@@ -42,6 +42,9 @@ await restore(A,'y1'); await quiet(A,4); const an1=await notesOf(A), r1=revivedF
 ok('1 the attempt was insured (purged, auto) and kept failing; the restore came in between', !!s1.tr && !!s1.tr.result.purged && s1.tr.result.auto===true && !s1.note.deleted===false);
 ok('1b the tombstone (auto) went through; y1 is gone and its restored text lives in a revived note in the list, which is in the cloud', !!c1 && !!c1.purged && c1.auto===true && !an1.find(n=>n.id==='y1') && r1.length===1 && !r1[0].deleted && text(r1[0])==='y1' && !!cloud.doc('notes',r1[0].id) && !cloud.doc('notes',r1[0].id).deleted && (await logOf(A,'^tombstone$','y1')).some(e=>e.own && e.changed));
 
+const p1=await purgedRec(A,'y1'), r1b=await A.pg.evaluate(()=>sheetDebug.sync.engine().importNote({id:'y1', title:'', blocks:[{id:'b',row:1,fx:0,text:'y1 з файлу'}], created:1, updated:2})); await quiet(A,2);
+ok('1b2 the registry points at the revived note once the tombstone went through; a re-import of y1 goes into it, not into a new note', !!p1 && p1.revivedAs===r1[0].id && r1b.kind==='revived' && r1b.id===r1[0].id && revivedFrom(await notesOf(A),'y1').length===1);
+
 /* ── 1c. the same with an edit instead of a restore: the revived note stays in the trash ── */
 cloud.fault('fail',{dev:'A', op:'txn', n:4}); await A.pg.evaluate(()=>sheetDebug.sync.tombstone('y2')); await wake(A); await settle(A.pg,50);
 await edit(A,'y2','y2 (правка в кошику)'); await quiet(A,4); const an2=await notesOf(A), r2=revivedFrom(an2,'y2');

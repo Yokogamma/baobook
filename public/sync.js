@@ -179,6 +179,7 @@ const dayKey=t=>dayFmt.format(new Date(t));
 const bytesOf=str=>new TextEncoder().encode(str).length;
 const isNetErr=code=>code==='unavailable' || code==='deadline-exceeded' || code==='aborted' || code==='unknown';
 const errOf=e=>{ const code=(e && e.code) || 'unavailable'; return {code: ['unavailable','deadline-exceeded','permission-denied','resource-exhausted','too-large','invalid','failed-precondition','aborted'].includes(code)? (code==='aborted'? 'unavailable' : code) : 'unavailable', message: e && e.message || String(e)}; };
+const codeOf=e=>(e && typeof e.code==='string' && e.code) || (e && e.name) || 'error';   // a refusal carries a string code; a DOMException's numeric code is no name, its .name is
 const fail=(code,msg)=>Object.assign(new Error(msg||code),{code});
 const srvMinus=(srv, ms)=>{ if(!srv) return null; const s=(+srv.s||0)-Math.ceil(ms/1000); return {s: Math.max(0,s), ns:+srv.ns||0}; };
 const cursorMax=(a,b)=>!a? b : !b? a : (cmpSrv(a.srv,b.srv)<0 || (cmpSrv(a.srv,b.srv)===0 && String(a.id)<String(b.id)))? b : a;
@@ -217,7 +218,7 @@ function makeSync(deps){
       for(const m of await t.range('sync','meta:n:','meta:n:\uffff')){ if(m.err) S.err.set(m.k.slice(7), m.err); if(m.sends) S.sends.set(m.k.slice(7), m.sends); }
       for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ if(m.wait) addWaiting(m.wait); }
       for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); }
-  function addWaiting(doc){ const list=S.waiting.get(doc.note)||[]; if(!list.some(d=>d.id===doc.id)) list.push(doc); S.waiting.set(doc.note,list); }
+  function addWaiting(doc){ const list=S.waiting.get(doc.note)||[]; const i=list.findIndex(d=>d.id===doc.id); if(i<0) list.push(doc); else if((doc.rev||0)>=(list[i].rev||0)) list[i]=doc; S.waiting.set(doc.note,list); }   // a later state of the same version replaces the earlier one
   // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work
   async function reloadQueue(){ S.queueAt=now(); await db.tx(['sync'],'readonly', async t=>{ S.jobs.clear(); S.tries.clear(); S.refetch.clear();
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); }); }
@@ -226,7 +227,7 @@ function makeSync(deps){
   function quotaNow(){ const day=dayKey(now()); if(!S.quota || S.quota.day!==day){ S.quota={k:'quota', day, reads:0, writes:0, lastSend:0}; S.quotaDirty=true; S.paused=false; } return S.quota; }
   const countRead=n=>{ const q=quotaNow(); q.reads+=Math.max(1,n|0); S.quotaDirty=true; if(q.reads>=budgets().reads) pauseDay(); };
   const countWrite=n=>{ const q=quotaNow(); q.writes+=n; q.lastSend=now(); S.quotaDirty=true; if(q.writes>=budgets().writes) pauseDay(); };
-  function pauseDay(){ if(S.paused) return; S.paused=true; log({t:'limit', reads:S.quota.reads, writes:S.quota.writes}); }
+  function pauseDay(){ if(S.paused) return; S.paused=true; log({t:'limit', reads:S.quota.reads, writes:S.quota.writes}); if(S.listen.notes || S.listen.versions){ stopListeners(); S.listenPaused=true; } }   // no more paid reads today: the listeners go too, and come back with the next day's budget
   const budgetShare=()=>{ const q=quotaNow(), b=budgets(); return Math.max(q.reads/b.reads, q.writes/b.writes); };
   async function flushQuota(){ if(!S.quotaDirty || !S.quota) return; S.quotaDirty=false; try{ await db.tx(['sync'],'readwrite', async t=>{ t.put('sync', S.quota); }); }catch(_){ S.quotaDirty=true; } }
   // the pace is counted from time stamps clamped to now: a clock set back must not stall the queue for the difference
@@ -245,11 +246,13 @@ function makeSync(deps){
     const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks)), tv=Math.min(tt, vnow());
     t.put('versions',{id:vid(), note:id, t:tv, w:tv, reason:'incoming', title:m.title, sig, blocks:m.blocks, size:size+bytesOf(JSON.stringify(m.blocks)), sum:sumOf(m,last)});
     after(()=>emit(deps.onHistory,id)); }
+  // a conflict copy is the insurance of a losing side (§4.7): every body goes in full, inline, whatever the limit of the automatic history
+  // (a block over V_BODY_MAX has h:null in a manifest; here it gets its real hash, so the record's sig tells copies apart by that body too)
   async function writeCopies(t, id, copies, tt, after){ if(!copies || !copies.length) return; const list=await versionsOf(t,id), last=lastOf(list); const sigs=new Set(list.filter(v=>v.reason==='copy').map(v=>v.sig)); let any=false;
-    for(const c of copies){ const n=c.note, m=manifestOf(n.title, n.blocks); if(sigs.has(m.sig)) continue; sigs.add(m.sig); any=true;
-      const src=new Map((n.blocks||[]).map(b=>[b.id,b])); let size=0;
-      const blocks=m.blocks.map(e=>{ const d=src.get(e.id); if(!e.h) return e; const body=bodyOf(d); size+=bytesOf(body); const x={...e, s:body}; if(!d.kind && d.html) x.r=1; return x; });
-      const tv=Math.min(tt, vnow()), rec={id:vid(), note:id, t:tv, w:tv, reason:'copy', keep:1, inline:1, title:m.title, sig:m.sig, blocks, size:size+bytesOf(JSON.stringify(m.blocks)), sum:sumOf(m,last), updated:n.updated, dev:c.dev||devId}; const dn=c.dev? c.dn : devName; if(dn) rec.dn=dn; t.put('versions',rec); }
+    for(const c of copies){ const n=c.note, m=manifestOf(n.title, n.blocks), src=new Map((n.blocks||[]).map(b=>[b.id,b])); let size=0;
+      const blocks=m.blocks.map(e=>{ const d=src.get(e.id), body=bodyOf(d); size+=bytesOf(body); const x={...e, h:e.h||hashOf(body), s:body}; if(!d.kind && d.html) x.r=1; return x; });
+      const bare=blocks.map(x=>{ const e={...x}; delete e.s; delete e.r; return e; }), sig=hashOf(m.title+'\n'+JSON.stringify(bare)); if(sigs.has(sig)) continue; sigs.add(sig); any=true;
+      const tv=Math.min(tt, vnow()), rec={id:vid(), note:id, t:tv, w:tv, reason:'copy', keep:1, inline:1, title:m.title, sig, blocks, size:size+bytesOf(JSON.stringify(bare)), sum:sumOf(m,last), updated:n.updated, dev:c.dev||devId}; const dn=c.dev? c.dn : devName; if(dn) rec.dn=dn; t.put('versions',rec); }
     if(any) after(()=>emit(deps.onHistory,id)); }
   async function hasCopies(t,id){ return (await versionsOf(t,id)).some(v=>v.reason==='copy'); }
   async function deleteRecord(t,id){ t.del('notes',id); for(const v of await versionsOf(t,id)) t.del('versions',v.id); for(const b of await t.blobs(id)) t.del('blobs',[b.note,b.h]); }
@@ -287,7 +290,7 @@ function makeSync(deps){
       const body={...noteBody(note)}; if(!r.keepUpdated){ body.updated=tt; t.put('sync',{k:'clock', last:tt}); }
       const res=await putNote(t, id, body, meta, {copies, t:tt}, after); await ensureJob(t, id, body, meta, after);
       return {ok:true, lrev:res.lrev, note:res.note}; }); }
-    catch(e){ return {ok:false, code:e.code||'error', error:e}; } }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
 
   /* ── revival (§4.7) ── */
   async function revive(t, originId, moved, o, after){ const tt=o.t||now(); let purgedRec=await t.get('sync',K.purged(originId)); if(!purgedRec) purgedRec={k:K.purged(originId), rev:0}; if(o.tombRev) purgedRec.rev=Math.max(purgedRec.rev||0, o.tombRev);
@@ -363,6 +366,7 @@ function makeSync(deps){
     S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); setStatus('nospace'); return true; }
   // versions are received only in PR 1 (sending them comes with PR 4); a version waits for its note, one of a purged note is ignored
   async function applyVersionDoc(doc, source){ try{ return await tx(['notes','sync','versions'], async(t,after)=>{ const id=doc.id;
+      if(source==='wait'){ const w=(await getMeta(t,'v',id)).wait; if(!w) return 'skipped'; doc=w; }   // the note came: the version is applied from its stored latest state, which is what seen holds, so the replay is not a stale server read
       if(!id || !Number.isInteger(doc.rev) || doc.rev<1 || !validSrv(doc.srv) || typeof doc.note!=='string'){ log({t:'malformed', col:'v', id}); return 'skipped'; }
       const seen=await t.get('sync',K.seen('v',id)), place=placeAgainstSeen(doc, seen, source!=='delivery');
       if(place==='stale') return 'skipped';
@@ -427,8 +431,9 @@ function makeSync(deps){
   async function finishCore(t, id, tr, outcome, after){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op) return 'stale';
     const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id)), Srec=await t.get('notes',id), seen=(await t.get('sync',K.seen('n',id)))||null;
     if(outcome.kind==='accepted'){ const rev=outcome.rev, after_=meta.base? meta.base.srv||null : null; const sends=(meta.sends||[]).filter(x=>x>now()-pace.loopWindow); sends.push(now()); meta.sends=sends;
-      if(tr.result && tr.result.purged){ const p=(await t.get('sync',K.purged(id)))||{k:K.purged(id), rev:0}; p.rev=Math.max(p.rev||0, rev); setSeen(t,'n',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
+      if(tr.result && tr.result.purged){ setSeen(t,'n',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
         if(meta.lrev!==tr.sentLrev && Srec){ const toList=!!(tr.result.auto && meta.base && meta.base.deleted && !Srec.deleted); await revive(t, id, noteBody(Srec), {t:now(), tombRev:rev, toList}, after); log({t:'tombstone', id, changed:true, own:true}); }
+        const p=(await t.get('sync',K.purged(id)))||{k:K.purged(id), rev:0}; p.rev=Math.max(p.rev||0, rev);   // read after the revival: it may have pointed the registry at the revived note
         if(Srec) await deleteRecord(t,id); t.put('sync',p); t.del('sync',K.meta('n',id)); after(()=>{ S.err.delete(id); S.sends.delete(id); S.bytes.delete(id); }); dropJob(t,id,after); dropTry(t,id,after); log({t:'purged', id, rev}); after(()=>emit(deps.onChange,{id, kind:'purged'})); return 'done'; }
       const nb={...tr.result, rev, srv:outcome.srv||null, dev:devId, op:tr.op, v:1}; if(devName) nb.dn=devName; if(meta.base && meta.base.tsrv && ((meta.base.deleted||0)===(tr.result.deleted||0))) nb.tsrv=meta.base.tsrv;
       if(outcome.echo){ nb.rcpt=outcome.echo.rcpt; nb.tsrv=outcome.echo.tsrv; } else nb.rcpt={...(meta.base && meta.base.rcpt || {}), [devId]:tr.op};
@@ -454,7 +459,8 @@ function makeSync(deps){
       return true; } finally{ S.netBusy=false; } }
   function startListener(col){ if(!S.cloud || !S.cloud.listen) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
     S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000);
-    S.listen[col]=S.cloud.listen(col, from, (docs, info)=>{ if(info && info.snapshot) S.snapshot[col]=true; for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); }, err=>{ log({t:'listen-error', col, code:errOf(err).code}); S.snapshot[col]=false; S.listen[col]=null; }); }
+    S.listen[col]=S.cloud.listen(col, from, (docs, info)=>{ if(info && info.snapshot) S.snapshot[col]=true; if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); }, err=>{ log({t:'listen-error', col, code:errOf(err).code}); S.snapshot[col]=false; S.listen[col]=null; }); }   // every delivered document is a billed read (§4.17)
+  function stopListeners(){ for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } S.snapshot[col]=false; } }
   async function doRefetch(id){ S.netBusy=true; try{ const got=await net(()=>S.cloud.get('notes',id)); if(got.error){ log({t:'refetch-error', id, code:got.error.code}); S.refetchRetry=now()+backoffMs(1); return; } countRead(1);
       try{ await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropRefetch(t,id,after); const R=got.value; if(R) await applyNote(t, {...R, id}, 'server', after); }); }
       catch(e){ if(e.code==='epoch') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id); return; } log({t:'apply-error', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }   // the record stays for the next try
@@ -500,6 +506,7 @@ function makeSync(deps){
     if(S.inbox.length || S.refetch.size) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); return next; }
   async function stepOnce(){ if(!S.loaded) await load(); const nowT=now(); quotaNow();
     if(!S.started || !S.cloud || !S.owner){ return {did:'idle', next:Infinity, status:status()}; }
+    if(S.listenPaused && !S.paused){ S.listenPaused=false; reconnect(); }   // the day turned: the budget is back, so are the listeners
     if((S.errorUntil||0)>nowT) return {did:'idle', next:S.errorUntil, status:status()};
     // no space (§4.6): receiving stops for an hour, deliveries meanwhile are dropped (the totals check finds them later); then the listener and catch-up start over
     if(S.nospace){ if(nowT<(S.nospaceAt||0)+3600000){ S.inbox.length=0; return {did:'idle', next:S.nospaceAt+3600000, status:status()}; } S.nospace=false; S.sweptOnce=false; log({t:'nospace-over'}); reconnect(); }
@@ -545,23 +552,31 @@ function makeSync(deps){
       if(never){ t.del('sync',K.meta('n',id)); dropJob(t,id,after); dropRefetch(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:false, copies}; }
       meta.lrev=(meta.lrev||0)+1; putMeta(t,meta,after); const prev=await t.get('sync',K.purged(id)); const p={k:K.purged(id), rev:0}; if(prev && prev.revivedAs) p.revivedAs=prev.revivedAs; t.put('sync',p);
       setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true},after); dropRefetch(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:true, copies}; }); }
-    catch(e){ return {ok:false, code:e.code||'error'}; } }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function tombstoneAuto(id){ if(!S.loaded) await load(); return tx(['notes','sync'], async(t,after)=>{ const C=await t.get('notes',id); if(!C || !C.deleted) return {ok:false}; const job=await t.get('sync',K.out('n',id)); if(job && !job.tomb) return {ok:false, code:'busy'}; setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true, auto:true},after); return {ok:true}; }); }
   async function countCopies(id){ if(!S.loaded) await load(); return db.tx(['versions'],'readonly', async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
+  async function importOne(t, raw, body, after){ const id=String(raw.id), tt=now();
+    if(await t.get('sync',K.purged(id))){ const target=await revive(t, id, body, {t:tt}, after); return {ok:true, kind:'revived', id:target}; }
+    const C=await t.get('notes',id), meta=await getMeta(t,'n',id);
+    if(C && !(body.updated>C.updated)) return {ok:true, kind:'skipped', id, note:C};
+    if(C && sameDoc(body,C)) return {ok:true, kind:'same', id, note:C};
+    const res=await putNote(t, id, body, meta, {t:tt}, after); await ensureJob(t, id, body, meta, after);
+    return {ok:true, kind:C? 'updated' : 'added', id, note:res.note, lrev:res.lrev}; }
   async function importNote(raw){ if(!S.loaded) await load(); const nn=normNote(raw, deps); if(nn.bad) return {ok:false, code:'shape'};
-    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const id=String(raw.id), body=nn.note, tt=now();
-      if(await t.get('sync',K.purged(id))){ const target=await revive(t, id, body, {t:tt}, after); return {ok:true, kind:'revived', id:target}; }
-      const C=await t.get('notes',id), meta=await getMeta(t,'n',id);
-      if(C && !(body.updated>C.updated)) return {ok:true, kind:'skipped', id, note:C};
-      if(C && sameDoc(body,C)) return {ok:true, kind:'same', id, note:C};
-      const res=await putNote(t, id, body, meta, {t:tt}, after); await ensureJob(t, id, body, meta, after);
-      return {ok:true, kind:C? 'updated' : 'added', id, note:res.note, lrev:res.lrev}; }); }
-    catch(e){ return {ok:false, code:e.code||'error'}; } }
+    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>importOne(t, raw, nn.note, after)); }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
+  // several records in one transaction: a fallback copy and the backup of the record it displaces go in together or not at all. With `expect`
+  // the stored record must still be the one the caller saw ({id, updated} or null), else nothing is written and the caller decides again
+  async function importMany(raws, o={}){ if(!S.loaded) await load(); const norm=raws.map(r=>normNote(r, deps)); if(norm.some(n=>n.bad)) return {ok:false, code:'shape'};
+    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{
+      if(o.expect){ const C=await t.get('notes',o.expect.id); if((C? C.updated : null)!==(o.expect.updated===undefined? null : o.expect.updated)) return {ok:false, code:'changed'}; }
+      const results=[]; for(let i=0;i<raws.length;i++) results.push(await importOne(t, raws[i], norm[i].note, after)); return {ok:true, results}; }); }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function state(id){ if(!S.loaded) await load(); return db.tx(['notes','sync','versions'],'readonly', async t=>({note:await t.get('notes',id), meta:await t.get('sync',K.meta('n',id)), job:await t.get('sync',K.out('n',id)), tr:await t.get('sync',K.tr('n',id)), seen:await t.get('sync',K.seen('n',id)), purged:await t.get('sync',K.purged(id)), refetch:await t.get('sync',K.refetch('n',id)), quarantine:await t.get('sync',K.quarantine('n',id)), versions:await t.byNote('versions',id)})); }
   async function seenAll(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
   async function lrevOf(ids){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
-  return {start, stop, step, idle, status, online, reconnect, setOwner, writeLocal, purgeLocal, tombstoneAuto, countCopies, importNote, state, seenAll, lrevOf,
+  return {start, stop, step, idle, status, online, reconnect, setOwner, writeLocal, purgeLocal, tombstoneAuto, countCopies, importNote, importMany, state, seenAll, lrevOf,
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
     left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], inboxSize:()=>S.inbox.length, _S:S};
