@@ -51,7 +51,6 @@
   "search.none": "Nothing found",
 
   "save.ok": "Saved",
-  "tabs.conflict": "This note was just changed in another tab. This tab keeps its version; the other one is saved in the version history.",
   "save.failed": "Not saved",
   "save.failedOpen": "Not saved: open the panel",
   "save.failedReason": "Not saved: {reason}",
@@ -80,6 +79,10 @@
   "lock.updated": "Baobook was updated in another tab. Reload the page to continue.",
   "lock.unsaved": "Baobook was updated in another tab, and the last edit could not be saved. Export it, then reload the page.",
   "lock.epoch": "The notes on this device moved to another account in another tab. Reload the page to continue.",
+  "sync.changesFrom": "Changes from {device}",
+  "sync.changesDevice": "Changes from another device",
+  "sync.changesTab": "Changes from another tab",
+  "sync.update": "Update",
   "lock.blocked": "Another Baobook tab keeps the storage from being set up. Close the other Baobook tabs and reload the page.",
   "lock.export": "Export",
   "lock.exportUnsaved": "Export unsaved",
