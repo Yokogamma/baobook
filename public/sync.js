@@ -205,7 +205,7 @@ function makeSync(deps){
   const defMeta=(c,id)=>({k:K.meta(c,id), lrev:0, baseLrev:0, base:null});
   async function getMeta(t,c,id){ const m=await t.get('sync',K.meta(c,id)); return m? {...defMeta(c,id), ...m} : defMeta(c,id); }
   async function check(t){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); const eid=ep? ep.id : null, uid=ow? ow.uid : null, env=ow? ow.env : null;
-    if(eid!==S.epoch || uid!==(S.owner? S.owner.uid : null) || env!==(S.owner? S.owner.env : null)){ emit(deps.onStatus,'reload'); throw fail('epoch'); } }
+    if(eid!==S.epoch || uid!==(S.owner? S.owner.uid : null) || env!==(S.owner? S.owner.env : null)){ setStatus('reload'); throw fail('epoch'); } }
   // one transaction with the epoch check; `after` queues work for after the commit (cache updates, UI events)
   async function tx(stores, fn){ const after=[]; const t0=await db.tx(stores,'readwrite', async t=>{ await check(t); return fn(t, f=>after.push(f)); }); for(const f of after) await f(); return t0; }
   async function load(){ if(S.loaded) return; S.loaded=true;
@@ -360,7 +360,7 @@ function makeSync(deps){
     catch(e){ if(e.code==='epoch') return 'skipped'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
   // the first document without space: thin the history once and read the document again later, the page goes on; the second: no space, receiving stops (§4.6)
   async function quotaTrouble(id){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,id,after); }); }catch(_){} return false; }
-    S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); emit(deps.onStatus,'nospace'); return true; }
+    S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); setStatus('nospace'); return true; }
   // versions are received only in PR 1 (sending them comes with PR 4); a version waits for its note, one of a purged note is ignored
   async function applyVersionDoc(doc, source){ try{ return await tx(['notes','sync','versions'], async(t,after)=>{ const id=doc.id;
       if(!id || !Number.isInteger(doc.rev) || doc.rev<1 || !validSrv(doc.srv) || typeof doc.note!=='string'){ log({t:'malformed', col:'v', id}); return 'skipped'; }
@@ -416,7 +416,7 @@ function makeSync(deps){
   // §4.5 step 4: the cloud transaction; the callback has no side effects and may run more than once
   async function runTry(id){ const tr=S.tries.get(id); if(!tr || !S.online){ log({t:'try-skip', id, has:!!tr, online:S.online}); return; } S.netBusy=true; try{
       const res=await net(()=>S.cloud.txn('notes', id, D=>{ if(D && D.rcpt && D.rcpt[devId]===tr.op) return null; if((D? D.rev : 0)!==tr.expect) return null; const w={...tr.result, v:1, rev:tr.expect+1, op:tr.op, dev:devId, rcpt:{...(D && D.rcpt || {}), [devId]:tr.op}}; if(devName) w.dn=devName; return w; }));
-      if(res.error){ const code=res.error.code; if(isNetErr(code)){ await backoff(id, res.error); return; } if(code==='permission-denied'){ S.denied=true; log({t:'denied', id}); emit(deps.onStatus,'denied'); return; } if(code==='resource-exhausted'){ pauseDay(); return; }
+      if(res.error){ const code=res.error.code; if(isNetErr(code)){ await backoff(id, res.error); return; } if(code==='permission-denied'){ S.denied=true; log({t:'denied', id}); setStatus('denied'); return; } if(code==='resource-exhausted'){ pauseDay(); return; }
         await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op) return; dropTry(t,id,after); const meta=await getMeta(t,'n',id); meta.err=code==='too-large'? 'size' : 'invalid'; putMeta(t,meta,after); log({t:'rejected-write', id, code}); }); return; }
       const {read:D, wrote}=res.value; countRead(1); if(wrote) countWrite(1);
       // accepted by the receipt: the own write is rev expect+1; the document read may already be later (another device wrote on top) and is then applied as a server read
@@ -463,7 +463,7 @@ function makeSync(deps){
   /* ── the totals check and the full pass (§4.6) ── */
   async function seenTotals(c){ const list=await db.tx(['sync'],'readonly', async t=>t.range('sync','seen:'+c+':','seen:'+c+':\uffff')); let sum=0; for(const s of list) sum+=+s.rev||0; return {count:list.length, sum, ids:list.map(s=>s.k.slice(7))}; }
   function totalsDue(nowT){ if(!S.online || S.paused || S.denied || S.tries.size || S.netBusy || S.nospace) return null;
-    for(const col of ['notes','versions']){ const T=S.totals[col]; if(!S.catchupDone[col] || !S.snapshot[col]) continue; if(S.catchup[col] && S.catchup[col].active) continue;
+    for(const col of ['notes','versions']){ const T=S.totals[col]; if(!S.catchupDone[col] || !S.snapshot[col]) continue; if(S.catchup[col] && S.catchup[col].active) continue; if(S.scan[col] && S.scan[col].active) continue;   // the full pass settles the question itself; a check meanwhile would only spend the budget
       if(T.mismatchAt && nowT-T.mismatchAt<pace.totalsRecheck) continue; if(T.lastMatch && nowT-T.lastMatch<pace.totalsAfterMatch) continue;
       if(T.pending || !T.last || nowT-T.last>=pace.totalsEvery) return col; } return null; }
   async function runTotals(col){ const T=S.totals[col], c=COL[col]; S.netBusy=true; try{ const res=await net(()=>S.cloud.totals(col)); T.last=now(); T.pending=false;
@@ -473,12 +473,12 @@ function makeSync(deps){
       T.strikes++; T.mismatchAt=now();
       if(T.strikes===1){ startCatchup(col); return; }
       T.strikes=0; const day=dayKey(now()), sc=S.scan[col]; if(sc && (sc.startedDay===day || sc.active)){ log({t:'scan-skipped', col}); return; }
-      const left=Math.max(0, budgets().reads-quotaNow().reads); S.scan[col]={k:K.scan(col), active:true, after:null, found:0, ids:[], startedDay:day, day, allow:Math.floor(left/2)}; await saveScan(col); log({t:'scan-start', col}); emit(deps.onStatus,'checking',0); }
+      const left=Math.max(0, budgets().reads-quotaNow().reads); S.scan[col]={k:K.scan(col), active:true, after:null, found:0, ids:[], startedDay:day, day, allow:Math.floor(left/2)}; await saveScan(col); log({t:'scan-start', col}); setStatus('checking',0); }
     finally{ S.netBusy=false; } }
   async function saveScan(col){ const sc=S.scan[col]; await db.tx(['sync'],'readwrite', async t=>{ if(sc) t.put('sync',sc); else t.del('sync',K.scan(col)); }); }
   function scanReady(nowT){ for(const col of ['notes','versions']){ const sc=S.scan[col]; if(!sc || !sc.active) continue; const day=dayKey(nowT); if(sc.day!==day){ sc.day=day; sc.allow=Math.floor(Math.max(0, budgets().reads-quotaNow().reads)/2); } if(sc.allow>=1 && S.online && !S.paused && !S.netBusy && !S.denied) return col; } return null; }
   async function scanPage(col){ const sc=S.scan[col]; S.netBusy=true; try{ const n=Math.min(200, sc.allow); const res=await net(()=>S.cloud.scan(col, {afterId:sc.after}, n)); if(res.error){ sc.retryAt=now()+backoffMs(1); return; }
-      const docs=res.value||[]; countRead(Math.max(1,docs.length)); sc.allow-=Math.max(1,docs.length); for(const d of docs){ await applyIncoming(col, d, 'server'); sc.ids.push(d.id); sc.found++; sc.after=d.id; } S.scanFound=sc.found; emit(deps.onStatus,'checking',sc.found);
+      const docs=res.value||[]; countRead(Math.max(1,docs.length)); sc.allow-=Math.max(1,docs.length); for(const d of docs){ await applyIncoming(col, d, 'server'); sc.ids.push(d.id); sc.found++; sc.after=d.id; } S.scanFound=sc.found; setStatus('checking',sc.found);
       if(docs.length<n){ await scanComplete(col); return; } await saveScan(col); } finally{ S.netBusy=false; } }
   async function scanComplete(col){ const sc=S.scan[col], c=COL[col], mine=await seenTotals(c), got=new Set(sc.ids), vanished=mine.ids.filter(id=>!got.has(id)); log({t:'scan-done', col, found:sc.found, vanished:vanished.length});
     if(vanished.length) await tx(['notes','sync'], async(t,after)=>{ for(const id of vanished){ t.del('sync',K.seen(c,id)); log({t:'vanished', col, id}); if(c==='n'){ const meta=await getMeta(t,'n',id); meta.base=null; meta.baseLrev=0; putMeta(t,meta,after); const rec=await t.get('notes',id); if(rec){ const job=await t.get('sync',K.out('n',id)); if(!job) setJob(t,id,{k:K.out('n',id), tries:0, next:0},after); } } else { const meta=await getMeta(t,'v',id); meta.base=null; putMeta(t,meta,after); } } });
@@ -492,7 +492,9 @@ function makeSync(deps){
     else if(S.tries.size && [...S.tries.values()].some(tr=>(S.jobs.get(tr.k.slice(6))||{}).tries>0 && now()-(tr.at||0)>pace.waiting)) code='waiting';
     else if(jobs || S.refetch.size) code='sending';
     else if(S.snapshot.notes && S.snapshot.versions && S.totals.notes.lastMatch && S.totals.versions.lastMatch) code='synced'; else code='pending';
-    const st={code, n: code==='checking'? S.scanFound : jobs}; if(!S.lastStatus || S.lastStatus.code!==code || S.lastStatus.n!==st.n){ S.lastStatus=st; emit(deps.onStatus, code, st.n); } return st; }
+    const st={code, n: code==='checking'? S.scanFound : jobs}; setStatus(code, st.n); return st; }
+  // every status report goes through here, so a direct report (a pass's progress, denied, no space) and the computed one never disagree
+  function setStatus(code, n){ const st={code, n:n||0}; if(!S.lastStatus || S.lastStatus.code!==code || S.lastStatus.n!==st.n){ S.lastStatus=st; emit(deps.onStatus, code, st.n); } }
   function nextWake(nowT){ let next=Infinity; for(const [id,job] of S.jobs){ const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
     for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }
     if(S.inbox.length || S.refetch.size) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); return next; }
