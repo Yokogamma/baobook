@@ -7,7 +7,7 @@ const SITE=(await serve()).url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const read=p=>fs.readFileSync(new URL('../public/'+p, import.meta.url),'utf8');
-const html=read('index.html'), sw=read('sw.js');
+const html=read('index.html'), sw=read('sw.js'), core=read('sync.js');
 const LOCALES=fs.readdirSync(new URL('../public/locales/', import.meta.url)).filter(f=>f.endsWith('.json')).map(f=>f.slice(0,-5));
 const dict=Object.fromEntries(LOCALES.map(l=>[l, JSON.parse(read('locales/'+l+'.json'))]));
 const CYR=/[А-Яа-яІіЇїЄєҐґʼ]/;
@@ -35,6 +35,7 @@ const cyrLits=literals(script).filter(l=>CYR.test(l.text)).map(l=>l.text);
 ok('1 no Cyrillic string literals in the app code ('+(cyrLits.slice(0,3).join(' | ')||'none')+')', cyrLits.length===0);
 ok('1b no Cyrillic in markup and CSS outside comments', !CYR.test(markup));
 ok('1c no Cyrillic literals in the service worker', !literals(sw).some(l=>CYR.test(l.text)));
+ok('1d no Cyrillic literals in the sync core (sync.js)', !literals(core).some(l=>CYR.test(l.text)));
 
 // 2. keys: everything the code and markup ask for exists in every language file, and nothing in the files is unused
 const used=new Set();
