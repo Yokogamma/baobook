@@ -110,7 +110,7 @@ const btn=async(pg,id,cls)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]
   await fresh(pg); await open(pg,'n2'); await pg.waitForTimeout(400);
   await tapBtn(pg.locator('#moreBtn')); const mi=pg.locator('.amenu.hm .mi',{hasText:'Перенести в архів'});
   ok('9a the header «⋯» has «Перенести в архів»', (await mi.count())===1);
-  await tapBtn(mi); await pg.waitForTimeout(300);
+  await tapBtn(mi); await until(async()=>((await stored(pg,'n2'))||{}).archived>0);
   ok('9b it archives the open note and opens the next one', (await stored(pg,'n2')).archived>0 && await cur(pg)!=='n2');
   await pg.click('#undo .uclose'); await pg.waitForTimeout(300); await pg.click('#sideBtn'); await pg.waitForTimeout(400); await pg.click('#archRow'); await pg.waitForTimeout(300);
   ok('9c the archive section has its own history entry', (await pg.evaluate(()=>history.state&&history.state.nav))==='section' && await pg.locator('#sect').isVisible());

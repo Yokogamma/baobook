@@ -23,7 +23,8 @@ const focusedTxt=()=>pg.evaluate(()=>!!document.activeElement && document.active
 const blk=t=>pg.locator('#sheet > .blk').filter({hasText:t});
 const isSel=t=>blk(t).evaluate(e=>e.classList.contains('sel')), caretIn=()=>pg.evaluate(()=>{ const s=getSelection(); const n=s.anchorNode; return !!(n && (n.nodeType===1? n : n.parentElement).closest('.txt')); });
 // a hold makes a block and puts the caret into it on release: type once it is there (Esc leaves the block, which writes it at once)
-const holdType=async(x,y,t)=>{ await hold(x,y); await until(focusedTxt); await pg.keyboard.type(t); await pg.keyboard.press('Escape'); await frames(pg); };
+const holdType=async(x,y,t)=>{ await hold(x,y); await until(focusedTxt); await pg.keyboard.type(t); await pg.keyboard.press('Escape'); await frames(pg);
+  await until(async()=>{ try{ return !!(await model())[t]; }catch(_){ return false; } }); };   // the write on Escape is asynchronous
 const model=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); const all=t.result.flatMap(n=>n.blocks); res(Object.fromEntries(all.map(b=>[b.text,{row:b.row,fx:+(b.fx||0).toFixed(3),parent:b.parent||null}]))); }; }; }));
 const near=(a,b,d=3)=>Math.abs(a-b)<=d;
 // a move and its way to storage: the autosave writes 300 ms after it, later on a busy machine

@@ -3,7 +3,7 @@
 // Also the regression where an area narrowed for a frame while a block was carried in, and its blocks jumped down too early.
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
-import { ready } from './lib/wait.mjs';
+import { ready, frames, still, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 // reduced motion: neighbours slide (appslide.mjs checks that), here positions are read right after each move
@@ -53,8 +53,10 @@ await pg.reload(); await ready(pg); await pg.waitForTimeout(200);
   ok('3b після відходу вбік за межі колонки ('+out.y+') і назад: нижче середини блок області знову на своєму місці'+back2.at, back2.frames>3 && back2.home);
   // drop past the middle: the block of the area is below the dropped one
   for(let y=gy-200; y>=gy-470; y-=6) await mv(gx,y);
-  const gh=await ghost(); await pg.mouse.up(); await pg.waitForTimeout(300);
-  const r=await area.locator('.abody .blk').evaluateAll(els=>els.map(e=>{ const q=e.getBoundingClientRect(); return {sized:!!e.querySelector('.sized'), y:Math.round(q.top), b:Math.round(q.bottom)}; }));
+  const gh=await ghost(); await pg.mouse.up(); await frames(pg); await still(area);
+  // the drop settles over a few frames (the area grows, the blocks take their rows): read once two reads 100 ms apart agree
+  const read=()=>area.locator('.abody .blk').evaluateAll(els=>els.map(e=>{ const q=e.getBoundingClientRect(); return {sized:!!e.querySelector('.sized'), y:Math.round(q.top), b:Math.round(q.bottom)}; }));
+  let r=await read(); await until(async()=>{ await new Promise(t=>setTimeout(t,100)); const r2=await read(), same=JSON.stringify(r2)===JSON.stringify(r); r=r2; return same; }, 3000, 0);
   const was=r.find(o=>o.sized), came=r.find(o=>!o.sized);
   ok('3a відпустив після середини: обидва блоки в області, той, що був там, — під перенесеним ('+JSON.stringify(r)+')', r.length===2 && was && came && gh && !gh.bad && was.y>=came.b); }
 

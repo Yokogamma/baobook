@@ -72,7 +72,7 @@ const endOf=async(pg,txt)=>{ await pg.locator('#sheet .blk .txt').filter({hasTex
   for(let i=0;i<5;i++) await pg.keyboard.press('Backspace');
   await pg.keyboard.type('[[Відпустка 2027'); await pg.waitForTimeout(150); const p5=await pick(pg); await pg.keyboard.press('Enter'); await until(()=>pg.evaluate(()=>[...document.querySelectorAll('#list .item .it-t')].some(e=>e.textContent==='Відпустка 2027')));
   const made=await pg.evaluate(()=>[...document.querySelectorAll('#list .item .it-t')].map(e=>e.textContent)), nid=await pg.evaluate(()=>document.querySelector('#sheet .txt a.lnk[data-to]:last-of-type').getAttribute('data-to'));
-  ok('3b «Створити нотатку»: '+p5.items.join(' | ')+' → the list has «Відпустка 2027», the chip links to it, «Деплой» is still open', p5.items.join('|')==='Створити нотатку «Відпустка 2027»' && made.includes('Відпустка 2027') && (await chips(pg)).includes(nid+'=Відпустка 2027') && await cur(pg)==='n1' && (await stored(pg,nid)).title==='Відпустка 2027');
+  ok('3b «Створити нотатку»: '+p5.items.join(' | ')+' → the list has «Відпустка 2027», the chip links to it, «Деплой» is still open', p5.items.join('|')==='Створити нотатку «Відпустка 2027»' && made.includes('Відпустка 2027') && (await chips(pg)).includes(nid+'=Відпустка 2027') && await cur(pg)==='n1' && (await storedWhen(pg,nid,r=>r.title==='Відпустка 2027')||{}).title==='Відпустка 2027');
 
   // 4 live names: a renamed note shows its new name; the note that links to it does not change
   // the link to the new note is in storage first (the autosave comes 300 ms after it), so that a later save of «Деплой» would show
