@@ -1,6 +1,6 @@
 # Sync between devices and Google sign-in
 
-**Status: approved plan; PR 0 is merged, PR 1 is built (its row in §5 names what differs), PR 2–5 are not implemented yet.** Approved on 2026-10-16 after five review rounds (issue [#18](https://github.com/Yokogamma/baobook/issues/18)) and amended on 2026-10-17 with the free-quota estimate ([#56](https://github.com/Yokogamma/baobook/issues/56)), an independent design review and the owner's answers to it. PR 0, the storage groundwork ([#55](https://github.com/Yokogamma/baobook/pull/55)), ships to production on its own. The rest is built in PR 1–4. PR 5 updates this document to match what was actually built. The earlier plan («Чистий аркуш», September 2026) is in the git history of this file.
+**Status: approved plan; PR 0 ([#55](https://github.com/Yokogamma/baobook/pull/55), released by [#58](https://github.com/Yokogamma/baobook/pull/58)) and PR 1 ([#61](https://github.com/Yokogamma/baobook/pull/61), released by [#62](https://github.com/Yokogamma/baobook/pull/62) on 2026-10-18) are done and in production (the PR 1 row in §5 names what differs); PR 2 is in progress; PR 3–5 are not implemented yet.** Approved on 2026-10-16 after five review rounds (issue [#18](https://github.com/Yokogamma/baobook/issues/18)) and amended on 2026-10-17 with the free-quota estimate ([#56](https://github.com/Yokogamma/baobook/issues/56)), an independent design review and the owner's answers to it. PR 0, the storage groundwork ([#55](https://github.com/Yokogamma/baobook/pull/55)), ships to production on its own. The rest is built in PR 1–4. PR 5 updates this document to match what was actually built. The earlier plan («Чистий аркуш», September 2026) is in the git history of this file.
 
 Mockups of the interface: a private claude.ai page owned by the project owner (ask for access).
 
@@ -507,7 +507,7 @@ Icons differ in shape, not only colour. The button has an `aria-label`; on a pho
 
 Done on 2026-10-16: the project `baobook-3fe7f` (Spark, Google Analytics off), the Google provider, the authorized domains `baobook.matamata.dev` and `baobook.matamata.app`, Firestore `(default)` in `eur3`, the web app `Baobook web`, the OAuth client's origins and redirect URIs with the branding, and the first index exemptions (`blocks`, `title`, `rcpt`). Left:
 
-1. **Firestore → Indexes → Automatic (single field) → exemptions** in `notes` and `versions` for every other field except `srv` and `rev`: `v`, `op`, `dev`, `dn`, `created`, `updated`, `deleted`, `archived`, `revived`, `tsrv`, `purged`, `auto`, `note`, `t`, `name`.
+1. **Firestore → Indexes → Automatic (single field) → exemptions** in `notes` and `versions` for every other field except `srv` and `rev`: `v`, `op`, `dev`, `dn`, `created`, `updated`, `deleted`, `archived`, `revived`, `tsrv`, `purged`, `auto`, `note`, `t`, `name`. **Done on 2026-10-18 (36 exemptions).**
 2. **After the first sign-in on .dev (PR 3):** Authentication → Users → the owner's User UID; it goes into the rules.
 3. **Firestore → Rules:** the text from PR 3 → Publish.
 

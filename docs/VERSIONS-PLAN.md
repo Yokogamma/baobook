@@ -1,113 +1,115 @@
-# Версии заметок в «Чистом листе»: план реализации, редакция 1
+# Note versions in «Чистый лист»: implementation plan, revision 1
 
-Дата: 2026-10-05. Запрос владельца: видеть версии каждой заметки и откатываться к прежней «примерно как в git»; хранить не копии заметки целиком, а изменения; пример — случайно испорченный пароль или ключ в заметке, который нужно посмотреть в старой версии, сравнить и вернуть; удобное переключение между версиями. Направление (вариант «тела блоков по хэшу содержимого», раздел 3.1) владельцем одобрено, этот документ — план для ревьюера.
+[now Baobook: `public/index.html`]
 
-Приложение: `sheet/index.html` (один файл, vanilla JS, PWA, без сборки). Живая версия: https://yokogamma.github.io/mockups/sheet/. Тесты: `sheet/tests/` (Playwright, 19 сценариев, запуск описан в `sheet/tests/README.md`). Смежные планы: `sheet/MOBILE-PLAN.md` (стек структурных операций 3.6, маршрут и Back 3.8, меню «⋯» шапки), `sheet/SYNC-PLAN.md` (слияние по блокам, надгробия, Firestore).
+Date: 2026-10-05. The owner's request: see the versions of every note and go back to an earlier one "roughly as in git"; store the changes, not full copies of the note; the example is a password or a key in a note that was spoiled by accident and has to be looked up in an old version, compared and brought back; easy switching between versions. The direction (the "block bodies by content hash" option, section 3.1) is approved by the owner; this document is the plan for the reviewer.
 
-Коротко: версии и тела блоков лежат в той же IndexedDB `sheet` (версия базы 2, два новых хранилища `versions` и `blobs`); версия создаётся перед первой правкой сохранённого состояния и далее не чаще раза в 5 минут; старые версии прореживаются до одной в час, затем одной в сутки, именованные не трогаются; просмотр — на том же полотне в режиме только чтения с подсветкой отличий; откат всей заметки или одного блока всегда обратим: состояние до отката само становится версией, а плашка «Скасувати» возвращает его сразу. Ссылки на строки ниже даны по `sheet/index.html` на коммите `584ffb2` и приблизительны (≈).
+App: `sheet/index.html` (one file, vanilla JS, PWA, no build step). Live version: https://yokogamma.github.io/mockups/sheet/. Tests: `sheet/tests/` (Playwright, 19 scenarios, how to run them is in `sheet/tests/README.md`). Related plans: `sheet/MOBILE-PLAN.md` (the stack of structural operations 3.6, the route and Back 3.8, the header «⋯» menu), `sheet/SYNC-PLAN.md` (merging by blocks, tombstones, Firestore).
 
-Состояние PR 1 (2026-10-06): реализовано по разделам 3.1–3.4 без интерфейса; сценарий `sheet/tests/appversions.mjs`. Решения по разделу 8 взяты по умолчанию (владелец сказал начинать без ответов): интервал 5 мин, лестница 24 ч / 7 д / 90 д, бюджет `min(20 МБ, 5 % квоты)` и 300 версий на заметку, именованные версии в PR 3, версии удалённой заметки удаляются вместе с ней, плашка после отката — без таймера через стек отмены (MOBILE-PLAN 3.6 уже есть). Отличия от текста плана: (1) R1 пишет «перед правкою» только если у заметки ещё нет версий или сохранённое состояние «отлежалось» ≥ `V_GAP` (по часам версий `SAVED.at`), иначе каждая пауза в наборе давала бы версию, а «10 правок за минуту — одна версия» не выполнялось бы; защита состояния внутри сессии правки — R3 раз в 5 мин, как у Obsidian; (2) пустое начальное состояние новой заметки версией не становится; (3) `idb.run(mode, fn)` оставлен как есть, для нескольких хранилищ добавлен `idb.tx(stores, mode, fn)`; (4) `force(reason, name)` пишет версию с `t = vnow()`, чтобы сценарии прореживания работали со сдвинутыми часами; (5) при `?debug=1` ошибки версий идут в `console.warn`, переключателя в панели нет. Проверка руками по разделу 6 (пункты 3–5, 7) на устройствах не проводилась.
+In short: versions and block bodies live in the same IndexedDB `sheet` (database version 2, two new stores `versions` and `blobs`); a version is created before the first edit of a saved state and after that no more often than once in 5 minutes; old versions are thinned to one per hour, then one per day, and named ones are not touched; viewing is on the same canvas in read-only mode, with the differences highlighted; restoring the whole note or one block can always be undone: the state before the restore becomes a version itself, and the «Скасувати» toast brings it back at once. The line references below are to `sheet/index.html` at commit `584ffb2` and are approximate (≈).
+
+PR 1 state (2026-10-06): implemented per sections 3.1–3.4, without an interface; scenario `sheet/tests/appversions.mjs`. The decisions of section 8 were taken by default (the owner said to start without the answers): a 5 min interval, a 24 h / 7 d / 90 d ladder, a budget of `min(20 MB, 5 % of the quota)` and 300 versions per note, named versions in PR 3, the versions of a deleted note are deleted with it, the toast after a restore has no timer, through the undo stack (MOBILE-PLAN 3.6 already exists). Differences from the text of the plan: (1) R1 writes «перед правкою» only if the note has no versions yet or the saved state has "settled" for ≥ `V_GAP` (by the version clock, `SAVED.at`); otherwise every pause in typing would make a version, and "10 edits in a minute, one version" would not hold; the state within an editing session is protected by R3 once in 5 min, as in Obsidian; (2) the empty initial state of a new note does not become a version; (3) `idb.run(mode, fn)` is left as it is, and `idb.tx(stores, mode, fn)` is added for several stores; (4) `force(reason, name)` writes a version with `t = vnow()`, so that the thinning scenarios work with a shifted clock; (5) with `?debug=1` version errors go to `console.warn`; there is no switch in the panel. The manual check of section 6 (items 3–5, 7) was not done on devices.
 
 PR 2 state (2026-10-09): done per 3.5, 3.6 (restoring the note) and 3.8 (the panel hides «+»; the undo bar and toasts sit above the bottom sheet); scenario `tests/appversions2.mjs`. Differences from the text: (1) `.ghost-blk` (blocks a full restore would remove) moves to PR 3, as the plan allows; (2) the «Історія версій» item in the header «⋯» menu is not added: the button stays visible in the header at every width, 320 px included; (3) the version kind `conflict` reads «з іншої вкладки» (written when two tabs change one note at once, see `tests/apptabsync.mjs`), and `manual` without a name reads «вручну»; (4) the undo bar after a restore has no timer (`offerUndo` with `big`); (5) Ctrl+Z, «Область», «Очистити» and opening another note close the panel first, paste does nothing while a version is shown; (6) the system Back closes the panel only on a narrow screen (≤640 px), where it is a bottom sheet. Not checked on devices by hand (section 6, items 1 and 6).
 
 PR 3 state (2026-10-09): done per 3.5 (search in versions, `.ghost-blk`), 3.6 (restoring a block), 3.7 and 3.8 (export with history); scenario `tests/appversions3.mjs`. Differences from the text: (1) «Повернути цей блок» is not shown on hover: the sheet is inert while a version is shown, so the buttons sit in a layer over the sheet (`#vlayer .vbtn`), beside every changed or missing block, the same on a computer and a phone; (2) «Зафіксувати версію…», the search on a phone and «Очистити історію нотатки» live in the panel's «⋯» menu (`#histMore`), so the bottom sheet keeps room for the list; on a computer the search field is always shown; (3) with a version shown, the menu item is «Назвати цю версію…» and gives that version the name instead of writing a new one; (4) undo after restoring a block puts back only that block, so later edits elsewhere stay; (5) the history size is shown in the notes panel footer as «історія: N КБ/МБ» once the size is known; (6) the export box «з історією версій» is not remembered: every export starts without history. Not checked on devices by hand (section 6, item 2).
 
-## 0. Карта изменений в коде
+## 0. Map of changes in the code
 
-| Место в `sheet/index.html` | Что меняется | PR |
+| Place in `sheet/index.html` | What changes | PR |
 |---|---|---|
-| `idb.open`, `idb.run` | версия базы 2, хранилища `versions` и `blobs` с индексами, `run(stores, mode, fn)` | 1 |
-| новый модуль `vers` рядом с `db` | `hashOf`, `bodyOf`, `manifestOf`, `capture`, `after`, `write`, `last`, `thin`, `sweep`, `drop`, `bodies` | 1 |
-| `markDirty`, `flushSave`, `openNote`, `writeNote` | R1 в `markDirty`, `SAVED` в `flushSave` и `openNote`, `VLAST` в `openNote`, R3 после `r.ok` в `writeNote` | 1 |
-| `importNotes`, `delNote` | R2 перед `Object.assign`, `vers.drop(id)` при удалении | 1 |
-| `DEBUG`, `Object.assign(DEBUG,…)` | `DEBUG.vers` с крючками раздела 3.4 | 1 |
-| разметка `.top .tools`, новый `#hist`, CSS `.sheet.history`, `.blk.v-ch/.v-add`, `.ghost-blk` | кнопка, панель, режим только чтения, подсветка | 2 |
-| `markDirty`, `flushSave`, `fabSync`, `layoutBottom` | no-op в режиме истории; «+» и плашка при открытой панели | 2 |
-| `offerUndo` | необязательная длительность (15 с для отката) | 2 |
-| `make`/`buildText`/`buildCode` | кнопка «Повернути цей блок» в режиме истории, пересборка блока при смене `kind` | 3 |
-| `exportAll`, `importNotes`, `storageUI` | флажок «з історією версій», поле `history`, размер истории в подвале | 3 |
+| `idb.open`, `idb.run` | database version 2, the stores `versions` and `blobs` with indexes, `run(stores, mode, fn)` | 1 |
+| a new module `vers` next to `db` | `hashOf`, `bodyOf`, `manifestOf`, `capture`, `after`, `write`, `last`, `thin`, `sweep`, `drop`, `bodies` | 1 |
+| `markDirty`, `flushSave`, `openNote`, `writeNote` | R1 in `markDirty`, `SAVED` in `flushSave` and `openNote`, `VLAST` in `openNote`, R3 after `r.ok` in `writeNote` | 1 |
+| `importNotes`, `delNote` | R2 before `Object.assign`, `vers.drop(id)` on deletion | 1 |
+| `DEBUG`, `Object.assign(DEBUG,…)` | `DEBUG.vers` with the hooks of section 3.4 | 1 |
+| the `.top .tools` markup, a new `#hist`, CSS `.sheet.history`, `.blk.v-ch/.v-add`, `.ghost-blk` | the button, the panel, read-only mode, highlighting | 2 |
+| `markDirty`, `flushSave`, `fabSync`, `layoutBottom` | no-op in history mode; «+» and the toast while the panel is open | 2 |
+| `offerUndo` | an optional duration (15 s for a restore) | 2 |
+| `make`/`buildText`/`buildCode` | the «Повернути цей блок» button in history mode, rebuilding a block when `kind` changes | 3 |
+| `exportAll`, `importNotes`, `storageUI` | the «з історією версій» box, the `history` field, the history size in the footer | 3 |
 
-## 1. Исходные факты
+## 1. Starting facts
 
-Проверено по исходнику; поведение подтверждено чтением кода, не измерениями.
+Checked against the source; the behavior is confirmed by reading the code, not by measurements.
 
-| Что | Факт | Где в коде |
+| What | Fact | Where in the code |
 |---|---|---|
-| Хранилище | База `sheet` версии 1, одно хранилище `notes` (keyPath `id`); `idb.run(mode, fn)` открывает транзакцию только на `'notes'`; `db.save` при отказе IndexedDB пишет в localStorage `sheet:note:<id>`, `db.init` переносит такие заметки обратно | `idb` ≈523–530, `db` ≈533–544 |
-| Путь записи | Единственный путь — `writeNote(n)`: ревизия `REV`, `inflight`, `unsaved`, статус в шапке только по последней начатой ревизии; `flushSave` через 300 мс после `markDirty` кладёт `serialize()` в `cur.blocks`, ставит `cur.updated=now()`; при переходе, `pagehide`, скрытии вкладки — сразу | `markDirty` ≈676, `writeNote` ≈682–685, `flushSave` ≈686, ≈693, ≈734 |
-| Модель блока | `serBlock`: `{id,row,text}` + `fx` на листе или `parent`+`col` в области; текстовый: `cw,ch,html` (html только с форматированием, `text` всегда рядом); код: `kind,lang,wrap,num,cw,ch,open,title`; область: `kind,cw,ch,title,color,collapsed`; пустые текстовые блоки не сохраняются | `serBlock` ≈668–672, `serialize` ≈673 |
-| Загрузка блока | `make(d,false)`: из `d.html` восстанавливаются `html` и `text` (`cleanRich`, `plainOf`); области создаются первыми, осиротевшие дети уходят на лист; `make` и `resolve` не зовут `markDirty` | `make` ≈825–836, `openNote` ≈695–698, `resolve` ≈811–818 |
-| Название | `ttl` при вводе меняет `cur.title` до вызова `markDirty`, то есть на момент `markDirty` прежнее название есть только в сохранённой копии | ≈725 |
-| Отмена | Плашка на одну операцию, 7 с (`UNDO_MS`); Ctrl+Z вне полей — плашка, в поле — своя история `HIST` на поле; снимок области `snapshot`/`restoreArea` берёт живые блоки как есть | `offerUndo` ≈998–1000, `HIST` ≈1006–1028, ≈1035–1038 |
-| Разрушительные действия | «Очистити аркуш» (`confirm`, затем `remove` каждого блока), `delNote` (`confirm`, `db.remove`), импорт заменяет заметку более новой копией `Object.assign(ex,n)`, «Видалити область» с плашкой | `clearBtn` ≈1294, `delNote` ≈699, `importNotes` ≈716–719, меню области ≈1078 |
-| Только чтение | Режим «як на компʼютері»: `.sheet.overview{pointer-events:none}` и `zoom`, блоки те же; это готовый образец режима просмотра | CSS ≈168, `applyMode` ≈1285 |
-| Экспорт | `{app:'sheet',format:1,exported,settings,notes}`; импорт берёт только `id,title,blocks,created,updated`, незнакомые поля игнорирует | `exportAll` ≈711, `importNotes` ≈716 |
-| Отладка | `const DEBUG={failSave:false}; window.sheetDebug=DEBUG`, в него же `idb`, `offerUndo`, `dropUndo`; `?debug=1` показывает переключатель отказа | ≈428, ≈545 |
-| Шапка | `.top .tools`: статус, ⚠, счётчик, область, правопись, сетка, тема, «Очистити»; до 640 px статус показывается коротко (● и ✓), счётчик скрыт; горячие клавиши через `hotkey(e)` не зависят от раскладки | разметка ≈404–412, `hotkey` ≈435 |
-| Тесты | Сброс состояния `localStorage.clear()` + `indexedDB.deleteDatabase('sheet')` после паузы ≥400 мс, строки `✓`/`✗`, код выхода 1; `apphistory.mjs` уже занят историей правок поля | `sheet/tests/README.md` |
+| Storage | Database `sheet` version 1, one store `notes` (keyPath `id`); `idb.run(mode, fn)` opens a transaction only on `'notes'`; when IndexedDB fails, `db.save` writes to localStorage `sheet:note:<id>`, and `db.init` moves such notes back | `idb` ≈523–530, `db` ≈533–544 |
+| The write path | The only path is `writeNote(n)`: the revision `REV`, `inflight`, `unsaved`, the header status only by the latest started revision; `flushSave`, 300 ms after `markDirty`, puts `serialize()` into `cur.blocks` and sets `cur.updated=now()`; on a note switch, `pagehide` and hiding the tab, at once | `markDirty` ≈676, `writeNote` ≈682–685, `flushSave` ≈686, ≈693, ≈734 |
+| The block model | `serBlock`: `{id,row,text}` + `fx` on the sheet or `parent`+`col` in an area; text: `cw,ch,html` (html only with formatting, `text` always next to it); code: `kind,lang,wrap,num,cw,ch,open,title`; area: `kind,cw,ch,title,color,collapsed`; empty text blocks are not saved | `serBlock` ≈668–672, `serialize` ≈673 |
+| Loading a block | `make(d,false)`: `html` and `text` are restored from `d.html` (`cleanRich`, `plainOf`); areas are created first, orphaned children go to the sheet; `make` and `resolve` do not call `markDirty` | `make` ≈825–836, `openNote` ≈695–698, `resolve` ≈811–818 |
+| Title | `ttl` on input changes `cur.title` before it calls `markDirty`, so at the time of `markDirty` the old title exists only in the saved copy | ≈725 |
+| Undo | A toast for one operation, 7 s (`UNDO_MS`); Ctrl+Z outside fields is the toast, in a field it is the field's own history `HIST`; the area snapshot `snapshot`/`restoreArea` takes the live blocks as they are | `offerUndo` ≈998–1000, `HIST` ≈1006–1028, ≈1035–1038 |
+| Destructive actions | «Очистити аркуш» (`confirm`, then `remove` of every block), `delNote` (`confirm`, `db.remove`), import replaces a note with a newer copy `Object.assign(ex,n)`, «Видалити область» with a toast | `clearBtn` ≈1294, `delNote` ≈699, `importNotes` ≈716–719, the area menu ≈1078 |
+| Read-only | The «як на компʼютері» mode: `.sheet.overview{pointer-events:none}` and `zoom`, the same blocks; a ready model for a viewing mode | CSS ≈168, `applyMode` ≈1285 |
+| Export | `{app:'sheet',format:1,exported,settings,notes}`; import takes only `id,title,blocks,created,updated` and ignores unknown fields | `exportAll` ≈711, `importNotes` ≈716 |
+| Debugging | `const DEBUG={failSave:false}; window.sheetDebug=DEBUG`, with `idb`, `offerUndo`, `dropUndo` also in it; `?debug=1` shows the failure switch | ≈428, ≈545 |
+| Header | `.top .tools`: the status, ⚠, the counter, area, spelling, grid, theme, «Очистити»; up to 640 px the status is short (● and ✓) and the counter is hidden; hotkeys through `hotkey(e)` do not depend on the keyboard layout | markup ≈404–412, `hotkey` ≈435 |
+| Tests | State reset with `localStorage.clear()` + `indexedDB.deleteDatabase('sheet')` after a pause of ≥400 ms, `✓`/`✗` lines, exit code 1; `apphistory.mjs` is already taken by the edit history of a field | `sheet/tests/README.md` |
 
-## 2. На какие паттерны опираемся
+## 2. Patterns we rely on
 
-- **Снимок перед первой правкой после паузы** (Joplin: ревизия перед первой правкой заметки, которую не трогали 7 дней) — состояние до случайной правки есть всегда; у нас порог не 7 дней, а «сохранённое состояние ещё не записано как версия».
-- **Интервал снимков** (Obsidian File recovery: не чаще раза в 5 мин, 7 дней; Joplin: 10 мин, 90 дней; Craft: через час после начала правок) — версии не множатся от автосохранения.
-- **Слияние старых версий и именованные версии** (Google Docs: старые правки объединяются ради места, именованные версии не сливаются, до 40 на документ; Notion: глубина 7/30/90 дней по тарифу).
-- **Локальная история без синхронизации** (Obsidian: снимки в локальной базе, между устройствами не передаются) — первый шаг у нас такой же.
-- **Адресация содержимого** (git: blob по хэшу содержимого, tree как список имён → хэшей, commit с родителем и временем; неизменённое хранится один раз).
-- **Восстановление, которое ничего не стирает** (Google Docs, Evernote: откат создаёт новую версию, прежние остаются) плюс наша плашка «Скасувати».
-- Apple Notes и Bear 2 истории версий не имеют; у Bear это одна из самых частых просьб — подтверждение ценности функции.
+- **A snapshot before the first edit after a pause** (Joplin: a revision before the first edit of a note not touched for 7 days): the state before an accidental edit always exists; our threshold is not 7 days but "the saved state is not yet written as a version".
+- **Snapshot interval** (Obsidian File recovery: no more often than once in 5 min, kept 7 days; Joplin: 10 min, 90 days; Craft: an hour after the edits start): versions do not multiply from autosave.
+- **Merging old versions, and named versions** (Google Docs: old edits are merged to save space, named versions are not merged, up to 40 per document; Notion: a depth of 7/30/90 days depending on the plan).
+- **Local history without sync** (Obsidian: snapshots in a local database, not passed between devices): our first step is the same.
+- **Content addressing** (git: a blob by content hash, a tree as a list of names → hashes, a commit with a parent and a time; what did not change is stored once).
+- **A restore that erases nothing** (Google Docs, Evernote: a restore creates a new version, the earlier ones stay) plus our «Скасувати» toast.
+- Apple Notes and Bear 2 have no version history; for Bear it is one of the most frequent requests, which confirms the value of the feature.
 
-## 3. Контракты поведения
+## 3. Behavior contracts
 
-### 3.1. Модель хранения (PR 1)
+### 3.1. Storage model (PR 1)
 
-Размеры для выбора варианта (строки в IndexedDB Chrome: 2 байта на символ кириллицы, 1 на ASCII). «Типичная» заметка: 20 блоков × 200 символов ≈ 20 × (400 + ~70 служебных) ≈ 10 КБ; сценарий — 30 версий за день, в каждой изменены 3 блока. «Код»: блок 5 КБ (ASCII) + 19 текстовых (~8 КБ), код правили 50 раз.
+Sizes for choosing the option (strings in Chrome's IndexedDB: 2 bytes per Cyrillic character, 1 per ASCII character). A "typical" note: 20 blocks × 200 characters ≈ 20 × (400 + ~70 of overhead) ≈ 10 KB; the scenario: 30 versions a day, 3 blocks changed in each. "Code": a 5 KB block (ASCII) + 19 text blocks (~8 KB), the code edited 50 times.
 
-| Вариант | Типичная, 30 версий | Код 5 КБ × 50 | Плюсы / минусы |
+| Option | Typical, 30 versions | Code 5 KB × 50 | Pros / cons |
 |---|---|---|---|
-| (a) полные снимки заметки | 30 × 10 = 300 КБ | 50 × 13 = 650 КБ | 30 строк кода; всё дублируется |
-| (b) манифест + тела блоков по хэшу | 30 × 1,3 (манифесты) + 8 + 30 × 3 × 0,42 ≈ 85 КБ | 50 × 5 + 8 + 65 ≈ 320 КБ (с deflate ≈ 150) | любая версия читается одной транзакцией; сводка «что изменилось» из манифестов; нужен GC тел |
-| (c) текстовые дельты по блокам | ≈ 16 КБ | ≈ 25 КБ | минимум места; нужен diff (diff-match-patch ≈ 45 КБ) или свой; показ версии — пересборка цепочки; порча одной дельты ломает всё после неё |
-| (d) журнал операций | как (c) | как (c) | не ложится на contenteditable (текст читается из DOM через `richOf`, «операций» нет); сложный replay |
+| (a) full snapshots of the note | 30 × 10 = 300 KB | 50 × 13 = 650 KB | 30 lines of code; everything is duplicated |
+| (b) manifest + block bodies by hash | 30 × 1.3 (manifests) + 8 + 30 × 3 × 0.42 ≈ 85 KB | 50 × 5 + 8 + 65 ≈ 320 KB (with deflate ≈ 150) | any version is read in one transaction; the "what changed" summary comes from the manifests; bodies need GC |
+| (c) text deltas per block | ≈ 16 KB | ≈ 25 KB | the least space; needs a diff (diff-match-patch ≈ 45 KB) or our own; showing a version means rebuilding the chain; one damaged delta breaks everything after it |
+| (d) operation log | as (c) | as (c) | does not fit contenteditable (the text is read from the DOM through `richOf`, there are no "operations"); a complex replay |
 
-Выбран (b): в типичном случае в 3,5 раза меньше (a); в худшем случае «большой блок правят много раз» уступает (c) в ~10 раз, но остаётся в сотнях КБ, а с правилами раздела 3.2 из 50 правок за день выходит 10–12 версий (~70 КБ). Реализация ~150 строк без библиотек, чтение любой версии за O(1), дельты и сжатие можно добавить позже внутрь той же схемы.
+Chosen: (b). In the typical case it is 3.5 times smaller than (a); in the worst case, "a big block edited many times", it loses to (c) about 10 times but stays in the hundreds of KB, and with the rules of section 3.2, 50 edits a day give 10–12 versions (~70 KB). The implementation is ~150 lines without libraries, any version is read in O(1), and deltas and compression can be added later inside the same scheme.
 
-Схема (`indexedDB.open('sheet', 2)`):
+Scheme (`indexedDB.open('sheet', 2)`):
 
 ```
-versions  keyPath 'id'   id = 'v' + Date.now().toString(36) + 4 случайных символа (как у заметок)
-  { id, note, t, w, reason, name?, title, sig, from?, dev?, size, sum:{ch,add,del,mv,ttl}, blocks:[запись манифеста…] }
-  индексы: note_t ['note','t'] (список заметки по времени), t (глобальное прореживание и бюджет)
+versions  keyPath 'id'   id = 'v' + Date.now().toString(36) + 4 random characters (as for notes)
+  { id, note, t, w, reason, name?, title, sig, from?, dev?, size, sum:{ch,add,del,mv,ttl}, blocks:[manifest entry…] }
+  indexes: note_t ['note','t'] (the note's list by time), t (global thinning and the budget)
 blobs     keyPath ['note','h']
   { note, h, s, r?, z }
 ```
 
-- Запись манифеста: `{id, h, row, fx | parent+col, kind?, lang?, title?, cw?, ch?, wrap?, num?, open?, color?, collapsed?}` — всё из `serBlock`, кроме тела. `t` — время содержимого (для R1 это `updated` заметки), `w` — время записи версии, `reason` ∈ `base | auto | import | manual | restore | conflict`, `from` — `id` версии, из которой восстанавливали, `dev` — устройство (для будущих `conflict`), `sig` — хэш названия и манифеста (сравнение «изменилось ли» без пересчёта), `sum` — сводка относительно предыдущей версии заметки, считается при записи, `size` — байты манифеста плюс тел, впервые записанных этой версией.
-- Тело: `s` = `html`, если есть форматирование (`r:1`), иначе `text`; у кода — код; у области `s=''`. `z = new Blob([s]).size`. Перенос блока, ширина, `lang`, переименование блока кода или области нового тела не создают.
-- Хэш синхронный, без библиотек: FNV-1a 32 бит (смещение 2166136261, множитель 16777619, по кодам UTF-16) и djb2 32 бит (начальное 5381, `h*33 ^ c`), плюс длина; ключ — три числа в base36 через конкатенацию, 13–16 символов. Вероятность коллизии при 10 000 тел в заметке ≈ 3·10⁻¹², но на неё не полагаемся: перед `put` тела читается запись с тем же ключом, и если она есть, а `s` отличается, тело пишется под ключом `h~1` (`h~2`…), в манифест идёт фактический ключ. `crypto.subtle.digest('SHA-256')` отвергнут как асинхронный без выгоды при такой проверке.
-- Эскиз помощников (имена для ревью кода):
+- A manifest entry: `{id, h, row, fx | parent+col, kind?, lang?, title?, cw?, ch?, wrap?, num?, open?, color?, collapsed?}`: everything from `serBlock` except the body. `t` is the time of the content (for R1 this is the note's `updated`), `w` is the time the version was written, `reason` ∈ `base | auto | import | manual | restore | conflict`, `from` is the `id` of the version that was restored, `dev` is the device (for the future `conflict`), `sig` is the hash of the title and the manifest (to compare "did it change" without recomputing), `sum` is a summary against the note's previous version, computed on write, `size` is the bytes of the manifest plus the bodies first written by this version.
+- The body: `s` = `html` if there is formatting (`r:1`), otherwise `text`; for code, the code; for an area, `s=''`. `z = new Blob([s]).size`. Moving a block, its width, `lang`, and renaming a code block or an area do not create a new body.
+- The hash is synchronous, without libraries: FNV-1a 32-bit (offset 2166136261, multiplier 16777619, over UTF-16 codes) and djb2 32-bit (start 5381, `h*33 ^ c`), plus the length; the key is the three numbers in base36, concatenated, 13–16 characters. The probability of a collision with 10 000 bodies in a note is ≈ 3·10⁻¹², but we do not rely on it: before the `put` of a body, the record with the same key is read, and if it exists and its `s` differs, the body is written under the key `h~1` (`h~2`…), and the manifest gets the actual key. `crypto.subtle.digest('SHA-256')` is rejected as asynchronous, with no gain given this check.
+- A sketch of the helpers (names for the code review):
 
 ```js
 const hashOf=s=>{ let a=2166136261, b=5381; for(let i=0;i<s.length;i++){ const c=s.charCodeAt(i); a=Math.imul(a^c,16777619); b=(Math.imul(b,33)^c)|0; }
   return (a>>>0).toString(36)+(b>>>0).toString(36)+s.length.toString(36); };
-const bodyOf=d=>d.kind? (d.text||'') : (d.html||d.text||'');                       // что хэшируем и кладём в blobs
-const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; e.h=hashOf(bodyOf(d)); return e; };   // запись манифеста
+const bodyOf=d=>d.kind? (d.text||'') : (d.html||d.text||'');                       // what is hashed and put into blobs
+const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; e.h=hashOf(bodyOf(d)); return e; };   // a manifest entry
 function manifestOf(title, blocks){ const m=blocks.map(entryOf).sort((x,y)=>x.id<y.id?-1:1); return {title, blocks:m, sig:hashOf(title+'\n'+JSON.stringify(m))}; }
 ```
 
-- Порог: тело длиннее 256 КБ в историю не кладётся — в манифесте `h:null`, при показе блок рисуется с подписью «завеликий для історії», при откате берётся текущее содержимое блока (если блока нет — пропускается, в плашке сказано «1 блок пропущено»).
-- `idb.run(stores, mode, fn)` принимает список хранилищ и передаёт транзакцию; существующие вызовы передают `'notes'`. `onupgradeneeded` создаёт `versions` с индексами и `blobs`, `notes` не трогается. Старая вкладка с кодом версии 1 после обновления базы получит `VersionError` при открытии — её `db.save` уйдёт в localStorage, при следующем старте перенос уже есть. Тесты сбрасывают базу `deleteDatabase('sheet')` как раньше.
-- Не сейчас, без смены схемы: дельта-тело для `s` > 2 КБ (общий префикс и суффикс с предыдущим телом того же `id`, `{b:h0,p,q,m}`, цепочка ≤ 10) и `CompressionStream('deflate-raw')` (Chrome 80+, Safari 16.4+, Firefox 113+; код сжимается ~3×).
+- The threshold: a body longer than 256 KB does not go into the history: the manifest has `h:null`; when shown, the block is drawn with the caption «завеликий для історії»; on a restore, the current content of the block is taken (if there is no such block, it is skipped, and the toast says «1 блок пропущено»).
+- `idb.run(stores, mode, fn)` takes a list of stores and passes the transaction on; existing calls pass `'notes'`. `onupgradeneeded` creates `versions` with its indexes and `blobs`; `notes` is not touched. An old tab with version 1 code gets a `VersionError` on open after the database upgrade: its `db.save` goes to localStorage, and the move back on the next start already exists. Tests reset the database with `deleteDatabase('sheet')` as before.
+- Not now, and without a change of the scheme: a delta body for `s` > 2 KB (a common prefix and suffix with the previous body of the same `id`, `{b:h0,p,q,m}`, a chain ≤ 10) and `CompressionStream('deflate-raw')` (Chrome 80+, Safari 16.4+, Firefox 113+; code compresses ~3×).
 
-### 3.2. Когда создаётся версия (PR 1)
+### 3.2. When a version is created (PR 1)
 
-Все версии — сохранённые состояния. Константы: `V_GAP = 5 мин`, время через `vnow() = Date.now() + DEBUG.vers.clock`. В памяти: `SAVED: noteId → {title, blocks, updated}` — последнее сброшенное в объект заметки состояние (ставится в `openNote` из загруженной заметки и в `flushSave` после `cur.blocks=serialize()`); `VLAST: noteId → {id, t, w, sig}` — последняя версия заметки, читается в `openNote` курсором по `note_t` назад; записи одной заметки идут через очередь обещаний `VQ`, чтобы R1 не обогнала загрузку `VLAST` и две версии не писались вперемешку.
+All versions are saved states. Constants: `V_GAP = 5 min`, the time through `vnow() = Date.now() + DEBUG.vers.clock`. In memory: `SAVED: noteId → {title, blocks, updated}`: the last state flushed into the note object (set in `openNote` from the loaded note and in `flushSave` after `cur.blocks=serialize()`); `VLAST: noteId → {id, t, w, sig}`: the note's latest version, read in `openNote` with a cursor backwards over `note_t`; the writes of one note go through a promise queue `VQ`, so that R1 does not overtake the loading of `VLAST` and two versions are not written interleaved.
 
-- **R1 «перед правкою»**: в `markDirty()` вызывается `vers.capture(cur.id, SAVED.get(cur.id), 'base')`: если `SAVED` есть и его `sig` ≠ `VLAST.sig`, пишется версия с `t = SAVED.updated`, `w = vnow()`. Это защита пароля: состояние до случайной правки записано ещё до того, как через 300 мс автосохранение перезапишет заметку. Попутно покрывает «Очистити аркуш», удаление блока и области, разгруппирование, откат — всё идёт через `markDirty`. Для `capture` нужна копия названия из `SAVED`, а не `cur.title` (факт о `ttl` в разделе 1).
-- **R2 «перед перезаписью извне»**: `importNotes` перед `Object.assign(ex,n)` вызывает `vers.capture(ex.id, {title:ex.title, blocks:ex.blocks, updated:ex.updated}, 'import')` и ждёт его; будущее слияние при синхронизации — `conflict` с `dev`.
-- **R3 «інтервал»**: в `writeNote` после `r.ok` (и только если `REV.get(n.id)===rev`) — `vers.after(n)`: манифест текущего состояния; если `sig` совпадает с `VLAST.sig` — ничего; если `vnow() − w0 < V_GAP`, где `w0 = VLAST.w`, а без версий — `n.created`, — ничего; иначе версия `auto` с `t = n.updated`. Отсчёт от `w`, а не от `t`: иначе через 300 мс после версии R1 появилась бы версия из одного нажатия.
-- **R4 «вручну»** (PR 3): «Зафіксувати версію…» → `flushSave()` → `capture(cur.id, {title:cur.title, blocks:cur.blocks, updated:cur.updated}, 'manual', name)` без учёта интервала и `sig` (две одинаковые именованные версии допустимы).
-- **R5 «відновлення»**: откат заметки или блока пишет версию `restore` с `from` сразу после своего `flushSave`, без учёта интервала; состояние до отката записала R1.
-- Условия R1 и R3 одной строкой каждое (эскиз):
+- **R1 «перед правкою»**: `markDirty()` calls `vers.capture(cur.id, SAVED.get(cur.id), 'base')`: if `SAVED` exists and its `sig` ≠ `VLAST.sig`, a version is written with `t = SAVED.updated`, `w = vnow()`. This protects the password: the state before an accidental edit is written before autosave overwrites the note 300 ms later. Along the way it covers «Очистити аркуш», deleting a block and an area, ungrouping and restoring: all of them go through `markDirty`. `capture` needs the copy of the title from `SAVED`, not `cur.title` (the fact about `ttl` in section 1).
+- **R2 "before an overwrite from outside"**: `importNotes` calls `vers.capture(ex.id, {title:ex.title, blocks:ex.blocks, updated:ex.updated}, 'import')` before `Object.assign(ex,n)` and waits for it; a future merge in sync is `conflict` with `dev`.
+- **R3 «інтервал»**: in `writeNote` after `r.ok` (and only if `REV.get(n.id)===rev`), `vers.after(n)`: the manifest of the current state; if `sig` matches `VLAST.sig`, nothing; if `vnow() − w0 < V_GAP`, where `w0 = VLAST.w`, or `n.created` when there are no versions, nothing; otherwise an `auto` version with `t = n.updated`. It counts from `w`, not from `t`: otherwise, 300 ms after an R1 version, a version of a single keystroke would appear.
+- **R4 «вручну»** (PR 3): «Зафіксувати версію…» → `flushSave()` → `capture(cur.id, {title:cur.title, blocks:cur.blocks, updated:cur.updated}, 'manual', name)`, ignoring the interval and `sig` (two identical named versions are allowed).
+- **R5 «відновлення»**: a restore of a note or a block writes a `restore` version with `from` right after its `flushSave`, ignoring the interval; the state before the restore was written by R1.
+- The conditions of R1 and R3, one line each (a sketch):
 
 ```js
 async function capture(id, st, reason, name, from){ if(!st) return; const m=manifestOf(st.title, st.blocks); const L=VLAST.get(id);
@@ -116,137 +118,137 @@ async function after(n){ const m=manifestOf(n.title, n.blocks), L=VLAST.get(n.id
   if(vnow()-(L? L.w : n.created) < V_GAP) return; await write(n.id, m, {t:n.updated, w:vnow(), reason:'auto'}); }                    // R3
 ```
 
-- Конец сессии версии не создаёт: последнее состояние — сама заметка («Зараз»), R1 запишет его при следующей правке с правильным `t`. Удаление заметки (`delNote`) удаляет её версии и тела.
-- Оценка объёма: 8 часов непрерывной правки одной заметки ≤ 96 версий ≈ 2,5 КБ каждая ≈ 240 КБ в день; после прореживания — 8 версий в день.
+- The end of a session creates no version: the last state is the note itself («Зараз»), and R1 writes it on the next edit with the right `t`. Deleting a note (`delNote`) deletes its versions and bodies.
+- A volume estimate: 8 hours of continuous editing of one note ≤ 96 versions ≈ 2.5 KB each ≈ 240 KB a day; after thinning, 8 versions a day.
 
-### 3.3. Прореживание, бюджет, GC (PR 1)
+### 3.3. Thinning, budget, GC (PR 1)
 
-- Лестница по возрасту относительно `tMax = max(vnow(), t новейшей версии)` (часы могли уйти назад): младше 24 ч — всё; 24 ч–7 д — последняя за каждый час; 7–90 д — последняя за сутки; старше 90 д — удаляется. Никогда не удаляются версии с `name` и новейшая версия заметки.
-- Ключ корзины: возраст `a = tMax − t`; `a < 24 ч` → своя корзина у каждой версии; `a < 7 д` → местный час `Math.floor(loc/3600000)`; `a < 90 д` → местные сутки `Math.floor(loc/86400000)`, где `loc = t − getTimezoneOffset(t) × 60000` (решение владельца 2026-10-08: сутки и часы местные, как их покажет «Історія», а не UTC; в Киеве сутки UTC начинались в 02:00/03:00); старше — корзина «удалить». В каждой корзине остаётся версия с наибольшим `t`, остальные без `name` удаляются; проход идёт от новейшей к старейшей по индексу `note_t`.
-- Лимит на заметку: 300 версий, лишние — самые старые без `name`. Общий бюджет: `min(20 МБ, 0.05 × quota)` из `navigator.storage.estimate()` (без `estimate` — 20 МБ); сумма `size` ведётся в памяти, пересчитывается на старте курсором по индексу `t` в `requestIdleCallback` (запасной `setTimeout` 3 с). При превышении удаляются самые старые версии без `name`, кроме новейшей каждой заметки, до 90 % бюджета.
-- Запуск: для заметки — после каждой записи её версии; глобально — раз в сутки на старте (`S.versSwept` в настройках).
-- GC тел после любого удаления версий заметки: множество `h` из оставшихся версий, затем курсор по `blobs` в диапазоне `IDBKeyRange.bound([note,''],[note,'￿'])` удаляет тела вне множества. Тела заметки с версиями других заметок не делятся, поэтому GC не трогает чужое.
+- A ladder by age relative to `tMax = max(vnow(), t of the newest version)` (the clock may have gone back): younger than 24 h, everything; 24 h–7 d, the last one of each hour; 7–90 d, the last one of each day; older than 90 d, deleted. Versions with a `name` and the note's newest version are never deleted.
+- The bucket key: the age `a = tMax − t`; `a < 24 h` → every version has a bucket of its own; `a < 7 d` → the local hour `Math.floor(loc/3600000)`; `a < 90 d` → the local day `Math.floor(loc/86400000)`, where `loc = t − getTimezoneOffset(t) × 60000` (the owner's decision of 2026-10-08: days and hours are local, as «Історія» shows them, not UTC; in Kyiv a UTC day started at 02:00/03:00); older → the "delete" bucket. In each bucket the version with the largest `t` stays, and the others without a `name` are deleted; the pass goes from the newest to the oldest over the `note_t` index.
+- The per-note limit: 300 versions; the extra ones are the oldest without a `name`. The overall budget: `min(20 MB, 0.05 × quota)` from `navigator.storage.estimate()` (without `estimate`, 20 MB); the sum of `size` is kept in memory and recounted at start with a cursor over the `t` index in `requestIdleCallback` (a fallback `setTimeout` of 3 s). When it is exceeded, the oldest versions without a `name` are deleted, except the newest of each note, down to 90 % of the budget.
+- When it runs: for a note, after every write of its version; globally, once a day at start (`S.versSwept` in the settings).
+- Body GC after any deletion of a note's versions: the set of `h` from the remaining versions, then a cursor over `blobs` in the range `IDBKeyRange.bound([note,''],[note,'￿'])` deletes the bodies outside the set. A note's bodies are not shared with the versions of other notes, so GC does not touch anything else.
 
-### 3.4. Путь записи и отказы (PR 1)
+### 3.4. The write path and failures (PR 1)
 
-- `vers.write(note, manifest, meta)` — одна транзакция `['versions','blobs']` readwrite: для каждой записи манифеста `get [note,h]` → проверка коллизии → `put` при отсутствии; затем `put` версии; `VLAST` обновляется по `oncomplete`. Намеренно не в одной транзакции с заметкой: отказ по квоте в `blobs` не должен откатить запись заметки.
-- Ошибка записи версии глотается: `unsaved` и статус «Збережено» не затрагиваются, `DEBUG.vers.errors++`, при `?debug=1` — `console.warn`; после `QuotaExceededError` один раз запускается глобальное прореживание, повтор записи — при следующем сохранении заметки. Версия никогда не блокирует `writeNote`, `beforeunload` её не ждёт.
-- Отладочные крючки в `window.sheetDebug.vers` (как `DEBUG.failSave`): `force(reason, name)` — записать версию текущей заметки в обход интервала; `clock` — сдвиг `vnow()` в мс; `estimate` — подмена ответа `navigator.storage.estimate()`; `fail` — каждая запись версии завершается ошибкой; `errors` — счётчик; `list(noteId)` и `thin(noteId)`, `sweep()` — чтение и принудительное прореживание для тестов. Тесты читают `versions`/`blobs` напрямую через `indexedDB.open('sheet')`, как `idbAll` в `appstore.mjs`.
+- `vers.write(note, manifest, meta)`: one readwrite transaction over `['versions','blobs']`: for each manifest entry, `get [note,h]` → a collision check → `put` if missing; then the `put` of the version; `VLAST` is updated on `oncomplete`. Deliberately not in one transaction with the note: a quota failure in `blobs` must not roll back the note's write.
+- An error writing a version is swallowed: `unsaved` and the «Збережено» status are not touched, `DEBUG.vers.errors++`, and with `?debug=1` a `console.warn`; after a `QuotaExceededError` the global thinning runs once, and the write is retried on the next save of the note. A version never blocks `writeNote`, and `beforeunload` does not wait for it.
+- Debug hooks in `window.sheetDebug.vers` (like `DEBUG.failSave`): `force(reason, name)`: write a version of the current note, bypassing the interval; `clock`: the shift of `vnow()` in ms; `estimate`: a substitute answer of `navigator.storage.estimate()`; `fail`: every version write ends with an error; `errors`: the counter; `list(noteId)` and `thin(noteId)`, `sweep()`: reading and forced thinning for tests. Tests read `versions`/`blobs` directly through `indexedDB.open('sheet')`, like `idbAll` in `appstore.mjs`.
 
-### 3.5. Панель «Історія»: просмотр (PR 2)
+### 3.5. The «Історія» panel: viewing (PR 2)
 
-- Вход: кнопка `#histBtn` «Історія версій» (значок часов со стрелкой) в `.top .tools` перед «Очистити»; Ctrl+Alt+H через `hotkey` (как Ctrl+Alt+N). На телефоне тот же значок; когда появится меню «⋯» шапки (MOBILE-PLAN 3.6), пункт «Історія версій» дублируется там; системный Back закрывает панель через модуль `nav` (3.8), до него — Esc и «✕».
-- Панель `#hist` (`role="complementary"`, `aria-label="Історія версій"`): на компьютере колонка 300 px справа от листа, лист ужимается; на экране до 640 px — нижний лист высотой 40 % окна с ручкой, лист прокручивается над ним. Заголовок: «Історія версій», «✕»; кнопки «Відновити цю версію» (активна, когда выбрана версия) и в PR 3 — «Зафіксувати версію…».
-- Идентификаторы для стилей и тестов (фиксируются в PR 2 и не меняются): `#histBtn` (`aria-pressed`), `#hist`, `#histClose`, `#histRestore`, `#histRange` (только до 640 px), `#histList` со строками `.hv` (`data-id` версии, `.hv-t` время, `.hv-k` вид, `.hv-s` сводка, `.cur` у выбранной, `.named` у именованных), `#histNow` — строка «Зараз»; PR 3 добавляет `#histName`, `#histSave`, `#histClear`, `#histQ`, `.vbtn` у блока. Состояние режима — `sheet.classList.contains('history')`, в `DEBUG.vers.view` — `id` показанной версии или `null`.
-- Список (`role="listbox"`): первая строка «Зараз» (текущее состояние), ниже версии по убыванию `t`, группы «Сьогодні», «Вчора», далее дата по `fmtDate`; строка: время, вид («автоматично», «перед правкою», «перед імпортом», «відновлено з 10:02», «● Назва» у именованных), сводка из `sum` через `pl`: «змінено 3 блоки, видалено 1», «додано 2 блоки», «переміщено 1 блок», «назву змінено». У строки «Зараз» сводка относительно новейшей версии, считается при открытии панели из живых блоков. Объём списка: манифесты не нужны, читаются только поля строк; тела заметки читаются одним `getAll` по диапазону и кэшируются на время открытой панели.
-- Показ версии: выбранная строка → `showVersion(v)`: живые элементы снимаются с листа, из манифеста и тел создаются блоки тем же `make(d,false)` (сначала области), `resolve(); update()`; `sheet.classList.add('history')` даёт `pointer-events:none` как `.overview` и прячет ручки и «+»; `ttl` показывает название версии и не редактируется; `document.title` не меняется. На время режима `markDirty` и `flushSave` — no-op (страховка: сейчас `make`/`resolve` их не зовут, но любой будущий путь не должен записать версию поверх заметки). Выход («Зараз», Esc, «✕», переход в другую заметку) — `openNote(cur)` перерисовывает живую заметку.
-- Подсветка относительно «Зараз»: `.blk.v-ch` — полоса слева цветом предупреждения: тело или заголовок отличаются; `.blk.v-add` — зелёная: блока сейчас нет, при откате вернётся; `.ghost-blk` — серый пунктир по текущим координатам: блоки, которых в версии ещё не было, при полном откате исчезнут (если не поместится в PR 2 — в PR 3). Перемещённые без подсветки, только в сводке. Цвета проверяются на трёх темах и цветных подложках областей.
-- Переключение: ↑/↓ в списке меняют выбор и перерисовывают лист (задержка 80 мс), Home/End — крайние, пробел — версия ↔ «Зараз» для сравнения на месте, Esc закрывает. На телефоне над списком ползунок `input[type=range]` (`aria-valuetext` = время версии) — крутить версии пальцем; касание строки выбирает. Side-by-side не делаем: на полотне с абсолютными координатами два листа не помещаются, а переключение «було/стало» на месте нагляднее.
-- Поиск по версиям (PR 3): поле «Шукати у версіях…» над списком, задержка 120 мс как у `#q`, сравнение через `norm`; остаются версии, в телах которых есть запрос, совпавшие блоки получают `.v-hit`.
+- Entry: the `#histBtn` button «Історія версій» (a clock icon with an arrow) in `.top .tools` before «Очистити»; Ctrl+Alt+H through `hotkey` (like Ctrl+Alt+N). On a phone, the same icon; when the header «⋯» menu appears (MOBILE-PLAN 3.6), the «Історія версій» item is duplicated there; the system Back closes the panel through the `nav` module (3.8), and before that, Esc and «✕».
+- The `#hist` panel (`role="complementary"`, `aria-label="Історія версій"`): on a computer a 300 px column right of the sheet, and the sheet narrows; on a screen up to 640 px, a bottom sheet 40 % of the window high with a handle, and the note's sheet scrolls above it. The header: «Історія версій», «✕»; the buttons «Відновити цю версію» (active when a version is chosen) and, in PR 3, «Зафіксувати версію…».
+- Identifiers for styles and tests (fixed in PR 2 and not changed after): `#histBtn` (`aria-pressed`), `#hist`, `#histClose`, `#histRestore`, `#histRange` (only up to 640 px), `#histList` with `.hv` rows (`data-id` of the version, `.hv-t` the time, `.hv-k` the kind, `.hv-s` the summary, `.cur` on the chosen one, `.named` on named ones), `#histNow`: the «Зараз» row; PR 3 adds `#histName`, `#histSave`, `#histClear`, `#histQ`, `.vbtn` on a block. The state of the mode is `sheet.classList.contains('history')`; `DEBUG.vers.view` holds the `id` of the shown version or `null`.
+- The list (`role="listbox"`): the first row is «Зараз» (the current state), below it the versions by descending `t`, in the groups «Сьогодні», «Вчора», then the date by `fmtDate`; a row: the time, the kind («автоматично», «перед правкою», «перед імпортом», «відновлено з 10:02», «● Назва» for named ones), the summary from `sum` through `pl`: «змінено 3 блоки, видалено 1», «додано 2 блоки», «переміщено 1 блок», «назву змінено». The «Зараз» row has a summary against the newest version, computed from the live blocks when the panel opens. The list volume: manifests are not needed, only the row fields are read; the note's bodies are read with one `getAll` over a range and cached while the panel is open.
+- Showing a version: the chosen row → `showVersion(v)`: the live elements are taken off the sheet, and blocks are created from the manifest and the bodies by the same `make(d,false)` (areas first), `resolve(); update()`; `sheet.classList.add('history')` gives `pointer-events:none` like `.overview` and hides the handles and «+»; `ttl` shows the version's title and is not editable; `document.title` does not change. While in the mode, `markDirty` and `flushSave` are no-ops (insurance: `make`/`resolve` do not call them now, but no future path may write a version over the note). Leaving («Зараз», Esc, «✕», going to another note): `openNote(cur)` redraws the live note.
+- Highlighting against «Зараз»: `.blk.v-ch`, a bar on the left in the warning color: the body or the title differs; `.blk.v-add`, green: the block is not there now and comes back on a restore; `.ghost-blk`, a grey dashed outline at the current coordinates: blocks that did not exist yet in the version and disappear on a full restore (if it does not fit in PR 2, then in PR 3). Moved blocks are not highlighted, they are only in the summary. The colors are checked on the three themes and on the colored backgrounds of areas.
+- Switching: ↑/↓ in the list change the choice and redraw the sheet (an 80 ms delay), Home/End go to the ends, Space toggles version ↔ «Зараз» to compare in place, Esc closes. On a phone there is an `input[type=range]` slider above the list (`aria-valuetext` = the version's time) to turn through versions with a finger; a tap on a row chooses it. No side-by-side: two sheets do not fit on a canvas with absolute coordinates, and switching "before/after" in place shows more.
+- Search in versions (PR 3): the field «Шукати у версіях…» above the list, a 120 ms delay like `#q`, comparison through `norm`; the versions whose bodies contain the query stay, and the matching blocks get `.v-hit`.
 
-### 3.6. Откат заметки и блока, плашка (заметка — PR 2, блок — PR 3)
+### 3.6. Restoring a note and a block, the toast (the note in PR 2, the block in PR 3)
 
-- Откат заметки: «Відновити цю версію» → `flushSave()` → R1 для текущего состояния (если оно ещё не версия) → копия текущего состояния `prev` в памяти → блоки и название заменяются содержимым версии (как `openNote`), `markDirty()`, `flushSave()` → версия `restore` с `from`. Плашка `offerUndo('Нотатку відновлено до версії 10:02', …)`; отмена возвращает `prev` тем же путём. Плашка без таймера, как планирует 3.6 для удалений с содержимым; до реализации 3.6 — `offerUndo(msg, restore, 15000)` (третий, необязательный параметр вместо `UNDO_MS`), этого достаточно, потому что состояние до отката тоже версия. Подпись в панели после отката: «Попередній стан збережено як версію».
-- Откат блока: в режиме истории у блока с `.v-ch` или `.v-add` кнопка «Повернути цей блок» (`pointer-events:auto` только у неё; на компьютере по наведению, на дотике — по касанию блока показывается та же кнопка в мини-панели вида `#blockbar`). Действие: выход из режима истории, затем в живой заметке блок с тем же `id` получает тело, `kind`, `lang` и `title` версии (положение и размер не меняются; смена `kind` — пересборкой как `toCode`/`toText`), удалённый блок создаётся по координатам версии (в области, если она жива, иначе на листе по правилу сирот) и расталкивается `resolve`; `markDirty()`, версия `restore` с `from` и `sum:{ch:1}` или `{add:1}`; плашка «Блок повернуто з версії 10:02 · Скасувати» возвращает прежнее тело или убирает созданный блок.
-- Оба отката не стирают более поздние правки других блоков (откат блока) и не трогают другие заметки; `unsaved`/статус ведут себя как при обычной правке.
+- Restoring a note: «Відновити цю версію» → `flushSave()` → R1 for the current state (if it is not a version yet) → a copy `prev` of the current state in memory → the blocks and the title are replaced with the content of the version (as in `openNote`), `markDirty()`, `flushSave()` → a `restore` version with `from`. The toast `offerUndo('Нотатку відновлено до версії 10:02', …)`; undo brings back `prev` the same way. The toast has no timer, as 3.6 plans for deletions with content; until 3.6 is implemented, `offerUndo(msg, restore, 15000)` (a third, optional parameter instead of `UNDO_MS`), which is enough because the state before the restore is a version too. The caption in the panel after a restore: «Попередній стан збережено як версію».
+- Restoring a block: in history mode a block with `.v-ch` or `.v-add` has a «Повернути цей блок» button (`pointer-events:auto` only on it; on a computer on hover, on touch a tap on the block shows the same button in a mini panel like `#blockbar`). The action: leave history mode, then in the live note the block with the same `id` gets the body, `kind`, `lang` and `title` of the version (the position and size do not change; a change of `kind` is a rebuild, like `toCode`/`toText`); a deleted block is created at the version's coordinates (in its area if the area is alive, otherwise on the sheet by the orphan rule) and pushed apart by `resolve`; `markDirty()`, a `restore` version with `from` and `sum:{ch:1}` or `{add:1}`; the toast «Блок повернуто з версії 10:02 · Скасувати» brings back the previous body or removes the created block.
+- Neither restore erases later edits of other blocks (for the block restore) or touches other notes; `unsaved` and the status behave as on an ordinary edit.
 
-### 3.7. «Зафіксувати версію», «Очистити історію», размер (PR 3)
+### 3.7. «Зафіксувати версію», «Очистити історію», size (PR 3)
 
-- «Зафіксувати версію…»: в заголовке панели; поле «Назва версії» и «Зберегти» прямо в панели (без `prompt`); пишется `manual` по R4; строка показывается как «● Назва» и не прореживается.
-- «Очистити історію нотатки» в подвале панели: `confirm('Видалити всі версії нотатки «…»? Поточний текст залишиться.')` → удаление версий и тел заметки одной транзакцией, `VLAST` сбрасывается. Нужна для паролей, которые иначе живут в истории 90 дней.
-- В подвале панели заметок к строке `storInfo` добавляется «· історія: 3,2 МБ» из суммы `size`.
+- «Зафіксувати версію…»: in the panel header; the field «Назва версії» and «Зберегти» right in the panel (no `prompt`); a `manual` version is written by R4; the row shows as «● Назва» and is not thinned.
+- «Очистити історію нотатки» in the panel footer: `confirm('Видалити всі версії нотатки «…»? Поточний текст залишиться.')` → the note's versions and bodies are deleted in one transaction, and `VLAST` is reset. It is needed for passwords, which otherwise live in the history for 90 days.
+- In the notes panel footer the `storInfo` row gets «· історія: 3,2 МБ» from the sum of `size`.
 
-### 3.8. Взаимодействие с другими частями
+### 3.8. Interaction with other parts
 
-- История правок в полях (`HIST`) и планируемый стек структурных операций (3.6) — память, точность до нажатия, до перезагрузки. Версии — диск, шаг ≥ 5 мин, 90 дней. Слои не пересекаются: откат из истории — обычная операция, которую плашка (и потом стек) умеет отменить; Ctrl+Z в поле по-прежнему идёт в `HIST`. Побочная выгода: 3.6 обещает восстановление «до перезавантаження», а R1 делает удалённую область доступной и после перезагрузки.
-- Экспорт и импорт: `format:1` не меняется; по флажку «з історією версій» (по умолчанию выключен) в файл добавляется `history:{versions, blobs}`; импорт сливает версии по `id` и тела по `[note,h]`, старый импорт незнакомое поле игнорирует. Обычный экспорт не растёт.
-- Firestore (SYNC-PLAN): версии остаются локальными на устройстве. Манифест ссылается на те же `id` блоков, что и карта `blocks` с `u`; предложение к §4 SYNC-PLAN: проигравшие при слиянии копии писать версией `conflict` с `dev`, а не блоком «конфлікт з телефону» на полотне. Синхронизация истории позже: именованные версии и тела в `notes/{id}/versions` и `blobs` (≤ 1 МБ на документ), TTL — минимальный среди устройств (урок Joplin); при шифровании тела шифруются как заметки.
-- Квота: `persistOnce()` уже вызывается после первого сохранения; бюджет истории отдельный (3.3); на iOS без установки PWA хранилище может быть вычищено после 7 дней неиспользования — риск тот же, что у заметок.
-- Плашка «Скасувати» и «+» на телефоне: панель истории закрывает плашку и «+» (как открытая панель заметок в `fabSync`); откат из панели закрывает панель, затем показывает плашку.
+- The edit history in fields (`HIST`) and the planned stack of structural operations (3.6) are in memory, precise to a keystroke, until a reload. Versions are on disk, a step of ≥ 5 min, 90 days. The layers do not overlap: a restore from the history is an ordinary operation that the toast (and later the stack) can undo; Ctrl+Z in a field still goes to `HIST`. A side benefit: 3.6 promises recovery «до перезавантаження», and R1 makes a deleted area available after a reload too.
+- Export and import: `format:1` does not change; with the «з історією версій» box (off by default) the file gets `history:{versions, blobs}`; import merges versions by `id` and bodies by `[note,h]`; an old import ignores the unknown field. An ordinary export does not grow.
+- Firestore (SYNC-PLAN): versions stay local on the device. The manifest refers to the same block `id`s as the `blocks` map with `u`; a proposal for §4 of SYNC-PLAN: write the copies that lose in a merge as a `conflict` version with `dev`, not as a «конфлікт з телефону» block on the canvas. Syncing history comes later: named versions and bodies in `notes/{id}/versions` and `blobs` (≤ 1 MB per document), the TTL the smallest among the devices (Joplin's lesson); with encryption, bodies are encrypted like notes.
+- Quota: `persistOnce()` is already called after the first save; the history budget is separate (3.3); on iOS without the PWA installed, storage may be wiped after 7 days without use: the same risk as for notes.
+- The «Скасувати» toast and «+» on a phone: the history panel hides the toast and «+» (like the open notes panel in `fabSync`); a restore from the panel closes the panel, then shows the toast.
 
-### 3.9. Тексты интерфейса (украинский, как в приложении)
+### 3.9. Interface texts (Ukrainian, as in the app)
 
-| Где | Текст |
+| Where | Text |
 |---|---|
-| Кнопка в шапке, `title` | «Історія версій (Ctrl+Alt+H)» |
-| Панель | «Історія версій», «Зараз», «Відновити цю версію», «Зафіксувати версію…», «Назва версії», «Зберегти», «Очистити історію нотатки», «Шукати у версіях…», «Поки версій немає» |
-| Вид версии | «автоматично», «перед правкою», «перед імпортом», «відновлено з 10:02», «конфлікт з телефону» (будущее), именованная — «● Назва» |
-| Сводка | «змінено N», «додано N», «видалено N», «переміщено N» с `pl(N,'блок','блоки','блоків')`; «назву змінено»; «без змін» у строки «Зараз», когда совпадает с новейшей версией |
-| Группы дат | «Сьогодні», «Вчора», далее `fmtDate` («28 вер.», с другим годом «28 вер. 2025 р.») |
-| Блок | «Повернути цей блок», подпись «завеликий для історії» |
-| Плашки | «Нотатку відновлено до версії 10:02», «Блок повернуто з версії 10:02», кнопка «Скасувати» как есть; подпись в панели «Попередній стан збережено як версію» |
-| Подтверждения | «Видалити всі версії нотатки «…»? Поточний текст залишиться.» |
-| Подвал панели заметок | «… · історія: 3,2 МБ»; флажок экспорта «з історією версій» |
+| The header button, `title` | «Історія версій (Ctrl+Alt+H)» |
+| Panel | «Історія версій», «Зараз», «Відновити цю версію», «Зафіксувати версію…», «Назва версії», «Зберегти», «Очистити історію нотатки», «Шукати у версіях…», «Поки версій немає» |
+| Version kind | «автоматично», «перед правкою», «перед імпортом», «відновлено з 10:02», «конфлікт з телефону» (future), a named one: «● Назва» |
+| Summary | «змінено N», «додано N», «видалено N», «переміщено N» with `pl(N,'блок','блоки','блоків')`; «назву змінено»; «без змін» on the «Зараз» row when it matches the newest version |
+| Date groups | «Сьогодні», «Вчора», then `fmtDate` («28 вер.», with another year «28 вер. 2025 р.») |
+| Block | «Повернути цей блок», the caption «завеликий для історії» |
+| Toasts | «Нотатку відновлено до версії 10:02», «Блок повернуто з версії 10:02», the «Скасувати» button as it is; the caption in the panel «Попередній стан збережено як версію» |
+| Confirmations | «Видалити всі версії нотатки «…»? Поточний текст залишиться.» |
+| Notes panel footer | «… · історія: 3,2 МБ»; the export box «з історією версій» |
 
-## 4. Порядок PR и объём
+## 4. PR order and scope
 
-| PR | Содержание | Тесты | Условие готовности | Оценка |
+| PR | Content | Tests | Ready when | Estimate |
 |---|---|---|---|---|
-| 1 | 3.1 база v2, `idb.run` со списком хранилищ, модуль `vers` (хэш с проверкой коллизий, манифест, `sig`, `sum`, `write`), 3.2 R1–R3 и R5-крючок, `SAVED`/`VLAST`/`VQ`, 3.3 прореживание, бюджет, GC, `delNote`, 3.4 отказы и `DEBUG.vers`; интерфейса нет | новый `appversions.mjs`: первая правка создаёт `base` с `t = updated` и `sig` ≠ текущего; 10 правок за минуту — одна версия; `clock` +5 мин и правка → `auto`; перенос блока мышью не увеличивает число тел; переименование блока кода не создаёт тела; импорт более новой копии пишет `import`; `delNote` чистит `versions` и `blobs`; 200 синтетических версий с датами → после `thin` ожидаемое число по лестнице, именованная цела; `estimate` = 1 МБ → старые `auto` удалены до 90 %, новейшая каждой заметки цела; `fail=true` → «Збережено» и `unsaved` как обычно, `errors` растёт; `VersionError` старой вкладки не воспроизводится в Playwright, проверяется чтением кода; регрессия `appstore`, `appsave` | Все сценарии проходят; на живой странице после обновления базы заметки на месте, `versions`/`blobs` появляются после правки, экспорт без изменений | 6–8 ч |
-| 2 | 3.5 кнопка, панель, список, показ версии, подсветка, ↑/↓, пробел, ползунок, нижний лист на телефоне; 3.6 откат заметки с плашкой; 3.8 закрытие плашки и «+» | новый `appversions2.mjs`: после трёх версий (через `force`) панель показывает «Зараз» и три строки со сводками; выбор строки рисует блоки версии, набор с клавиатуры и клики по листу ничего не меняют (`notes` в IndexedDB и `versions.count` те же); классы `.v-ch`/`.v-add` на нужных блоках; ↑/↓ меняют выбор; пробел показывает «Зараз»; «Відновити цю версію» → текст заменён, есть `restore` с `from`, предыдущие версии целы, «Скасувати» возвращает; 390×844 с `hover:none`: нижний лист, ползунок через CDP-касания; 320×568 и низкое окно; регрессия `appundo`, `appkb` | Панель открывается на компьютере и телефоне, версия читается с подсветкой, откат обратим; поведение на компьютере вне панели не изменилось | 10–14 ч кода и тестов, 2 ч на устройствах |
-| 3 | 3.6 откат блока; 3.7 «Зафіксувати версію…», «Очистити історію нотатки», размер истории в подвале; 3.5 поиск по версиям; 3.8 экспорт с историей по флажку; `.ghost-blk`, если не вошли в PR 2 | новый `appversions3.mjs`: откат блока меняет только его тело, соседи и `row`/`fx` на месте, есть `restore` с `sum.ch=1`, «Скасувати» возвращает; удалённый блок возвращается в область; именованная версия переживает `thin` и бюджет; «Очистити історію» удаляет версии и тела только этой заметки; поиск оставляет нужные версии и помечает блок; экспорт без флажка без `history`, с флажком — импорт в чистый профиль восстанавливает список | Сценарий владельца с паролем проходит руками по разделу 6 на компьютере и телефоне | 6–8 ч, 1 ч на устройствах |
+| 1 | 3.1 database v2, `idb.run` with a list of stores, the `vers` module (a hash with collision checks, the manifest, `sig`, `sum`, `write`), 3.2 R1–R3 and the R5 hook, `SAVED`/`VLAST`/`VQ`, 3.3 thinning, budget, GC, `delNote`, 3.4 failures and `DEBUG.vers`; no interface | a new `appversions.mjs`: the first edit creates `base` with `t = updated` and a `sig` ≠ the current one; 10 edits in a minute give one version; `clock` +5 min and an edit → `auto`; moving a block with the mouse does not increase the number of bodies; renaming a code block creates no body; importing a newer copy writes `import`; `delNote` cleans `versions` and `blobs`; 200 synthetic versions with dates → after `thin` the number expected by the ladder, the named one intact; `estimate` = 1 MB → old `auto` versions deleted down to 90 %, the newest of each note intact; `fail=true` → «Збережено» and `unsaved` as usual, `errors` grows; the `VersionError` of an old tab cannot be reproduced in Playwright and is checked by reading the code; regression of `appstore`, `appsave` | All scenarios pass; on the live page, after the database upgrade the notes are in place, `versions`/`blobs` appear after an edit, the export is unchanged | 6–8 h |
+| 2 | 3.5 the button, the panel, the list, showing a version, highlighting, ↑/↓, Space, the slider, the bottom sheet on a phone; 3.6 restoring a note with a toast; 3.8 hiding the toast and «+» | a new `appversions2.mjs`: after three versions (through `force`) the panel shows «Зараз» and three rows with summaries; choosing a row draws the version's blocks, and typing on the keyboard and clicks on the sheet change nothing (`notes` in IndexedDB and `versions.count` are the same); the `.v-ch`/`.v-add` classes are on the right blocks; ↑/↓ change the choice; Space shows «Зараз»; «Відновити цю версію» → the text is replaced, there is a `restore` with `from`, the earlier versions are intact, «Скасувати» brings it back; 390×844 with `hover:none`: the bottom sheet, the slider through CDP touches; 320×568 and a low window; regression of `appundo`, `appkb` | The panel opens on a computer and a phone, a version reads with highlighting, a restore can be undone; behavior on a computer outside the panel did not change | 10–14 h of code and tests, 2 h on devices |
+| 3 | 3.6 restoring a block; 3.7 «Зафіксувати версію…», «Очистити історію нотатки», the history size in the footer; 3.5 search in versions; 3.8 export with history by a box; `.ghost-blk` if it did not get into PR 2 | a new `appversions3.mjs`: restoring a block changes only its body, the neighbours and `row`/`fx` stay, there is a `restore` with `sum.ch=1`, «Скасувати» brings it back; a deleted block returns into its area; a named version survives `thin` and the budget; «Очистити історію» deletes the versions and bodies of this note only; search keeps the right versions and marks the block; an export without the box has no `history`, and with the box an import into a clean profile restores the list | The owner's password scenario passes by hand per section 6 on a computer and a phone | 6–8 h, 1 h on devices |
 
-Каждый PR самостоятельно сливаем, проходит все сценарии, не меняет поведение на компьютере вне панели; публикация после каждого: PR в `main`, GitHub Pages, проверка живой страницы `curl` с маркером версии. В описании PR записывается, что прошло, что не прошло и что не запускалось, с версиями устройств и браузеров.
+Each PR can be merged on its own, passes all scenarios and does not change behavior on a computer outside the panel; publishing after each: a PR into `main`, GitHub Pages, a check of the live page with `curl` for a version marker. The PR description records what passed, what failed and what was not run, with the versions of the devices and browsers.
 
-## 5. Тестовая матрица и приёмка
+## 5. Test matrix and acceptance
 
-Автоматически (Playwright, Chromium): компьютер 1280×900; телефон 390×844 и 320×568 с `hover:none`, `pointer:coarse`, касания через CDP; подмена времени через `DEBUG.vers.clock`, квоты через `DEBUG.vers.estimate`, отказа через `DEBUG.vers.fail`; чтение `versions` и `blobs` напрямую из IndexedDB. Каждый сценарий — отдельный файл `appversions*.mjs`, сброс состояния `localStorage.clear()` + `indexedDB.deleteDatabase('sheet')` после паузы ≥400 мс, строки `✓`/`✗`, код выхода 1 при ошибке, снимки в `<tmpdir>/sheet-tests/`; CI запускает их вместе с остальными.
+Automatically (Playwright, Chromium): a computer at 1280×900; a phone at 390×844 and 320×568 with `hover:none`, `pointer:coarse`, touches through CDP; the time substituted through `DEBUG.vers.clock`, the quota through `DEBUG.vers.estimate`, a failure through `DEBUG.vers.fail`; `versions` and `blobs` read directly from IndexedDB. Each scenario is a separate file `appversions*.mjs`, with a state reset by `localStorage.clear()` + `indexedDB.deleteDatabase('sheet')` after a pause of ≥400 ms, `✓`/`✗` lines, exit code 1 on an error, screenshots in `<tmpdir>/sheet-tests/`; CI runs them together with the rest.
 
-Соглашения для сценариев `appversions*.mjs`:
+Conventions for the `appversions*.mjs` scenarios:
 
-- Помощник `idbAll(store)` по образцу `idbAll` из `appundo.mjs`, но с именем хранилища; `vers(noteId)` — версии заметки по `note_t`, отсортированные по `t`; `bodies(noteId)` — тела по диапазону ключа.
-- Версия пишется после автосохранения, поэтому перед чтением `versions` пауза ≥500 мс после последней правки (300 мс сброс + транзакция); для R1 читать сразу после первого нажатия нельзя — ждать той же паузы.
-- Время сдвигается только через `sheetDebug.vers.clock` (мс), не через `page.clock`: `Date.now()` в `updated` и в списке заметок должен оставаться настоящим.
-- Версии «из прошлого» для прореживания создаются через `sheetDebug.vers.force('auto')` при разных `clock` (отрицательные значения — в прошлое), затем `sheetDebug.vers.thin(id)`; ожидаемое число версий считается в самом сценарии по лестнице 3.3 из тех же дат.
-- Касания на телефоне — через CDP (`Input.dispatchTouchEvent`), как в `apptouch.mjs`; ползунок двигается `page.keyboard` (←/→) после фокуса, чтобы не зависеть от координат.
-- Снимки: `appversions2-panel.png`, `appversions2-phone.png` в `<tmpdir>/sheet-tests/`, как у остальных.
+- A helper `idbAll(store)` modelled on `idbAll` from `appundo.mjs`, but with a store name; `vers(noteId)`: the note's versions by `note_t`, sorted by `t`; `bodies(noteId)`: the bodies by key range.
+- A version is written after autosave, so before reading `versions` wait ≥500 ms after the last edit (the 300 ms flush + the transaction); for R1, do not read right after the first keystroke: wait the same pause.
+- Time is shifted only through `sheetDebug.vers.clock` (ms), not through `page.clock`: `Date.now()` in `updated` and in the note list must stay real.
+- Versions "from the past" for thinning are created through `sheetDebug.vers.force('auto')` at different `clock` values (negative values go into the past), then `sheetDebug.vers.thin(id)`; the expected number of versions is computed in the scenario itself by the ladder of 3.3 from the same dates.
+- Touches on the phone go through CDP (`Input.dispatchTouchEvent`), as in `apptouch.mjs`; the slider is moved with `page.keyboard` (←/→) after focusing it, so as not to depend on coordinates.
+- Screenshots: `appversions2-panel.png`, `appversions2-phone.png` in `<tmpdir>/sheet-tests/`, like the others.
 
-На устройствах, руками, с записью версий в описании PR: Android Chrome, iPhone Safari, установленное PWA на обоих: нижний лист и ползунок пальцем, откат блока по касанию, Back (после 3.8), поворот, 200 % текста, открытие панели у заметки с 300 версиями (ожидание: до 300 мс), TalkBack и VoiceOver по списку и кнопкам.
+On devices, by hand, with the versions recorded in the PR description: Android Chrome, iPhone Safari, the installed PWA on both: the bottom sheet and the slider with a finger, a block restore by touch, Back (after 3.8), rotation, 200 % text, opening the panel for a note with 300 versions (expected: up to 300 ms), TalkBack and VoiceOver over the list and the buttons.
 
-Приёмка PR 1: после обновления живой страницы заметки на месте; правка создаёт версию `base` с временем прошлого сохранения; серия правок за минуту не плодит версий; через 5 минут правки — `auto`; `?debug=1` с `DEBUG.vers.fail=true` не меняет статус «Збережено»; экспорт без изменений; `delNote` не оставляет тел.
+Acceptance of PR 1: after the live page updates, the notes are in place; an edit creates a `base` version with the time of the previous save; a series of edits within a minute does not multiply versions; after 5 minutes an edit gives `auto`; `?debug=1` with `DEBUG.vers.fail=true` does not change the «Збережено» status; the export is unchanged; `delNote` leaves no bodies.
 
-Приёмка PR 2: сценарий с паролем из раздела 6 проходит откатом всей заметки; в режиме истории ни набор, ни касания, ни «+» ничего не меняют; отмена отката возвращает всё, включая название; на 320 px панель и кнопки помещаются, плашка видна.
+Acceptance of PR 2: the password scenario of section 6 passes with a restore of the whole note; in history mode neither typing, nor touches, nor «+» change anything; undoing the restore brings everything back, the title included; at 320 px the panel and the buttons fit, and the toast is visible.
 
-Приёмка PR 3: сценарий с паролем проходит откатом одного блока, соседние блоки и их правки целы; именованная версия не исчезает после прореживания и при малом бюджете; «Очистити історію» чистит только свою заметку; экспорт с историей импортируется в чистый профиль.
+Acceptance of PR 3: the password scenario passes with a restore of one block, and the neighbouring blocks and their edits are intact; a named version does not disappear after thinning or with a small budget; «Очистити історію» clears only its own note; an export with history imports into a clean profile.
 
-## 6. Как ревьюеру проверить руками
+## 6. How the reviewer checks by hand
 
-1. **Пароль (после PR 2, откат заметки).** Создать заметку «Доступи» с тремя блоками, в одном — «пароль: Qw3rty!», выйти из блока, подождать 1 с (запись). Перезагрузить страницу (новая сессия). Поставить курсор в блок с паролем, стереть пароль и набрать «ууу», выйти из блока, подождать 1 с. Открыть «Історія» (кнопка в шапке или Ctrl+Alt+H). Ожидание: строки «Зараз · змінено 1 блок» и «<время прошлого сохранения> · перед правкою». Выбрать вторую: на листе старый пароль, блок подсвечен слева, лист не редактируется, «+» скрыт. Нажать «Відновити цю версію»: заметка с верным паролем, плашка «Нотатку відновлено до версії … · Скасувати», в списке появилась строка «відновлено з …», испорченная версия тоже осталась в списке. Нажать «Скасувати»: снова «ууу». Повторить откат — пароль вернулся.
-2. **Пароль (после PR 3, откат блока).** Тот же путь, но перед откатом добавить в другой блок слово «нове» (R1 запишет ещё одну версию). В истории выбрать версию до порчи пароля, навести на подсвеченный блок (на телефоне коснуться) → «Повернути цей блок». Ожидание: пароль прежний, слово «нове» в соседнем блоке цело, плашка «Блок повернуто з версії …».
-3. **Интервал (после PR 1).** В одной заметке набирать с паузами 10 раз в течение минуты, затем в консоли `sheetDebug.vers.list(<id>)`. Ожидание: одна версия `base`. Выполнить `sheetDebug.vers.clock = 5*60*1000`, набрать ещё — появилась `auto`.
-4. **Бюджет (после PR 1).** `sheetDebug.vers.estimate = {usage:0, quota: 20*1024*1024}` (бюджет 1 МБ), вставить в блок кода 200 КБ текста, сделать шесть версий через `sheetDebug.vers.force('auto')` с изменениями, вызвать `sheetDebug.vers.sweep()`. Ожидание: старые `auto` удалены, новейшая на месте, именованная (`force('manual','Реліз')`) на месте, размер в подвале уменьшился.
-5. **Отказ (после PR 1).** `?debug=1`, `sheetDebug.vers.fail = true`, набрать текст. Ожидание: «Збережено» как обычно, в панели нет ⚠, `sheetDebug.vers.errors` растёт; выключить — следующая правка записала версию.
-6. **Телефон (после PR 2).** Открыть историю: нижний лист, ползунок; крутить ползунок — лист над панелью перерисовывается; Back (после 3.8) или «✕» закрывает; при открытой панели «+» и плашка не торчат из-под неё.
-7. **Прежнее поведение.** Повторить `appundo`-сценарий руками: удалить область с блоками, «Скасувати» — вернулась; Ctrl+Z в тексте работает как раньше; экспорт по-прежнему без поля `history`.
+1. **Password (after PR 2, restoring the note).** Create a note «Доступи» with three blocks, one of them «пароль: Qw3rty!», leave the block, wait 1 s (the write). Reload the page (a new session). Put the caret into the block with the password, erase the password and type «ууу», leave the block, wait 1 s. Open «Історія» (the button in the header or Ctrl+Alt+H). Expected: the rows «Зараз · змінено 1 блок» and «<time of the previous save> · перед правкою». Choose the second: the old password is on the sheet, the block is highlighted on the left, the sheet is not editable, «+» is hidden. Press «Відновити цю версію»: the note with the right password, the toast «Нотатку відновлено до версії … · Скасувати», a row «відновлено з …» appears in the list, and the spoiled version also stays in the list. Press «Скасувати»: «ууу» again. Restore again: the password is back.
+2. **Password (after PR 3, restoring a block).** The same path, but before the restore add the word «нове» to another block (R1 writes one more version). In the history choose the version from before the password was spoiled, hover over the highlighted block (on a phone, tap it) → «Повернути цей блок». Expected: the old password, the word «нове» in the neighbouring block is intact, the toast «Блок повернуто з версії …».
+3. **Interval (after PR 1).** In one note, type with pauses 10 times within a minute, then run `sheetDebug.vers.list(<id>)` in the console. Expected: one `base` version. Run `sheetDebug.vers.clock = 5*60*1000` and type more: an `auto` version appears.
+4. **Budget (after PR 1).** `sheetDebug.vers.estimate = {usage:0, quota: 20*1024*1024}` (a 1 MB budget), paste 200 KB of text into a code block, make six versions with changes through `sheetDebug.vers.force('auto')`, call `sheetDebug.vers.sweep()`. Expected: the old `auto` versions are deleted, the newest is in place, the named one (`force('manual','Реліз')`) is in place, and the size in the footer went down.
+5. **Failure (after PR 1).** `?debug=1`, `sheetDebug.vers.fail = true`, type some text. Expected: «Збережено» as usual, no ⚠ in the panel, `sheetDebug.vers.errors` grows; turn it off: the next edit writes a version.
+6. **Phone (after PR 2).** Open the history: the bottom sheet, the slider; move the slider: the sheet above the panel redraws; Back (after 3.8) or «✕» closes it; with the panel open, «+» and the toast do not stick out from under it.
+7. **The old behavior.** Repeat the `appundo` scenario by hand: delete an area with blocks, «Скасувати»: it is back; Ctrl+Z in text works as before; the export still has no `history` field.
 
-## 7. Вне объёма
+## 7. Out of scope
 
-- Синхронизация истории между устройствами и корзина удалённых заметок (отдельные задачи после шага 3 SYNC-PLAN).
-- Diff внутри блока (подсветка слов) и side-by-side сравнение; дельты и сжатие тел (3.1, «не сейчас»).
-- Совместное редактирование, история по нескольким заметкам сразу, «история этого блока» как отдельный экран (дёшево сделать фильтром списка, но не в этих PR).
-- Изменение формата экспорта `format:1`; история в обычном экспорте.
+- Syncing the history between devices, and a trash for deleted notes (separate tasks after step 3 of SYNC-PLAN).
+- A diff inside a block (highlighting words) and a side-by-side comparison; deltas and compression of bodies (3.1, "not now").
+- Co-editing, history over several notes at once, "the history of this block" as a separate screen (cheap to do as a filter of the list, but not in these PRs).
+- A change of the export format `format:1`; history in an ordinary export.
 
-## 8. Открытые вопросы для владельца и предлагаемые решения по умолчанию
+## 8. Open questions for the owner and proposed defaults
 
-1. Интервал R3: предлагается 5 мин (Obsidian); альтернативы 2 мин (больше версий, больше места) и 10 мин (Joplin). Одна константа `V_GAP`.
-2. Хранение: 24 ч всё → 7 дней по одной в час → 90 дней по одной в сутки → удаление; именованные навсегда. Альтернатива — не удалять суточные версии вовсе (при ~2,5 КБ на версию это ≤ 1 МБ в год на активную заметку).
-3. Бюджет: `min(20 МБ, 5 % квоты)` и 300 версий на заметку; при превышении удаляются самые старые без имени. Показывать размер истории в подвале — да.
-4. Именованные версии: предлагается PR 3 (запись дешёвая, интерфейс требует поля в панели); если нужны раньше — поле в PR 2.
-5. Где «Історія»: кнопка в шапке на всех ширинах; на 320 px проверить, что `.tools` не переполняется (сейчас на телефоне там пять кнопок по 44 px); если тесно — пункт в меню «⋯» шапки, которое планирует MOBILE-PLAN 3.6, а в шапке остаётся только на компьютере.
-6. «Очистити історію»: только для текущей заметки (в панели). Общая очистка в подвале панели заметок — по желанию, одной кнопкой «Очистити всю історію».
-7. Версии удалённой заметки удаляются вместе с ней (как решено в MOBILE-PLAN 8.2: корзины нет); альтернатива — хранить 7 дней как дешёвую корзину.
-8. Плашка после отката без таймера (как в 3.6) или 15 с — до реализации стека 3.6 предлагается 15 с.
+1. The R3 interval: 5 min is proposed (Obsidian); the alternatives are 2 min (more versions, more space) and 10 min (Joplin). One constant, `V_GAP`.
+2. Retention: 24 h everything → 7 days one per hour → 90 days one per day → deletion; named ones forever. The alternative: never delete the daily versions (at ~2.5 KB per version this is ≤ 1 MB a year per active note).
+3. Budget: `min(20 MB, 5 % of the quota)` and 300 versions per note; when it is exceeded, the oldest without a name are deleted. Show the history size in the footer: yes.
+4. Named versions: PR 3 is proposed (the write is cheap, the interface needs a field in the panel); if they are needed earlier, a field in PR 2.
+5. Where «Історія» goes: a button in the header at every width; at 320 px check that `.tools` does not overflow (a phone now has five 44 px buttons there); if it is tight, an item in the header «⋯» menu that MOBILE-PLAN 3.6 plans, and the header keeps the button only on a computer.
+6. «Очистити історію»: only for the current note (in the panel). A general clearing in the notes panel footer is optional, as one button «Очистити всю історію».
+7. The versions of a deleted note are deleted with it (as decided in MOBILE-PLAN 8.2: no trash); the alternative is to keep them for 7 days as a cheap trash.
+8. The toast after a restore: no timer (as in 3.6) or 15 s; until the 3.6 stack is implemented, 15 s is proposed.
 
-## 9. Чек-лист приёмки
+## 9. Acceptance checklist
 
-- [ ] 1: база обновлена до версии 2 без потери заметок; `versions` и `blobs` создаются, старые тела не дублируются при переносе и переименовании.
-- [ ] 1: R1 записывает состояние до первой правки с временем прошлого сохранения; R3 не чаще раза в 5 мин; импорт пишет `import`; `delNote` чистит всё своё.
-- [ ] 1: лестница прореживания, лимит на заметку, бюджет и GC подтверждены сценарием и руками; именованные и новейшие целы.
-- [ ] 1: отказ записи версии не влияет на статус сохранения, `unsaved` и `beforeunload`; `DEBUG.vers` работает.
-- [ ] 2: панель на компьютере и телефоне; список со сводками; версия на полотне только для чтения, подсветка на трёх темах.
-- [ ] 2: ↑/↓, пробел, Esc, ползунок на дотике; плашка и «+» не торчат.
-- [ ] 2: откат заметки обратим плашкой и сам становится версией; сценарий с паролем проходит.
-- [ ] 3: откат блока не трогает соседей; именованные версии; «Очистити історію»; поиск; экспорт с историей по флажку.
-- [ ] Каждый PR: Android Chrome и iPhone Safari, установленные PWA; версии записаны.
-- [ ] Каждый PR: все сценарии регрессии и новые проходят в CI; записано, что прошло, что не прошло и что не запускалось.
-- [ ] Каждый PR: экспорт без флажка и поведение на компьютере вне панели не изменились; документ и фактический контракт совпадают.
+- [ ] 1: the database is upgraded to version 2 without losing notes; `versions` and `blobs` are created; old bodies are not duplicated on moving and renaming.
+- [ ] 1: R1 writes the state before the first edit with the time of the previous save; R3 no more often than once in 5 min; import writes `import`; `delNote` cleans up everything of its own.
+- [ ] 1: the thinning ladder, the per-note limit, the budget and GC are confirmed by the scenario and by hand; named and newest versions are intact.
+- [ ] 1: a failed version write does not affect the save status, `unsaved` or `beforeunload`; `DEBUG.vers` works.
+- [ ] 2: the panel on a computer and a phone; the list with summaries; the version on the canvas, read-only, with highlighting on the three themes.
+- [ ] 2: ↑/↓, Space, Esc, the slider on touch; the toast and «+» do not stick out.
+- [ ] 2: restoring a note can be undone with the toast and becomes a version itself; the password scenario passes.
+- [ ] 3: restoring a block does not touch the neighbours; named versions; «Очистити історію»; search; export with history by a box.
+- [ ] Each PR: Android Chrome and iPhone Safari, the installed PWAs; versions recorded.
+- [ ] Each PR: all regression scenarios and the new ones pass in CI; what passed, what failed and what was not run is recorded.
+- [ ] Each PR: the export without the box and the behavior on a computer outside the panel did not change; the document and the actual contract match.
