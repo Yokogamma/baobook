@@ -99,7 +99,7 @@ ok('10 the tombstone with rev 1 below seen but a newer srv: the note is deleted,
 
 /* ── 11. a pass over its budget goes on the next day and announces nothing until the end ── */
 for(let i=0;i<20;i++) cloudWrite(cloud,'s'+String(i).padStart(2,'0'),{title:'Маса '+i, blocks:[{id:'b',row:1,fx:0,text:'м '+i}]}); await quiet(A,2);
-lie='G'; const G=await newDevice(br, cloud, SITE, 'G', {ctx:CTX, connect:{pace:PACE, budgets:{reads:100, writes:1000}}}); await quiet(G,8);
+lie='G'; const G=await newDevice(br, cloud, SITE, 'G', {ctx:CTX, connect:{pace:{...PACE, totalsEvery:60000, totalsAfterMatch:60000}, budgets:{reads:120, writes:1000}}}); await quiet(G,8);   // the listener's deliveries count as reads too (28 documents twice: the page and the snapshot); matched totals rest for a minute so the budget of the day goes to the pass
 const l11=await since(G,0,'^(scan-start|scan-done|vanished|limit)$'), sc11=(await syncRecs(G.pg,'scan:')).find(r=>r.k==='scan:notes'), total=cloud.all('notes').length;
 ok('11 the pass started and ran out of budget ('+(sc11&&sc11.found)+' of '+total+' read): not done, nothing announced, status «checking»', l11.some(e=>e.t==='scan-start') && !l11.some(e=>e.t==='scan-done') && !l11.some(e=>e.t==='vanished') && !l11.some(e=>e.t==='limit') && (await status(G)).code==='checking' && !!sc11 && sc11.active && sc11.found>0 && sc11.found<total);
 await G.pg.evaluate(()=>{ sheetDebug.sync.clock=86400e3; sheetDebug.sync.wake(); }); await quiet(G,6);
