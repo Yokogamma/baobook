@@ -524,6 +524,6 @@ The `access/{email}` document made on 2026-10-16 is not used any more; it can st
 
 ## 8. Not in this stage
 
-Encryption; sync requests and mailings, and with them access by a custom claim, Blaze with a budget alert, a way to delete an account's cloud data and a privacy note (only the email and uid are used, not the name or photo); Apple sign-in; sharing notes; block-level updates under the caret; a list of the account's devices; App Check.
+Encryption; sync requests and mailings, and with them access by a custom claim, Blaze with a budget alert, a way to delete an account's cloud data and a privacy note (only the email and uid are used, not the name or photo); Apple sign-in; sharing notes; block-level updates under the caret; a list of the account's devices; App Check. Automatic backups of the notes to the owner's Google Drive are planned as a separate stage after PR 4, in [docs/BACKUP-PLAN.md](BACKUP-PLAN.md).
 
 After the load measurement in PR 3, only if it shows the need: not storing `text` of formatted blocks in the cloud (rebuilt from `html`, about −20 % for an average note); compressing `blocks` of big notes (3–4 times smaller, but the rules and the console no longer see the blocks); Realtime Database instead of Firestore if reads stay the limit; finding a gap by halving `srv` ranges with aggregations instead of a full pass (may need a composite index `srv` + `rev`).
