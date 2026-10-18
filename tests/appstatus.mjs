@@ -64,5 +64,14 @@ await realWrites(); const saved3=await until(()=>stored('статус1234'));
 ok('3 старіший запис завершився, поки новіша правка чекала ('+(r3&&r3.writes)+' запис почато): без ✓ ('+(r3&&r3.cls)+'), «●» до нового запису ('+mid3+', «'+dot3+'»), тоді «'+ok3+'» ('+end3+'), у сховищі «статус1234» ('+saved3+')',
   held3 && held3b && !!r3 && r3.writes===1 && /pend/.test(r3.cls) && !/\bok\b/.test(r3.cls) && /pend/.test(mid3) && dot3==='●' && /\bok\b/.test(end3) && ok3==='Збережено' && saved3);
 
+// 4 an edit made with the history panel open on «Зараз», then a version picked before the autosave (in the same task): the edit is written
+await settled(); await pg.click('#histBtn'); await until(()=>pg.evaluate(()=>[...document.querySelectorAll('#histList .hv')].some(d=>d.dataset.id && d.dataset.id!=='now')));
+const r4=await pg.evaluate(()=>{ const t=[...document.querySelectorAll('#sheet .blk .txt')].find(e=>e.textContent.includes('статус1234')); if(!t) return null;
+  t.focus(); const sel=getSelection(); sel.selectAllChildren(t); sel.collapseToEnd(); document.execCommand('insertText',false,'-після');
+  const v=[...document.querySelectorAll('#histList .hv')].find(d=>d.dataset.id && d.dataset.id!=='now'); v.click(); return true; });
+await pg.keyboard.press('Escape'); await until(async()=>await pg.locator('#hist').isHidden());
+const shown4=await has('статус1234-після'), saved4=await until(()=>stored('статус1234-після'));
+ok('4 правка при відкритій історії, потім вибір версії до автозбереження: після повернення текст на місці ('+shown4+') і записаний ('+saved4+')', !!r4 && shown4 && saved4);
+
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

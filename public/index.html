@@ -2341,7 +2341,8 @@ function pickHist(id, delay=0){ if(!histOrder().includes(id)) return; H.sel=id; 
   clearTimeout(H.t); const go=()=>{ if(id==='now') showNow(); else showVersion(H.list.find(v=>v.id===id)); syncHist(); }; if(delay) H.t=setTimeout(go,delay); else go(); }
 const cardOf=b=>b.el.querySelector(':scope>.tcard,:scope>.cblk,:scope>.ablk')||b.el;
 function liveGeo(){ const s=sheet.getBoundingClientRect(), m=new Map(); for(const b of blocks){ const r=cardOf(b).getBoundingClientRect(); if(r.width) m.set(b.id,{x:r.left-s.left, y:r.top-s.top, w:r.width, h:r.height}); } return m; }
-function showVersion(v){ if(!v || !cur) return; const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
+function showVersion(v){ if(!v || !cur) return; if(!H.view) flushSave();   // an edit made with «Зараз» open is written first: flushSave skips while a version is shown, and showNow redraws the note from storage
+  const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
   if(!H.view) H.geo=liveGeo();   // where the live blocks are, for the outlines of the blocks this version has not
   H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
   const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
