@@ -30,8 +30,11 @@ function canon(doc){ if(!isObj(doc)) return canonValue(doc); const o={};
   return o; }
 const cjson=doc=>JSON.stringify(canon(doc));
 const hashDoc=doc=>hashOf(cjson(doc));
-function noUpdated(doc){ if(!isObj(doc)) return doc; const o={...doc}; delete o.updated; return o; }
-const sameDoc=(a,b)=>cjson(noUpdated(a))===cjson(noUpdated(b));   // equality «without updated» (§4.4 step 4)
+// the body of a document: what the device stores and compares; the service fields of §4.2 (and a tombstone's) are not part of it
+const SERVICE=['v','rev','op','srv','dev','dn','rcpt','tsrv','purged','auto'];
+function noteBody(doc){ if(!isObj(doc)) return doc; const o={}; for(const k of Object.keys(doc)){ if(!SERVICE.includes(k) && doc[k]!==undefined) o[k]=doc[k]; } return o; }
+function noUpdated(doc){ if(!isObj(doc)) return doc; const o=noteBody(doc); delete o.updated; return o; }
+const sameDoc=(a,b)=>cjson(noUpdated(a))===cjson(noUpdated(b));   // equality «without updated» (§4.4 step 4), by the body only
 const docBytes=doc=>new TextEncoder().encode(cjson(doc)).length;   // bytes, not code units: Cyrillic is two bytes a letter
 
 /* ── server times: {s, ns} like a Firestore Timestamp (§4.6 rule 1) ── */
@@ -85,6 +88,76 @@ function normVersion(raw, deps){ if(!isObj(raw)) return {bad:'shape'};
   if(!isStr(raw.title,LIM.title)) return {bad:'title'}; const blocks=normBlocks(raw.blocks, deps, {inline:true}); if(blocks===false) return {bad:'blocks'};
   return {version:{note:raw.note, t:raw.t, name:raw.name, title:raw.title, blocks}}; }
 
+/* ── merging (§4.7) ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   Every merge is local. merge3(base, L, R) is the three-way merge against the confirmed cloud state; merge0(L, R) the first merge of
+   two copies with the same id and no common base; moveInto(revived, moved) the move of a late copy into the revived note. All three
+   return {note, copies, lost, trace}: `copies` are the sides that lost somewhere (kept in full as conflict copies), `trace` names, for
+   every block whose content from L or R did not reach the result, why: own | causal | deleted | key (for the simulation's oracle). */
+const PLACE=['row','fx','parent','col','cw','ch','collapsed'];   // the «place» group; everything else but id is «content»
+const groupOf=(b,place)=>{ const o={}; for(const k of Object.keys(b)){ if(k==='id') continue; if(PLACE.includes(k)===place) o[k]=b[k]; } return o; };
+const gjson=(b,place)=>JSON.stringify(canonBlock(groupOf(b,place)));
+const vjson=v=>v===undefined? 'u' : JSON.stringify(canonValue(v));
+// the key of a side in a conflict: (updated, dev, hash of the canonical form); a side without dev (a local record) is this device
+const keyOf=(doc, dev)=>[+doc.updated||0, doc.dev||dev||'', hashDoc(noUpdated(doc))];
+const cmpKey=(a,b)=>{ for(let i=0;i<3;i++){ if(a[i]<b[i]) return -1; if(a[i]>b[i]) return 1; } return 0; };
+const NOTE_FIELDS=['title','deleted','archived','revived'];
+function fixParents(blocks){ const areas=new Set(blocks.filter(b=>b.kind==='area').map(b=>b.id)); return blocks.map(b=>{ if(!b.parent || areas.has(b.parent)) return b; const c={...b}; delete c.parent; delete c.col; c.fx=0; return c; }); }
+const byId=blocks=>new Map((blocks||[]).map(b=>[b.id,b]));
+const contentChanged=(a,b)=>JSON.stringify(canon({title:a.title,blocks:a.blocks}))!==JSON.stringify(canon({title:b.title,blocks:b.blocks}));
+function finishMerge(res, L, R, ctx, lost, trace){
+  res.blocks=fixParents(res.blocks);
+  // trash against an edit (§4.7): the note stays in the trash and its period starts again from this merge
+  if(res.deleted && ctx && ctx.t && (ctx.base? (contentChanged(L,ctx.base) || contentChanged(R,ctx.base)) : contentChanged(L,R))) res.deleted=ctx.t;
+  // a result equal to the remote by content takes it as it is, `updated` included, so a merge that only takes the other side sends nothing
+  const same=sameDoc(res,R), note=same? noteBody(R) : {...res, updated: ctx && ctx.t? ctx.t : Math.max(+L.updated||0, +R.updated||0)};
+  const copies=[]; if(lost.local) copies.push({side:'L', note:noteBody(L)}); if(lost.remote) copies.push({side:'R', note:noteBody(R)});
+  return {note, copies, lost, trace, same}; }
+// three-way: base is the confirmed cloud state, L the local record, R the cloud document that moved ahead
+function merge3(base, L, R, ctx={}){ const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, lost={local:false, remote:false}, trace=[]; const res={};
+  for(const f of NOTE_FIELDS){ const bv=vjson(base[f]), lv=vjson(L[f]), rv=vjson(R[f]);
+    const v = (lv===bv && rv===bv)? L[f] : lv===bv? R[f] : rv===bv? L[f] : lv===rv? L[f] : (lost[lWins? 'remote' : 'local']=true, (lWins? L : R)[f]);
+    if(v!==undefined) res[f]=v; }
+  res.created=Math.min(+L.created||Infinity, +R.created||Infinity, +base.created||Infinity); if(!Number.isFinite(res.created)) res.created=+L.created||+R.created||0;
+  const B=byId(base.blocks), Lm=byId(L.blocks), Rm=byId(R.blocks), ids=[...Lm.keys(), ...[...Rm.keys()].filter(id=>!Lm.has(id))], out=[];
+  for(const id of ids){ const b=B.get(id), l=Lm.get(id), r=Rm.get(id);
+    if(!b){ if(l && r){ if(blockJson(l)===blockJson(r)){ out.push(l); continue; } const m={id}; for(const place of [true,false]){ const gl=gjson(l,place), gr=gjson(r,place); const w=gl===gr? l : lWins? l : r; if(gl!==gr){ lost[lWins? 'remote' : 'local']=true; if(!place) trace.push({id, side:lWins? 'R' : 'L', cause:'key'}); } Object.assign(m, groupOf(w,place)); } out.push(m); } else out.push(l||r); continue; }
+    if(!l && !r) continue;
+    if(!l){ if(blockJson(b)===blockJson(r)){ trace.push({id, side:'R', cause:'causal'}); continue; } out.push(r); continue; }   // deleted here, untouched there → gone; changed there → stays
+    if(!r){ if(blockJson(b)===blockJson(l)){ trace.push({id, side:'L', cause:'causal'}); continue; } out.push(l); continue; }
+    const m={id};
+    for(const place of [true,false]){ const gb=gjson(b,place), gl=gjson(l,place), gr=gjson(r,place); let w;
+      if(gl===gb && gr===gb) w=l; else if(gl===gb){ w=r; if(!place && gl!==gr) trace.push({id, side:'L', cause:'causal'}); } else if(gr===gb){ w=l; if(!place && gl!==gr) trace.push({id, side:'R', cause:'causal'}); } else if(gl===gr) w=l;
+      else { w=lWins? l : r; lost[lWins? 'remote' : 'local']=true; if(!place) trace.push({id, side:lWins? 'R' : 'L', cause:'key'}); }
+      Object.assign(m, groupOf(w,place)); }
+    out.push(m); }
+  res.blocks=out; return finishMerge(res, L, R, {...ctx, base}, lost, trace); }
+// first merge of two copies with the same id and no base: equal → the remote; otherwise a union by id, shared ids from the side with the larger key, deleted wins
+function merge0(L, R, ctx={}){ if(sameDoc(L,R)) return {note:noteBody(R), copies:[], lost:{local:false,remote:false}, trace:[], same:true};
+  const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, W=lWins? L : R, trace=[]; const res={};
+  for(const f of ['title','archived','revived']) if(W[f]!==undefined) res[f]=W[f];
+  const d=Math.max(+L.deleted||0, +R.deleted||0); if(d) res.deleted=d;
+  res.created=Math.min(+L.created||Infinity, +R.created||Infinity); if(!Number.isFinite(res.created)) res.created=0;
+  const Lm=byId(L.blocks), Rm=byId(R.blocks), ids=[...Lm.keys(), ...[...Rm.keys()].filter(id=>!Lm.has(id))];
+  res.blocks=ids.map(id=>{ const l=Lm.get(id), r=Rm.get(id); if(!l || !r) return l||r; if(blockJson(l)===blockJson(r)) return l; if(gjson(l,false)!==gjson(r,false)) trace.push({id, side:lWins? 'R' : 'L', cause:'key'}); return lWins? l : r; });
+  return finishMerge(res, L, R, ctx, {local:true, remote:true}, trace); }   // both source copies are kept
+// a late copy of a purged original goes into the revived note: a union without a common base; the revived note keeps its own fields
+function moveInto(revived, moved, ctx={}){ const trace=[];
+  if(!revived){ const note={title:moved.title, blocks:fixParents((moved.blocks||[]).map(b=>({...b}))), created:+moved.created||ctx.t||0, updated:ctx.t||+moved.updated||0}; if(moved.archived) note.archived=moved.archived; if(moved.deleted) note.deleted=moved.deleted; return {note, copies:[], trace, changed:true}; }
+  const rWins=cmpKey(keyOf(revived,ctx.dev), keyOf(moved,ctx.dev))>=0, Vm=byId(revived.blocks), Mm=byId(moved.blocks), ids=[...Vm.keys(), ...[...Mm.keys()].filter(id=>!Vm.has(id))];
+  const blocks=fixParents(ids.map(id=>{ const v=Vm.get(id), m=Mm.get(id); if(!v || !m) return v||m; if(blockJson(v)===blockJson(m)) return v; if(gjson(v,false)!==gjson(m,false)) trace.push({id, side:rWins? 'M' : 'V', cause:'key'}); return rWins? v : m; }));
+  const res={...revived, blocks}; const changed=!sameDoc(res, revived); if(changed) res.updated=ctx.t||res.updated;
+  const copies=[{side:'V', note:noteBody(revived)}]; if(hashDoc(noUpdated(moved))!==hashDoc(noUpdated(revived))) copies.push({side:'M', note:noteBody(moved)});   // equal sources are not duplicated
+  return {note:changed? res : revived, copies, trace, changed}; }
+
+/* ── the monotonic device clock (§4.4) and rule 1 of §4.6 ── */
+const nextUpdated=(now, last)=>Math.max(+now||0, (+last||0)+1);
+// where a document stands against `seen`: 'fresh' | 'stale' | 'recreated' | 'rewritten' (a stale state read from the server itself)
+function placeAgainstSeen(doc, seen, serverRead){ if(!seen) return 'fresh'; const known=!!seen.srv, ref=seen.srv||seen.after, rev=+doc.rev, sr=+seen.rev;
+  if(rev<sr) return clearlyNewer(doc.srv, ref)? 'recreated' : serverRead? 'rewritten' : 'stale';
+  if(rev>sr) return ref && clearlyNewer(ref, doc.srv)? (serverRead? 'rewritten' : 'stale') : 'fresh';
+  if(!known) return 'fresh';   // the echo of an own write fills in srv
+  return clearlyNewer(doc.srv, seen.srv)? 'recreated' : clearlyNewer(seen.srv, doc.srv)? (serverRead? 'rewritten' : 'stale') : 'fresh'; }
+
 /* ── history manifests (VERSIONS-PLAN), shared with the versions code of index.html ── */
 const bodyOf=d=>d.kind? (d.text||'') : (d.html||d.text||'');
 const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; delete e.s; delete e.r; const b=bodyOf(d); e.h=b.length>V_BODY_MAX? null : hashOf(b); return e; };   // a body too big for the history gets h:null
@@ -94,5 +167,6 @@ function sumOf(m, prev){ const s={ch:0,add:0,del:0,mv:0,ttl:0}; if(!prev){ s.add
     if(p.h!==e.h || (p.title||'')!==(e.title||'') || (p.kind||'')!==(e.kind||'') || (p.lang||'')!==(e.lang||'')) s.ch++; else if(p.row!==e.row || p.fx!==e.fx || p.parent!==e.parent || p.col!==e.col) s.mv++; }
   for(const id of P.keys()) if(!seen.has(id)) s.del++; if((prev.title||'')!==(m.title||'')) s.ttl=1; return s; }
 
-return {DOC_MAX, V_BODY_MAX, LIM, hashOf, canon, cjson, hashDoc, noUpdated, sameDoc, docBytes, cmpSrv, clearlyNewer, validSrv, normBlock, normBlocks, normNote, normVersion, bodyOf, entryOf, manifestOf, sumOf};
+return {DOC_MAX, V_BODY_MAX, LIM, SERVICE, hashOf, canon, cjson, hashDoc, noteBody, noUpdated, sameDoc, docBytes, cmpSrv, clearlyNewer, validSrv, normBlock, normBlocks, normNote, normVersion,
+  keyOf, cmpKey, merge3, merge0, moveInto, nextUpdated, placeAgainstSeen, bodyOf, entryOf, manifestOf, sumOf};
 });
