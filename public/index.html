@@ -1061,7 +1061,8 @@ function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; driving=tr
     if(r.next<Infinity){ const d=Math.min(5000, Math.max(50, r.next-(Date.now()+(DEBUG.sync.clock||0)))); driveT=setTimeout(syncWake, d); } })(); }
 // the record changed in storage behind the interface: take it unless this tab has unwritten edits of it (then its pending write merges, §4.10)
 // or the caret stands in one of its fields; `src` names where the change came from, for the strip (without it, the record's base tells when it can)
-async function takeStored(id, src){ const st=await SYNC.state(id); if(!st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
+const keptView=()=>LOCK==='epoch';   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's data comes onto it, by any path
+async function takeStored(id, src){ if(keptView()) return; const st=await SYNC.state(id); if(keptView() || !st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
@@ -1087,7 +1088,7 @@ let composing=false; document.addEventListener('compositionstart',()=>{ composin
 const tempBlock=()=>{ const a=document.activeElement, b=a && blocks.find(x=>x.txt===a); return b && !b.kind && !(b.text||'').trim()? b : null; };   // the empty text block a click makes: not in storage yet
 const fieldActive=()=>{ if(composing) return true; const a=document.activeElement; if(tempBlock()) return false; return !!(a && a!==document.body && (a===ttl || (sheet.contains(a) && (a.isContentEditable || /^(INPUT|TEXTAREA)$/.test(a.tagName))))); };
 async function safePoint(id){ const n=notes.find(x=>x.id===id); if(!n || n!==cur || busy(n) || fieldActive()){ chgUI(); return; } await takeStored(id); }
-function flushPending(){ for(const id of [...PENDING.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ PENDING.delete(id); continue; } if(busy(n)) continue; if(n===cur){ if(!fieldActive()) safePoint(id); } else takeStored(id); } chgUI(); }
+function flushPending(){ if(keptView()) return; for(const id of [...PENDING.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ PENDING.delete(id); continue; } if(busy(n)) continue; if(n===cur){ if(!fieldActive()) safePoint(id); } else takeStored(id); } chgUI(); }
 document.addEventListener('focusout',()=>{ if(PENDING.size) setTimeout(flushPending,0); });   // after the focus has settled: a move between two fields is not a safe point
 // the record is purged (a tombstone from the cloud, or an own write refused as purged): the note leaves memory once everything typed here is in the
 // revived note. One revival per note at a time (a refused write or «Повторити» joins it); text typed while a snapshot is being written goes with the
@@ -1108,7 +1109,7 @@ async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) ret
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id); EDITS.delete(id);
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); chgUI(); }
 // the engine (this tab leads) applied a document: this tab takes it, and the other tabs are told which record changed, to what lrev and from which device
-function syncChanged(ev){ if(!STARTED){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
+function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
 function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
 /* ══ the leader tab (SYNC-PLAN 4.10): one tab per data space talks to the cloud, under the Web Lock `baobook-sync:{env}`; the others only write locally.
    The lock goes on pagehide and freeze, so the page may enter the back/forward cache and a frozen tab blocks nobody; a request still waiting in the
@@ -1126,7 +1127,7 @@ function leadOff(){ LEAD.gen++; const ac=LEAD.abort, rel=LEAD.release; LEAD.abor
 // generation is checked: a pagehide, freeze or LOCK meanwhile has released the lock, and a start that finished anyway is undone
 async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
   try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(over()) return;
-    await eng.start({cloud:CLOUD}); if(over()){ eng.stop(); return; } LEAD.on=true; syncWake(); }
+    await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile
   catch(e){ if(e && e.code==='epoch'){ setLock('epoch'); return; } if(/[?&]debug=1/.test(location.search)) console.warn('lead:',e); if(!over()) leadOff(); } }
 // ask for the lock; resolves to whether this tab leads now (granted at once) or waits in the queue (false). Idempotent: a held lock is kept, the
 // engine restarted only when the engine or the cloud changed (connect); a request already queued is left alone. Returns false under LOCK or without an owner
@@ -1602,7 +1603,7 @@ newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection
 const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
 const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || REVIVING.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet: a failed or in-flight write, a revival being written, typing
-function takeNote(r, lrev){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.id);
+function takeNote(r, lrev){ if(!validNote(r) || keptView()) return; const n=notes.find(x=>x.id===r.id);
   if(!n){ notes.push(r); if(lrev!=null) LREV.set(r.id,lrev); renderList(); storageUI(); return; }
   const mine=LREV.get(r.id), known=lrev!=null && mine!=null;   // both lrevs known: the newer wins, equal ones compare by time (a record written past the core)
   if(known? (lrev<mine || (lrev===mine && (r.updated||0)<=(n.updated||0))) : (r.updated||0)<=(n.updated||0)) return;
@@ -1616,13 +1617,13 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); undoStacks.delete(id);
   if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
-function tabMsg(m){ if(LOCK==='epoch') return;   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's is shown here
+function tabMsg(m){ if(keptView()) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner') leadCheck();
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
   if(LEAD.on && SYNC && m.t!=='owner'){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
-async function syncTabs(){ if(!cur) return; const {m, lrev}=await storedWithLrev(); for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
+async function syncTabs(){ if(!cur || keptView()) return; const {m, lrev}=await storedWithLrev(); if(keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }

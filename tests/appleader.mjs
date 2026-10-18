@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { TestCloud } from './lib/cloud.mjs';
-import { newDevice, newTab, lead, locks, settle, stored, syncRecs, typeAt, curId, cloudWrite, connect } from './lib/cloudpage.mjs';
+import { newDevice, newTab, lead, locks, settle, stored, syncRecs, typeAt, curId, cloudWrite, connect, openNote } from './lib/cloudpage.mjs';
 import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -105,6 +105,11 @@ await D.close(); const kl=await until(async()=>(await lead(K)).on, 10000);
 const k4i=await locked(H), l4i=await lead(H), k4j=await locked(J);
 ok('4k the lock reached the tabs that knew the old owner first: each refused the store, locked itself as «epoch» (the engine still names u5) and let the lock go; the tab that knows the new owner leads', kl && (await lead(K)).held && k4i.strip && /іншого облікового запису/.test(k4i.msg) && !l4i.on && !l4i.held && !l4i.queued && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && k4j.strip && !(await lead(J)).on);
 ok('4l the locked tab still shows its note and takes no new text into the store', (await H.evaluate(()=>document.getElementById('sheet').innerText)).includes('набрано у H під u5') && (await H.evaluate(()=>document.getElementById('sheet').inert)));
+// 4g: the locked tab is shown again: the storage check of pageshow/visibilitychange must not bring the new owner's data onto its screen either
+await K.bringToFront(); await K.click('#ttl'); await K.keyboard.press('End'); await K.keyboard.type(' (u6)'); await K.keyboard.press('Escape'); await K.waitForTimeout(600);
+const tH=await H.evaluate(()=>document.getElementById('ttl').textContent);
+await H.evaluate(()=>{ document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(Object.assign(new Event('pageshow'),{persisted:true})); }); await H.waitForTimeout(500);
+ok('4l2 the new owner\'s tab renamed the note: the store has the new title, the locked tab shown again keeps the old one («'+tH+'») and still names u5', (await stored(H,'notes',id)).title.endsWith('(u6)') && (await H.evaluate(()=>document.getElementById('ttl').textContent))===tH && !tH.endsWith('(u6)') && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && !(await lead(H)).queued);
 // 4f: the lead is lost while the start is still running (the format record write is held): the start must not bring the engine up afterwards
 const L=await newTab(A, SITE, {connect:{owner:owner('u6'), pace:PACE}});   // with a cloud: the engine's start writes the format record, which the gate below holds
 await L.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });   // every write of L waits, the engine's start among them
@@ -118,12 +123,28 @@ await L.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await L.wa
 ok('4p the held start finished: the engine did not come up (not started, not leading, no listeners), the last tab keeps leading', !lL.on && !lL.started && !lL.held && (await L.evaluate(()=>{ const S=sheetDebug.sync.engine()._S; return !S.listen.notes && !S.listen.versions; })) && (await lead(M)).on);
 await fire(L,'resume',true); await L.waitForTimeout(300);
 ok('4q resumed, it waits in the queue behind the leader', (await lead(L)).queued && !(await lead(L)).on && (await lead(M)).on);
+// 4h: the lock comes back before the held start finished: a second start joins it, and the stale one must not stop the engine of the new one
+await L.close();   // out of the queue: the next tab opened below is the one to get the lock after the leader
+const N=await newTab(A, SITE, {connect:{owner:owner('u6'), pace:PACE}});
+await N.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });
+const O=await newTab(A, SITE, {connect:{owner:owner('u6'), pace:PACE}});
+await M.close(); await until(async()=>(await lead(N)).started, 5000);
+ok('4r the next tab got the lock and its start waits in the gate', (await lead(N)).held && (await lead(N)).started && !(await lead(N)).on);
+await fire(N,'freeze',true); const ol=await until(async()=>(await lead(O)).on, 5000);
+ok('4s frozen in the middle of the start: the last tab leads', ol && !(await lead(N)).held);
+await fire(N,'resume',true); await N.waitForTimeout(300); ok('4t resumed: in the queue', (await lead(N)).queued && !(await lead(N)).on);
+await O.close(); await until(async()=>(await lead(N)).held, 5000); await N.waitForTimeout(200);
+ok('4u the lock is back while the first start still waits in the gate: held, the engine marked started, not leading yet', (await lead(N)).held && (await lead(N)).started && !(await lead(N)).on);
+await N.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); const nOn=await until(async()=>(await lead(N)).on, 5000);
+ok('4v both starts finished: the stale one changed nothing, the tab leads with its engine started and its listeners on', nOn && (await lead(N)).started && (await lead(N)).held && (await N.evaluate(()=>{ const S=sheetDebug.sync.engine()._S; return !!S.listen.notes && !!S.listen.versions && S.started; })));
+await openNote(N,'p1'); await typeAt(N,500,420,'після двох запусків'); const sent=await until(()=>!!cloud.doc('notes','p1') && cloud.doc('notes','p1').blocks.some(b=>b.text==='після двох запусків'), 6000);
+ok('4w its edit reaches the cloud', !!sent);
 
 /* ── 5. any view-only mode releases the lock: another tab opens the database with a newer version ── */
 const G=await newTab(A, SITE, {connect:false});
 await G.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgradeneeded=()=>{}; r.onsuccess=()=>{ r.result.close(); res('ok'); }; r.onblocked=()=>res('blocked'); r.onerror=()=>res('error'); }));
-const gone=await until(async()=>!(await lead(M)).held && !(await locks(G)).held.includes(LOCK), 5000);
-ok('5 the leader was locked out by the newer database («updated»): the lock is free, nobody leads', gone && (await locked(M)).strip && !(await lead(M)).on);
+const gone=await until(async()=>!(await lead(N)).held && !(await locks(G)).held.includes(LOCK), 5000);
+ok('5 the leader was locked out by the newer database («updated»): the lock is free, nobody leads', gone && (await locked(N)).strip && !(await lead(N)).on);
 
 const errs=A.errs; console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await A.close(); await br.close(); await srv.close(); process.exit(fails?1:0);

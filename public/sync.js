@@ -562,9 +562,11 @@ function makeSync(deps){
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
     resetMemory({owner:true}); await load(); if(S.started) connectCloud(); }
   function connectCloud(){ if(!S.cloud || !S.owner) return; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); startListener('versions'); }
-  async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; S.started=true;
-    if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} if(!S.started) return; connectCloud(); } }   // stopped while the record was written (the tab lost the lead): no listeners
-  function stop(){ S.started=false; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
+  // every start has a run id; stop() and a later start move it on, so a start that was waiting on its transaction when either came connects nothing
+  // and changes nothing of the run that superseded it (a tab that lost the lead during its start and got it back before that start finished)
+  async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; const run=S.runId=(S.runId||0)+1; S.started=true;
+    if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} if(!S.started || S.runId!==run) return; connectCloud(); } }
+  function stop(){ S.started=false; S.runId=(S.runId||0)+1; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
     S.lastReconnect=now(); startListener('notes'); startListener('versions'); startCatchup('notes'); emit(deps.wake); }
