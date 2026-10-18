@@ -687,6 +687,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
+<script src="sync.js"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -720,6 +721,7 @@ const $=id=>document.getElementById(id);
 const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('searchBox'), sheet=$('sheet'), ttl=$('ttl'), cnt=$('cnt'), savedEl=$('saved'), toast=$('toast'),
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
 const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), areaBtn=$('areaBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
+const SC=window.BaobookSync, {hashOf, bodyOf, entryOf, manifestOf, sumOf, V_BODY_MAX}=SC;   // the sync core (sync.js): the canonical form, the normalizer, merging and the history manifests it shares with the versions code
 const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
@@ -947,18 +949,11 @@ function idbLost(e){ const d=idb.db, newer=!!e && e.newVersion!=null && e.newVer
    R2 перед перезаписом імпортом; R3 після запису, якщо від останньої версії минуло ≥ V_GAP; R5 після відновлення (PR 2). Записи однієї нотатки — чергою VQ.
    Прорідження за віком (до 24 год усе, до 7 днів по одній на годину, до 90 днів по одній на добу, старше — геть; іменовані й найновіша лишаються), ліміт V_MAX_NOTE,
    загальний бюджет min(V_BUDGET_MAX, 5% квоти) — найстаріші без імені, крім найновішої кожної нотатки; GC тіл після видалень. Помилка запису версії ковтається: статус збереження не чіпає. */
-const V_GAP=5*60000, V_MAX_NOTE=300, V_BODY_MAX=256*1024, V_BUDGET_MAX=20*1024*1024;
+const V_GAP=5*60000, V_MAX_NOTE=300, V_BUDGET_MAX=20*1024*1024;   // V_BODY_MAX comes from the sync core
 const SAVED=new Map(), VLAST=new Map(), VQ=new Map();   // SAVED: id → {title,blocks,updated} останній скинутий у нотатку стан; VLAST: id → {id,t,w,sig,reason} | null; VQ: id → ланцюжок обіцянок
 DEBUG.vers={clock:0, estimate:null, fail:false, errors:0, size:0, view:null};
 const vnow=()=>Date.now()+(DEBUG.vers.clock||0);
-const hashOf=s=>{ let a=2166136261, b=5381; for(let i=0;i<s.length;i++){ const c=s.charCodeAt(i); a=Math.imul(a^c,16777619); b=(Math.imul(b,33)^c)|0; } return (a>>>0).toString(36)+(b>>>0).toString(36)+s.length.toString(36); };   // FNV-1a + djb2 + довжина
-const bodyOf=d=>d.kind? (d.text||'') : (d.html||d.text||'');
-const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; const b=bodyOf(d); e.h=b.length>V_BODY_MAX? null : hashOf(b); return e; };   // завелике тіло в історію не йде (h:null)
-function manifestOf(title, blocks){ const m=(blocks||[]).filter(d=>d&&d.id).map(entryOf).sort((x,y)=>x.id<y.id?-1:1); return {title:title||'', blocks:m, sig:hashOf((title||'')+'\n'+JSON.stringify(m))}; }
-function sumOf(m, prev){ const s={ch:0,add:0,del:0,mv:0,ttl:0}; if(!prev){ s.add=m.blocks.length; return s; } const P=new Map(prev.blocks.map(e=>[e.id,e])), seen=new Set();
-  for(const e of m.blocks){ const p=P.get(e.id); seen.add(e.id); if(!p){ s.add++; continue; }
-    if(p.h!==e.h || (p.title||'')!==(e.title||'') || (p.kind||'')!==(e.kind||'') || (p.lang||'')!==(e.lang||'')) s.ch++; else if(p.row!==e.row || p.fx!==e.fx || p.parent!==e.parent || p.col!==e.col) s.mv++; }
-  for(const id of P.keys()) if(!seen.has(id)) s.del++; if((prev.title||'')!==(m.title||'')) s.ttl=1; return s; }
+// hashOf, bodyOf, entryOf, manifestOf and sumOf live in sync.js (the sync core shares them)
 const vid=()=>'v'+vnow().toString(36)+Math.random().toString(36).slice(2,6);
 function vlast(note){ return idb.tx(['versions'],'readonly',t=>{ const q={result:null}; const c=t.objectStore('versions').index('note_t').openCursor(IDBKeyRange.bound([note,-Infinity],[note,Infinity]),'prev'); c.onsuccess=()=>{ const r=c.result; if(r) q.result=r.value; }; return q; }); }
 function vload(note){ return vqueue(note, async()=>{ if(VLAST.has(note)) return; const r=await vlast(note); VLAST.set(note, r? {id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason} : null); }); }   // остання версія нотатки — перш ніж щось писати
