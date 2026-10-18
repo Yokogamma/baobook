@@ -87,8 +87,11 @@ ok('16 a tiny budget leaves the named versions and the newest one ('+s6.vers.map
 await pg.evaluate(()=>{ sheetDebug.vers.estimate=null; });
 await openPanel(); await menu('Очистити історію нотатки'); const t7=await pg.locator('#askTitle').innerText(); await pg.click('#askYes'); await pg.waitForTimeout(500); const s7=await state();
 ok('17a it asks in our own dialog: «'+t7+'»', /^Очистити історію нотатки «.+»\?$/.test(t7));
-ok('17 «Очистити історію нотатки» removes its versions and bodies, «Інша» keeps hers ('+s7.vers.length+'/'+s7.blobs.length+', other '+s7.other.length+'/'+s7.otherBlobs.length+')', s7.vers.length===0 && s7.blobs.length===0 && s7.other.length===1 && s7.otherBlobs.length>0 && blk(s7.note,'b'));
-ok('18 the list says «Поки версій немає»', await pg.evaluate(()=>document.querySelector('#histList .none')?.textContent)==='Поки версій немає');
+ok('17 «Очистити історію нотатки» removes the automatic versions and their bodies; the two named ones stay with their text inside, «Інша» keeps hers ('+s7.vers.map(v=>v.name||v.reason).join(', ')+', '+s7.blobs.length+' bodies, other '+s7.other.length+'/'+s7.otherBlobs.length+')', s7.vers.length===2 && s7.vers.every(v=>v.name && v.keep===1 && v.inline===1 && v.blocks.every(e=>typeof e.s==='string')) && s7.blobs.length===0 && s7.other.length===1 && s7.otherBlobs.length>0 && blk(s7.note,'b'));
+ok('18 the list shows only the two named versions', (await rows()).filter(r=>r.id!=='now').map(r=>r.k).sort().join()==='● Перша,● Реліз' && !(await pg.evaluate(()=>document.querySelector('#histList .none'))));
+await pg.click('#histList .hv[data-id="'+v1.id+'"]'); await pg.waitForTimeout(300);
+ok('18b the named old version still shows its text from the bodies inside the record', (await pg.evaluate(()=>[...document.querySelectorAll('#sheet .blk .txt')].map(t=>t.textContent).join('|'))).includes('Qw3rty!'));
+await pg.click('#histList .hv[data-id="now"]'); await pg.waitForTimeout(200);
 
 /* ── phone: the search hides behind «⋯», the restore buttons stay on the screen ── */
 { const c3=await br.newContext({...CTX, viewport:{width:390,height:844}, hasTouch:true, isMobile:true}); const p3=await c3.newPage(); p3.on('pageerror',e=>errs.push('PAGEERROR (phone) '+e.message)); await p3.goto(SITE); await p3.waitForTimeout(600);

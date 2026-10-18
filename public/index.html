@@ -958,11 +958,14 @@ const vid=()=>'v'+vnow().toString(36)+Math.random().toString(36).slice(2,6);
 function vlast(note){ return idb.tx(['versions'],'readonly',t=>{ const q={result:null}; const c=t.objectStore('versions').index('note_t').openCursor(IDBKeyRange.bound([note,-Infinity],[note,Infinity]),'prev'); c.onsuccess=()=>{ const r=c.result; if(r) q.result=r.value; }; return q; }); }
 function vload(note){ return vqueue(note, async()=>{ if(VLAST.has(note)) return; const r=await vlast(note); VLAST.set(note, r? {id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason} : null); }); }   // остання версія нотатки — перш ніж щось писати
 function vqueue(note, fn){ const p=(VQ.get(note)||Promise.resolve()).then(fn).catch(e=>{ DEBUG.vers.errors++; if(/[?&]debug=1/.test(location.search)) console.warn('versions:',e); if(/Quota/i.test((e&&e.name)||'')) vsweep(); }); VQ.set(note,p); return p; }
-function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); let size=0, rec=null;
+/* a named version is written with keep:1 and inline:1 (SYNC-PLAN 4.3): full bodies inside the record (`s`, `r` for rich text), no thinning, no budget,
+   no plain «Очистити історію». Every record's t is at most vnow(), so a note with an `updated` far ahead cannot make vthin drop the rest as too old */
+function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); const inline=!!meta.name; let size=0, rec=null;
   return idb.tx(['versions','blobs'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
-    const finish=()=>{ if(--pending) return; const prev=prevQ&&prevQ.result? prevQ.result : null; const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks));
-      rec={id:vid(), note, t:meta.t, w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name) rec.name=meta.name; if(meta.from) rec.from=meta.from; V.put(rec); };
-    m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); pending++;
+    const finish=()=>{ if(--pending) return; const prev=prevQ&&prevQ.result? prevQ.result : null; const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
+      rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name){ rec.name=meta.name; rec.keep=1; rec.inline=1; } if(meta.from) rec.from=meta.from; V.put(rec); };
+    if(prevQ){ pending++; prevQ.onsuccess=prevQ.onerror=()=>finish(); }   // the previous record is read before the record is built: with bodies inline there may be no other request to wait for
+    m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); if(inline){ e.s=body; if(!d.kind && d.html) e.r=1; return; } pending++;
       const tryKey=(h,k)=>{ const g=B.get([note,h]); g.onsuccess=()=>{ const ex=g.result; if(!ex){ const z=new Blob([body]).size; B.put({note,h,s:body,r:(!d.kind&&d.html)?1:0,z}); e.h=h; size+=z; finish(); } else if(ex.s!==body) tryKey(e.h+'~'+(k+1),k+1); else { e.h=h; finish(); } }; };   // колізія хешу — сусідній ключ
       tryKey(e.h,0); });
     finish(); return {get result(){ return rec; }}; }).then(r=>{ VLAST.set(note,{id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason}); DEBUG.vers.size+=r.size; storageUI(); return r; }); }
@@ -974,11 +977,11 @@ function vafter(n){ vload(n.id); return vqueue(n.id, async()=>{ const m=manifest
 function vlist(note){ return idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('note_t').getAll(IDBKeyRange.bound([note,-Infinity],[note,Infinity]))); }
 function vbodies(note){ return idb.tx(['blobs'],'readonly',t=>t.objectStore('blobs').getAll(IDBKeyRange.bound([note,''],[note,'\uffff']))); }
 function vkeep(list, tMax){ const sorted=[...list].sort((a,b)=>b.t-a.t); const keep=new Set(), buckets=new Map();   // лестница: <24 год усе; <7 днів — година; <90 днів — доба; старше — геть
-  sorted.forEach((v,i)=>{ if(i===0 || v.name){ keep.add(v.id); return; } const a=tMax-v.t; if(a<864e5){ keep.add(v.id); return; } if(a>=90*864e5) return; const loc=v.t-new Date(v.t).getTimezoneOffset()*6e4;   // buckets are local hours and days, as the history shows them, not UTC ones
+  sorted.forEach((v,i)=>{ if(i===0 || v.name || v.keep){ keep.add(v.id); return; } /* named versions and conflict copies (keep) never thin out */ const a=tMax-v.t; if(a<864e5){ keep.add(v.id); return; } if(a>=90*864e5) return; const loc=v.t-new Date(v.t).getTimezoneOffset()*6e4;   // buckets are local hours and days, as the history shows them, not UTC ones
     const key=a<7*864e5? 'h'+Math.floor(loc/36e5) : 'd'+Math.floor(loc/864e5); if(!buckets.has(key)){ buckets.set(key,v.id); keep.add(v.id); } });
-  let n=0; for(const v of sorted){ if(!keep.has(v.id)) continue; if(v.name || n<V_MAX_NOTE) n++; else keep.delete(v.id); } return keep; }   // понад V_MAX_NOTE — найстаріші без імені
+  let n=0; for(const v of sorted){ if(!keep.has(v.id)) continue; if(v.name || v.keep || n<V_MAX_NOTE) n++; else keep.delete(v.id); } return keep; }   // понад V_MAX_NOTE — найстаріші без імені
 async function vthin(note, list){ list=list||await vlist(note); if(!list.length) return 0; const tMax=Math.max(vnow(), ...list.map(v=>v.t)); const keep=vkeep(list,tMax); const gone=list.filter(v=>!keep.has(v.id)); if(!gone.length) return 0; await vdelete(note, gone, list.filter(v=>keep.has(v.id))); return gone.length; }
-function vdelete(note, gone, rest){ const keepH=new Set(); rest.forEach(v=>v.blocks.forEach(e=>{ if(e.h) keepH.add(e.h); }));   // GC тіл: лишаються ті, на які ще посилається якась версія нотатки
+function vdelete(note, gone, rest){ const keepH=new Set(); rest.forEach(v=>v.blocks.forEach(e=>{ if(e.h && e.s===undefined) keepH.add(e.h); }));   // GC тіл: лишаються ті, на які ще посилається якась версія нотатки (запис із тілом усередині, `s`, тіла не тримає)
   return idb.tx(['versions','blobs'],'readwrite',t=>{ const V=t.objectStore('versions'), B=t.objectStore('blobs'); gone.forEach(v=>{ V.delete(v.id); DEBUG.vers.size-=v.size||0; });
     const c=B.openCursor(IDBKeyRange.bound([note,''],[note,'\uffff'])); c.onsuccess=()=>{ const r=c.result; if(!r) return; if(!keepH.has(r.value.h)) r.delete(); r.continue(); }; })
     .then(()=>{ const L=VLAST.get(note); if(L && gone.some(v=>v.id===L.id)){ const top=rest.sort((a,b)=>b.t-a.t)[0]; VLAST.set(note, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); } storageUI(); }); }
@@ -989,7 +992,7 @@ function vsweep(){ if(vsweeping) return vsweeping; vsweeping=(async()=>{ try{ co
     for(const [note,list] of byNote) await vthin(note, list);   // спершу лестниця кожної нотатки
     const left=await idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()); DEBUG.vers.size=left.reduce((a,v)=>a+(v.size||0),0); const budget=await vbudget(); if(DEBUG.vers.size<=budget) return;
     const newest=new Map(); left.forEach(v=>{ const c=newest.get(v.note); if(!c || v.t>c.t) newest.set(v.note,v); }); const goneBy=new Map(); let size=DEBUG.vers.size;
-    for(const v of left){ if(size<=budget*0.9) break; if(v.name || newest.get(v.note)===v) continue; if(!goneBy.has(v.note)) goneBy.set(v.note,[]); goneBy.get(v.note).push(v); size-=v.size||0; }   // найстаріші без імені, крім найновішої кожної нотатки
+    for(const v of left){ if(size<=budget*0.9) break; if(v.name || v.keep || newest.get(v.note)===v) continue; if(!goneBy.has(v.note)) goneBy.set(v.note,[]); goneBy.get(v.note).push(v); size-=v.size||0; }   // найстаріші без імені, крім найновішої кожної нотатки
     for(const [note,gone] of goneBy){ const ids=new Set(gone.map(v=>v.id)); await vdelete(note, gone, left.filter(v=>v.note===note && !ids.has(v.id))); } }
   catch(e){ DEBUG.vers.errors++; } finally{ vsweeping=null; } })(); return vsweeping; }
 function vstart(){ const day=864e5; const go=()=>{ if(db.backend!=='idb' || LOCK) return; const due=!S.versSwept || now()-S.versSwept>day; (due? vsweep() : idb.tx(['versions'],'readonly',t=>t.objectStore('versions').index('t').getAll()).then(all=>{ DEBUG.vers.size=all.reduce((a,v)=>a+(v.size||0),0); })).then(()=>{ if(due) saveS({versSwept:now()}); }).catch(()=>{}); };
@@ -2305,14 +2308,17 @@ const H={open:false, list:[], vis:[], bodies:null, sel:'now', view:null, nowSum:
 const hm=t=>new Date(t).toLocaleTimeString(I18N.locale,{hour:'2-digit',minute:'2-digit'});
 function dayOf(t){ const d=new Date(t), y=new Date(); y.setDate(y.getDate()-1); return d.toDateString()===new Date().toDateString()? loc('hist.today') : d.toDateString()===y.toDateString()? loc('hist.yesterday') : fmtDate(t); }
 const SUM={ch:n=>loc('hist.sum.ch',{n}), add:n=>loc('hist.sum.add',{n}), del:n=>loc('hist.sum.del',{n}), mv:n=>loc('hist.sum.mv',{n})},
-  KIND={base:()=>loc('hist.kind.base'), auto:()=>loc('hist.kind.auto'), import:()=>loc('hist.kind.import'), manual:()=>loc('hist.kind.manual'), conflict:()=>loc('hist.kind.conflict')};
+  KIND={base:()=>loc('hist.kind.base'), auto:()=>loc('hist.kind.auto'), import:()=>loc('hist.kind.import'), manual:()=>loc('hist.kind.manual'), conflict:()=>loc('hist.kind.conflict'), incoming:()=>loc('hist.kind.incoming')};
 function sumText(s){ if(!s) return ''; const p=[]; for(const k in SUM) if(s[k]) p.push(SUM[k](s[k])); if(s.ttl) p.push(loc('hist.sum.ttl')); return p.join(', ')||loc('hist.sum.none'); }
 function kindText(v){ if(v.name) return '● '+v.name;
+  if(v.reason==='copy') return loc('hist.kind.copy',{device:v.dn||v.dev||''});   // a conflict copy from a sync merge: the losing side, with its device
   if(v.reason==='restore'){ const f=v.from && H.list.find(x=>x.id===v.from); return f? loc('hist.kind.restoreFrom',{time:hm(f.t)}) : loc('hist.kind.restore'); }
   return (KIND[v.reason]||KIND.auto)(); }
-function verBlocks(v){ return v.blocks.map(e=>{ const d={...e}; delete d.h; const b=e.h && H.bodies && H.bodies.get(e.h);
+// the body of an entry: inside the record (`s`, keep/inline), else in blobs by its hash, else missing (too big for the history, or a named old version that lacks it)
+const bodyOfEntry=e=>e.s!==undefined? {s:e.s, r:e.r? 1 : 0} : (e.h && H.bodies && H.bodies.get(e.h))||null;
+function verBlocks(v){ return v.blocks.map(e=>{ const d={...e}; delete d.h; delete d.s; delete d.r; const b=bodyOfEntry(e);
     if(b){ if(!d.kind && b.r){ d.html=b.s; d.text=plainOf(cleanRich(b.s)); } else d.text=b.s; }
-    else { const now=cur.blocks.find(x=>x.id===e.id); d.text=now? now.text : ''; if(now && now.html) d.html=now.html; }   // a body too big for the history keeps today's text
+    else d.text='';   // a missing body is shown as missing («текст цього блоку не зберігся»), never as today's text
     return d; }); }
 const vtext=v=>{ if(!H.txt.has(v.id)) H.txt.set(v.id, norm([v.title||'', ...verBlocks(v).map(d=>(d.title||'')+'\n'+(d.text||''))].join('\n'))); return H.txt.get(v.id); };
 async function loadHist(){ const n=cur; let list=[], bodies=[];
@@ -2348,7 +2354,7 @@ function showVersion(v){ if(!v || !cur) return; const now=new Map(manifestOf(cur
   const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
   for(const b of blocks){ const e=v.blocks.find(x=>x.id===b.id), n=now.get(b.id);
     b.el.classList.toggle('v-add', !n); b.el.classList.toggle('v-ch', !!n && !!e && ((!!e.h && n.h!==e.h) || (n.title||'')!==(e.title||'') || (n.kind||'')!==(e.kind||'') || (n.lang||'')!==(e.lang||'')));
-    b.el.classList.toggle('v-big', !!e && !e.h); if(e && !e.h) b.el.dataset.vnote=loc('hist.tooBig'); }   // its body was too big for the history: today's text is shown
+    b.el.classList.toggle('v-big', !!e && !bodyOfEntry(e)); if(e && !bodyOfEntry(e)) b.el.dataset.vnote=loc('hist.tooBig'); }   // its body was not kept (too big, or a named old version without it)
   sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove());
   for(const [id,g] of H.geo||[]) if(now.has(id) && !v.blocks.some(e=>e.id===id)){ const d=el('div','ghost-blk',sheet); Object.assign(d.style,{left:g.x+'px', top:g.y+'px', width:g.w+'px', height:g.h+'px'}); }
   markHits(); placeVbtns(); }
@@ -2377,11 +2383,12 @@ function restoreBlock(id){ const v=H.view; if(!v || !cur) return; const d=verBlo
   offerUndo(loc('hist.blockRestored',{time:at}), ()=>{ if(cur!==n) return; flushSave(); putState(n, {title:n.title, blocks: old? n.blocks.map(x=>x.id===id? old : x) : n.blocks.filter(x=>x.id!==id)}); }, {big:true}); }   // undo puts back only this block
 function nameHist(){ histNameRow.hidden=false; histName.value=(H.view&&H.view.name)||''; histName.focus(); histName.select(); }
 async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if(!name || !n) return; histNameRow.hidden=true;
-  if(v) await vqueue(n.id, ()=>idb.tx(['versions'],'readwrite',t=>{ const s=t.objectStore('versions'), g=s.get(v.id); g.onsuccess=()=>{ if(g.result){ g.result.name=name; s.put(g.result); } }; }));   // the shown version gets the name
+  if(v) await vqueue(n.id, ()=>idb.tx(['versions'],'readwrite',t=>{ const s=t.objectStore('versions'), g=s.get(v.id); g.onsuccess=()=>{ const r=g.result; if(!r) return; r.name=name; r.keep=1; r.inline=1;   // the shown version gets the name and becomes keep/inline: the bodies the history still has go inside it (a missing one makes it «неповна», PR 4)
+    r.blocks.forEach(e=>{ if(e.s!==undefined) return; const b=e.h && H.bodies && H.bodies.get(e.h); if(b){ e.s=b.s; if(b.r) e.r=1; } }); s.put(r); }; }));
   else { flushSave(); await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name); }   // «Зараз» becomes a named version (R4)
   say(loc('hist.named',{name})); await loadHist(); }
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
-  await vqueue(n.id, async()=>{ await vdelete(n.id, await vlist(n.id), []); VLAST.set(n.id,null); }); storageUI(); await loadHist(); }
+  await vqueue(n.id, async()=>{ const list=await vlist(n.id), stay=list.filter(v=>v.keep || v.name); await vdelete(n.id, list.filter(v=>!v.keep && !v.name), stay); const top=stay.sort((a,b)=>b.t-a.t)[0]; VLAST.set(n.id, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); }); storageUI(); await loadHist(); }   // only this device's automatic history goes; named versions and conflict copies stay (SYNC-PLAN §2)
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
 histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });
 histRestore.addEventListener('click',restoreVersion);
