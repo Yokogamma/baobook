@@ -3,6 +3,7 @@
 // Also the regression where an area narrowed for a frame while a block was carried in, and its blocks jumped down too early.
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
+import { ready, frames, still, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 // reduced motion: neighbours slide (appslide.mjs checks that), here positions are read right after each move
@@ -12,11 +13,13 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.
 // the ghost slides to its place (transition on top), so read where it is going, not where it is in this frame
 const ghost=()=>pg.evaluate(()=>{ const g=document.querySelector('.gbox.on'); if(!g) return null; const p=g.offsetParent, y=p.getBoundingClientRect().top+p.clientTop+parseFloat(g.style.top); return {y:Math.round(y), b:Math.round(y+g.offsetHeight), bad:g.classList.contains('bad'), inArea:!!g.closest('.abody')}; });
 const dragTop=()=>pg.evaluate(()=>{ const d=document.querySelector('.blk.drag'); return d? Math.round(d.getBoundingClientRect().top) : null; });
-const wipe=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(300); };
+const wipe=async()=>{ await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg); };
+// a click makes a block; the text goes in once the caret is in it (typed earlier, it would be lost)
+const typeAt=async(x,y)=>{ await pg.mouse.click(x,y); await pg.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest('#sheet .blk')),null,{timeout:5000}); };
 // pointermove reaches the page with the next frame: wait for it before reading positions
 const mv=async(x,y,o)=>{ await pg.mouse.move(x,y,o); await pg.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))); };
 const G=24, EDGE=14;   // frames within half a row of the middle are skipped: the edge snaps to the grid there
-await pg.goto(SITE); await pg.waitForTimeout(300); await wipe();
+await pg.goto(SITE); await ready(pg); await wipe();
 
 // 1–3 the owner's note: an area with one tall block of fixed width, a long block below the area is carried up into it
 const T="New 9.x feature that size the items to fit their content height as to not have scroll bars\ncase C: `sizeToContent:false` to turn off.\ncase E: has soft maxsize `sizeToContent:3`, shrinking to smaller content as needed\nDefaulting to different initial size (see code) to show grow/shrink behavior";
@@ -24,7 +27,7 @@ await pg.evaluate(async T=>{ const n={id:'nswap',title:'',blocks:[{id:'barea',ro
   const db=await new Promise((r,j)=>{ const q=indexedDB.open('sheet'); q.onsuccess=()=>r(q.result); q.onerror=j; });
   await new Promise(r=>{ const tx=db.transaction('notes','readwrite'); tx.objectStore('notes').put(n); tx.oncomplete=r; }); db.close();
   const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.current='nswap'; localStorage.setItem('sheet:settings', JSON.stringify(s)); sessionStorage.clear(); }, T);
-await pg.reload(); await pg.waitForTimeout(500);
+await pg.reload(); await ready(pg); await pg.waitForTimeout(200);
 { const area=pg.locator('.blk.is-area'), kid=area.locator('.abody .blk').first(); const k0=await box(kid), a0=await box(area.locator('.ablk')); const mid=k0.y+k0.h/2;
   const g=await box(pg.locator('#sheet > .blk:not(.is-area) .grip').last()); const gx=g.x+g.w/2, gy=g.y+g.h/2;
   await mv(gx,gy); await pg.mouse.down();
@@ -50,15 +53,17 @@ await pg.reload(); await pg.waitForTimeout(500);
   ok('3b після відходу вбік за межі колонки ('+out.y+') і назад: нижче середини блок області знову на своєму місці'+back2.at, back2.frames>3 && back2.home);
   // drop past the middle: the block of the area is below the dropped one
   for(let y=gy-200; y>=gy-470; y-=6) await mv(gx,y);
-  const gh=await ghost(); await pg.mouse.up(); await pg.waitForTimeout(300);
-  const r=await area.locator('.abody .blk').evaluateAll(els=>els.map(e=>{ const q=e.getBoundingClientRect(); return {sized:!!e.querySelector('.sized'), y:Math.round(q.top), b:Math.round(q.bottom)}; }));
+  const gh=await ghost(); await pg.mouse.up(); await frames(pg); await still(area);
+  // the drop settles over a few frames (the area grows, the blocks take their rows): read once two reads 100 ms apart agree
+  const read=()=>area.locator('.abody .blk').evaluateAll(els=>els.map(e=>{ const q=e.getBoundingClientRect(); return {sized:!!e.querySelector('.sized'), y:Math.round(q.top), b:Math.round(q.bottom)}; }));
+  let r=await read(); await until(async()=>{ await new Promise(t=>setTimeout(t,100)); const r2=await read(), same=JSON.stringify(r2)===JSON.stringify(r); r=r2; return same; }, 3000, 0);
   const was=r.find(o=>o.sized), came=r.find(o=>!o.sized);
   ok('3a відпустив після середини: обидва блоки в області, той, що був там, — під перенесеним ('+JSON.stringify(r)+')', r.length===2 && was && came && gh && !gh.bad && was.y>=came.b); }
 
 // 4–5 on the sheet, from above: a one-line block dragged down onto a four-line block
 await wipe();
-await pg.mouse.click(500,420); for(const [i,t] of ['перший рядок','другий рядок','третій рядок','четвертий рядок'].entries()){ if(i) await pg.keyboard.press('Enter'); await pg.keyboard.type(t); } await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
-await pg.mouse.click(500,200); await pg.keyboard.type('зверху'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+await typeAt(500,420); for(const [i,t] of ['перший рядок','другий рядок','третій рядок','четвертий рядок'].entries()){ if(i) await pg.keyboard.press('Enter'); await pg.keyboard.type(t); } await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+await typeAt(500,200); await pg.keyboard.type('зверху'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 { const B=pg.locator('#sheet > .blk').filter({hasText:'четвертий'}), A=pg.locator('#sheet > .blk').filter({hasText:'зверху'}); const b0=await box(B), a0=await box(A); const mid=b0.y+b0.h/2;
   ok('4 підготовка: нижній блок — 4 рядки, верхній — 1', b0.h===4*G && a0.h===G);
   const g=await box(A.locator('.grip')); const gx=g.x+g.w/2, gy=g.y+g.h/2; await mv(gx,gy); await pg.mouse.down();

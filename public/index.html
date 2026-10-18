@@ -880,7 +880,7 @@ const idb={ db:null, opening:null,
    open, so a save made in idbLost still lands before close(); inside `fn` only the transaction's own requests may be awaited (a foreign await commits it early) */
 const SDB={ tx(stores, mode, fn){ const locked=()=>Object.assign(new Error('locked'),{code:'locked'}); if(mode==='readwrite' && LOCK) return Promise.reject(locked()); if(!idb.db) return idb.open().then(()=>SDB.tx(stores,mode,fn));
     if(mode==='readwrite' && DEBUG.saveGate) return Promise.resolve().then(()=>DEBUG.saveGate(stores)).then(()=>SDB.run(stores,mode,fn)); return SDB.run(stores,mode,fn); },   // saveGate: a test's hand on every write (appsave): it waits for the promise, or fails with its error
-  run(stores, mode, fn){ return new Promise((res,rej)=>{ let t; try{ t=idb.db.transaction(stores.filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); }   // a store a damaged database lacks is left out: only a request to it fails
+  run(stores, mode, fn){ return new Promise((res0,rej)=>{ const res=v=>{ if(mode==='readwrite' && stores.includes('notes') && DEBUG.saveHold) Promise.resolve(DEBUG.saveHold(stores)).then(()=>res0(v), rej); else res0(v); };   /* saveHold: a test's hand after the write landed (appstatus) */ let t; try{ t=idb.db.transaction(stores.filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); }   // a store a damaged database lacks is left out: only a request to it fails
     const req=r=>new Promise((ok,ko)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); });
     const T={ get:(st,k)=>req(t.objectStore(st).get(k)), put:(st,v)=>{ t.objectStore(st).put(v); }, del:(st,k)=>{ t.objectStore(st).delete(k); },
       range:(st,a,b)=>req(t.objectStore(st).getAll(IDBKeyRange.bound(a,b))), byNote:(st,n)=>req(t.objectStore(st).index('note_t').getAll(IDBKeyRange.bound([n,-Infinity],[n,Infinity]))), blobs:n=>req(t.objectStore('blobs').getAll(IDBKeyRange.bound([n,''],[n,'￿']))) };
@@ -1437,12 +1437,13 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження
+function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
-   старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено» */
+   старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
+   edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
 function writeNote(n, delta){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ Object.assign(n, r.note); if(!r.note.deleted) delete n.deleted; if(!r.note.archived) delete n.archived; PENDING.add(n.id); }   // the stored result is the truth; the screen catches up at a safe point
@@ -1450,7 +1451,7 @@ function writeNote(n, delta){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev);
       tellTabs({t:'put',n:{...snap, ...(r.note||{})}}); }
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else unsaved.set(n.id,{reason:r.reason,since:now(),delta});   // the same delta is retried later
-    if(n===cur && saveP===p){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
+    if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
     saveUI(); storageUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null) safePoint(n.id); } }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here
 function retrySave(){ const wasDirty=dirty; if(wasDirty) flushSave(); for(const id of [...unsaved.keys()]){ const n=notes.find(x=>x.id===id); if(!n){ unsaved.delete(id); continue; } if(unsaved.get(id).revive){ removeStored(id); continue; } if(n===cur && wasDirty) continue; writeNote(n, (unsaved.get(id)||{}).delta); } saveUI(); }   // the failed write is retried with the delta it had; a note whose record was purged tries its revival again
@@ -1921,12 +1922,12 @@ function buildCode(b){
 /* стек скасування структурних дій (план 3.6): на кожну нотатку до UNDO_MAX записів, разом не більше UNDO_TOTAL записів і ~UNDO_BYTES байтів знімків; живе до перезавантаження вкладки.
    Плашка показує останній запис: дрібний (порожній чи однорядковий блок, розгрупування) — UNDO_MS, вагомий (область із блоками, багаторядковий текст) — без таймера, до ✕ чи наступної дії.
    Повертають по одному: кнопка плашки, Ctrl+Z поза полями, «Скасувати: …» у меню «⋯» шапки. Перехід до іншої нотатки лише ховає плашку — стек нотатки лишається. Пересування стрілками — тихий запис, без плашки. */
-const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStacks=new Map(); let undoT=null, undoRaf=0;
+const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStacks=new Map(); let undoT=null, undoRaf=0, undoHideT=0;   // undoHideT: hideUndo's timer that sets hidden after the fade; a new toast cancels it
 function undoStack(id){ id=id||(cur&&cur.id); if(!undoStacks.has(id)) undoStacks.set(id,[]); return undoStacks.get(id); }
 function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now()}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
 function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st) bytes+=e.size; if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES)) return; oldest.shift(); } }   // найстаріші записи витісняються першими, з будь-якої нотатки
-function showUndo(msg, big){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
-function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
+function showUndo(msg, big){ clearTimeout(undoT); undoT=null; clearTimeout(undoHideT); cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
+function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); clearTimeout(undoHideT); undoHideT=setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
 function dropUndo(){ hideUndo(); }   // ховає плашку; стек лишається (перехід між нотатками, тести)
 /* own confirmation instead of confirm(): ask({title, text, ok}) → Promise<boolean>. A modal <dialog>: the page under it is inert, the safe button has the focus;
    Esc, a click outside and system Back cancel (Back through nav, like the other overlays) */
@@ -2441,7 +2442,8 @@ function pickHist(id, delay=0){ if(!histOrder().includes(id)) return; H.sel=id; 
   clearTimeout(H.t); const go=()=>{ if(id==='now') showNow(); else showVersion(H.list.find(v=>v.id===id)); syncHist(); }; if(delay) H.t=setTimeout(go,delay); else go(); }
 const cardOf=b=>b.el.querySelector(':scope>.tcard,:scope>.cblk,:scope>.ablk')||b.el;
 function liveGeo(){ const s=sheet.getBoundingClientRect(), m=new Map(); for(const b of blocks){ const r=cardOf(b).getBoundingClientRect(); if(r.width) m.set(b.id,{x:r.left-s.left, y:r.top-s.top, w:r.width, h:r.height}); } return m; }
-function showVersion(v){ if(!v || !cur) return; const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
+function showVersion(v){ if(!v || !cur) return; if(!H.view) flushSave();   // an edit made with «Зараз» open is written first: flushSave skips while a version is shown, and showNow redraws the note from storage
+  const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
   if(!H.view) H.geo=liveGeo();   // where the live blocks are, for the outlines of the blocks this version has not
   H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
   const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
