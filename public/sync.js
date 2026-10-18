@@ -176,6 +176,9 @@ const budgetOf=env=>BUDGETS[env]||{writes:1500, reads:4000};
 const PACE={dev:3000, note:5000, big:30000, huge:120000, slow:30000, retryMin:2000, retryMax:300000, totalsEvery:3600000, totalsAfterMatch:900000, totalsRecheck:300000, waiting:30000, loopN:30, loopWindow:300000};
 const dayFmt=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles', year:'numeric', month:'2-digit', day:'2-digit'});
 const dayKey=t=>dayFmt.format(new Date(t));
+const dayClock=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles', hourCycle:'h23', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+// the first moment of the next Pacific day (the budget counts anew then); a DST change is covered by the key check
+const nextDay=t=>{ const f={}; for(const x of dayClock.formatToParts(new Date(t))) f[x.type]=+x.value; let n=t+((23-f.hour)*3600+(59-f.minute)*60+(60-f.second))*1000-(t%1000); for(let i=0;i<3 && dayKey(n)===dayKey(t);i++) n+=3600000; return n; };
 const bytesOf=str=>new TextEncoder().encode(str).length;
 const isNetErr=code=>code==='unavailable' || code==='deadline-exceeded' || code==='aborted' || code==='unknown';
 const errOf=e=>{ const code=(e && e.code) || 'unavailable'; return {code: ['unavailable','deadline-exceeded','permission-denied','resource-exhausted','too-large','invalid','failed-precondition','aborted'].includes(code)? (code==='aborted'? 'unavailable' : code) : 'unavailable', message: e && e.message || String(e)}; };
@@ -212,6 +215,7 @@ function makeSync(deps){
   async function load(){ if(S.loaded) return; S.loaded=true;
     await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); S.epoch=ep? ep.id : null; S.owner=ow||null;
       S.cursor.notes=(await t.get('sync',K.cursor('notes')))||null; S.cursor.versions=(await t.get('sync',K.cursor('versions')))||null; S.quota=(await t.get('sync','quota'))||null;
+      if(overBudget()){ S.paused=true; S.listenPaused=true; }   // the day's budget was spent before this start: the pause is restored from the stored quota, nothing is read until the next day
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j);
       for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r);
       for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10));
@@ -227,7 +231,8 @@ function makeSync(deps){
   function quotaNow(){ const day=dayKey(now()); if(!S.quota || S.quota.day!==day){ S.quota={k:'quota', day, reads:0, writes:0, lastSend:0}; S.quotaDirty=true; S.paused=false; } return S.quota; }
   const countRead=n=>{ const q=quotaNow(); q.reads+=Math.max(1,n|0); S.quotaDirty=true; if(q.reads>=budgets().reads) pauseDay(); };
   const countWrite=n=>{ const q=quotaNow(); q.writes+=n; q.lastSend=now(); S.quotaDirty=true; if(q.writes>=budgets().writes) pauseDay(); };
-  function pauseDay(){ if(S.paused) return; S.paused=true; log({t:'limit', reads:S.quota.reads, writes:S.quota.writes}); if(S.listen.notes || S.listen.versions){ stopListeners(); S.listenPaused=true; } }   // no more paid reads today: the listeners go too, and come back with the next day's budget
+  function pauseDay(){ if(S.paused) return; S.paused=true; log({t:'limit', reads:S.quota.reads, writes:S.quota.writes}); stopListeners(); S.listenPaused=true; }   // no more paid reads today: the listeners go too, and come back with the next day's budget
+  const overBudget=()=>{ const q=S.quota, b=budgets(); return !!q && q.day===dayKey(now()) && (q.reads>=b.reads || q.writes>=b.writes); }
   const budgetShare=()=>{ const q=quotaNow(), b=budgets(); return Math.max(q.reads/b.reads, q.writes/b.writes); };
   async function flushQuota(){ if(!S.quotaDirty || !S.quota) return; S.quotaDirty=false; try{ await db.tx(['sync'],'readwrite', async t=>{ t.put('sync', S.quota); }); }catch(_){ S.quotaDirty=true; } }
   // the pace is counted from time stamps clamped to now: a clock set back must not stall the queue for the difference
@@ -457,7 +462,7 @@ function makeSync(deps){
       if(last){ c.after=last; const cur=cursorMax(S.cursor[col], last); if(cur!==S.cursor[col]){ S.cursor[col]=cur; await db.tx(['sync'],'readwrite', async t=>{ t.put('sync',{k:K.cursor(col), ...cur}); }); } }
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
-  function startListener(col){ if(!S.cloud || !S.cloud.listen) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
+  function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
     S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000);
     S.listen[col]=S.cloud.listen(col, from, (docs, info)=>{ if(info && info.snapshot) S.snapshot[col]=true; if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); }, err=>{ log({t:'listen-error', col, code:errOf(err).code}); S.snapshot[col]=false; S.listen[col]=null; }); }   // every delivered document is a billed read (§4.17)
   function stopListeners(){ for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } S.snapshot[col]=false; } }
@@ -503,7 +508,7 @@ function makeSync(deps){
   function setStatus(code, n){ const st={code, n:n||0}; if(!S.lastStatus || S.lastStatus.code!==code || S.lastStatus.n!==st.n){ S.lastStatus=st; emit(deps.onStatus, code, st.n); } }
   function nextWake(nowT){ let next=Infinity; for(const [id,job] of S.jobs){ const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
     for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }
-    if(S.inbox.length || S.refetch.size) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); return next; }
+    if(S.inbox.length || S.refetch.size) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); if(S.paused) next=Math.min(next, nextDay(nowT)); return next; }   // paused: the step runs again when the budget counts anew
   async function stepOnce(){ if(!S.loaded) await load(); const nowT=now(); quotaNow();
     if(!S.started || !S.cloud || !S.owner){ return {did:'idle', next:Infinity, status:status()}; }
     if(S.listenPaused && !S.paused){ S.listenPaused=false; reconnect(); }   // the day turned: the budget is back, so are the listeners
@@ -535,14 +540,16 @@ function makeSync(deps){
       if(owner){ t.put('sync',{k:'owner', ...owner}); for(const n of await t.range('notes','','\uffff')){ if(isEmpty(n)) continue; t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); } for(const v of await t.range('versions','','\uffff')){ if(v.keep && v.name) t.put('sync',{k:K.out('v',v.id), tries:0, next:0}); } }
       else { t.del('sync','owner'); for(const n of await t.range('notes','','\uffff')) t.del('notes',n.id); for(const v of await t.range('versions','','\uffff')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],[ '\uffff','\uffff'])) t.del('blobs',[b.note,b.h]); }
       S.loaded=false; });
+    if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
     S.jobs.clear(); S.tries.clear(); S.refetch.clear(); S.err.clear(); S.sends.clear(); S.cursor={notes:null, versions:null}; S.scan={notes:null, versions:null}; S.catchupDone={notes:false, versions:false}; S.everCaughtUp=false; S.lastDelivered.clear(); S.waiting.clear(); S.snapshot={notes:false, versions:false}; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}};
     if(!S.loaded) await load(); if(S.started) connectCloud(); }
-  function connectCloud(){ if(!S.cloud || !S.owner) return; startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); startListener('versions'); }
+  function connectCloud(){ if(!S.cloud || !S.owner) return; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); startListener('versions'); }
   async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; S.started=true;
     if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} connectCloud(); } }
   function stop(){ S.started=false; for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } } }
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
-  function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; S.lastReconnect=now(); startListener('notes'); startListener('versions'); startCatchup('notes'); emit(deps.wake); }
+  function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
+    S.lastReconnect=now(); startListener('notes'); startListener('versions'); startCatchup('notes'); emit(deps.wake); }
 
   /* ── «forever» with an owner, an automatic tombstone, import (§4.4, §4.7, §4.14) ── */
   async function purgeLocal(id){ if(!S.loaded) await load(); try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const C=await t.get('notes',id); if(!C) return {ok:false, code:'missing'};
@@ -565,11 +572,12 @@ function makeSync(deps){
   async function importNote(raw){ if(!S.loaded) await load(); const nn=normNote(raw, deps); if(nn.bad) return {ok:false, code:'shape'};
     try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>importOne(t, raw, nn.note, after)); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
-  // several records in one transaction: a fallback copy and the backup of the record it displaces go in together or not at all. With `expect`
-  // the stored record must still be the one the caller saw ({id, updated} or null), else nothing is written and the caller decides again
-  async function importMany(raws, o={}){ if(!S.loaded) await load(); const norm=raws.map(r=>normNote(r, deps)); if(norm.some(n=>n.bad)) return {ok:false, code:'shape'};
-    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{
-      if(o.expect){ const C=await t.get('notes',o.expect.id); if((C? C.updated : null)!==(o.expect.updated===undefined? null : o.expect.updated)) return {ok:false, code:'changed'}; }
+  // several records in one transaction: a fallback copy and the backup of the record it displaces go in together or not at all. `src` is the
+  // list of records, or a function of the stored record of `o.id` (null when there is none) that returns the list: it decides inside the
+  // transaction, over the record as it is at that moment, so no write can slip in between the look and the move
+  async function importMany(src, o={}){ if(!S.loaded) await load();
+    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const raws=typeof src==='function'? src(o.id? ((await t.get('notes',o.id))||null) : null) : src;
+      if(!Array.isArray(raws)) return {ok:false, code:'shape'}; const norm=raws.map(r=>normNote(r, deps)); if(norm.some(n=>n.bad)) return {ok:false, code:'shape'};
       const results=[]; for(let i=0;i<raws.length;i++) results.push(await importOne(t, raws[i], norm[i].note, after)); return {ok:true, results}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function state(id){ if(!S.loaded) await load(); return db.tx(['notes','sync','versions'],'readonly', async t=>({note:await t.get('notes',id), meta:await t.get('sync',K.meta('n',id)), job:await t.get('sync',K.out('n',id)), tr:await t.get('sync',K.tr('n',id)), seen:await t.get('sync',K.seen('n',id)), purged:await t.get('sync',K.purged(id)), refetch:await t.get('sync',K.refetch('n',id)), quarantine:await t.get('sync',K.quarantine('n',id)), versions:await t.byNote('versions',id)})); }

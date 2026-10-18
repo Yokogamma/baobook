@@ -927,13 +927,13 @@ const db={ backend:'local', inited:false, ready:null,
     try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; if(LOCK) return; const w=await writerLock(); if(w) fbLocal(); else setLock(w===false? 'other' : 'nolock'); return; }
     }finally{ db.inited=true; } })(); },   // with IndexedDB the fallback copies move in through the sync core once it runs: db.move() from start()
   // fallback copies (writes that missed IndexedDB) move into the store through the core, so lrev, the queue and the history see them like any other
-  // write; the copy and the backup of the record it displaces go in one transaction, and only if the stored record is still the one read here.
+  // write; the copy and the backup of the record it displaces are decided over the stored record inside one transaction and go in together.
   // A plain key is written by a tab without IndexedDB, only under the writer lock, and by an app from before PR 0. So this tab drops one only
   // while it holds the lock (or the browser has no Web Locks, and then no tab without IndexedDB writes), and only if the key did not change
   async move(){ if(db.backend!=='idb' || LOCK || !SYNC) return;
     const w=hasLocks() && store.keys(NK).some(k=>!fbOnce(k))? await writerLock() : null, mine=!!w || !hasLocks();
     try{ for(const k of store.keys(NK)){ if(LOCK) return; const raw=store.raw(k), n=store.get(k), once=fbOnce(k); if(!validNote(n)) continue; let r=null;
-      try{ const ex=(await SYNC.state(n.id)).note||null; if(!once && !mine && ex && (n.updated||0)<=(ex.updated||0)) r={ok:true}; else { const raws=fbPut(ex, n); r=raws.length? await SYNC.importMany(raws, {expect:{id:n.id, updated:ex? ex.updated : null}}) : {ok:true}; } }catch(_){ r=null; }   // a plain key that stays moves in only when it is newer: an older copy waits for a start under the lock, so no start stacks another backup of it
+      try{ r=await SYNC.importMany(ex=>(!once && !mine && ex && (n.updated||0)<=(ex.updated||0))? [] : fbPut(ex, n), {id:n.id}); }catch(_){ r=null; }   // decided over the stored record inside the move's transaction. A plain key that stays moves in only when it is newer: an older copy waits for a start under the lock, so no start stacks another backup of it
       if(LOCK) return; if(!r || !r.ok) continue;   // not moved: the key stays for the next start
       if(once || (mine && store.raw(k)===raw)) store.del(k); }   // a key written once cannot have changed; a plain one stays without the lock, or if it was rewritten meanwhile
     }finally{ if(w) w(); } },
@@ -1066,11 +1066,22 @@ const fieldActive=()=>{ if(composing) return true; const a=document.activeElemen
 async function safePoint(id){ const n=notes.find(x=>x.id===id); if(!n || n!==cur || busy(n) || fieldActive()) return; await takeStored(id); }
 function flushPending(){ for(const id of [...PENDING]){ const n=notes.find(x=>x.id===id); if(!n){ PENDING.delete(id); continue; } if(busy(n)) continue; if(n===cur){ if(!fieldActive()) safePoint(id); } else takeStored(id); } }
 document.addEventListener('focusout',()=>{ if(PENDING.size) setTimeout(flushPending,0); });   // after the focus has settled: a move between two fields is not a safe point
-async function removeStored(id){ const n=notes.find(x=>x.id===id); if(!n) return;
-  let typed=false; if(n===cur && dirty){ clearTimeout(saveT); dirty=false; n.blocks=serialize(); n.updated=now(); typed=true; }   // the text typed into a note a tombstone just purged goes to the revived note, by the import contract (§4.7); a write of the record itself would be refused
-  if(typed || busy(n) || unsaved.has(id)){ const body=noteSnap(n); let r=null; try{ r=await SYNC.importNote({id, ...body}); }catch(e){ r={ok:false, code:(e && e.code)||'error'}; }
-    if(!r || !r.ok){ unsaved.set(id,{reason:r && r.error? reasonOf(r.error) : loc('save.reason.error',{name:(r && r.code)||'import'}), since:now(), revive:true}); saveUI(); storageUI(); return; } }   // the text stays here, visible and exportable, with the warning; «Повторити» tries the revival again
-  notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id);
+// the record is purged (a tombstone from the cloud, or an own write refused as purged): the note leaves memory once everything typed here is in the
+// revived note. One revival per note at a time (a refused write or «Повторити» joins it); text typed while a snapshot is being written goes with the
+// next one (moveInto merges it into the same revived note), and the note stays until the last snapshot is confirmed
+const REVIVING=new Map(), EDITS=new Map();   // REVIVING: id → the revival in progress; EDITS: id → how many edits markDirty saw
+function removeStored(id){ if(REVIVING.has(id)) return REVIVING.get(id); const p=removeStoredNow(id).finally(()=>REVIVING.delete(id)); REVIVING.set(id,p); return p; }
+async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) return; let moved=false, prev=null, target=null;
+  for(;;){ let typed=false; if(n===cur && dirty){ clearTimeout(saveT); dirty=false; n.blocks=serialize(); n.updated=now(); typed=true; }   // the text typed here goes to the revived note, by the import contract (§4.7); a write of the record itself would be refused
+    const gen=EDITS.get(id)||0;
+    if(typed || moved || busy(n) || unsaved.has(id)){ const body=noteSnap(n); let r=null;
+      try{ if(target && prev){ const E=prev, D=body; r=await SYNC.writeLocal(target,(C,meta,t)=>{ if(!C) return D; const m=SC.merge3(E, D, C, {dev:S.devId, t}); return {note:m.note, copies:m.copies}; }); if(r.ok){ r.kind='revived'; r.id=target; } }   // the next snapshot is the same typing gone on: its changes over the previous one go onto the revived note as an edit, not as a second copy
+        else r=await SYNC.importNote({id, ...body}); }catch(e){ r={ok:false, code:(e && e.code)||'error', error:e}; }
+      if(!r || !r.ok){ unsaved.set(id,{reason:r && r.error? reasonOf(r.error) : loc('save.reason.error',{name:(r && r.code)||'import'}), since:now(), revive:true}); saveUI(); storageUI(); return; }   // the text stays here, visible and exportable, with the warning; «Повторити» tries the revival again
+      moved=true; prev=body; if(r.kind==='revived' && r.id) target=r.id; }
+    if((EDITS.get(id)||0)!==gen || (n===cur && dirty)) continue;   // typed while the snapshot was being written: the next snapshot goes the same way
+    break; }
+  notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id); EDITS.delete(id);
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); }
 function syncChanged(ev){ if(!STARTED){ return; } if(ev.kind==='purged') removeStored(ev.id); else if(ev.kind==='note' || ev.kind==='revived') takeStored(ev.id); else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
 function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
@@ -1437,7 +1448,7 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
+function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
