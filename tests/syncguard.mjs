@@ -1,7 +1,8 @@
 // The sync core under Node: the guarantees a review found broken (docs/SYNC-PLAN.md §4.7, §4.6, §4.17). A conflict copy keeps a block over the
 // automatic history's body limit in full, and two copies that differ only in such a block are both kept; a version that arrives before its
 // note is applied in its latest state once the note comes (no quarantine of the earlier state); the listener's deliveries count as reads,
-// the budget stops the listeners (a reconnect or a restart on the same day does not bring them back, the next day does); a fallback copy's
+// the budget stops the listeners (a reconnect or a restart on the same day does not bring them back, the next day does), and a paused engine
+// names the next day as its wake-up time whatever waits (a job, a page, a refetch); a fallback copy's
 // move decides over the stored record inside its own transaction.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
@@ -65,6 +66,15 @@ const body=d=>{ const o={title:d.title, blocks:d.blocks, created:d.created, upda
   ok('3d a new engine over the store on the same day: paused from the start, no listeners, nothing read ('+G2.sync._S.quota.reads+')', G2.sync._S.paused && G2.sync.status().code==='limit' && cloud.subs.filter(s=>s.dev==='G').length===0 && G2.sync._S.quota.reads===r1 && !G2.db.get('notes','late1'));
   cloud.advance(86400e3); await idle(G2); const subs2=cloud.subs.filter(s=>s.dev==='G').length;
   ok('3e the next day: the listeners are back ('+subs2+'), the notes written during the pause arrived, the budget counts anew ('+G2.sync._S.quota.reads+' reads)', subs2===2 && !!G2.db.get('notes','late1') && !!G2.db.get('notes','p1') && G2.sync.status().code!=='limit' && G2.sync._S.quota.reads<30 && cloud.doc('notes','s0').blocks[0].text==='s0 (G під час паузи)'); }
+
+/* ── 3f. the limit reached during the first catch-up: the page stays due but forbidden, and the step still names the next day ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<20;i++){ cloud.advance(120000); cloud.write('notes',{id:'c'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'c'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }   // two minutes apart: the next day's windows hold only the last few
+  const H=await mk(cloud,'H',{budgets:{reads:15, writes:1000}}); await idle(H); H.sync._S.refetch.add('c0');   // the first page alone spends the budget; a refetch waits as well
+  const active=()=>!!((H.sync._S.catchup.notes && H.sync._S.catchup.notes.active) || (H.sync._S.catchup.versions && H.sync._S.catchup.versions.active));
+  const steps=[]; for(let i=0;i<3;i++){ const r=await H.sync.step(); steps.push({did:r.did, wait:r.next-cloud.now()}); } const reads=H.sync._S.quota.reads;
+  ok('3f paused during the first load: a catch-up is still active, three steps are idle and every one names the next day ('+steps.map(x=>x.did+':'+Math.round(x.wait/60000)+'min').join(' ')+'), reads stay at '+reads, H.sync._S.paused && active() && steps.every(x=>x.did==='idle' && x.wait>60000 && S.dayKey(cloud.now()+x.wait)!==S.dayKey(cloud.now())) && reads>=15 && H.sync._S.quota.reads===reads);
+  cloud.advance(86400e3); await idle(H);
+  ok('3g the next day the catch-up finishes within the budget ('+H.sync._S.quota.reads+' reads) and all the notes are here', !active() && H.db.all('notes').length===20 && H.sync.status().code!=='limit' && H.sync._S.quota.reads<15); }
 
 /* ── 4. a fallback copy's move decides over the stored record inside the transaction, not over an earlier look at it ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A');
