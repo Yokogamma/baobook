@@ -52,7 +52,7 @@ Moving out of `mockups`, with no new features. Steps:
 - **Trash and archive (`docs/TRASH-PLAN.md`):** PR 1 (the in-app `ask()` dialog instead of `confirm()`, a broom for «Очистити аркуш», undo after clearing) PR 2 (a 30-day trash, read-only view, restore, delete forever) and PR 3 (the archive: a section without a time limit, editable notes, a search group) are done.
 - **Links between notes (`docs/LINKS-PLAN.md`):** done: `[[` and the link button, links to notes and to blocks, «Копіювати посилання», following with «back», the address of the open note, the notes that link here, the hover preview.
 - **Secret links with Matamata:** A0 → A1 → A2; the plan lives in the private `payee-private-docs`.
-- **Sync and sign-in (`docs/SYNC-PLAN.md`):** plan approved on 2026-10-16, amended on 2026-10-17 with the quota estimate (#56) and a design review. PR 0 (storage groundwork, #55) is merged and goes to production on its own before PR 1 is released; then PR 1 (sync core) to PR 5. The Firebase project `baobook-3fe7f` is set up; what is left of section 6 of the plan is needed for PR 3.
+- **Sync and sign-in (`docs/SYNC-PLAN.md`):** plan approved on 2026-10-16, amended on 2026-10-17 with the quota estimate (#56) and a design review. PR 0 (storage groundwork, #55) is merged and released. PR 1 (the sync core: `public/sync.js`, delta writes and the editor snapshot in `index.html`, the test cloud in `tests/lib`; no Firebase SDK yet) is built and stays in `main` until a release is asked for; PR 2 (several tabs) to PR 5 follow. The Firebase project `baobook-3fe7f` is set up; what is left of section 6 of the plan is needed for PR 3.
 
 ## After the move
 

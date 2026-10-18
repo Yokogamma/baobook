@@ -1,5 +1,6 @@
 // The «Скасувати» toast and the save status under unlucky timing: a frame that comes late after Ctrl+Z, an edit made while ✓ is
-// still shown, and an older write that finishes after a newer edit. Writes are held and released by the scenario through sheetDebug.idb.put
+// still shown, and an older write that finishes after a newer edit. Writes are held and released by the scenario through sheetDebug.saveHold:
+// the write lands in storage at once, the app hears of it when the scenario lets go (the write path goes through the sync core, not idb.put)
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
 const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
@@ -19,9 +20,8 @@ const out=async()=>{ await pg.keyboard.press('Escape'); await pg.evaluate(()=>do
 const undo=pg.locator('#undo'), saved=pg.locator('#saved'), cls=()=>saved.getAttribute('class'), label=()=>saved.locator('.sl').innerText();
 const settled=()=>until(async()=>!/pend/.test(await cls()));   // no edit waits for its write
 // every write goes into storage at once, but the app hears the result only when the scenario calls go() on it: window.__q in start order
-const holdWrites=()=>pg.evaluate(()=>{ const i=sheetDebug.idb; i._put=i._put||i.put; window.__q=[];
-  i.put=n=>{ const w={real:i._put(n), stored:false}; w.real.then(()=>{ w.stored=true; },()=>{}); window.__q.push(w); return new Promise((res,rej)=>{ w.go=()=>w.real.then(res,rej); }); }; });
-const realWrites=()=>pg.evaluate(()=>{ const i=sheetDebug.idb; i.put=i._put; });
+const holdWrites=()=>pg.evaluate(()=>{ window.__q=[]; sheetDebug.saveHold=()=>{ const w={stored:true}; const p=new Promise(res=>{ w.go=()=>res(); }); window.__q.push(w); return p; }; });   // called once the transaction has landed
+const realWrites=()=>pg.evaluate(()=>{ sheetDebug.saveHold=null; });
 const heldStored=k=>until(()=>pg.evaluate(k=>window.__q.length===k+1 && window.__q[k].stored,k));   // write k has started, is in storage and waits for go()
 
 await pg.goto(SITE); await ready();
