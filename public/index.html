@@ -840,28 +840,35 @@ const store={
 const NK='sheet:note:', SK='sheet:settings';
 /* ══ сховище нотаток: IndexedDB (запас місця, асинхронно); localStorage — запасний варіант і місце для налаштувань ══ */
 const IDB_NAME='sheet';
-/* ══ the database version is the data format (docs/SYNC-PLAN.md, PR 0): this code writes v2. The database opens without a version, so a newer
-   app's data (a larger version, e.g. after rolling the site back) still opens, but only to view and export: LOCK stops every write, the
-   localStorage fallback included. On a new device that open makes an empty v1, and the stores come with v2.
+/* ══ the database version is the data format (docs/SYNC-PLAN.md, PR 0 and PR 1): this code writes v3. The database opens without a version, so a newer
+   app's data (a larger version, e.g. after rolling the site back, or a `format` record in `sync` above this code's) still opens, but only to view
+   and export: LOCK stops every write, the localStorage fallback included. On a new device that open makes an empty v1, and the stores come with v3;
+   v2 (PR 0) gets the `sync` store. A v3 database without a `format` record reads as the current format.
    LOCK: null; 'newer' (the data is newer than this code); 'updated' (another tab upgraded the database while this one was open);
    'blocked' (another tab keeps this one from creating the stores); 'other' (no IndexedDB, and another tab is the one that writes);
    'nolock' (no IndexedDB, and the browser cannot confirm that this tab is the only one that writes) ══ */
-const IDB_VER=2, IDB_STORES=['notes','versions','blobs'];
+const IDB_VER=3, IDB_STORES=['notes','versions','blobs','sync'];
 let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
 function setLock(k){ if(LOCK) return; LOCK=k; if(STARTED) lockUI(); }
-const idb={ db:null,
-  open(){ return new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
+const idb={ db:null, opening:null,
+  // one open at a time: concurrent callers (saves, the sync engine) share the promise instead of making two connections
+  open(){ if(idb.opening) return idb.opening; return idb.opening=new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
     const go=v=>{ let r, bt=0; try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
       r.onupgradeneeded=()=>{ if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
         if(!d.objectStoreNames.contains('versions')){ const s=d.createObjectStore('versions',{keyPath:'id'}); s.createIndex('note_t',['note','t']); s.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
-        if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']}); };   // тіла блоків за хешем вмісту
+        if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']});   // тіла блоків за хешем вмісту
+        if(!d.objectStoreNames.contains('sync')) d.createObjectStore('sync',{keyPath:'k'});   // sync metadata (SYNC-PLAN 4.3): format, owner, epoch, per-note meta, queue, seen, cursor…
+        try{ r.transaction.objectStore('sync').put({k:'format', v:IDB_VER}); }catch(_){} };
       r.onsuccess=()=>{ clearTimeout(bt); const d=r.result;
-        if(d.version>IDB_VER) setLock('newer');   // checked first, before the fallback copies move or anything is cleaned up
-        else if(!LOCK && d.version<IDB_VER && IDB_STORES.some(s=>!d.objectStoreNames.contains(s))){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: v2 creates what is missing. A v2 is never bumped past IDB_VER to mend a missing store: that would read as a newer app's data and lock this app out
-        idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
+        const done=()=>{ idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
+        if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
+        if(!LOCK && d.version<IDB_VER && IDB_STORES.some(s=>!d.objectStoreNames.contains(s))){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: the upgrade creates what is missing. A database at IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
+        // the second half of the format check: a `format` record above this code's version marks data of a newer app in a database of the same version
+        if(!d.objectStoreNames.contains('sync')) return done();
+        try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>IDB_VER) setLock('newer'); done(); }; g.onerror=()=>done(); }catch(_){ done(); } };
       r.onerror=()=>{ clearTimeout(bt); if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
       r.onblocked=()=>{ clearTimeout(bt); bt=setTimeout(()=>{ setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block stops the writes
-    go(0); }); },
+    go(0); }).finally(()=>{ idb.opening=null; }); },
   async run(mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
   async tx(stores,mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
