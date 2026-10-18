@@ -1,0 +1,81 @@
+// Firestore security rules of Baobook sync: docs/SYNC-PLAN.md §4.16 (data in §4.2, sending in §4.5, the trash in §4.8,
+// named versions in §4.9). Tested on the emulator by tests/rules/firestore.mjs; not published to the real project until PR 3.
+//
+// ACCESS PLACEHOLDER: 'OWNER_UID' in allowed() stands for the owner's Firebase Auth uid, which is not known yet. It matches no
+// account, so these rules as they stand let nobody in. PR 3 replaces it with the owner's User UID after the owner's first
+// sign-in on .dev (§6, step 2), and only then are the rules published (§6, step 3). The tests put a test uid in its place.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function allowed() { return request.auth != null && request.auth.uid in ['OWNER_UID']; }   // no document read
+    function owner(env, uid) { return env in ['dev', 'app'] && allowed() && request.auth.uid == uid; }
+    function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    function optNum(d, k) { return !(k in d) || d[k] is number; }
+    function optPos(d, k) { return !(k in d) || (d[k] is number && d[k] > 0); }   // deleted, archived: a time, absent when not; 0 would read as «not» on a device
+    function receipts(d, o) {                 // own receipt == this op; other devices' receipts untouched
+      return d.rcpt is map && d.rcpt.size() <= 200 && d.rcpt[d.dev] == d.op
+        && (o == null ? d.rcpt.keys().hasOnly([d.dev])
+                      : d.rcpt.diff(o.rcpt).affectedKeys().hasOnly([d.dev]));
+    }
+    function stamp(d, o) {                    // every synced document
+      return d.v == 1 && d.rev is int && d.rev == (o == null ? 1 : o.rev + 1) && d.srv == request.time
+        && str(d.op, 40) && str(d.dev, 40) && (!('dn' in d) || str(d.dn, 80)) && receipts(d, o);
+    }
+
+    match /env/{env}/users/{uid}/notes/{id} {
+      function live(d) {
+        return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','title','blocks','created','updated'])
+          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','title','blocks','created','updated','deleted','archived','revived','tsrv'])
+          && d.title is string && d.title.size() <= 2000 && d.blocks is list && d.blocks.size() <= 5000
+          && d.created is number && d.updated is number && optPos(d, 'deleted') && optPos(d, 'archived')
+          && (!('revived' in d) || d.revived is map) && (!('tsrv' in d) || (d.tsrv is timestamp && 'deleted' in d));
+      }
+      function tomb(d, o) {
+        return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','purged'])
+          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','purged','auto']) && d.purged is number
+          && (!('auto' in d) || (d.auto == true && o != null && 'deleted' in o && o.deleted is number && o.deleted > 0 && 'tsrv' in o
+                                 && request.time > o.tsrv + duration.value(30, 'd')));   // the server checks the age
+      }
+      function trashDated(d, o) {            // entering or extending the trash is dated by the server
+        return !('deleted' in d)
+          || (o != null && 'deleted' in o && d.deleted == o.deleted && d.get('tsrv', null) == o.get('tsrv', null))
+          || d.get('tsrv', null) == request.time;
+      }
+      allow get, list: if owner(env, uid);
+      allow create: if owner(env, uid) && stamp(request.resource.data, null)
+        && (tomb(request.resource.data, null) || (live(request.resource.data) && trashDated(request.resource.data, null)));
+      allow update: if owner(env, uid) && !('purged' in resource.data)            // a tombstone is final
+        && stamp(request.resource.data, resource.data)
+        && (tomb(request.resource.data, resource.data)
+            || (live(request.resource.data) && trashDated(request.resource.data, resource.data)));
+      allow delete: if false;
+    }
+
+    match /env/{env}/users/{uid}/versions/{id} {
+      function noteAlive(note) {
+        let p = /databases/$(db)/documents/env/$(env)/users/$(uid)/notes/$(note);
+        return exists(p) && get(p).data.get('purged', null) == null;
+      }
+      function vlive(d) {
+        return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','note','t','name','title','blocks'])
+          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','note','t','name','title','blocks'])
+          && str(d.note, 64) && d.t is number && str(d.name, 80)   // 64, not 40: the note id limit of the core (LIM.id in sync.js)
+          && d.title is string && d.title.size() <= 2000 && d.blocks is list && d.blocks.size() <= 5000;
+      }
+      function vtomb(d) {
+        return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','note','deleted'])
+          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','note','deleted']) && d.deleted == true;
+      }
+      allow get, list: if owner(env, uid);
+      allow create: if owner(env, uid) && stamp(request.resource.data, null)
+        && vlive(request.resource.data) && noteAlive(request.resource.data.note);
+      allow update: if owner(env, uid) && !('deleted' in resource.data)           // a deleted version stays deleted
+        && stamp(request.resource.data, resource.data)
+        && request.resource.data.note == resource.data.note
+        && (vtomb(request.resource.data)                                          // deleting is always allowed
+            || (vlive(request.resource.data) && noteAlive(request.resource.data.note)   // rename: live parent, same snapshot
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','rev','op','srv','dev','dn','rcpt'])));
+      allow delete: if false;
+    }
+  }
+}
