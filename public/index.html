@@ -1068,13 +1068,14 @@ function flushPending(){ for(const id of [...PENDING]){ const n=notes.find(x=>x.
 document.addEventListener('focusout',()=>{ if(PENDING.size) setTimeout(flushPending,0); });   // after the focus has settled: a move between two fields is not a safe point
 // the record is purged (a tombstone from the cloud, or an own write refused as purged): the note leaves memory once everything typed here is in the
 // revived note. One revival per note at a time (a refused write or «Повторити» joins it); text typed while a snapshot is being written goes with the
-// next one (moveInto merges it into the same revived note), and the note stays until the last snapshot is confirmed
+// next one as an edit of the revived note, and the note stays until the last snapshot is confirmed: busy() counts the revival, so the tab check
+// (syncTabs → dropNote) and the beforeunload protection treat it as an unfinished save
 const REVIVING=new Map(), EDITS=new Map();   // REVIVING: id → the revival in progress; EDITS: id → how many edits markDirty saw
 function removeStored(id){ if(REVIVING.has(id)) return REVIVING.get(id); const p=removeStoredNow(id).finally(()=>REVIVING.delete(id)); REVIVING.set(id,p); return p; }
 async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) return; let moved=false, prev=null, target=null;
   for(;;){ let typed=false; if(n===cur && dirty){ clearTimeout(saveT); dirty=false; n.blocks=serialize(); n.updated=now(); typed=true; }   // the text typed here goes to the revived note, by the import contract (§4.7); a write of the record itself would be refused
     const gen=EDITS.get(id)||0;
-    if(typed || moved || busy(n) || unsaved.has(id)){ const body=noteSnap(n); let r=null;
+    if(typed || moved || inflight.has(id) || unsaved.has(id)){ const body=noteSnap(n); let r=null;   // something of this note is not in storage (busy() itself counts the revival, so it is not asked here)
       try{ if(target && prev){ const E=prev, D=body; r=await SYNC.writeLocal(target,(C,meta,t)=>{ if(!C) return D; const m=SC.merge3(E, D, C, {dev:S.devId, t}); return {note:m.note, copies:m.copies}; }); if(r.ok){ r.kind='revived'; r.id=target; } }   // the next snapshot is the same typing gone on: its changes over the previous one go onto the revived note as an edit, not as a second copy
         else r=await SYNC.importNote({id, ...body}); }catch(e){ r={ok:false, code:(e && e.code)||'error', error:e}; }
       if(!r || !r.ok){ unsaved.set(id,{reason:r && r.error? reasonOf(r.error) : loc('save.reason.error',{name:(r && r.code)||'import'}), since:now(), revive:true}); saveUI(); storageUI(); return; }   // the text stays here, visible and exportable, with the warning; «Повторити» tries the revival again
@@ -1471,7 +1472,7 @@ function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; 
   saveErrMsg.innerHTML='<b>'+escHtml(loc('save.failedReason',{reason:first.reason}))+'.</b> '+escHtml(k===1? loc('save.unsavedOne',{name:names[0]}) : loc('save.unsavedMany',{n:k, names:names.join(', ')}))+' '+escHtml(loc('save.memoryOnly')); }
 saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('click',()=>exportAll()); saveWarn.addEventListener('click',()=>{ setSide(true); saveErr.scrollIntoView({block:'nearest'}); });
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
-window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
+window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size||REVIVING.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
 function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
   if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
@@ -1536,7 +1537,7 @@ newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection
    back from the page cache) compares its notes with the storage when it is shown again. */
 const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
-const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet
+const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || REVIVING.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet: a failed or in-flight write, a revival being written, typing
 function takeNote(r){ if(!validNote(r)) return; const n=notes.find(x=>x.id===r.id);
   if(!n){ notes.push(r); renderList(); storageUI(); return; }
   if((r.updated||0)<=(n.updated||0)) return;

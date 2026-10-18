@@ -506,7 +506,8 @@ function makeSync(deps){
     const st={code, n: code==='checking'? S.scanFound : jobs}; setStatus(code, st.n); return st; }
   // every status report goes through here, so a direct report (a pass's progress, denied, no space) and the computed one never disagree
   function setStatus(code, n){ const st={code, n:n||0}; if(!S.lastStatus || S.lastStatus.code!==code || S.lastStatus.n!==st.n){ S.lastStatus=st; emit(deps.onStatus, code, st.n); } }
-  function nextWake(nowT){ let next=Infinity; for(const [id,job] of S.jobs){ const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
+  function nextWake(nowT){ let next=Infinity; for(const [id,job] of S.jobs){ if(S.paused){ const tr=S.tries.get(id); if(!(tr && tr.result && tr.result.purged)) continue; }   // paused: only a tombstone's attempt may still run; the other jobs wait for the next day, not for the next step
+      const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
     for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }
     if(S.inbox.length || S.refetch.size) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); if(S.paused) next=Math.min(next, nextDay(nowT)); return next; }   // paused: the step runs again when the budget counts anew
   async function stepOnce(){ if(!S.loaded) await load(); const nowT=now(); quotaNow();

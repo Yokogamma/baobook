@@ -35,8 +35,8 @@ const note=(i,t)=>({title:'', blocks:[{id:'b',row:1,fx:0,text:t||('x'+i)}]});
 // a storage fault by flag: while localStorage.__failRevived is set, a put of a revived note throws QuotaExceededError
 const PATCH=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototype.put=function(v){ let f=''; try{ f=localStorage.getItem('__failRevived')||''; }catch(_){} if(this.name==='notes' && f && v && v.revived) throw new DOMException('full','QuotaExceededError'); return put.apply(this, arguments); }; };
 const A=await newDevice(br, cloud, SITE, 'A', {ctx:CTX, connect:{pace:PACE}, init:PATCH}), B=await newDevice(br, cloud, SITE, 'B', {ctx:CTX, connect:{pace:PACE}});
-for(const i of [1,3,4,5,6,7,8,9,10,11,12,13]) cloudWrite(cloud,'x'+i,note(i)); await quiet([A,B],3);
-ok('0 both devices hold the notes from the phone', (await notesOf(A)).filter(n=>/^x\d+$/.test(n.id)).length===12 && (await notesOf(B)).filter(n=>/^x\d+$/.test(n.id)).length===12);
+for(const i of [1,3,4,5,6,7,8,9,10,11,12,13,14]) cloudWrite(cloud,'x'+i,note(i)); await quiet([A,B],3);
+ok('0 both devices hold the notes from the phone', (await notesOf(A)).filter(n=>/^x\d+$/.test(n.id)).length===13 && (await notesOf(B)).filter(n=>/^x\d+$/.test(n.id)).length===13);
 
 /* ── 1. two devices revive one note: two revived notes, nothing lost ── */
 await off(A,false); await off(B,false); await edit(A,'x1','x1 (A офлайн)'); await edit(B,'x1','x1 (B офлайн)'); tomb('x1');
@@ -117,5 +117,15 @@ const mid13=await A.pg.evaluate(()=>({imports:window.__imports, cur:sheetDebug.c
 await A.pg.keyboard.type(' LATE_UNIQUE'); await A.pg.waitForTimeout(500); await A.pg.evaluate(()=>window.__release()); await A.pg.waitForTimeout(600); await quiet(A,3);
 const an13=await notesOf(A), r13=revivedFrom(an13,'x13');
 ok('12d the revival waited ('+mid13.imports+' import started, x13 still open and focused: '+mid13.focused+'); the text typed meanwhile is in the revived note too ('+(r13[0]? text(r13[0]) : '—')+'), x13 is gone, nothing is lost', mid13.imports>=1 && mid13.cur==='x13' && mid13.focused && r13.length===1 && /BASE FIRST/.test(text(r13[0])) && /LATE_UNIQUE/.test(text(r13[0])) && !an13.find(n=>n.id==='x13') && !!cloud.doc('notes',r13[0].id) && /LATE_UNIQUE/.test(JSON.stringify(cloud.doc('notes',r13[0].id).blocks)) && (await A.pg.evaluate(()=>document.getElementById('saveWarn').hidden)));
+/* ── 12e. a revival in flight is an unfinished save: the tab check keeps the note, leaving the page would warn; a failed write then leaves the text with the warning ── */
+await openNote(A.pg,'x14'); const t14=A.pg.locator('#sheet .blk .txt').first(); await t14.click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' UNIQUE_PENDING');   // not written yet (dirty) when the tombstone comes: the text goes to the revived note
+await A.pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__release=r; }); }); tomb('x14'); await A.pg.waitForTimeout(700);
+const mid14=await A.pg.evaluate(()=>{ document.dispatchEvent(new Event('visibilitychange')); const e=new Event('beforeunload',{cancelable:true}); window.dispatchEvent(e); return {warn:e.defaultPrevented}; }); await A.pg.waitForTimeout(500);
+const kept14=await A.pg.evaluate(()=>({inList:!!document.querySelector('#list .item[data-id="x14"]'), cur:sheetDebug.cur(), sheet:document.getElementById('sheet').innerText}));
+await A.pg.evaluate(()=>localStorage.setItem('__failRevived','1')); await A.pg.evaluate(()=>window.__release()); await A.pg.waitForTimeout(600); await quiet(A,2);
+const an14=await notesOf(A), ui14=await A.pg.evaluate(()=>({inList:!!document.querySelector('#list .item[data-id="x14"]'), warn:!document.getElementById('saveWarn').hidden, msg:document.getElementById('saveErrMsg').innerText, sheet:document.getElementById('sheet').innerText}));
+ok('12e while the revival waited: the page would warn before unloading, the tab check kept x14; the write then failed: x14 is still here with its text and the warning, nothing in storage', mid14.warn && kept14.inList && kept14.cur==='x14' && /UNIQUE_PENDING/.test(kept14.sheet) && ui14.inList && /UNIQUE_PENDING/.test(ui14.sheet) && ui14.warn && /UNIQUE_PENDING/.test(ui14.msg) && !an14.find(n=>n.id==='x14') && !revivedFrom(an14,'x14').length);
+await A.pg.evaluate(()=>localStorage.removeItem('__failRevived')); await A.pg.evaluate(()=>document.getElementById('saveRetry').click()); await A.pg.waitForTimeout(600); await quiet(A,3); const r14=revivedFrom(await notesOf(A),'x14');
+ok('12f «Повторити» revives it with the text, x14 leaves memory, the warning is gone', r14.length===1 && /UNIQUE_PENDING/.test(text(r14[0])) && !!cloud.doc('notes',r14[0].id) && !(await A.pg.evaluate(()=>!!document.querySelector('#list .item[data-id="x14"]'))) && (await A.pg.evaluate(()=>document.getElementById('saveWarn').hidden)));
 ok('13 no page errors', !A.errs.length && !B.errs.length && !C.errs.length);
 await br.close(); await srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
