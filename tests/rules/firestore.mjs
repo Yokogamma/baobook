@@ -1,7 +1,7 @@
 // The Firestore security rules of docs/SYNC-PLAN.md §4.16 (firestore.rules at the repository root) on the Firestore emulator.
 // Run from this folder through the emulator, never against the real project (`npm test` does the same):
 //   npx firebase emulators:exec --only firestore --project demo-baobook "node firestore.mjs"
-// The rules' access list still holds the 'OWNER_UID' placeholder (PR 3 puts the owner's uid there); the test puts its own uid into
+// The rules' access list holds the owner's uid (PR 3c); the test puts its own uid into
 // that list when it loads the rules. Every scenario starts on an empty emulator. Documents are written the way §4.5 step 4 writes
 // them: the whole document with `set`, `rev` one above the stored one, `srv` the server time, the writing device's receipt.
 import { readFileSync } from 'node:fs';
@@ -18,7 +18,7 @@ const allow = async (name, fn) => { try { await assertSucceeds(fn()); line(true,
 const deny = async (name, fn) => { try { await assertFails(fn()); line(true, name); } catch (e) { line(false, name, e.message); } };
 const scenario = async title => { console.log('— ' + title); await env.clearFirestore(); };
 
-// the rules with a test uid in the access list of allowed(): the placeholder now, the owner's uid after PR 3
+// the rules with a test uid in the access list of allowed(): the owner's uid in the file, a test uid here
 const src = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
 const ACCESS = /(request\.auth\.uid in \[)[^\]]*(\])/g;
 line((src.match(ACCESS) || []).length === 1, 'firestore.rules has one access list, and the test puts its uid there');

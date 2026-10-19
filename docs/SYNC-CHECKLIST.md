@@ -4,12 +4,12 @@ What the emulators cannot check (docs/SYNC-PLAN.md §7): the real Google sign-in
 
 ## Before 3c (the rules are still «deny all»)
 
-The sign-in works, the data does not move yet: the first read is refused by the rules, so the status says «Синхронізація за запрошенням». This is the state in which the owner's uid is read for 3c.
+The sign-in works, the data does not move yet: the first read is refused by the rules, so the status says «Синхронізація за запрошеннями» and the device is not bound to the account (no owner). This is the state in which the owner's uid is read for 3c. Items 1–4 were done on 2026-10-19 in Chrome through Claude in Chrome: one press, the popup on the site's origin, the status, the account kept on a reload, the SDK in `baobook-sdk` and no `/__/auth/` entry in any cache; the uid is in the rules.
 
-1. **Computer, Chrome:** the gear → «Увійти через Google». The press loads the SDK (`baobook-sdk` appears under DevTools → Application → Cache Storage) and opens a popup on `baobook.matamata.dev/__/auth/handler?…` (the site's own origin, not `firebaseapp.com`), with the Google account chooser. If the browser blocked the popup (the load took too long for the press to count as fresh), the label says «Продовжити з Google» and the next press opens it. After the choice: the menu shows the email, «Вийти» and «Прибрати нотатки з пристрою»; the header has the cloud button; its title and the line under the email say «Синхронізація за запрошенням».
+1. **Computer, Chrome:** the gear → «Увійти через Google». The press loads the SDK (`baobook-sdk` appears under DevTools → Application → Cache Storage) and opens a popup on `baobook.matamata.dev/__/auth/handler?…` (the site's own origin, not `firebaseapp.com`), with the Google account chooser. If the browser blocked the popup (the load took too long for the press to count as fresh), the label says «Продовжити з Google» and the next press opens it. After the choice: the menu shows the email, «Вийти» and «Прибрати нотатки з пристрою»; the header has the cloud button; its title and the line under the email say «Синхронізація за запрошеннями».
 2. **Firebase console → Authentication → Users:** the account is listed with its User UID. The uid goes into `firestore.rules` (3c).
 3. **Reload:** the menu still shows the account (Firebase remembers it), the status is the same, no popup.
-4. **«Вийти»:** the menu offers the sign-in again and still names the account the notes belong to; the status says «Вийшли · 0 змін чекають». An edit → «Вийшли · 1 зміна чекає».
+4. **«Вийти»:** the menu offers the sign-in again and nothing else of the account: no status line, since the device was never bound (the rules refused the access). «Вийшли · n змін чекає» belongs to a bound device, after 3c (item 9).
 5. **Firefox and Safari** on the computer: items 1 and 3 (the popup on Safari may be blocked on the first try: allow popups for the site, or the second press after the SDK is in shows it).
 
 ## After 3c (the rules published with the owner's uid)
@@ -18,7 +18,7 @@ The sign-in works, the data does not move yet: the first read is refused by the 
 7. **A second browser or device, the same account:** after the sign-in the notes arrive; an edit on either side reaches the other within seconds; the same block edited on both at once leaves one text and a conflict copy in the history.
 8. **Offline:** airplane mode → an edit → «Офлайн · 1 зміна чекає»; back online → «Синхронізовано», the edit on the other device.
 9. **Sign-out with an edit waiting:** «Вийти» while the status says «Надсилаю…» → «Завершую надсилання…» for a moment, then «Вийшли · n змін чекає»; the sign-in again sends them.
-10. **Another Google account (not in the rules):** sign out, sign in with a second account → «Синхронізація за запрошенням», no dialog, the notes stay; sign out, sign in with the owner's account → «Синхронізовано», nothing asked.
+10. **Another Google account (not in the rules):** sign out, sign in with a second account → «Синхронізація за запрошеннями», no dialog, the notes stay; sign out, sign in with the owner's account → «Синхронізовано», nothing asked.
 11. **Two tabs:** both show the status; «Вийти» in one signs out both; the sign-in in one shows the account in the other (reload it if its SDK was not loaded).
 12. **«Прибрати нотатки з пристрою»:** the dialog says what is not in the cloud and offers the export; «Прибрати» → the page reloads empty, signed out, with the sign-in offered; the cloud keeps everything (item 6); the sign-in brings the notes back.
 13. **Phone, Chrome on Android, in the browser:** the gear → the sign-in → one press: the SDK loads and the page itself goes to Google (no popup, no second press) and comes back signed in, with the status; everything typed before the press is there.

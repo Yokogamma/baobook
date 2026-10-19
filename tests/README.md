@@ -30,7 +30,7 @@ npm ci     # once: its own node_modules, firebase-tools included
 npm test   # = npx firebase emulators:exec --only firestore --project demo-baobook "node firestore.mjs"
 ```
 
-The emulator listens on `127.0.0.1:8080` (`firebase.json`) and is downloaded into `~/.cache/firebase/emulators` on the first run. The test puts its own uid into the access list of `allowed()` (the `'OWNER_UID'` placeholder until PR 3c puts the owner's uid there) and empties the emulator before each scenario. On Windows, Oracle's `javapath` launcher on `PATH` leaves the emulator's Java process running after the test, and the next run finds port 8080 taken: put the JDK's own `bin` first (`$env:PATH='C:\Program Files\Java\jdk-21\bin;'+$env:PATH`) or stop that process.
+The emulator listens on `127.0.0.1:8080` (`firebase.json`) and is downloaded into `~/.cache/firebase/emulators` on the first run. The test puts its own uid into the access list of `allowed()` (the owner's uid, in the file since 3c) and empties the emulator before each scenario. On Windows, Oracle's `javapath` launcher on `PATH` leaves the emulator's Java process running after the test, and the next run finds port 8080 taken: put the JDK's own `bin` first (`$env:PATH='C:\Program Files\Java\jdk-21\bin;'+$env:PATH`) or stop that process.
 
 The Firestore adapter (`public/cloud.js`, the cloud adapter contract of `docs/SYNC-PLAN.md` §4.6) is tested on the same emulator by `rules/adapter.mjs`, over the npm package of the SDK (the same version the app loads from gstatic) and an authenticated instance from the rules test library; `npm test` in `tests/rules` runs both files.
 

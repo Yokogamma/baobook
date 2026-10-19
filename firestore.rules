@@ -1,13 +1,13 @@
 // Firestore security rules of Baobook sync: docs/SYNC-PLAN.md §4.16 (data in §4.2, sending in §4.5, the trash in §4.8,
-// named versions in §4.9). Tested on the emulator by tests/rules/firestore.mjs; not published to the real project until PR 3.
+// named versions in §4.9). Tested on the emulator by tests/rules/firestore.mjs; published to the real project by the owner (§6).
 //
-// ACCESS PLACEHOLDER: 'OWNER_UID' in allowed() stands for the owner's Firebase Auth uid, which is not known yet. It matches no
-// account, so these rules as they stand let nobody in. PR 3 replaces it with the owner's User UID after the owner's first
-// sign-in on .dev (§6, step 2), and only then are the rules published (§6, step 3). The tests put a test uid in its place.
+// ACCESS: allowed() holds the owner's Firebase Auth uid (Authentication → Users, read after the owner's first sign-in on .dev on
+// 2026-10-19; PR 3c). Any other account is refused without a document read. The uid is no secret: the rules are the boundary.
+// The tests put a test uid in its place (the one uid list of allowed()).
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
-    function allowed() { return request.auth != null && request.auth.uid in ['OWNER_UID']; }   // no document read
+    function allowed() { return request.auth != null && request.auth.uid in ['nJYXgv8yPnPCcd4j9rACOHGYY4q1']; }   // no document read
     function owner(env, uid) { return env in ['dev', 'app'] && allowed() && request.auth.uid == uid; }
     function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
     function optNum(d, k) { return !(k in d) || d[k] is number; }
