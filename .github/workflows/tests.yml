@@ -3,9 +3,9 @@ name: Baobook tests
 on:
   push:
     branches: [main]
-    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
+    paths: ['public/**', 'tests/**', 'worker/**', 'wrangler.jsonc', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   pull_request:
-    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
+    paths: ['public/**', 'tests/**', 'worker/**', 'wrangler.jsonc', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   workflow_dispatch:
 
 jobs:
