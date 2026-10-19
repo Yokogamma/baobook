@@ -19,8 +19,8 @@ async function call(method, url, body, headers={}){ const r=await fetch(url, {me
 // the emulators' state
 export const clearAuth=()=>call('DELETE', AUTH+'/emulator/v1/projects/'+PROJECT+'/accounts');
 export const clearFirestore=()=>call('DELETE', FIRESTORE+'/emulator/v1/projects/'+PROJECT+'/databases/(default)/documents');
-// the rules of the repository with `uid` in the access list (the placeholder 'OWNER_UID' until PR 3c, the owner's uid after it)
-export function rulesFor(uid){ const src=fs.readFileSync(path.join(ROOT,'firestore.rules'),'utf8'); const list=/(request\.auth\.uid in \[)[^\]]*(\])/g; if((src.match(list)||[]).length!==1) throw new Error('firestore.rules: one access list expected'); return src.replace(list, `$1'${uid}'$2`); }
+// the rules of the repository with these uids in the access list (the placeholder 'OWNER_UID' until PR 3c, the owner's uid after it)
+export function rulesFor(...uids){ const src=fs.readFileSync(path.join(ROOT,'firestore.rules'),'utf8'); const list=/(request\.auth\.uid in \[)[^\]]*(\])/g; if((src.match(list)||[]).length!==1) throw new Error('firestore.rules: one access list expected'); return src.replace(list, (m,a,b)=>a+uids.map(u=>`'${u}'`).join(', ')+b); }
 export const loadRules=content=>call('PUT', FIRESTORE+'/emulator/v1/projects/'+PROJECT+':securityRules', {rules:{files:[{content}]}});
 // a Google user of the Auth emulator from a fake id token: `sub` is the key the emulator maps to one account; the uid (localId) is the emulator's own
 export async function googleUser(sub, email){ const r=await call('POST', AUTH+'/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=fake-api-key',

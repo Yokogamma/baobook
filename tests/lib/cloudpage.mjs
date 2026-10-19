@@ -25,7 +25,7 @@ export async function attachCloud(context, cloud, dev){
       listen(col,from,onDocs,onErr){ let live=true, id=null; (async()=>{ try{ id=await call('listen',col,from); }catch(e){ onErr(e); return; } while(live){ let batches=null; try{ batches=await call('poll',id); }catch(e){ onErr(e); return; } if(batches===null){ onErr(Object.assign(new Error('gone'),{code:'unavailable'})); return; } for(const b of batches) if(live) onDocs(b.docs, b.info); await new Promise(r=>setTimeout(r,100)); } })(); return ()=>{ live=false; if(id) call('unlisten',id).catch(()=>{}); }; } }; });
   return api; }
 // connect a page as a device: the hook writes the owner and starts the engine with the shared cloud
-export async function connect(page, o={}){ return page.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:o.owner||{env:'test', uid:'u1', email:'u@test'}, devId:o.devId, devName:o.devName, budgets:o.budgets||{reads:1e6, writes:1e6}, pace:o.pace||{dev:0, note:0, big:0, huge:0, slow:0}}), o); }
+export async function connect(page, o={}){ return page.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:o.owner||{env:'test', uid:'u1', email:'u@test'}, user:o.user, devId:o.devId, devName:o.devName, budgets:o.budgets||{reads:1e6, writes:1e6}, pace:o.pace||{dev:0, note:0, big:0, huge:0, slow:0}}), o); }   // user: a signed-in account for the status button (appaccount), without Firebase
 // drive the engine until it is idle; the test cloud's listener is polled every 100 ms, so give deliveries a moment first
 export async function settle(page, ms=250){ await page.waitForTimeout(ms); return page.evaluate(()=>sheetDebug.sync.idle(300)); }
 // a browser «device»: its own context (own storage), the shared cloud attached, the app loaded and connected
