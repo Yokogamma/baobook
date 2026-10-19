@@ -12,6 +12,7 @@ const TOMB_ALL=['v','rev','op','dev','rcpt','purged'], TOMB_ONLY=[...TOMB_ALL,'d
 const VLIVE_ALL=['v','rev','op','dev','rcpt','note','t','name','title','blocks'], VLIVE_ONLY=[...VLIVE_ALL,'dn'];
 const VTOMB_ALL=['v','rev','op','dev','rcpt','note','deleted'], VTOMB_ONLY=[...VTOMB_ALL,'dn'];
 const err=(code,msg)=>Object.assign(new Error(msg||code),{code});
+const TRASH_MS=30*864e5;   // the trash term the rules enforce on an automatic tombstone (§4.8)
 const clone=v=>v===undefined? undefined : structuredClone(v);
 const SERVICE=new Set(['id','v','rev','op','srv','dev','dn','rcpt','tsrv','purged','auto','commitAt','seq']);
 const bodyJson=d=>{ const o={}; for(const k of Object.keys(d).sort()){ if(!SERVICE.has(k) && k!=='updated') o[k]=d[k]; } return JSON.stringify(o); };
@@ -27,7 +28,7 @@ export class TestCloud{
   visible(col){ const now=this.t; return [...this.docs[col].values()].filter(d=>d.commitAt<=now); }   // for the srv-range queries only
   all(col){ return [...this.docs[col].values()]; }
   out(d){ if(!d) return null; const o=clone(d); delete o.commitAt; delete o.seq; return o; }
-  fails(dev, op){ const f=this.take('fail',dev,op); if(f) throw err(f.code||'unavailable','injected'); }
+  fails(dev, op){ const f=this.take('fail',dev,op); if(f){ if(typeof f.then==='function') f.then(this); throw err(f.code||'unavailable','injected'); } }   // `then`: the test's hand at the moment of the failure (another device writes right then)
   async get(col,id,o={}){ this.fails(o.dev,'get'); const r=this.out(this.docs[col].get(id)); const h=this.take('hold',o.dev,'get'); if(h) await h.promise; return r; }   // held after the read: the caller goes on with a stale answer
   // the rules of §4.16 as the test cloud applies them
   check(col, w, D){ const keys=Object.keys(w), has=k=>keys.includes(k);
@@ -42,7 +43,8 @@ export class TestCloud{
     for(const k of ALL) if(!has(k)) throw err('permission-denied','hasAll: '+k); for(const k of keys) if(!ONLY.includes(k)) throw err('permission-denied','hasOnly: '+k);
     if(col==='notes' && !tomb){ if(typeof w.title!=='string' || w.title.length>2000 || !Array.isArray(w.blocks) || w.blocks.length>5000 || typeof w.created!=='number' || typeof w.updated!=='number') throw err('permission-denied','live shape');
       if(has('deleted') && typeof w.deleted!=='number' || has('archived') && typeof w.archived!=='number' || has('revived') && (typeof w.revived!=='object' || !w.revived)) throw err('permission-denied','live shape'); }
-    if(col==='notes' && tomb){ if(typeof w.purged!=='number') throw err('permission-denied','tomb shape'); if(has('auto') && (w.auto!==true || !D || !('deleted' in D))) throw err('permission-denied','auto'); }
+    if(col==='notes' && tomb){ if(typeof w.purged!=='number') throw err('permission-denied','tomb shape'); if(has('auto') && (w.auto!==true || !D || !('deleted' in D))) throw err('permission-denied','auto');
+      if(has('auto') && (!D.tsrv || this.t<=D.tsrv.s*1000+Math.floor(D.tsrv.ns/1e6)+TRASH_MS)) throw err('permission-denied','auto: the server clock says the 30 days are not over'); }   // the rules check the age by request.time (§4.8); here by the virtual clock
     if(col==='versions' && !tomb && w.note!==undefined){ const note=this.docs.notes.get(w.note); if(!note || note.purged) throw err('permission-denied','noteAlive'); }
     if(D && w.rev===D.rev+1 && bodyJson(w)===bodyJson(D) && !(tomb) && !(D.purged)) throw err('invalid','an empty write'); }
   // the server transaction: fn(D) → the document to write or null; it may run again on contention and with the `tworunners` fault
@@ -53,7 +55,10 @@ export class TestCloud{
       if(hold && !held){ held=true; await hold.promise; const D2=this.docs[col].get(id); if((D2? D2.rev : 0)!==(D? D.rev : 0)) continue; }   // held after the callback: a document that moved meanwhile sends the callback round again
       break; }
     let wrote=false;
-    if(w){ this.check(col, w, D); const commitAt=this.t+(delay? delay.ms : 0)+(late? late.ms : 0); const d={...clone(w), id, srv:this.srvAt(reqAt), commitAt, seq:++this.seq}; /* late: hidden from page and listen until commitAt */ if(w.tsrv===undefined && col==='notes' && !w.purged && 'deleted' in w && !(D && D.deleted===w.deleted && D.tsrv)) d.tsrv=this.srvAt(reqAt); this.docs[col].set(id,d); wrote=true; this.events.push({t:'commit', col, id, rev:d.rev, dev:d.dev, at:this.t}); if(this.auto) this.pump(); }
+    if(w){ this.check(col, w, D); const commitAt=this.t+(delay? delay.ms : 0)+(late? late.ms : 0); const d={...clone(w), id, srv:this.srvAt(reqAt), commitAt, seq:++this.seq}; /* late: hidden from page and listen until commitAt */
+      // tsrv as the adapter writes it (§4.8): a new server date when the note enters the trash or its term is extended, the stored one kept by an edit in the trash, none outside it or on a tombstone
+      if(w.tsrv===undefined && col==='notes' && !w.purged && 'deleted' in w){ if(D && D.deleted===w.deleted && D.tsrv) d.tsrv=D.tsrv; else d.tsrv=this.srvAt(reqAt); }
+      this.docs[col].set(id,d); wrote=true; this.events.push({t:'commit', col, id, rev:d.rev, dev:d.dev, at:this.t}); if(this.auto) this.pump(); }
     if(two && w){ const D2=this.out(this.docs[col].get(id)); const w2=fn(D2); if(w2) throw new Error('the callback wrote again over its own result: '+JSON.stringify(w2)); }
     if(lost) throw err('unavailable','the response was lost');
     return {read:D, wrote}; }
@@ -64,7 +69,8 @@ export class TestCloud{
   async page(col, q, n, o={}){ this.fails(o.dev,'page'); let list=this.visible(col).sort((a,b)=>cmpSrv(a.srv,b.srv)||(a.id<b.id? -1 : a.id>b.id? 1 : 0));
     if(q.after) list=list.filter(d=>{ const c=cmpSrv(d.srv,q.after.srv); return c>0 || (c===0 && d.id>q.after.id); }); else if(q.from) list=list.filter(d=>cmpSrv(d.srv,q.from)>=0);
     const out=list.slice(0,n).map(d=>this.out(d)); const h=this.take('hold',o.dev,'page'); if(h) await h.promise; return out; }   // held after the read, like get
-  listen(col, from, onDocs, onErr, o={}){ const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
+  listen(col, from, onDocs, onErr, o={}){ const f=this.take('fail',o.dev,'listen'); if(f){ queueMicrotask(()=>onErr(err(f.code||'unavailable','injected'))); return ()=>{}; }   // a listener refused or lost: the error comes by the callback, as the SDK's does
+    const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
   // deliver what changed to every listener: the first call is the server snapshot; `dup` repeats the batch, `reorder` shuffles it
   pump(){ for(const sub of this.subs){ if(!sub.live) continue; const docs=this.visible(sub.col).filter(d=>!sub.from || cmpSrv(d.srv,sub.from)>=0).filter(d=>sub.seen.get(d.id)!==d.seq);
       if(!docs.length && !sub.first) continue; for(const d of docs) sub.seen.set(d.id,d.seq); let batch=docs.map(d=>this.out(d)); const dup=this.take('dup',sub.dev), re=this.take('reorder',sub.dev);
