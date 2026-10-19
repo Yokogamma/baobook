@@ -53,6 +53,7 @@ Moving out of `mockups`, with no new features. Steps:
 - **Links between notes (`docs/LINKS-PLAN.md`):** done: `[[` and the link button, links to notes and to blocks, «Копіювати посилання», following with «back», the address of the open note, the notes that link here, the hover preview.
 - **Secret links with Matamata:** A0 → A1 → A2; the plan lives in the private `payee-private-docs`.
 - **Sync and sign-in (`docs/SYNC-PLAN.md`):** plan approved on 2026-10-16, amended on 2026-10-17 with the quota estimate (#56) and a design review. PR 0 (storage groundwork, #55) and PR 1 (the sync core, #61: `public/sync.js`, delta writes and the editor snapshot in `index.html`, the test cloud in `tests/lib`; no Firebase SDK yet) were released to production by #58 and #62 (2026-10-18). PR 2 (tabs and the open note: the leader tab under a Web Lock, `lrev` between tabs, the «Є зміни» strip) is built and stays in `main` until a release is asked for; PR 3 to PR 5 follow. The Firebase project `baobook-3fe7f` is set up, the index exemptions included; what is left of section 6 of the plan (the owner's uid in the rules, publishing the rules) comes with PR 3.
+- **Backups to Google Drive (`docs/BACKUP-PLAN.md`):** plan approved on 2026-10-19, not implemented; a separate stage after sync PR 4: B1 copies with one tap, B2 the token broker in the Worker, B3 restore from the list of copies, B4 an optional folder on the computer.
 
 ## After the move
 
