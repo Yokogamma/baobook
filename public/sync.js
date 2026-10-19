@@ -608,7 +608,7 @@ function makeSync(deps){
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'￿')) t.del('sync',r.k);
       const erase=!!o.erase || !owner;
       if(erase){ for(const n of await t.range('notes','','￿')) t.del('notes',n.id); for(const v of await t.range('versions','','￿')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['￿','￿'])) t.del('blobs',[b.note,b.h]); }
-      if(owner){ t.put('sync',{k:'owner', ...owner}); if(!erase){ for(const n of await t.range('notes','','￿')){ if(isEmpty(n)) continue; t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); } for(const v of await t.range('versions','','￿')){ if(v.keep && v.name) t.put('sync',{k:K.out('v',v.id), tries:0, next:0}); } } }
+      if(owner){ t.put('sync',{k:'owner', ...owner}); if(!erase){ for(const n of await t.range('notes','','￿')){ if(isEmpty(n)) continue; t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); t.put('sync',{...defMeta('n',n.id), lrev:1}); } for(const v of await t.range('versions','','￿')){ if(v.keep && v.name) t.put('sync',{k:K.out('v',v.id), tries:0, next:0}); } } }   // the queued note is a local change ahead of no base (lrev 1 over baseLrev 0): a document of the same id in the new owner's cloud is merged with it (merge0) and the job stays, instead of replacing it
       else t.del('sync','owner');
       S.loaded=false; });
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew

@@ -54,30 +54,48 @@ await signOut(T2); await until(T1, ()=>{ const a=sheetDebug.sync.account(); retu
 const a5=await acc(T1), a5b=await acc(T2), lk5=await locks(T1), s5=await settings(T1);
 ok('5 after the sign-out in tab 2, tab 1 (the leader) let the cloud and the lock go; the mirror is cleared; the owner stays u2', !a5.user && !a5.cloud && !a5.lead && !a5b.user && !a5b.cloud && !lk5.held.includes('baobook-sync:dev') && s5.fbUser===null && a5.owner.uid===u2.uid && a5.ui.code==='signedOut' && a5b.ui.code==='signedOut');
 
-// 6. u1 signs in in tab 1: the dialog there, «in the other tab» in tab 2; «Прибрати й увійти» erases the device, both tabs reload, u1's cloud comes down
-await signIn(T1, C1); await until(T1, ()=>!!sheetDebug.sync.choice()); await untilUI(T2, 'other');
+// 6. u1 signs in in tab 1 and decides «Додати до хмари» at once, while tab 2 still waits its 1.5 s before asking: tab 2 must not show the stale
+// question about u2 afterwards; it adopts u1 and connects
+await signIn(T1, C1); await until(T1, ()=>!!sheetDebug.sync.choice()); await choose(T1, 'add'); await untilUI(T1, 'synced'); await T1.waitForTimeout(2500);
+let d6=null; for(let i=0;i<60;i++){ d6=await readDoc(R1+'/notes/'+id1); if(d6 && d6.rev>=2) break; await T1.waitForTimeout(250); }
+if(!(d6 && d6.rev>=2)) console.log('  T1 engine:', JSON.stringify(await T1.evaluate(async id=>({local:(await sheetDebug.sync.state(id)).note.blocks.map(b=>b.text), meta:(await sheetDebug.sync.state(id)).meta, jobs:sheetDebug.sync.jobs(), status:sheetDebug.sync.status, log:sheetDebug.sync.log().slice(-25)}), id1)), JSON.stringify({u1:d6? {rev:d6.rev, dev:d6.dev, rcpt:d6.rcpt, blocks:d6.blocks.map(b=>b.text)} : null, u2:await readDoc(R2+'/notes/'+id1).then(d=>d? {rev:d.rev, blocks:d.blocks.map(b=>b.text)} : null)}));
 const a6=await acc(T2), m6=await menu(T2);
-ok('6 tab 1 asks (it signed in), tab 2 shows «another account — choose in the other tab» and no dialog', a6.otherTab && !a6.cloud && m6.title===await loc(T2,'sync.st.other') && !m6.choice && a6.user.uid===u1.uid);
-await choose(T1, 'remove');
-ok('6b both tabs reload as u1\'s device and u1\'s note comes down from the cloud, without the edit that went to u2',
-  await untilSafe(T1, id=>{ const a=sheetDebug.sync.account(); return !!a.owner && a.owner.uid===a.user?.uid && a.ui && a.ui.code==='synced' && !!document.querySelector('#list .item[data-id="'+id+'"]'); }, id1)
-  && await untilSafe(T2, id=>{ const a=sheetDebug.sync.account(); return !!a.owner && !!a.user && a.owner.uid===a.user.uid && !!document.querySelector('#list .item[data-id="'+id+'"]'); }, id1)
-  && (await stored(T1,'sync','owner')).uid===u1.uid && (await acc(T1)).epoch!==ep1);
-const t6=await T1.evaluate(async id=>(await sheetDebug.sync.state(id)).note.blocks.map(b=>b.text).join('|'), id1);
-ok('6c the note on the device is u1\'s version', t6==='Нотатка першого' && (await readDoc(R2+'/notes/'+id1)).blocks.length===2);
+ok('6 after the fast «add» in tab 1, tab 2 shows no dialog, is u1\'s with the user u1, connected behind the leader; the note with both blocks went into u1\'s cloud', !m6.choice && !a6.dialog && !a6.otherTab && a6.owner && a6.owner.uid===u1.uid && a6.user && a6.user.uid===u1.uid && a6.cloud && !a6.lead && m6.st==='synced' && d6 && d6.blocks.length===2);
+if(!(d6 && d6.blocks.length===2 && a6.cloud && m6.st==='synced')) console.log('  ', JSON.stringify({a6, m6:{choice:m6.choice, st:m6.st, title:m6.title}, d6:d6? {rev:d6.rev, blocks:d6.blocks.map(b=>b.text)} : null}));
 
-// 7. «Прибрати нотатки з пристрою»: the dialog with the export, then the device is signed out, unbound and empty; the cloud keeps everything
-await T1.evaluate(()=>{ sheetDebug.sync.remove(); }); await until(T1, ()=>!!sheetDebug.sync.choice());
-const m7=await menu(T1);
-ok('7 the dialog of «Прибрати»: the account named, everything in the cloud, export or remove', m7.choice.join()==='cancel,export,remove' && m7.choiceTitle===await loc(T1,'account.removeTitle') && m7.choiceText.startsWith(await loc(T1,'account.removeText',{a:'one@example.com', unsynced:await loc(T1,'account.unsyncedNone')})));
+// 7. both signed out; tab 2 holds an edit the storage refused (unsaved); u2 signs in in tab 1: the dialog there, «in the other tab» in tab 2;
+// «Прибрати й увійти» erases the device and reloads tab 1, while tab 2 keeps its screen view-only with the unsaved text and the export
+await signOut(T2); await until(T1, ()=>{ const a=sheetDebug.sync.account(); return !a.user && !a.cloud && !a.lead; }); await until(T2, ()=>!sheetDebug.sync.account().user);
+await T2.evaluate(()=>{ sheetDebug.failSave=true; }); await typeAt(T2, 500, 540, 'Незаписане'); await until(T2, ()=>sheetDebug.sync.unsavedCount()===1);
+await signIn(T1, C2); await until(T1, ()=>!!sheetDebug.sync.choice()); await untilUI(T2, 'other');
+const a7=await acc(T2), m7=await menu(T2);
+ok('7 tab 1 asks (it signed in), tab 2 shows «another account — choose in the other tab» and no dialog', a7.otherTab && !a7.cloud && m7.title===await loc(T2,'sync.st.other') && !m7.choice && a7.user.uid===u2.uid);
 await choose(T1, 'remove');
-ok('7b the device is new: no owner, no user, the sign-in offered, no note of u1 on it; tab 2 reloaded too',
+ok('7b tab 1 reloads as u2\'s device and u2\'s notes come down from the cloud',
+  await untilSafe(T1, id=>{ const a=sheetDebug.sync.account(); return !!a.owner && !!a.user && a.owner.uid===a.user.uid && a.ui && a.ui.code==='synced' && !!document.querySelector('#list .item[data-id="'+id+'"]'); }, id1)
+  && (await stored(T1,'sync','owner')).uid===u2.uid && (await acc(T1)).epoch!==ep1);
+await T2.waitForTimeout(1500); const l7=await T2.evaluate(id=>({lock:sheetDebug.sync.locked(), unsaved:sheetDebug.sync.unsavedCount(), msg:document.getElementById('roMsg').textContent, listed:!!document.querySelector('#list .item[data-id="'+id+'"]'), dying:sheetDebug.sync.account().dying}), id1);
+ok('7c tab 2 did not reload over its unsaved text: view-only as «epoch» with the old screen, the text under the unsaved warning, «'+l7.msg+'»', l7.lock==='epoch' && l7.unsaved===1 && !l7.dying && l7.listed && l7.msg===await loc(T2,'lock.epoch'));
+const dl7=T2.waitForEvent('download',{timeout:10000}); await T2.evaluate(()=>{ document.getElementById('exportBtn').click(); }); const f7=await dl7;
+ok('7d the export still works there ('+f7.suggestedFilename()+')', /^baobook-.*\.json$/.test(f7.suggestedFilename()));
+await T2.evaluate(()=>{ sheetDebug.failSave=false; }); await T2.reload();
+ok('7e reloaded by hand, tab 2 is u2\'s device too', await untilSafe(T2, id=>{ const a=sheetDebug.sync.account(); return !!a.owner && !!a.user && a.owner.uid===a.user.uid && !!document.querySelector('#list .item[data-id="'+id+'"]'); }, id1));
+const t7=await T1.evaluate(async id=>(await sheetDebug.sync.state(id)).note.blocks.map(b=>b.text).join('|'), id1);
+ok('7f the note on the device is u2\'s version («'+t7+'»), u1\'s cloud copy untouched', t7==='Нотатка першого|Дописано без входу' && (await readDoc(R1+'/notes/'+id1)).blocks.length===2);
+if(t7!=='Нотатка першого|Дописано без входу') console.log('  ', JSON.stringify({u2doc:(await readDoc(R2+'/notes/'+id1)).blocks.map(b=>b.text), u1doc:(await readDoc(R1+'/notes/'+id1)).blocks.map(b=>b.text)}));
+
+// 8. «Прибрати нотатки з пристрою»: the dialog with the export, then the device is signed out, unbound and empty; the cloud keeps everything
+await T1.evaluate(()=>{ sheetDebug.sync.remove(); }); await until(T1, ()=>!!sheetDebug.sync.choice());
+const m8=await menu(T1);
+ok('8 the dialog of «Прибрати»: the account named, everything in the cloud, export or remove', m8.choice.join()==='cancel,export,remove' && m8.choiceTitle===await loc(T1,'account.removeTitle') && m8.choiceText.startsWith(await loc(T1,'account.removeText',{a:'two@example.com', unsynced:await loc(T1,'account.unsyncedNone')})));
+await choose(T1, 'remove');
+ok('8b the device is new: no owner, no user, the sign-in offered, no note of u2 on it; tab 2 reloaded too (nothing unsaved there now)',
   await untilSafe(T1, id=>{ const a=sheetDebug.sync.account(); return a.sdk===false && !a.owner && !a.user && !document.querySelector('#list .item[data-id="'+id+'"]') && document.querySelectorAll('#list .item').length===1; }, id1)
   && await untilSafe(T2, id=>{ const a=sheetDebug.sync.account(); return !a.owner && !a.user && !document.querySelector('#list .item[data-id="'+id+'"]'); }, id1)
-  && (await settings(T1)).fbUser===null && !(await stored(T1,'sync','owner')) && !!(await readDoc(R1+'/notes/'+id1)));
-const m7b=await menu(T1);
-ok('7c the menu is back to «Увійти через Google»', m7b.signIn && !m7b.row && !m7b.remove && !m7b.sync);
+  && (await settings(T1)).fbUser===null && !(await stored(T1,'sync','owner')) && !!(await readDoc(R2+'/notes/'+id1)));
+const m8b=await menu(T1);
+ok('8c the menu is back to «Увійти через Google»', m8b.signIn && !m8b.row && !m8b.remove && !m8b.sync);
 
-ok('8 no request went to a real Google host ('+A.blocked.length+' blocked)', !A.blocked.length); if(A.blocked.length) console.log(A.blocked);
-ok('9 no page errors', !A.errs.length); if(A.errs.length) console.log(A.errs);
+ok('9 no request went to a real Google host ('+A.blocked.length+' blocked)', !A.blocked.length); if(A.blocked.length) console.log(A.blocked);
+ok('10 no page errors', !A.errs.length); if(A.errs.length) console.log(A.errs);
 await env.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

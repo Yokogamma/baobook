@@ -3,7 +3,7 @@
 // the owner and the queue, a reload with the SDK loading at start, the sign-in again sending what waited. Run from tests/rules through the
 // emulators (see tests/README.md):
 //   npx firebase emulators:exec --only auth,firestore --project demo-baobook "node ../emu/signin.mjs"
-import { launch, device, acc, signIn, signOut, press, loc, settings, menu, untilUI, until, untilNote, listed } from './lib/app.mjs';
+import { launch, device, tab, acc, signIn, signOut, press, loc, settings, menu, untilUI, until, untilNote, listed } from './lib/app.mjs';
 import { clearAuth, clearFirestore, rulesFor, loadRules, googleUser, credential, readDoc } from './lib/emu.mjs';
 import { typeAt, stored } from '../lib/cloudpage.mjs';
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
@@ -25,7 +25,8 @@ await press(A.pg); await until(A.pg, ()=>sheetDebug.sync.account().sdk && !sheet
 const a2=await acc(A.pg), m2=await menu(A.pg);
 ok('2 the first press loads the SDK: the button says «Продовжити з Google», still no user and no owner', a2.sdk && !a2.user && !a2.owner && m2.signIn && m2.lbl===await loc(A.pg,'account.continue') && !m2.sync);
 
-// 3. the sign-in: the access checked, the device bound, the notes sent
+// 3. the sign-in: the access checked, the device bound, the notes sent; a second tab, open before it without the SDK (no owner yet), learns of it
+const T2=await tab(A, env); ok('3- the second tab has no SDK and no account before the sign-in', !(await acc(T2)).sdk && !(await acc(T2)).owner);
 const uid=await signIn(A.pg, C1); await untilUI(A.pg, 'synced');
 const a3=await acc(A.pg), m3=await menu(A.pg), own3=await stored(A.pg,'sync','owner'), s3=await settings(A.pg), d3=await readDoc(ROOT+'/notes/'+id1);
 ok('3 signed in as u1 ('+uid+'): the device is bound to u1 in env dev, the mirror is in the settings, the cloud is connected and this tab leads', uid===u1.uid && a3.user && a3.user.uid===u1.uid && own3 && own3.uid===u1.uid && own3.env==='dev' && own3.email==='one@example.com' && s3.fbUser && s3.fbUser.uid===u1.uid && a3.cloud && a3.cloudUid===u1.uid && a3.lead && a3.probe===null);
@@ -33,6 +34,9 @@ ok('3b the note went through the rules into the emulator with both blocks', !!d3
 ok('3c the menu shows the account and «Вийти», «Прибрати…»; the status button says synced', m3.row && m3.email==='one@example.com' && m3.signOut && m3.remove && !m3.signIn && m3.sync && m3.st==='synced' && m3.title===await loc(A.pg,'sync.st.synced') && m3.state===m3.title);
 const probe=await readDoc(ROOT+'/probe/'+s3.devId);
 ok('3d the rules probe left nothing behind (the write was refused, as it should be)', probe===null);
+await untilUI(T2, 'synced'); const aT2=await acc(T2), mT2=await menu(T2);
+ok('3e the second tab loaded the SDK on the sign-in message, got the user from Firebase, adopted the device\'s new owner, connected and mirrors the leader\'s status', aT2.sdk && aT2.user && aT2.user.uid===u1.uid && aT2.owner && aT2.owner.uid===u1.uid && aT2.cloud && !aT2.lead && !aT2.otherTab && !aT2.dialog && mT2.st==='synced' && mT2.email==='one@example.com' && mT2.signOut);
+await T2.close();
 
 // 4. a second device of the same account receives the note
 const B=await device(env,'B'); await signIn(B.pg, C1); await untilUI(B.pg, 'synced'); await until(B.pg, id=>!!document.querySelector('#list .item[data-id="'+id+'"]'), id1);

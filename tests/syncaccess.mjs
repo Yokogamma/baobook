@@ -11,9 +11,9 @@ import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
 const S=loadCore(); let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const DAY=864e5, owner={env:'test', uid:'u1', email:'u@test'};
-function device(cloud, name, o={}){ const d={name, db:o.db||new MemStore(), online:true, clock:0, logs:[], status:[], changes:[]};
-  d.proxy={ get:(c,i)=>cloud.get(c,i,{dev:name}), page:(c,q,n)=>cloud.page(c,q,n,{dev:name}), totals:c=>cloud.totals(c,{dev:name}), scan:(c,q,n)=>cloud.scan(c,q,n,{dev:name}), txn:(c,i,f)=>cloud.txn(c,i,f,{dev:name}),
-    listen:(c,from,onDocs,onErr)=>cloud.listen(c,from,(docs,info)=>{ if(d.online) onDocs(docs,info); },onErr,{dev:name}) };
+const proxyOf=(cloud,d)=>({ get:(c,i)=>cloud.get(c,i,{dev:d.name}), page:(c,q,n)=>cloud.page(c,q,n,{dev:d.name}), totals:c=>cloud.totals(c,{dev:d.name}), scan:(c,q,n)=>cloud.scan(c,q,n,{dev:d.name}), txn:(c,i,f)=>cloud.txn(c,i,f,{dev:d.name}),
+  listen:(c,from,onDocs,onErr)=>cloud.listen(c,from,(docs,info)=>{ if(d.online) onDocs(docs,info); },onErr,{dev:d.name}) });   // the device's adapter over a test cloud (another cloud is another account's space)
+function device(cloud, name, o={}){ const d={name, db:o.db||new MemStore(), online:true, clock:0, logs:[], status:[], changes:[]}; d.proxy=proxyOf(cloud,d);
   d.sync=S.makeSync({db:d.db, cloud:d.proxy, now:()=>cloud.now()+d.clock, random:Math.random, cleanRich:h=>h, env:'test', devId:name, devName:'Device '+name, budgets:o.budgets||{reads:1e9, writes:1e9},
     pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50, ...(o.pace||{})}, log:e=>d.logs.push(e), onChange:ev=>d.changes.push(ev), onStatus:(code,n)=>d.status.push(code)});
   d.off=async on=>{ d.online=on; d.sync.online(on); }; return d; }
@@ -158,5 +158,15 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
   A.db.data.blobs.set('o2\u0000h2',{note:'o2', h:'h2', s:'x', r:0, z:1}); const ep2=A.sync.epoch;
   await A.sync.setOwner({env:'test', uid:'u3', email:'w@test'}, {erase:true, expectEpoch:ep2});
   ok('7c «remove and sign in»: one transaction erased every store and bound u3 with nothing queued', A.sync.owner.uid==='u3' && !A.db.all('notes').length && !A.db.all('blobs').length && !A.sync.jobs().length && !A.db.get('sync','out:n:o2') && A.sync.epoch!==ep2); }
+
+/* ── 7d. a change of owner keeps the local changes: the new owner's cloud has a note of the same id with other content; the queued note is a local
+   change over no base (lrev 1 over baseLrev 0), so the document is merged with it (merge0) and the merged note goes up; the job is not dropped ── */
+{ const cloud1=new TestCloud({start:1_700_000_000_000}), cloud2=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud1,'A'); await note(A,'m1','текст у хмарі A'); await idle(A);
+  cloud2.write('notes',{id:'m1', title:'', blocks:[{id:'c',row:3,fx:0,text:'текст у хмарі B'}], created:cloud2.now(), updated:cloud2.now()},{dev:'phone'});
+  A.sync.stop(); const ep=A.sync.epoch; await A.sync.setOwner({env:'test', uid:'u2', email:'v@test'}, {expectEpoch:ep}); const meta0=A.db.get('sync','meta:n:m1');
+  ok('7d the note queued for u2 is marked as a local change over no base (lrev 1, baseLrev 0, no base)', A.sync.jobs().includes('m1') && !!meta0 && meta0.lrev===1 && meta0.baseLrev===0 && !meta0.base);
+  await A.sync.start({cloud:proxyOf(cloud2,A)}); await idle(A);
+  const local=A.db.get('notes','m1'), up=cloud2.doc('notes','m1'), texts=n=>(n.blocks||[]).map(b=>b.text).sort().join('|');
+  ok('7e u2\'s document of the same id was merged with the local note, not put over it: both texts here and in u2\'s cloud (rev 2), no job left, u1\'s cloud untouched', texts(local)==='текст у хмарі A|текст у хмарі B' && !!up && up.rev===2 && texts(up)===texts(local) && !A.sync.jobs().length && logs(A,'merged','m1').length===1 && cloud1.doc('notes','m1').rev===1); }
 
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

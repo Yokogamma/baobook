@@ -1195,7 +1195,7 @@ const makeCloud=user=>BaobookCloud.make({fs:ACC.sdk.fs, db:fsDb(), root:'env/'+F
 // Firebase reports the user of every tab (its own state is shared between them): a new one is checked, a gone one takes the cloud with it
 function authChanged(u){ const prev=ACC.user; if(u && prev && prev.uid===u.uid){ prev.email=u.email||prev.email; accUI(); return; }   // the same user reported again (a token refresh, the persistence settling): the object stays, the checks that hold it go on
   const user=u? {uid:u.uid, email:u.email||'', name:u.displayName||''} : null; ACC.user=user;
-  if(user){ saveS({fbUser:{uid:user.uid, email:user.email}}); ACC.probe=null; ACC.checked=null; ACC.otherTab=false;
+  if(user){ saveS({fbUser:{uid:user.uid, email:user.email}}); ACC.probe=null; ACC.checked=null; ACC.otherTab=false; if(ACC.signedHere) tellTabs({t:'auth', uid:user.uid});   // the tab that signed in tells the others: a tab without the SDK loads it, Firebase then brings it the user
     (async()=>{ if(CLOUD && CLOUD.uid && CLOUD.uid!==user.uid) await dropCloud(); if(ACC.user===user) await accountCheck(user); })(); }   // another user's cloud goes first, then the check of this one
   else if(prev && !ACC.signingOut){ saveS({fbUser:null}); dropCloud(); }   // signed out in another tab, or the session ended
   accUI(); accStatus(); }
@@ -1217,18 +1217,21 @@ async function accessProbe(user){ const fs=ACC.sdk.fs, d=fsDb(), root='env/'+FB.
   try{ await fs.deleteDoc(ref); }catch(_){} return 'open'; }
 function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=null; ACC.otherTab=false; if(!ACC.cloud || ACC.cloud.uid!==user.uid) ACC.cloud=makeCloud(user); CLOUD=ACC.cloud; leadAsk(); persistOnce(); accStatus(); tellTabs({t:'st?'}); }   // st?: the leader (if another tab) answers with its status
 // the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
-async function bindOwner(owner, o={}){ const cur0=SYNC.owner, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;
-  if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner); return; }
-  await SYNC.setOwner(owner, o); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
+async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
+  if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
+  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
 const raced=()=>{ if(DYING) return; DYING=true; say(loc('account.raced')); setTimeout(()=>location.reload(),1500); };   // another tab changed the owner first (the epoch moved under the dialog)
 // the notes on the device belong to A and the user signed in as B: one tab asks, the one where the sign-in happened first; the others learn the
 // outcome from the «owner» message (ownerMoved). Without Web Locks every tab asks
-async function ownerDialog(user, owner){ const run=async()=>{ if(ACC.user!==user || DYING) return; ACC.otherTab=false; accStatus(); await showOwnerDialog(user, owner); };
+async function ownerDialog(user, owner){ const ep0=SYNC.epoch;
+  const fresh=()=>{ const o=SYNC.owner; return !!o && o.uid===owner.uid && o.env===owner.env && SYNC.epoch===ep0 && ACC.user===user && !DYING; };   // the device is still A's, as when the question came up; a decision taken in another tab meanwhile (the engine re-adopted, the epoch moved) makes this question stale
+  const run=async()=>{ if(!fresh()) return; ACC.otherTab=false; accStatus(); await showOwnerDialog(user, owner, ep0); };
   if(!hasLocks()){ await run(); return; }
-  if(!ACC.signedHere){ await sleep(1500); if(ACC.user!==user || DYING) return; }
+  if(!ACC.signedHere){ await sleep(1500); if(!fresh()) return; }
   const got=await new Promise(res=>{ try{ navigator.locks.request('baobook-owner-dialog',{ifAvailable:true}, async lock=>{ res(!!lock); if(lock) await run(); }).catch(()=>res(false)); }catch(_){ res(false); } });
-  if(!got){ ACC.otherTab=true; accStatus(); } }
-async function showOwnerDialog(user, owner){ ACC.dialog=true; accStatus();
+  if(!got && fresh()){ ACC.otherTab=true; accStatus(); } }
+// ep0: the epoch the question was asked over; every answer is decided over it, so a change of owner made elsewhere since then is refused by setOwner (`epoch`) and the page reloads
+async function showOwnerDialog(user, owner, ep0){ ACC.dialog=true; accStatus();
   try{ for(;;){ if(ACC.user!==user || DYING) return; const who=user.email||user.uid, u=unsyncedText(await unsyncedCount());
       const c=await askChoice({title:loc('account.otherTitle',{a:ownerName(owner)}), text:loc('account.otherText',{b:who, unsynced:u})+' '+loc('account.historyLocal'),
         buttons:[{id:'export', label:loc('account.export')}, {id:'add', label:loc('account.add',{b:who}), pri:true}, {id:'remove', label:loc('account.removeSignIn'), danger:true}]});
@@ -1236,9 +1239,9 @@ async function showOwnerDialog(user, owner){ ACC.dialog=true; accStatus();
       if(c==='export'){ await exportAll({hist:true}); say(loc('account.exported')); continue; }
       if(c==='cancel'){ await signOutCore(); return; }   // the sign-in is taken back: the notes stay A's, signed out
       if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
-      const B={uid:user.uid, env:FB.env, email:user.email}, ep=SYNC.epoch;
-      if(c==='add'){ await bindOwner(B,{expectEpoch:ep}); connectAccount(user); return; }
-      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep}); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
+      const B={uid:user.uid, env:FB.env, email:user.email};
+      if(c==='add'){ await bindOwner(B,{expectEpoch:ep0}); connectAccount(user); return; }
+      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
   catch(e){ if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
   finally{ ACC.dialog=false; accStatus(); } }
 // a choice dialog: askChoice({title, text, buttons:[{id, label, pri, danger}]}) → Promise<id | 'cancel'>; Esc, a click outside and Back cancel, like ask()
@@ -1301,10 +1304,13 @@ async function removeFromDevice(){ if(DYING || ACC.signingOut) return; setMenu(f
 async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ await signOutCore(); ACC.probe='reauth'; accUI(); accStatus(); } finally{ ACC.reauth=false; } }
 // another tab changed the owner (the «owner» message of bindOwner / the dialog): after an erase or a decision made there this tab reloads; after a
 // binding that kept the records (a first sign-in, «Додати до хмари») the engine is replaced by one that knows the new owner, and the tab goes on
-async function ownerMoved(m){ if(DYING) return; if(m.erase || ACC.otherTab){ DYING=true; say(loc('lock.owner')); setTimeout(()=>location.reload(),1500); return; }
+async function ownerMoved(m){ if(DYING) return;
+  if(m.erase || ACC.otherTab){ flushSave(); await waitFree(3000);   // what is typed goes to storage first; a write the new epoch refuses stays under the unsaved warning
+    if(unsaved.size || inflight.size || REVIVING.size || dirty){ setLock('epoch'); accUI(); accStatus(); return; }   // something of this screen is not in storage: the screen stays as the old owner's, view-only with the export (lock.epoch), and the reload is the user's
+    DYING=true; say(loc('lock.owner')); setTimeout(()=>location.reload(),1500); return; }
   if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
   LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear();
-  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); }
+  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
 // the «auth» message of another tab: a sign-in there loads the SDK here (Firebase then brings the user); a sign-out there takes this tab's cloud at once
 function authMsg(m){ if(!accOn() || DYING) return; if(m.uid){ if(!ACC.sdk) sdkLoad(); return; } if(ACC.user || CLOUD){ ACC.user=null; dropCloud(); accUI(); } }
 const authGate=()=>!(CLOUD && CLOUD.uid) || (db.settings().fbUser||{}).uid===CLOUD.uid;   // the cloud this tab would lead with belongs to the user still signed in (the mirror is the synchronous truth)
@@ -1345,7 +1351,8 @@ rcCopy.addEventListener('click',()=>{ if(cur && !ro()) copyNoteOf(cur); });
 Object.assign(DEBUG.sync,{ account:()=>({user:ACC.user, owner:SYNC? SYNC.owner : null, epoch:SYNC? SYNC.epoch : null, probe:ACC.probe, otherTab:ACC.otherTab, dialog:ACC.dialog, cloud:!!CLOUD, cloudUid:CLOUD? CLOUD.uid||null : null, sdk:!!ACC.sdk, loading:!!ACC.loading, checking:!!ACC.checking, signingIn:ACC.signingIn, signingOut:ACC.signingOut, signedHere:ACC.signedHere, ui:DEBUG.sync.ui||null, dying:DYING, receipts:[...RECEIPTS], lead:LEAD.on, fb:FB? {env:FB.env, emulator:!!FB.emulator} : null}),
   signIn:async cred=>{ if(!FB || !FB.emulator) throw new Error('emulator only'); if(!(await sdkLoad())) throw new Error('load'); ACC.signedHere=true; const {auth}=ACC.sdk; const r=await auth.signInWithCredential(ACC.auth, auth.GoogleAuthProvider.credential(cred)); return r.user.uid; },   // the test's hand: a Google credential the Auth emulator accepts
   press:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), load:()=>sdkLoad(), redirectBack:()=>redirectBack(), choose:id=>{ if(choiceEnd) choiceEnd(id); }, choice:()=>choiceDlg.open? [...choiceDlg.querySelectorAll('button')].map(b=>b.dataset.id) : null,
-  fbFault:(k,v)=>{ if(ACC.cloud && ACC.cloud.fault) ACC.cloud.fault(k,v); }, quota:()=>SYNC? SYNC._S.quota : null, unsynced:()=>unsyncedCount(), copyNote:()=>cur? copyNoteOf(cur) : null });
+  fbFault:(k,v)=>{ if(ACC.cloud && ACC.cloud.fault) ACC.cloud.fault(k,v); }, quota:()=>SYNC? SYNC._S.quota : null, unsynced:()=>unsyncedCount(), copyNote:()=>cur? copyNoteOf(cur) : null,
+  bind:o=>bindOwner(o).then(()=>({ok:true}), e=>({ok:false, code:(e && e.code)||'error'})), locked:()=>LOCK, unsavedCount:()=>unsaved.size });   // bind: bindOwner from outside, for the epoch check (appaccount)
 // the test hook of PR 1: a cloud and an owner from outside (the account code above is the real one). The device record is the test's hand too: «this device is A»
 Object.assign(DEBUG.sync,{ core:SC,
   connect:async o=>{ SYNC.stop(); if(o.devId) saveS({devId:o.devId}); if(o.devName) saveS({devName:o.devName});

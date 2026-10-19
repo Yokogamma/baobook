@@ -70,5 +70,12 @@ await typeAt(D.pg, 500, 420, 'Правка з D'); await untilUI(D.pg, 'error');
   ok('5c «Створити копію нотатки»: the copy is open and in the cloud with both blocks, the original unmarked and without a job, untouched in the cloud; «'+m5.toast+'»', !!copy && copy.blocks.length===2 && copy.blocks[1].text==='Правка з D' && orig.rev===before && orig.blocks.length===1 && !st5.meta.err && !st5.job && !m5.rc && m5.st==='synced' && m5.toast===await loc(D.pg,'sync.copied',{title:'Нотатка з 200 квитанціями'}));
   await openNote(D.pg,'r1'); await D.pg.waitForTimeout(200); ok('5d the original opened again shows no strip', !(await menu(D.pg)).rc && (await stored(D.pg,'notes','r1')).blocks.length===2); }
 
-ok('6 no page errors', !D.errs.length); if(D.errs.length) console.log(D.errs);
+// 6. a binding decided over a stale engine: the store's owner and epoch moved under this tab (another tab's change whose message this tab missed:
+// hidden, frozen, no BroadcastChannel), its engine still knows u1; bindOwner must not write u1 back over u2, neither as the same owner's email update
+// nor as a binding to a third account: setOwner refuses both by the epoch
+await D.pg.evaluate(()=>new Promise((res,rej)=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), st=t.objectStore('sync'); st.put({k:'owner', uid:'u2', env:'test', email:'b@test'}); st.put({k:'epoch', id:'e-foreign'}); t.oncomplete=()=>{ d.close(); res(); }; t.onerror=()=>rej(t.error); }; r.onerror=()=>rej(r.error); }));
+{ const before=await acc(D.pg), b1=await D.pg.evaluate(()=>sheetDebug.sync.bind({env:'test', uid:'u1', email:'a@test'})), b2=await D.pg.evaluate(()=>sheetDebug.sync.bind({env:'test', uid:'u3', email:'c@test'})), own=await stored(D.pg,'sync','owner'), ep=await stored(D.pg,'sync','epoch');
+  ok('6 the stale tab\'s bindings are refused by the epoch ('+b1.code+', '+b2.code+'): the store keeps u2 with its email and the foreign epoch; the tab is not locked by the attempt itself', before.owner.uid==='u1' && b1.ok===false && b1.code==='epoch' && b2.ok===false && b2.code==='epoch' && own.uid==='u2' && own.email==='b@test' && ep.id==='e-foreign' && (await stored(D.pg,'notes','r1')).blocks.length===2); }
+
+ok('7 no page errors', !D.errs.length); if(D.errs.length) console.log(D.errs);
 await br.close(); await srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
