@@ -73,7 +73,18 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
   // a refused manual tombstone does not loop
   await note(A,'t1','буде видалена'); await idle(A); const commits0=cloud.events.length; ok('3i the note to be purged is in the cloud', !!cloud.doc('notes','t1') && commits0>0);
   cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied'}); await A.sync.purgeLocal('t1'); await idle(A); cloud.advance(1000); await idle(A); cloud.advance(1000); await idle(A); const st5=await A.sync.state('t1');
-  ok('3j a refused tombstone is marked invalid and not sent again ('+(cloud.events.length-commits0)+' more commits)', !!st5.meta && st5.meta.err==='invalid' && !!st5.job && st5.job.tomb && !st5.tr && !cloud.doc('notes','t1').purged && cloud.events.length===commits0); }
+  ok('3j a refused tombstone is marked invalid and not sent again ('+(cloud.events.length-commits0)+' more commits)', !!st5.meta && st5.meta.err==='invalid' && !!st5.job && st5.job.tomb && !st5.tr && !cloud.doc('notes','t1').purged && cloud.events.length===commits0);
+  // (review) a note whose edit was refused is still deleted for good: the refusal was about the old content, not about the tombstone
+  await note(A,'t2','буде відхилена'); await idle(A); cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied'}); await note(A,'t2','відхилена правка'); await idle(A);
+  ok('3k the edit of t2 was refused: invalid', (await A.sync.state('t2')).meta.err==='invalid' && cloud.doc('notes','t2').blocks[0].text==='буде відхилена');
+  await A.sync.purgeLocal('t2'); await idle(A); const st6=await A.sync.state('t2');
+  ok('3l «forever» after a refused edit: the tombstone goes (the mark was the old content\'s), the cloud document is purged', !!cloud.doc('notes','t2').purged && !st6.job && !st6.tr && !st6.meta && !!st6.purged);
+  // (review) the user edits the note while the refused attempt's check read is in flight: the refusal was about the old content, the new one goes unmarked
+  await note(A,'w4','стара'); await idle(A); let relG; const heldG=new Promise(r=>{ relG=r; });
+  cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied'}); cloud.fault('hold',{dev:'A', op:'get', promise:heldG});
+  await note(A,'w4','стара, відхилена'); const stepW=A.sync.step(); await new Promise(r=>setTimeout(r,20));   // the attempt was refused and the check read is held
+  await note(A,'w4','нова'); relG(); await stepW; await idle(A); const st7=await A.sync.state('w4');
+  ok('3m the refusal met a newer local revision: no invalid mark, the new text went ('+cloud.doc('notes','w4').blocks[0].text+')', !st7.meta.err && !st7.tr && !st7.job && cloud.doc('notes','w4').blocks[0].text==='нова' && logs(A,'rejected-write','w4').some(e=>e.stale)); }
 
 /* ── 4. the automatic purge: the early refusal waits a day, an edit cancels the wait, the candidates of the step ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A');
@@ -106,7 +117,14 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
   ok('4h a new device after its catch-up purged p5 from the step: a tombstone in the cloud', !!cloud.doc('notes','p5').purged && logs(B,'purge-auto','p5').length===1 && B.logs.some(e=>e.t==='purged' && e.id==='p5'));
   await note(B,'p7','p7'); await idle(B); await trash(B,'p7'); await idle(B); cloud.setTsrv('p7', cloud.now()-31*DAY); const st7=await B.sync.state('p7'); st7.meta.base.tsrv=cloud.doc('notes','p7').tsrv; B.db.data.sync.set('meta:n:p7', st7.meta);
   await idle(B); ok('4i within the hour nothing is looked at again', !cloud.doc('notes','p7').purged);
-  cloud.advance(3600e3+1000); await idle(B); ok('4j an hour later p7 is purged', !!cloud.doc('notes','p7').purged); }
+  cloud.advance(3600e3+1000); await idle(B); ok('4j an hour later p7 is purged', !!cloud.doc('notes','p7').purged);
+  // (review) a restore while the early refusal of an automatic tombstone is on its way: no day's wait on the restored note, it goes at once
+  await note(B,'p8','p8'); await idle(B); await trash(B,'p8'); await idle(B); cloud.setTsrv('p8', cloud.now()-29*DAY); const st8=await B.sync.state('p8'); st8.meta.base.tsrv=cloud.doc('notes','p8').tsrv; B.db.data.sync.set('meta:n:p8', st8.meta);   // 29 days by the server (refused as early), 31 by B's clock two days ahead (a candidate)
+  let relP; const heldP=new Promise(r=>{ relP=r; }); cloud.fault('fail',{dev:'B', op:'txn', code:'permission-denied', wait:heldP});
+  cloud.advance(3600e3+1000); const stepP=B.sync.idle(300); await new Promise(r=>setTimeout(r,30));   // the purge look queued the automatic tombstone; its attempt waits on the server's answer
+  ok('4k the automatic tombstone of p8 is in flight', (B.db.get('sync','try:n:p8')||{}).result && B.db.get('sync','try:n:p8').result.auto===true);
+  await restore(B,'p8'); relP(); await stepP; await idle(B); const st8b=await B.sync.state('p8'), c8=cloud.doc('notes','p8');
+  ok('4l restored meanwhile: the refusal set no wait, the restored note went at once, live in the cloud, no job', !st8b.job && !st8b.tr && !c8.purged && !c8.deleted && !!st8b.note && !st8b.note.deleted && logs(B,'purge-early','p8').some(e=>e.stale)); }
 
 /* ── 5. the receipt limit: 200 devices on the document, this one not among them ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); cloud.write('notes',{id:'r1', title:'', blocks:[{id:'b',row:1,fx:0,text:'r1'}], created:cloud.now(), updated:cloud.now()},{dev:'dev0'});

@@ -474,13 +474,17 @@ function makeSync(deps){
   // may report that instead of retrying the transaction), so the attempt is rejected as in step 4 and the refusal says nothing about the
   // content; the same revision means this document is refused for what it is: invalid, the rest go on
   async function refusedWrite(id, tr){ const same=async t=>{ const cur=await t.get('sync',K.tr('n',id)); return !!cur && cur.op===tr.op; };
-    if(tr.result && tr.result.purged && tr.result.auto){ await tx(['sync'], async(t,after)=>{ if(!(await same(t))) return; dropTry(t,id,after); const job=await t.get('sync',K.out('n',id)); if(job) setJob(t,id,{...job, tries:0, next:0, wait:now()+pace.purgeWait},after); log({t:'purge-early', id}); }); return; }
+    if(tr.result && tr.result.purged && tr.result.auto){ await tx(['sync'], async(t,after)=>{ if(!(await same(t))) return; dropTry(t,id,after); const job=await t.get('sync',K.out('n',id)), meta=await getMeta(t,'n',id);
+        if(job && job.tomb && job.auto && meta.lrev===tr.sentLrev){ setJob(t,id,{...job, tries:0, next:0, wait:now()+pace.purgeWait},after); log({t:'purge-early', id}); }   // still the same automatic tombstone: it waits for the server's day
+        else if(job){ setJob(t,id,{...job, tries:0, next:0},after); log({t:'purge-early', id, stale:true}); } }); return; }   // the note was restored or edited meanwhile: the job is an ordinary send now and goes at once
     const got=await net(()=>S.cloud.get('notes',id), {read:true, kind:'check'});
     if(got.error){ if(S.denied) return; await tx(['sync'], async(t,after)=>{ if(await same(t)) dropTry(t,id,after); }); await backoff(id, got.error); return; }
     countRead(1); const R=got.value? {...got.value, id} : null;
     await tx(['notes','sync','versions','blobs'], async(t,after)=>{ if(!(await same(t))) return;
       if((R? R.rev : 0)!==tr.expect){ log({t:'refused-moved', id, expect:tr.expect, rev:R? R.rev : null}); return finishCore(t, id, tr, R && R.rev>tr.expect? {kind:'rejected'} : {kind:'invariant', D:R}, after); }
-      dropTry(t,id,after); log({t:'rejected-write', id, code:'permission-denied'}); const meta=await getMeta(t,'n',id); meta.err='invalid'; putMeta(t,meta,after); }); }
+      dropTry(t,id,after); const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id));
+      if(meta.lrev!==tr.sentLrev){ log({t:'rejected-write', id, code:'permission-denied', stale:true}); if(job) setJob(t,id,{...job, tries:0, next:0},after); return; }   // the refused content was edited meanwhile: the newer record goes as a new attempt, unmarked
+      log({t:'rejected-write', id, code:'permission-denied'}); meta.err='invalid'; putMeta(t,meta,after); }); }
   // §4.5 step 5: the finish, only if the attempt is still the same one
   async function finishCore(t, id, tr, outcome, after){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.tries.get(id)===tr) S.tries.delete(id); S.queueAt=0; }); return 'stale'; }   // another runner finished it (§4.5 step 5): this memory forgets the attempt and reads the queue again
     const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id)), Srec=await t.get('notes',id), seen=(await t.get('sync',K.seen('n',id)))||null;
@@ -625,7 +629,7 @@ function makeSync(deps){
       await deleteRecord(t,id); after(()=>{ S.bytes.delete(id); S.sends.delete(id); S.err.delete(id); });
       const never=!S.owner || (!meta.base && !seen && !tr && S.everCaughtUp);   // nothing in the cloud to tombstone (decision 2 of the implementation plan)
       if(never){ t.del('sync',K.meta('n',id)); dropJob(t,id,after); dropRefetch(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:false, copies}; }
-      meta.lrev=(meta.lrev||0)+1; putMeta(t,meta,after); const prev=await t.get('sync',K.purged(id)); const p={k:K.purged(id), rev:0}; if(prev && prev.revivedAs) p.revivedAs=prev.revivedAs; t.put('sync',p);
+      meta.lrev=(meta.lrev||0)+1; if(meta.err==='invalid' || meta.err==='loop') delete meta.err; putMeta(t,meta,after); const prev=await t.get('sync',K.purged(id)); const p={k:K.purged(id), rev:0}; if(prev && prev.revivedAs) p.revivedAs=prev.revivedAs; t.put('sync',p);   // a refusal of the old content or a loop says nothing about the tombstone; a refusal of the tombstone itself blocks it again
       setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true},after); dropRefetch(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:true, copies}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function tombstoneAuto(id){ if(!S.loaded) await load(); return tx(['notes','sync'], async(t,after)=>{ const C=await t.get('notes',id); if(!C || !C.deleted) return {ok:false}; const job=await t.get('sync',K.out('n',id)); if(job && !job.tomb) return {ok:false, code:'busy'}; if(job && job.wait) return {ok:false, code:'waiting'}; setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true, auto:true},after); return {ok:true}; }); }   // waiting: the rules refused it as early; it keeps its day

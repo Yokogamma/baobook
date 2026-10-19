@@ -48,7 +48,8 @@ export class TestCloud{
     if(col==='versions' && !tomb && w.note!==undefined){ const note=this.docs.notes.get(w.note); if(!note || note.purged) throw err('permission-denied','noteAlive'); }
     if(D && w.rev===D.rev+1 && bodyJson(w)===bodyJson(D) && !(tomb) && !(D.purged)) throw err('invalid','an empty write'); }
   // the server transaction: fn(D) → the document to write or null; it may run again on contention and with the `tworunners` fault
-  async txn(col,id,fn,o={}){ this.fails(o.dev,'txn'); const two=this.take('tworunners',o.dev), other=this.take('other',o.dev), lost=this.take('lost',o.dev), delay=this.take('delay',o.dev), late=this.take('late',o.dev), hold=this.take('hold',o.dev,'txn');
+  async txn(col,id,fn,o={}){ { const f=this.take('fail',o.dev,'txn'); if(f){ if(f.wait) await f.wait; if(typeof f.then==='function') f.then(this); throw err(f.code||'unavailable','injected'); } }   // `wait`: the failure answers only when the test lets it (the device does things meanwhile)
+    const two=this.take('tworunners',o.dev), other=this.take('other',o.dev), lost=this.take('lost',o.dev), delay=this.take('delay',o.dev), late=this.take('late',o.dev), hold=this.take('hold',o.dev,'txn');
     const reqAt=this.t; let attempts=0, D, w, held=false;
     for(;;){ if(++attempts>5) throw err('aborted','contention'); D=this.out(this.docs[col].get(id));
       w=fn(D? clone(D) : null); if(other && attempts===1){ this.write(other.col||col, other.doc, {dev:other.dev||'other', dn:other.dn}); continue; }   // another device wrote between the read and the commit
