@@ -1268,15 +1268,16 @@ function unsyncedText(c){ const parts=[]; if(c.notes) parts.push(loc('account.un
 // «Увійти через Google»: the first press loads the SDK (a popup has to open from the press itself, so a second press opens it; a user Firebase
 // remembers is checked without one), then a popup on a computer, a redirect on touch devices and in the installed app (§4.12)
 async function signIn(){ if(!accOn() || ACC.signingIn || ACC.signingOut || DYING) return;
-  if(!ACC.sdk){ signInBtn.disabled=true; signInLbl.textContent=loc('account.loading'); await sdkLoad({tell:true}); signInBtn.disabled=false; accUI(); return; }
+  const how=DEBUG.sync.signInHow || ((TOUCH || standalone())? 'redirect' : 'popup');   // the tests set 'load': the SDK only, the sign-in itself through the credential hook
+  if(!ACC.sdk){ signInBtn.disabled=true; signInLbl.textContent=loc('account.loading'); const ok=await sdkLoad({tell:true}); signInBtn.disabled=false; accUI(); if(!ok) return;
+    try{ await ACC.auth.authStateReady(); }catch(_){} if(ACC.user || ACC.auth.currentUser || how==='load') return; }   // a user Firebase remembers is checked on its own (authChanged); else the press that loaded the SDK goes on to the sign-in: the redirect needs no fresh press, and the popup opens while the browser still counts this one as fresh (else the label says «Продовжити» and the next press opens it)
   const {auth}=ACC.sdk, prov=new auth.GoogleAuthProvider(); prov.setCustomParameters({prompt:'select_account'});
-  const how=DEBUG.sync.signInHow || ((TOUCH || standalone())? 'redirect' : 'popup');
   if(how==='redirect'){ if(!(await saveNow())){ say(loc('account.unsaved')); return; } saveS({signin:'pending'}); try{ sessionStorage.setItem('sheet:signin','1'); }catch(_){}
     try{ await auth.signInWithRedirect(ACC.auth, prov); }catch(e){ saveS({signin:null}); say(loc('account.signInFailed',{reason:(e && e.code)||'error'})); } return; }
   ACC.signedHere=true; ACC.signingIn=true; accStatus(); setMenu(false);
   try{ const r=await auth.signInWithPopup(ACC.auth, prov); const u=r && r.user; if(u && ACC.user && ACC.user.uid===u.uid && ACC.checked===u.uid && !CLOUD && !ACC.dialog) accountCheck(ACC.user,{force:true}); }   // the same account again (after «by invitation»): the access is checked anew
-  catch(e){ const c=(e && e.code)||'error'; if(!/cancelled|closed-by-user/.test(c)) say(loc('account.signInFailed',{reason:c})); }
-  finally{ ACC.signingIn=false; accStatus(); } }
+  catch(e){ const c=(e && e.code)||'error'; if(!/cancelled|closed-by-user|popup-blocked/.test(c)) say(loc('account.signInFailed',{reason:c})); }   // a blocked popup (the press was no longer fresh after the load) is no error: the button says «Продовжити з Google» and the next press opens it
+  finally{ ACC.signingIn=false; accUI(); accStatus(); } }
 async function redirectBack(){ if(db.settings().signin!=='pending' || !ACC.sdk) return; ACC.signingIn=true; accStatus();
   try{ await ACC.sdk.auth.getRedirectResult(ACC.auth); }catch(e){ say(loc('account.signInFailed',{reason:(e && e.code)||'error'})); }
   finally{ saveS({signin:null}); ACC.signingIn=false; accStatus(); } }

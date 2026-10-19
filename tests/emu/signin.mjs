@@ -20,8 +20,8 @@ ok('1 the emulator host: the menu offers «Увійти через Google» and 
 await typeAt(A.pg, 500, 300, 'Перша нотатка'); const id1=await A.pg.evaluate(()=>sheetDebug.cur());
 await typeAt(A.pg, 500, 420, 'Другий блок');
 
-// 2. the first press loads the SDK; the next one would open the popup
-await press(A.pg); await until(A.pg, ()=>sheetDebug.sync.account().sdk && !sheetDebug.sync.account().loading);
+// 2. the first press loads the SDK; held at that by the test (the sign-in itself goes through the credential hook below), the button offers the next press
+await A.pg.evaluate(()=>{ sheetDebug.sync.signInHow='load'; }); await press(A.pg); await until(A.pg, ()=>sheetDebug.sync.account().sdk && !sheetDebug.sync.account().loading);
 const a2=await acc(A.pg), m2=await menu(A.pg);
 ok('2 the first press loads the SDK: the button says «Продовжити з Google», still no user and no owner', a2.sdk && !a2.user && !a2.owner && m2.signIn && m2.lbl===await loc(A.pg,'account.continue') && !m2.sync);
 
