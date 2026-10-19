@@ -1,7 +1,11 @@
-// Service worker over a real origin: it touches only its own caches, the app opens offline, a new deploy arrives on reload.
+// Service worker over a real origin: it touches only its own caches, the app opens offline, a new deploy arrives on reload; requests to
+// /__/ (the sign-in pages the Worker proxies, SYNC-PLAN 4.13) pass it by and are never cached; the Firebase SDK is cached when used and
+// the cache survives an update of the worker.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
+import { until } from './lib/wait.mjs';
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS='1';   // before the launch: route() then sees the fetches the service worker itself makes (the SDK step)
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const keys=pg=>pg.evaluate(()=>caches.keys());
@@ -31,6 +35,28 @@ site.override.set('/index.html', html.replace('<title>','<meta name="build" cont
 await pg.reload(); await pg.waitForTimeout(500);
 ok('4 a new deploy shows up on the next reload', await pg.locator('meta[name="build"]').count()===1);
 site.override.delete('/index.html'); await pg.reload(); await pg.waitForTimeout(500);
+
+// the sign-in pages under /__/ go straight to the network (here: the server answers 404) and leave nothing in any cache
+{ const r=await pg.evaluate(async()=>{ const a=await fetch('/__/auth/iframe?apiKey=k'); const b=await fetch('/__/auth/handler',{method:'POST', body:'x=1'}); return [a.status, b.status]; });
+  const cached=await pg.evaluate(async()=>{ const out=[]; for(const k of await caches.keys()){ for(const q of await (await caches.open(k)).keys()) if(/\/__\//.test(q.url)) out.push(k+' '+q.url); } return out; });
+  ok('6 /__/auth/* passes the worker by (the server\'s 404 comes through, '+r.join('/')+') and nothing under /__/ is cached', r[0]===404 && r[1]===404 && cached.length===0 && await controlled(pg)); }
+
+// the Firebase SDK (www.gstatic.com/firebasejs/<version>/…): a module fetched through the worker lands in baobook-sdk and comes from there next time
+let sdkHits=0; const SDK_URL='https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+await ctx.route('https://www.gstatic.com/firebasejs/**', r=>{ sdkHits++; r.fulfill({status:200, contentType:'text/javascript', headers:{'access-control-allow-origin':'*'}, body:'export const sdk="stub";'}); });
+{ const v=await pg.evaluate(u=>import(u).then(m=>m.sdk), SDK_URL);
+  const keys=await pg.evaluate(async()=>(await (await caches.open('baobook-sdk')).keys()).map(q=>q.url));
+  ok('7 the SDK module loads through the worker ('+sdkHits+' network fetch) and is stored in baobook-sdk', v==='stub' && sdkHits===1 && keys.includes(SDK_URL));
+  await pg.reload(); await pg.waitForTimeout(300);
+  const v2=await pg.evaluate(u=>import(u).then(m=>m.sdk), SDK_URL);
+  ok('7b after a reload the module comes from the cache: still '+sdkHits+' network fetch', v2==='stub' && sdkHits===1); }
+
+// an update of the worker (the next version of sw.js on the server): the old shell goes, the SDK and font caches stay
+{ const sw=fs.readFileSync(new URL('../public/sw.js', import.meta.url),'utf8'); site.override.set('/sw.js', sw.replace("VERSION='v8'","VERSION='v99'"));
+  await pg.evaluate(async()=>{ const reg=await navigator.serviceWorker.getRegistration(); await reg.update(); });
+  const k2=await until(async()=>{ const k=await keys(pg); return k.includes('baobook-shell-v99') && !k.includes('baobook-shell-v8')? k : null; }, 10000) || await keys(pg);
+  ok('8 after the update the shell is v99, the old shell is gone and baobook-sdk is kept ('+k2.join(', ')+')', k2.includes('baobook-shell-v99') && !k2.includes('baobook-shell-v8') && k2.includes('baobook-sdk') && k2.includes('other-app-cache'));
+  await pg.reload(); await pg.waitForTimeout(500); }
 
 // the server goes away: the app still opens from the cache, with its notes
 await site.close();
