@@ -33,7 +33,7 @@ const T0=Date.now();
   await connect(pg,{devId:'solo'}); await pg.evaluate(()=>{ sheetDebug.sync.engine().setCloud(null); });
   await t1.click(); await pg.keyboard.press('End'); await pg.keyboard.type(' ще'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const jobs=await syncRecs(pg,'out:n:'), l2=await pg.evaluate(()=>sheetDebug.sync.lrev());
-  ok('1e an owner without a cloud: the note is queued, lrev restarted with the new owner and grew with the edit ('+l2.old1+'), owner and epoch stored', jobs.length===1 && jobs[0].k==='out:n:old1' && l2.old1===1 && (await syncRecs(pg,'owner')).length===1 && (await syncRecs(pg,'epoch')).length===1);
+  ok('1e an owner without a cloud: the note is queued as a local change over no base (lrev 1 with the new owner) and grew with the edit ('+l2.old1+'), owner and epoch stored', jobs.length===1 && jobs[0].k==='out:n:old1' && l2.old1===2 && (await syncRecs(pg,'owner')).length===1 && (await syncRecs(pg,'epoch')).length===1);   // lrev 1 at the binding: a document of the same id in the new owner's cloud is merged with the note, not put over it
   ok('1f no page errors', !errs.length); await ctx.close(); }
 
 /* ── 2. two devices: the editor snapshot keeps an edit typed while another device's change arrives; field deltas; incoming records ── */

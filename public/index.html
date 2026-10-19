@@ -573,6 +573,12 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 .hist-q{flex:0 0 auto}
 .hv.named .hv-k{color:var(--ink);font-weight:500}
 .setpop .chk{gap:8px;padding-left:36px;font-size:var(--t-sm)} .setpop .chk input{margin:0}
+.setpop .acc{display:flex;flex-direction:column;gap:2px;padding:6px 10px 4px;font-size:var(--t-sm);color:var(--ink-2)} .setpop .acc[hidden]{display:none} .setpop .acc-e{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .setpop .acc-s{color:var(--ink-3)}
+.setpop hr[hidden]{display:none}
+.tb.sync[hidden]{display:none} .tb.sync .i{font-size:1.125rem} .tb.sync .i path{stroke-width:1.6} .tb.sync .st-synced,.tb.sync .st-sending,.tb.sync .st-off,.tb.sync .st-bad,.tb.sync .st-busy{display:none}
+.tb.sync[data-st="synced"] .st-synced,.tb.sync[data-st="sending"] .st-sending,.tb.sync[data-st="off"] .st-off,.tb.sync[data-st="bad"] .st-bad,.tb.sync[data-st="busy"] .st-busy{display:block}
+.tb.sync[data-st="synced"]{color:var(--ink-2)} .tb.sync[data-st="sending"],.tb.sync[data-st="busy"]{color:var(--ink-3)} .tb.sync[data-st="off"]{color:var(--ink-3)} .tb.sync[data-st="bad"]{color:#c33}
+.choice .ask-b{flex-wrap:wrap;justify-content:flex-end} .choice .ask-b .fbtn{min-width:0}
 .ghost-blk{position:absolute;border:1.5px dashed var(--ink-3);border-radius:6px;pointer-events:none;opacity:.7}   /* a block the note has now but the version has not: a restore of the whole note removes it */
 .sheet.history .blk.v-hit>.tcard,.sheet.history .blk.v-hit>.cblk{outline:2px solid rgba(245,190,60,.75);outline-offset:2px;border-radius:6px}   /* matches the search in versions */
 .sheet.history .blk.v-big::after{content:attr(data-vnote);position:absolute;left:8px;bottom:-16px;font-size:var(--t-xs);color:var(--ink-3);white-space:nowrap}
@@ -597,6 +603,11 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<span class="devtag" id="devTag" data-i18n="dev.badge" data-i18n-attr="title:dev.title"></span><button class="gear" id="setBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" data-i18n-attr="title:settings.title;aria-label:settings.title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><small data-i18n="brand.tagline"></small></span></b>
       <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
       <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
+        <div class="acc" id="accRow" hidden><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
+        <button class="mi" id="signInBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7.1z"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5a9.5 9.5 0 0 0 8.5 5.2z"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6l3.2-2.5z"/><path d="M12 6.3c1.4 0 2.7.5 3.7 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5c.7-2.2 2.8-3.9 5.3-3.9z"/></svg><span id="signInLbl" data-i18n="account.signIn"></span></button>
+        <button class="mi" id="signOutBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></svg><span data-i18n="account.signOut"></span></button>
+        <button class="mi" id="removeBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-i18n="account.remove"></span></button>
+        <hr id="accHr" hidden>
         <label class="langrow"><span data-i18n="lang.label"></span><select class="fsel" id="langSel"></select></label>
         <button class="mi" id="textBtn" type="button" aria-haspopup="dialog"><svg class="i" viewBox="0 0 24 24"><path d="M3 18 7.5 6 12 18M4.7 14h5.6M14 18l3-7.5 3 7.5M15.1 15.5h3.8"/></svg><span data-i18n="text.title"></span><small id="textV"></small></button>
         <hr>
@@ -630,6 +641,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <main class="main">
     <div class="rowrap" id="roStrip" hidden><div class="rostrip" role="status"><span id="roMsg"></span><span class="ro-b"><button class="fbtn" id="roRestore" type="button" data-i18n="trash.restore"></button><button class="fbtn danger" id="roPurge" type="button" data-i18n="trash.purge"></button><button class="fbtn" id="roExport" type="button" hidden data-i18n="lock.export"></button><button class="fbtn" id="roReload" type="button" hidden data-i18n="lock.reload"></button></span></div></div>
     <div class="rowrap" id="chgStrip" hidden><div class="chgstrip" role="status"><span id="chgMsg"></span><span class="ro-b"><button class="fbtn pri" id="chgApply" type="button" data-i18n="sync.update"></button></span></div></div>
+    <div class="rowrap" id="rcStrip" hidden><div class="chgstrip" role="status"><span data-i18n="sync.receipts"></span><span class="ro-b"><button class="fbtn pri" id="rcCopy" type="button" data-i18n="sync.copyNote"></button></span></div></div>
     <header class="top">
       <div class="left">
         <button class="tb" id="sideBtn" data-i18n-attr="title:panel.label" aria-expanded="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -638,6 +650,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <span class="ttl" id="ttl" contenteditable="true" role="textbox" data-i18n-attr="data-ph:note.untitled;aria-label:note.titleLabel"></span>
       </div>
       <div class="tools">
+        <button class="tb sync" id="syncBtn" type="button" hidden data-st="synced" data-i18n-attr="title:sync.button;aria-label:sync.button"><svg class="i" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 7.5 4 4 0 0 1 17.5 18H7z"/><path class="st-synced" d="M9 13l2 2 4-4"/><path class="st-sending" d="M12 16V9.5M9.5 12l2.5-2.5 2.5 2.5"/><path class="st-off" d="M4 20L20 4"/><path class="st-bad" d="M12 9.5v3.5M12 15.5v.5"/><path class="st-busy" d="M8.5 13h1M11.5 13h1M14.5 13h1"/></svg></button>
         <span class="saved" id="saved" role="status"><span class="sl"></span><span class="ss"></span></span><button class="tb warn" id="saveWarn" hidden data-i18n-attr="title:save.failed;aria-label:save.failedOpen">⚠</button>
         <span class="cnt" id="cnt" data-i18n-attr="title:blocks.countTitle"></span>
         <button class="tb" id="areaBtn" data-i18n-attr="title:area.new.title"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 9.5h8"/></svg></button>
@@ -673,6 +686,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
 <div class="toast" id="toast" data-i18n-html="toast.help"></div>
+<dialog class="ask choice" id="choice" role="dialog" aria-labelledby="choiceTitle" aria-describedby="choiceText"><div class="ask-t" id="choiceTitle"></div><div class="ask-x" id="choiceText"></div><div class="ask-b" id="choiceBtns"></div></dialog>
 <dialog class="ask" id="ask" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askText"><div class="ask-t" id="askTitle"></div><div class="ask-x" id="askText"></div><div class="ask-b"><button class="fbtn" id="askNo" type="button" data-i18n="common.cancel"></button><button class="fbtn danger" id="askYes" type="button" data-i18n="common.delete"></button></div></dialog>
 <dialog class="ask tsz" id="tsz" aria-labelledby="tszTitle">
   <div class="tsz-h"><div class="ask-t" id="tszTitle" data-i18n="text.title"></div><button class="tb" id="tszClose" type="button" data-i18n-attr="title:common.close;aria-label:common.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -691,6 +705,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 </dialog>
 
 <script src="sync.js"></script>
+<script src="cloud.js"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -1038,7 +1053,15 @@ function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36
    (the shortcut is off until the sheet is redrawn at a safe point); LREV: id → lrev of every note; PENDING: id → where the change waiting in storage
    came from ({dn, dev} of another device, {tab:true} for another tab of this one), for the strip «Є зміни з … · Оновити»;
    ARRIVED: id → when a document with an `updated` ahead of this clock arrived (shown instead of that time) */
-const SYNC_ENV=location.hostname==='baobook.matamata.app'? 'app' : location.hostname==='baobook.matamata.dev'? 'dev' : null;
+/* the hosts (SYNC-PLAN 4.12): the two sites have a project each by env, localhost has only the emulators and only with the `emulator` flag in the settings
+   (the tests set it); every other host has no sync. The Firebase config is public by design (the rules are the boundary); authDomain is the site itself */
+const FB_VER='12.19.0', FB_BASE='https://www.gstatic.com/firebasejs/'+FB_VER+'/';
+const FB_CONFIG={apiKey:'AIzaSyCLULj0vihoScW4YwBiAk_6iHIMUDLaNo4', projectId:'baobook-3fe7f', messagingSenderId:'901237593810', appId:'1:901237593810:web:b99fe784de1ce107cd7f0b'};
+const FB_HOSTS={'baobook.matamata.app':{env:'app'}, 'baobook.matamata.dev':{env:'dev'}};
+const FB_EMU={env:'dev', emulator:true, config:{apiKey:'demo-api-key', projectId:'demo-baobook', appId:'1:1:web:demo'}, auth:'http://127.0.0.1:9099', firestore:['127.0.0.1',8080]};
+const FB=FB_HOSTS[location.hostname] || ((location.hostname==='localhost' || location.hostname==='127.0.0.1') && S.emulator===true? FB_EMU : null);
+const SYNC_ENV=FB? FB.env : null, TUNE=(FB && FB.emulator && S.tune)||{};   // TUNE: pace and budgets from the settings, under the emulator only (the tests shorten the retries)
+let DYING=false;   // the page is about to reload after a change of owner: nothing is written or taken any more (the account code below)
 const LREV=new Map(), ESNAP=new Map(), PENDING=new Map(), ARRIVED=new Map();
 DEBUG.sync={clock:0, status:{code:'none', n:0}};
 let SYNC=null, driveT=null, driving=false;
@@ -1053,16 +1076,16 @@ function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : 
 function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()}); const ref={};
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
   // the tab (a replaced one may still finish a step), and after the transaction that reported it, since the status comes from inside its callback
-  ref.eng=SC.makeSync({db:SDB, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets, pace:o.pace,
-    onChange:syncChanged, onStatus:(code,n)=>{ DEBUG.sync.status={code,n}; if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); }, onHistory:syncHistory, wake:syncWake, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
+  ref.eng=SC.makeSync({db:SDB, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
+    onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status={code,n}; if(LEAD.on) tellTabs({t:'st', code, n}); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
   return ref.eng; }
-function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; driving=true; clearTimeout(driveT);   // not before the start is done: documents applied then would not reach the list (syncChanged drops them)
-  (async()=>{ let r={did:'idle', next:Infinity}; try{ for(let i=0;i<500;i++){ r=await SYNC.step(); if(r.did==='idle') break; } }catch(e){ if(/[?&]debug=1/.test(location.search)) console.warn('sync:',e); } finally{ driving=false; }
-    if(r.next<Infinity){ const d=Math.min(5000, Math.max(50, r.next-(Date.now()+(DEBUG.sync.clock||0)))); driveT=setTimeout(syncWake, d); } })(); }
+function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=SYNC; driving=true; clearTimeout(driveT);   // not before the start is done: documents applied then would not reach the list (syncChanged drops them)
+  (async()=>{ let r={did:'idle', next:Infinity}; try{ for(let i=0;i<500;i++){ if(SYNC!==eng) break; r=await eng.step(); if(r.did==='idle') break; } }catch(e){ if(/[?&]debug=1/.test(location.search)) console.warn('sync:',e); } finally{ if(SYNC===eng) driving=false; }   // a detached engine (a sign-out that could not wait) ends its run quietly: the flag belongs to the engine in place
+    if(SYNC!==eng) return; if(r.next<Infinity){ const d=Math.min(5000, Math.max(50, r.next-(Date.now()+(DEBUG.sync.clock||0)))); driveT=setTimeout(syncWake, d); } })(); }
 // the record changed in storage behind the interface: take it unless this tab has unwritten edits of it (then its pending write merges, §4.10)
 // or the caret stands in one of its fields; `src` names where the change came from, for the strip (without it, the record's base tells when it can)
 const keptView=()=>LOCK==='epoch';   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's data comes onto it, by any path
-async function takeStored(id, src){ if(keptView()) return; const st=await SYNC.state(id); if(keptView() || !st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
+async function takeStored(id, src){ if(keptView() || DYING) return; const st=await SYNC.state(id); if(keptView() || !st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
@@ -1079,7 +1102,7 @@ function redrawCur(n){ const tb=tempBlock(), spot=tb && !tb.parent? {col:tb.col,
 // the strip «Є зміни з {device} · Оновити»: the open note has a change waiting in storage, and the wait is for the caret (or for an unsaved write), not
 // for a write in flight, which resolves itself in a moment. «Оновити» saves what is typed and takes the caret out: the safe point follows
 const chgStrip=$('chgStrip'), chgMsg=$('chgMsg'), chgApply=$('chgApply');
-function chgUI(){ const src=cur && !LOCK? PENDING.get(cur.id) : null, show=!!src && (fieldActive() || unsaved.has(cur.id)); chgStrip.hidden=!show; app.classList.toggle('chg', show);
+function chgUI(){ const src=cur && !LOCK? PENDING.get(cur.id) : null, show=!!src && (fieldActive() || unsaved.has(cur.id)), rc=!show && !!cur && !LOCK && RECEIPTS.has(cur.id); chgStrip.hidden=!show; rcStrip.hidden=!rc; app.classList.toggle('chg', show || rc);   // rc: the receipts strip of the account code, in the same place
   if(show) chgMsg.textContent=src.tab? loc('sync.changesTab') : src.dn? loc('sync.changesFrom',{device:src.dn}) : loc('sync.changesDevice'); }
 chgApply.addEventListener('click',()=>{ if(!cur) return; flushSave(); const a=document.activeElement; if(a && a!==document.body && a.blur) a.blur(); setTimeout(flushPending,0); });   // an explicit blur: a tap does not move the focus on iOS
 // a safe point: the open note is not being edited, nothing is in flight and the caret is not in one of its fields (a redraw would take the field
@@ -1109,7 +1132,7 @@ async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) ret
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id); EDITS.delete(id);
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); chgUI(); }
 // the engine (this tab leads) applied a document: this tab takes it, and the other tabs are told which record changed, to what lrev and from which device
-function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
+function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
 function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
 /* ══ the leader tab (SYNC-PLAN 4.10): one tab per data space talks to the cloud, under the Web Lock `baobook-sync:{env}`; the others only write locally.
    The lock goes on pagehide and freeze, so the page may enter the back/forward cache and a frozen tab blocks nobody; a request still waiting in the
@@ -1127,11 +1150,12 @@ function leadOff(){ LEAD.gen++; const ac=LEAD.abort, rel=LEAD.release; LEAD.abor
 // generation is checked: a pagehide, freeze or LOCK meanwhile has released the lock, and a start that finished anyway is undone
 async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
   try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(over()) return;
-    await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile
+    if(!authGate()){ CLOUD=null; ACC.cloud=null; leadOff(); accStatus(); return; }   // the user of this cloud signed out while the tab waited for the lock: the lock goes back, nothing of theirs is sent
+    await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; accStatus(); tellTabs({t:'st', ...DEBUG.sync.status}); syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile; the other tabs mirror the leader's status from here
   catch(e){ if(e && e.code==='epoch'){ setLock('epoch'); return; } if(/[?&]debug=1/.test(location.search)) console.warn('lead:',e); if(!over()) leadOff(); } }
 // ask for the lock; resolves to whether this tab leads now (granted at once) or waits in the queue (false). Idempotent: a held lock is kept, the
 // engine restarted only when the engine or the cloud changed (connect); a request already queued is left alone. Returns false under LOCK or without an owner
-async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;
+async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;   // without a cloud (signed out, the SDK not loaded yet) the leader only runs the store; connectAccount restarts it with the cloud
   if(!hasLocks()){ if(!LEAD.on || LEAD.engine!==SYNC || LEAD.cloud!==CLOUD){ LEAD.name=name; await leadOn(); } return true; }
   if(LEAD.name===name){ if(LEAD.release && (LEAD.engine!==SYNC || LEAD.cloud!==CLOUD)) await leadOn(); return !!LEAD.release; }
   leadOff(); LEAD.name=name;
@@ -1143,13 +1167,202 @@ async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;
   try{ navigator.locks.request(name,{signal:ac.signal}, lock=>hold(lock)).catch(()=>{}); }catch(_){}
   return false; }
 async function leadCheck(){ if(!SYNC || LOCK) return; let same=true; try{ same=await SYNC.checkOwner(); }catch(_){ return; } if(!same){ setLock('epoch'); return; } leadAsk(); }
-// the test hook of PR 1: a cloud and an owner from outside (sign-in comes with PR 3). The device record is the test's hand too: «this device is A»
+/* ══ the account (SYNC-PLAN 4.11–4.13, 4.18; PR 3b): Google sign-in through Firebase Auth, the Firestore adapter (cloud.js) as this tab's CLOUD.
+   The SDK (three modules from gstatic, cached by the service worker once used) loads only when needed: at start with an owner, a user Firebase
+   remembers or a redirect under way, else on the first press of «Увійти». After a sign-in the check goes in the order of §4.11: the access (one read
+   of the notes; refused by the rules → «by invitation»), the rules (one write the rules must refuse; accepted → «not protected»), then the owner:
+   none → this account takes the device; the same → connect; another → the dialog, in one tab (the Web Lock `baobook-owner-dialog`), the tab that
+   signed in first. S.fbUser mirrors the signed-in user in localStorage: it is written before the lock is released on sign-out, so the tab that takes
+   the lock next checks it synchronously (authGate) and never starts a cloud of a user who is gone. DYING: the page is about to reload after a
+   change of owner; nothing is written or taken any more */
+const ACC={user:null, sdk:null, app:null, auth:null, db:null, cloud:null, loading:null, checking:null, checked:null, probe:null, dialog:false, signedHere:false, otherTab:false, signingIn:false, signingOut:false, reauth:false, leadSt:null};
+const accRow=$('accRow'), accEmail=$('accEmail'), accState=$('accState'), signInBtn=$('signInBtn'), signInLbl=$('signInLbl'), signOutBtn=$('signOutBtn'), removeBtn=$('removeBtn'), accHr=$('accHr'), syncBtn=$('syncBtn'), rcStrip=$('rcStrip'), rcCopy=$('rcCopy');
+const accOn=()=>!!FB && db.backend==='idb' && !LOCK;   // sync needs a host with a project (or the emulator flag) and IndexedDB; a locked tab only shows
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const ownerName=o=>o? (o.email||o.uid) : '';
+const standalone=()=>!!navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+const dbg=(...a)=>{ if(/[?&]debug=1/.test(location.search)) console.warn(...a); };
+// the SDK: loaded once, on demand; `tell` says the press of a button asked for it, so a failure is shown
+function sdkLoad(o={}){ if(ACC.sdk) return Promise.resolve(true); if(ACC.loading) return ACC.loading;   // a module that failed to load stays failed in this document (the module map), so the message asks for a reload
+  ACC.loading=(async()=>{ try{ const [app, auth, fs]=await Promise.all([import(FB_BASE+'firebase-app.js'), import(FB_BASE+'firebase-auth.js'), import(FB_BASE+'firebase-firestore.js')]); ACC.sdk={app, auth, fs}; sdkInit(); return true; }
+    catch(e){ dbg('firebase:',e); if(o.tell) say(loc('account.loadFailed')); return false; } finally{ ACC.loading=null; accUI(); accStatus(); } })();
+  accStatus(); return ACC.loading; }
+function sdkInit(){ const {app, auth}=ACC.sdk; ACC.app=app.initializeApp({...(FB.config||FB_CONFIG), authDomain:location.hostname}); ACC.auth=auth.getAuth(ACC.app);   // authDomain: the site itself; the Worker proxies /__/auth/ to the project (§4.12)
+  if(FB.emulator) auth.connectAuthEmulator(ACC.auth, FB.auth, {disableWarnings:true});
+  auth.onAuthStateChanged(ACC.auth, authChanged, ()=>{}); }
+function fsDb(){ if(ACC.db) return ACC.db; const fs=ACC.sdk.fs; ACC.db=fs.getFirestore(ACC.app); if(FB.emulator) fs.connectFirestoreEmulator(ACC.db, FB.firestore[0], FB.firestore[1]); return ACC.db; }   // terminate() on sign-out drops the instance; the next sign-in makes a new one
+const makeCloud=user=>BaobookCloud.make({fs:ACC.sdk.fs, db:fsDb(), root:'env/'+FB.env+'/users/'+user.uid, uid:user.uid});
+// Firebase reports the user of every tab (its own state is shared between them): a new one is checked, a gone one takes the cloud with it
+function authChanged(u){ const prev=ACC.user; if(u && prev && prev.uid===u.uid){ prev.email=u.email||prev.email; accUI(); return; }   // the same user reported again (a token refresh, the persistence settling): the object stays, the checks that hold it go on
+  const user=u? {uid:u.uid, email:u.email||'', name:u.displayName||''} : null; ACC.user=user;
+  if(user){ saveS({fbUser:{uid:user.uid, email:user.email}}); ACC.probe=null; ACC.checked=null; ACC.otherTab=false; if(ACC.signedHere) tellTabs({t:'auth', uid:user.uid});   // the tab that signed in tells the others: a tab without the SDK loads it, Firebase then brings it the user
+    (async()=>{ if(CLOUD && CLOUD.uid && CLOUD.uid!==user.uid) await dropCloud(); if(ACC.user===user) await accountCheck(user); })(); }   // another user's cloud goes first, then the check of this one
+  else if(prev && !ACC.signingOut){ saveS({fbUser:null}); dropCloud(); }   // signed out in another tab, or the session ended
+  accUI(); accStatus(); }
+// §4.11: the access, the rules, the owner, only then the cloud. Once per user unless forced (a re-sign-in after «by invitation», the network back)
+function accountCheck(user, o={}){ if(!accOn() || DYING || ACC.dialog) return Promise.resolve(); if(ACC.checking) return ACC.checking; if(!o.force && ACC.checked===user.uid && (CLOUD || ACC.probe || ACC.otherTab)) return Promise.resolve();
+  ACC.checking=(async()=>{ try{ ACC.probe=null; accStatus(); let owner=SYNC.owner;
+      if(owner && owner.uid===user.uid && owner.env===FB.env){ await bindOwner({...owner, email:user.email}); connectAccount(user); return; }   // the usual start of a signed-in device: the catch-up's own first read is the access check
+      const r=await accessProbe(user); if(ACC.user!==user || DYING) return; if(r!=='ok'){ ACC.probe=r; return; }
+      owner=SYNC.owner; if(!owner){ await bindOwner({uid:user.uid, env:FB.env, email:user.email}); connectAccount(user); return; }
+      if(owner.uid===user.uid && owner.env===FB.env){ connectAccount(user); return; }
+      await ownerDialog(user, owner); }
+    catch(e){ dbg('account:',e); if(e && e.code==='epoch') raced(); }
+    finally{ ACC.checked=user.uid; ACC.checking=null; accUI(); accStatus(); } })(); return ACC.checking; }
+// one read the rules allow only the owner, then one write they must refuse: a write that passes means the rules are not published (test mode)
+async function accessProbe(user){ const fs=ACC.sdk.fs, d=fsDb(), root='env/'+FB.env+'/users/'+user.uid, code=e=>(e && e.code)||'';
+  try{ await fs.getDocsFromServer(fs.query(fs.collection(d, root+'/notes'), fs.limit(1))); }catch(e){ const c=code(e); return c==='permission-denied'? 'denied' : c==='unauthenticated'? 'reauth' : 'unverified'; }
+  const ref=fs.doc(d, root+'/probe/'+(S.devId||'d'));
+  try{ await fs.setDoc(ref, {t:fs.serverTimestamp()}); }catch(e){ return code(e)==='permission-denied'? 'ok' : 'unverified'; }
+  try{ await fs.deleteDoc(ref); }catch(_){} return 'open'; }
+function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=null; ACC.otherTab=false; if(!ACC.cloud || ACC.cloud.uid!==user.uid) ACC.cloud=makeCloud(user); CLOUD=ACC.cloud; leadAsk(); persistOnce(); accStatus(); tellTabs({t:'st?'}); }   // st?: the leader (if another tab) answers with its status
+// the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
+async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
+  if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
+  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
+// the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
+// anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
+async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
+  if(unsaved.size || inflight.size || REVIVING.size || dirty){ setLock('epoch'); accUI(); accStatus(); return; }
+  DYING=true; say(text); setTimeout(()=>location.reload(),1500); }
+const raced=()=>epochMoved(loc('account.raced'));   // another tab changed the owner first (the epoch moved under the dialog or under a binding)
+// the notes on the device belong to A and the user signed in as B: one tab asks, the one where the sign-in happened first; the others learn the
+// outcome from the «owner» message (ownerMoved). Without Web Locks every tab asks
+async function ownerDialog(user, owner){ const ep0=SYNC.epoch;
+  const fresh=()=>{ const o=SYNC.owner; return !!o && o.uid===owner.uid && o.env===owner.env && SYNC.epoch===ep0 && ACC.user===user && !DYING; };   // the device is still A's, as when the question came up; a decision taken in another tab meanwhile (the engine re-adopted, the epoch moved) makes this question stale
+  const run=async()=>{ if(!fresh()) return; ACC.otherTab=false; accStatus(); await showOwnerDialog(user, owner, ep0); };
+  if(!hasLocks()){ await run(); return; }
+  if(!ACC.signedHere){ await sleep(1500); if(!fresh()) return; }
+  const got=await new Promise(res=>{ try{ navigator.locks.request('baobook-owner-dialog',{ifAvailable:true}, async lock=>{ res(!!lock); if(lock) await run(); }).catch(()=>res(false)); }catch(_){ res(false); } });
+  if(!got && fresh()){ ACC.otherTab=true; accStatus(); } }
+// ep0: the epoch the question was asked over; every answer is decided over it, so a change of owner made elsewhere since then is refused by setOwner (`epoch`) and the page reloads
+async function showOwnerDialog(user, owner, ep0){ ACC.dialog=true; accStatus();
+  try{ for(;;){ if(ACC.user!==user || DYING) return; const who=user.email||user.uid, u=unsyncedText(await unsyncedCount());
+      const c=await askChoice({title:loc('account.otherTitle',{a:ownerName(owner)}), text:loc('account.otherText',{b:who, unsynced:u})+' '+loc('account.historyLocal'),
+        buttons:[{id:'export', label:loc('account.export')}, {id:'add', label:loc('account.add',{b:who}), pri:true}, {id:'remove', label:loc('account.removeSignIn'), danger:true}]});
+      if(ACC.user!==user || DYING) return;
+      if(c==='export'){ await exportAll({hist:true}); say(loc('account.exported')); continue; }
+      if(c==='cancel'){ await signOutCore(); return; }   // the sign-in is taken back: the notes stay A's, signed out
+      if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
+      const B={uid:user.uid, env:FB.env, email:user.email};
+      if(c==='add'){ await bindOwner(B,{expectEpoch:ep0}); connectAccount(user); return; }
+      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
+  catch(e){ if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
+  finally{ ACC.dialog=false; accStatus(); } }
+// a choice dialog: askChoice({title, text, buttons:[{id, label, pri, danger}]}) → Promise<id | 'cancel'>; Esc, a click outside and Back cancel, like ask()
+const choiceDlg=$('choice'); let choiceEnd=null;
+function askChoice(o){ if(choiceEnd) choiceEnd('cancel'); if(askEnd) askEnd(false); closePop(); setMenu(false); return new Promise(res=>{ choiceEnd=v=>{ choiceEnd=null; if(choiceDlg.open) choiceDlg.close(); nav.close('choice'); res(v); };
+  $('choiceTitle').textContent=o.title; $('choiceText').textContent=o.text||''; const bx=$('choiceBtns'); bx.innerHTML='';
+  const btn=(label, id, cls)=>{ const el=document.createElement('button'); el.type='button'; el.className='fbtn'+cls; el.textContent=label; el.dataset.id=id; el.addEventListener('click',()=>{ if(choiceEnd) choiceEnd(id); }); bx.appendChild(el); return el; };
+  const cancel=btn(loc('common.cancel'), 'cancel', ''); for(const b of o.buttons) btn(b.label, b.id, b.pri? ' pri' : b.danger? ' danger' : '');
+  choiceDlg.showModal(); cancel.focus(); nav.open('choice', ()=>{ if(choiceEnd) choiceEnd('cancel'); }); }); }
+choiceDlg.addEventListener('close',()=>{ if(choiceEnd && !choiceDlg.open) choiceEnd('cancel'); });   // Esc, or the browser closed it; the event of a close() that a new dialog already followed (the loop of the owner dialog) is not this one's
+choiceDlg.addEventListener('click',e=>{ if(e.target!==choiceDlg || !choiceEnd) return; const r=choiceDlg.getBoundingClientRect(); if(e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom) choiceEnd('cancel'); });
+addEventListener('keydown',e=>{ if(choiceDlg.open) e.stopPropagation(); },true);
+// everything typed is in storage, or the owner does not change: the write is awaited (up to 5 s), a failed one keeps the dialog open
+async function saveNow(){ flushSave(); const t0=Date.now(); while((inflight.size || REVIVING.size) && Date.now()-t0<5000) await sleep(50); return !unsaved.size && !inflight.size && !REVIVING.size && !dirty; }
+// what is not in the cloud: the notes with a job or an attempt waiting, the named versions queued; without an owner, every note on the device
+async function unsyncedCount(){ let n=0, v=0; try{ await SDB.tx(['sync'],'readonly', async t=>{ const ids=new Set(); for(const r of await t.range('sync','out:n:','out:n:\uffff')) ids.add(r.k.slice(6)); for(const r of await t.range('sync','try:n:','try:n:\uffff')) ids.add(r.k.slice(6)); n=ids.size; v=(await t.range('sync','out:v:','out:v:\uffff')).length; }); }catch(_){}
+  if(!SYNC.owner) n=notes.filter(x=>!x.deleted && (x.title || x.blocks.length)).length; return {notes:n, versions:v}; }
+function unsyncedText(c){ const parts=[]; if(c.notes) parts.push(loc('account.unsyncedNotes',{n:c.notes})); if(c.versions) parts.push(loc('account.unsyncedVersions',{n:c.versions})); return parts.length? parts.join(' ') : loc('account.unsyncedNone'); }
+// «Увійти через Google»: the first press loads the SDK (a popup has to open from the press itself, so a second press opens it; a user Firebase
+// remembers is checked without one), then a popup on a computer, a redirect on touch devices and in the installed app (§4.12)
+async function signIn(){ if(!accOn() || ACC.signingIn || ACC.signingOut || DYING) return;
+  if(!ACC.sdk){ signInBtn.disabled=true; signInLbl.textContent=loc('account.loading'); await sdkLoad({tell:true}); signInBtn.disabled=false; accUI(); return; }
+  const {auth}=ACC.sdk, prov=new auth.GoogleAuthProvider(); prov.setCustomParameters({prompt:'select_account'});
+  const how=DEBUG.sync.signInHow || ((TOUCH || standalone())? 'redirect' : 'popup');
+  if(how==='redirect'){ if(!(await saveNow())){ say(loc('account.unsaved')); return; } saveS({signin:'pending'}); try{ sessionStorage.setItem('sheet:signin','1'); }catch(_){}
+    try{ await auth.signInWithRedirect(ACC.auth, prov); }catch(e){ saveS({signin:null}); say(loc('account.signInFailed',{reason:(e && e.code)||'error'})); } return; }
+  ACC.signedHere=true; ACC.signingIn=true; accStatus(); setMenu(false);
+  try{ const r=await auth.signInWithPopup(ACC.auth, prov); const u=r && r.user; if(u && ACC.user && ACC.user.uid===u.uid && ACC.checked===u.uid && !CLOUD && !ACC.dialog) accountCheck(ACC.user,{force:true}); }   // the same account again (after «by invitation»): the access is checked anew
+  catch(e){ const c=(e && e.code)||'error'; if(!/cancelled|closed-by-user/.test(c)) say(loc('account.signInFailed',{reason:c})); }
+  finally{ ACC.signingIn=false; accStatus(); } }
+async function redirectBack(){ if(db.settings().signin!=='pending' || !ACC.sdk) return; ACC.signingIn=true; accStatus();
+  try{ await ACC.sdk.auth.getRedirectResult(ACC.auth); }catch(e){ say(loc('account.signInFailed',{reason:(e && e.code)||'error'})); }
+  finally{ saveS({signin:null}); ACC.signingIn=false; accStatus(); } }
+// the engine's run is left alone while a step is in flight (a transaction mid-write); after the wait a stuck one is detached: a fresh engine takes
+// its place and the old one's callbacks no longer reach this tab (makeEngine checks SYNC===ref.eng)
+async function waitFree(ms){ const t0=Date.now(); while((driving || inflight.size) && Date.now()-t0<ms) await sleep(100); return !driving; }
+function detachEngine(){ SYNC=makeEngine(); driving=false; clearTimeout(driveT); DEBUG.sync.status={code:'none', n:0}; SYNC.reload().catch(()=>{}); dbg('sync: engine detached'); }
+async function dropCloud(){ CLOUD=null; ACC.cloud=null; ACC.probe=null; ACC.checked=null; ACC.otherTab=false; ACC.leadSt=null; accStatus();
+  if(LEAD.on || LEAD.release || LEAD.abort || driving){ if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); if(driving) detachEngine(); } accStatus(); }
+// sign-out (§4.11): stop receiving, wait for the attempt in flight (up to 10 s), the mirror in localStorage before the lock goes, the other tabs,
+// Firebase, the Firestore instance. The owner and the queue stay: the notes are still this account's, waiting for the next sign-in
+async function signOutCore(){ if(ACC.signingOut) return; ACC.signingOut=true; accStatus();
+  try{ saveS({fbUser:null}); await dropCloud(); tellTabs({t:'auth', uid:null});
+    if(ACC.auth){ try{ await ACC.sdk.auth.signOut(ACC.auth); }catch(e){ dbg('signOut:',e); } }
+    if(ACC.db){ const old=ACC.db; ACC.db=null; try{ await ACC.sdk.fs.terminate(old); }catch(_){} }
+    ACC.user=null; ACC.signedHere=false; }
+  finally{ ACC.signingOut=false; accUI(); accStatus(); } }
+async function signOut(){ if(!ACC.user || DYING) return; setMenu(false); await signOutCore(); }
+// «Прибрати нотатки з пристрою»: sign out, then the owner becomes nobody and everything is erased (§4.11); the page reloads as a new device
+async function removeFromDevice(){ if(DYING || ACC.signingOut) return; setMenu(false); const who=ACC.user? (ACC.user.email||ACC.user.uid) : ownerName(SYNC.owner);
+  for(;;){ const u=unsyncedText(await unsyncedCount());
+    const c=await askChoice({title:loc('account.removeTitle'), text:loc('account.removeText',{a:who, unsynced:u})+' '+loc('account.historyLocal'), buttons:[{id:'export', label:loc('account.export')}, {id:'remove', label:loc('account.removeOk'), danger:true}]});
+    if(c==='export'){ await exportAll({hist:true}); say(loc('account.exported')); continue; }
+    if(c!=='remove') return;
+    if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
+    const ep=SYNC.epoch; DYING=true; await signOutCore();
+    try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && e.code==='epoch')) throw e; say(loc('account.raced')); }
+    tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
+// the engine must sign in again (its token is refused): the user is signed out here and told so
+async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ await signOutCore(); ACC.probe='reauth'; accUI(); accStatus(); } finally{ ACC.reauth=false; } }
+// another tab changed the owner (the «owner» message of bindOwner / the dialog): after an erase or a decision made there this tab reloads; after a
+// binding that kept the records (a first sign-in, «Додати до хмари») the engine is replaced by one that knows the new owner, and the tab goes on
+async function ownerMoved(m){ if(DYING) return;
+  if(m.erase || ACC.otherTab) return epochMoved(loc('lock.owner'));   // the records are gone, or the decision was taken in the other tab: this screen is the old owner's
+  if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
+  LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear();
+  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
+// the «auth» message of another tab: a sign-in there loads the SDK here (Firebase then brings the user); a sign-out there takes this tab's cloud at once
+function authMsg(m){ if(!accOn() || DYING) return; if(m.uid){ if(!ACC.sdk) sdkLoad(); return; } if(ACC.user || CLOUD){ ACC.user=null; dropCloud(); accUI(); } }
+const authGate=()=>!(CLOUD && CLOUD.uid) || (db.settings().fbUser||{}).uid===CLOUD.uid;   // the cloud this tab would lead with belongs to the user still signed in (the mirror is the synchronous truth)
+/* the status (§4.18): the button in the header and the line under the account in the menu. The leader computes it; the other tabs mirror the
+   leader's («st» message) and know their own states: signed out, checking, the dialog elsewhere */
+const ST_TEXT={synced:()=>loc('sync.st.synced'), sending:()=>loc('sync.st.sending'), waiting:()=>loc('sync.st.sending'), pending:()=>loc('sync.st.pending'), checking:()=>loc('sync.st.checking'), loading:()=>loc('sync.st.loading'),
+  signingIn:()=>loc('sync.st.signingIn'), signingOut:()=>loc('sync.st.signingOut'), offline:n=>loc('sync.st.offline',{n}), signedOut:n=>loc('sync.st.signedOut',{n}), limit:n=>loc('sync.st.limit',{n}),
+  unverified:()=>loc('sync.st.unverified'), denied:()=>loc('sync.st.denied'), open:()=>loc('sync.st.open'), reauth:()=>loc('sync.st.reauth'), other:()=>loc('sync.st.other'), error:()=>loc('sync.st.error'), nospace:()=>loc('sync.st.nospace')};
+const ST_KIND={synced:'synced', sending:'sending', waiting:'sending', pending:'busy', checking:'busy', loading:'busy', signingIn:'busy', signingOut:'busy', offline:'off', signedOut:'off', limit:'off'};
+function accStatus(){ if(!accOn()){ syncBtn.hidden=true; DEBUG.sync.ui=null; return; } const owner=SYNC && SYNC.owner; let code, n=0;
+  if(ACC.signingOut) code='signingOut'; else if(ACC.loading) code='loading'; else if(ACC.signingIn) code='signingIn'; else if(ACC.checking || ACC.dialog) code='checking';
+  else if(ACC.probe && ACC.probe!=='ok') code=ACC.probe; else if(ACC.otherTab) code='other';
+  else if(!owner){ syncBtn.hidden=true; accState.textContent=''; DEBUG.sync.ui={code:'none', text:''}; return; }
+  else { n=SYNC.jobs().length+SYNC.tries().length; if(!ACC.user || !CLOUD) code='signedOut'; else { const st=LEAD.on? DEBUG.sync.status : (ACC.leadSt||{code:'pending', n}); code=st.code; n=st.n; } }
+  if(!ST_TEXT[code]) code=code==='none'? 'pending' : 'error';
+  const text=ST_TEXT[code](n); syncBtn.hidden=false; syncBtn.dataset.st=ST_KIND[code]||'bad'; syncBtn.title=text; syncBtn.setAttribute('aria-label',text); accState.textContent=text; DEBUG.sync.ui={code, text}; }
+function accUI(){ const on=accOn(), owner=SYNC && SYNC.owner, user=ACC.user; accRow.hidden=!on || !(user || owner); accEmail.textContent=user? (user.email||user.uid) : ownerName(owner);
+  signInBtn.hidden=!on || !!user; signOutBtn.hidden=!on || !user; removeBtn.hidden=!on || !(user || owner); accHr.hidden=!on;
+  if(!ACC.loading) signInLbl.textContent=ACC.sdk? loc('account.continue') : loc('account.signIn'); }
+syncBtn.addEventListener('click',()=>{ if(syncBtn.title) say(syncBtn.title); });
+signInBtn.addEventListener('click',()=>signIn()); signOutBtn.addEventListener('click',()=>signOut()); removeBtn.addEventListener('click',()=>removeFromDevice());
+// the start of the account (the end of start()): the menu, the status, persistence with an owner, the SDK when the device has an owner, a user or a
+// redirect under way; the tab that comes back from a redirect knows it (sessionStorage); the Home Screen hint once on an iPhone outside the app
+function accStart(){ if(!FB) return; accUI(); accStatus(); if(!accOn()) return; const owner=SYNC.owner, s=db.settings();
+  try{ if(sessionStorage.getItem('sheet:signin')==='1'){ ACC.signedHere=true; sessionStorage.removeItem('sheet:signin'); } }catch(_){}
+  if(owner) persistOnce();
+  if(owner || s.fbUser || s.signin==='pending') sdkLoad().then(ok=>{ if(ok) redirectBack(); });
+  if(owner && /iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone() && !S.iosHintShown){ saveS({iosHintShown:true}); say(loc('install.iosHint')); } }
+window.addEventListener('online',()=>{ if(!accOn() || DYING) return;
+  if(ACC.user && ACC.sdk){ if(!ACC.checking && !ACC.dialog && (ACC.probe==='unverified' || (!CLOUD && !ACC.probe && !ACC.otherTab))) accountCheck(ACC.user,{force:true}); }
+  else if(!ACC.sdk && !ACC.loading && (SYNC.owner || db.settings().fbUser)) sdkLoad().then(ok=>{ if(ok) redirectBack(); }); });
+// the receipt limit (§4.18): the cloud document of this note has receipts of too many devices, so the rules refuse every write of it; the strip offers
+// a copy, which syncs in place of the original (its job goes; the note itself stays here as it is)
+const RECEIPTS=new Set();
+async function copyNoteOf(src){ flushSave(); const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:src.title, blocks:JSON.parse(JSON.stringify(src.blocks)), created:now(), updated:now()}; notes.unshift(n); setSnap(n.id, n, null);
+  const r=await writeNote(n); if(!r || !r.ok) return; try{ await SYNC.unqueue(src.id); }catch(_){} RECEIPTS.delete(src.id); renderList(); openNote(n); say(loc('sync.copied',{title:titleOf(src)})); }
+rcCopy.addEventListener('click',()=>{ if(cur && !ro()) copyNoteOf(cur); });
+Object.assign(DEBUG.sync,{ account:()=>({user:ACC.user, owner:SYNC? SYNC.owner : null, epoch:SYNC? SYNC.epoch : null, probe:ACC.probe, otherTab:ACC.otherTab, dialog:ACC.dialog, cloud:!!CLOUD, cloudUid:CLOUD? CLOUD.uid||null : null, sdk:!!ACC.sdk, loading:!!ACC.loading, checking:!!ACC.checking, signingIn:ACC.signingIn, signingOut:ACC.signingOut, signedHere:ACC.signedHere, ui:DEBUG.sync.ui||null, dying:DYING, receipts:[...RECEIPTS], lead:LEAD.on, fb:FB? {env:FB.env, emulator:!!FB.emulator} : null}),
+  signIn:async cred=>{ if(!FB || !FB.emulator) throw new Error('emulator only'); if(!(await sdkLoad())) throw new Error('load'); ACC.signedHere=true; const {auth}=ACC.sdk; const r=await auth.signInWithCredential(ACC.auth, auth.GoogleAuthProvider.credential(cred)); return r.user.uid; },   // the test's hand: a Google credential the Auth emulator accepts
+  press:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), load:()=>sdkLoad(), redirectBack:()=>redirectBack(), choose:id=>{ if(choiceEnd) choiceEnd(id); }, choice:()=>choiceDlg.open? [...choiceDlg.querySelectorAll('button')].map(b=>b.dataset.id) : null,
+  fbFault:(k,v)=>{ if(ACC.cloud && ACC.cloud.fault) ACC.cloud.fault(k,v); }, quota:()=>SYNC? SYNC._S.quota : null, unsynced:()=>unsyncedCount(), copyNote:()=>cur? copyNoteOf(cur) : null,
+  bind:o=>bindOwner(o).then(()=>({ok:true}), e=>({ok:false, code:(e && e.code)||'error'})), locked:()=>LOCK, unsavedCount:()=>unsaved.size });   // bind: bindOwner from outside, for the epoch check (appaccount)
+// the test hook of PR 1: a cloud and an owner from outside (the account code above is the real one). The device record is the test's hand too: «this device is A»
 Object.assign(DEBUG.sync,{ core:SC,
   connect:async o=>{ SYNC.stop(); if(o.devId) saveS({devId:o.devId}); if(o.devName) saveS({devName:o.devName});
     if(o.devId || o.devName){ try{ await SDB.tx(['sync'],'readwrite', async t=>{ const d=(await t.get('sync','device'))||{}; t.put('sync',{k:'device', id:o.devId||d.id||S.devId, name:o.devName||d.name||S.devName}); }); }catch(_){} }
-    SYNC=makeEngine(o); CLOUD=o.cloud||null; await SYNC.setOwner(o.owner||null);
+    SYNC=makeEngine(o); CLOUD=o.cloud||null; await SYNC.setOwner(o.owner||null); if(o.user!==undefined){ ACC.user=o.user; saveS({fbUser:o.user? {uid:o.user.uid, email:o.user.email} : null}); if(o.user) ACC.cloud=CLOUD; }   // user: a signed-in account without Firebase, for the status button and the menu (appaccount)
     LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null;   // a change of owner clears the per-note metadata (§4.11): the snapshots' lrev is unknown until the next write
-    tellTabs({t:'owner'}); await leadAsk(); return SYNC.owner; },
+    tellTabs({t:'owner'}); await leadAsk(); accUI(); accStatus(); tellTabs({t:'st?'}); return SYNC.owner; },
   disconnect:()=>{ leadOff(); SYNC.stop(); }, step:()=>SYNC.step(), idle:(n)=>SYNC.idle(n), online:on=>{ DEBUG.sync.offline=!on; SYNC.online(on); syncWake(); }, reconnect:()=>{ SYNC.reconnect(); syncWake(); }, wake:()=>syncWake(),
   lead:()=>({on:LEAD.on, name:LEAD.name, held:!!LEAD.release, queued:!!LEAD.abort, started:!!(SYNC && SYNC._S.started)}), ask:()=>leadAsk(), check:()=>leadCheck(),
   tombstone:(id,o)=>SYNC.tombstoneAuto(id,o), state:id=>SYNC.state(id), seen:()=>SYNC.seenAll(), jobs:()=>SYNC.jobs(), tries:()=>SYNC.tries(), lrev:()=>SYNC.lrevOf(), log:()=>SYNC? SYNC.log : [], engine:()=>SYNC, snap:id=>ESNAP.get(id), pending:()=>[...PENDING.keys()] });   // functions, not getters: Object.assign would copy a getter's value
@@ -1509,14 +1722,14 @@ function serBlock(b){ const d={id:b.id,row:b.row,text:b.text}; if(b.parent){ d.p
 function serialize(){ return blocks.filter(b=>b.id && (b.kind || (b.text||'').trim())).map(serBlock); }   // порожній текстовий блок — тимчасовий, у сховище не йде
 const savedL=savedEl.querySelector('.sl'), savedS=savedEl.querySelector('.ss');
 function savedShow(cls, long, short){ savedL.textContent=long; savedS.textContent=short; savedEl.className='saved '+cls; }
-function markDirty(){ if(H.view || ro() || !STARTED) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
+function markDirty(){ if(H.view || ro() || !STARTED || DYING) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
-function writeNote(n, delta){ const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
+function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ Object.assign(n, r.note); if(!r.note.deleted) delete n.deleted; if(!r.note.archived) delete n.archived; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
         setSnap(n.id, same? D : D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) updateItem(n); }
@@ -1534,13 +1747,13 @@ function saveUI(){ const k=unsaved.size; saveWarn.hidden=!k; saveErr.hidden=!k; 
   saveErrMsg.innerHTML='<b>'+escHtml(loc('save.failedReason',{reason:first.reason}))+'.</b> '+escHtml(k===1? loc('save.unsavedOne',{name:names[0]}) : loc('save.unsavedMany',{n:k, names:names.join(', ')}))+' '+escHtml(loc('save.memoryOnly')); }
 saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('click',()=>exportAll()); saveWarn.addEventListener('click',()=>{ setSide(true); saveErr.scrollIntoView({block:'nearest'}); });
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
-window.addEventListener('beforeunload',e=>{ flushSave(); if(inflight.size||unsaved.size||REVIVING.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
+window.addEventListener('beforeunload',e=>{ if(DYING) return; flushSave(); if(inflight.size||unsaved.size||REVIVING.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
 function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
   if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!ESNAP.has(n.id) || !busy(n)) setSnap(n.id, n, LREV.get(n.id)??0); if(db.backend==='idb') vload(n.id);   // the snapshot is taken synchronously from memory (equal to storage unless the note is busy, whose snapshot stays)
-  drawNote(n); chgUI();
+  drawNote(n); chgUI(); if(SYNC && db.backend==='idb' && !RECEIPTS.has(n.id)) SYNC.state(n.id).then(st=>{ if(cur===n && st.meta && st.meta.err==='receipts'){ RECEIPTS.add(n.id); chgUI(); } }).catch(()=>{});   // a refusal for receipts (the leader found it) is in the record's metadata
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); roSync(); renderBacklinks(); }
@@ -1603,7 +1816,7 @@ newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection
 const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
 const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || REVIVING.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet: a failed or in-flight write, a revival being written, typing
-function takeNote(r, lrev){ if(!validNote(r) || keptView()) return; const n=notes.find(x=>x.id===r.id);
+function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; const n=notes.find(x=>x.id===r.id);
   if(!n){ notes.push(r); if(lrev!=null) LREV.set(r.id,lrev); renderList(); storageUI(); return; }
   const mine=LREV.get(r.id), known=lrev!=null && mine!=null;   // both lrevs known: the newer wins, equal ones compare by time (a record written past the core)
   if(known? (lrev<mine || (lrev===mine && (r.updated||0)<=(n.updated||0))) : (r.updated||0)<=(n.updated||0)) return;
@@ -1617,13 +1830,14 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); undoStacks.delete(id);
   if(cur===n){ cur=null; openNote(firstNote()); } else renderBacklinks(); renderList(); storageUI(); }
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
-function tabMsg(m){ if(keptView()) return;
-  if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner') leadCheck();
+function tabMsg(m){ if(keptView() || DYING) return;
+  if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
+  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs({t:'st', ...DEBUG.sync.status}); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected)
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
-  if(LEAD.on && SYNC && m.t!=='owner'){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
+  if(LEAD.on && SYNC && !['owner','auth','st','st?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
-async function syncTabs(){ if(!cur || keptView()) return; const {m, lrev}=await storedWithLrev(); if(keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
+async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev}=await storedWithLrev(); if(keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
@@ -2665,7 +2879,7 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload'? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
-  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader)
+  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();

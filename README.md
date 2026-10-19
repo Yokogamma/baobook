@@ -19,6 +19,7 @@ Each site keeps its own notes, because a site cannot read another site's browser
 - Offline shell through a service worker; light, dark and sand themes.
 - Text size: «Як у системі» by default (the browser font size, and the iOS text size on an iPhone or iPad), or the sheet text from 14 to 24px and the interface from 90 to 130%. Per device; the export does not carry it.
 - Ukrainian and English UI from `public/locales/*.json`; a new language is one more file (see CLAUDE.md).
+- Sign in with Google (the gear menu) to keep the notes in the cloud and on every device, being built: see [docs/SYNC-PLAN.md](docs/SYNC-PLAN.md). Each site has its own data space; nothing leaves the device without a sign-in.
 
 ## Layout
 
