@@ -64,11 +64,12 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
   await A.off(false); await note(A,'w3','третя, правка'); cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied'}); cloud.fault('fail',{dev:'A', op:'get', code:'unavailable'}); await A.off(true); await idle(A); const st3=await A.sync.state('w3');
   ok('3f the check read was lost: no attempt, the job waits with a retry, no mark', !st3.tr && !!st3.job && st3.job.tries>=1 && !st3.meta.err && !A.sync._S.denied && cloud.doc('notes','w3').blocks[0].text==='третя');
   cloud.advance(100); await idle(A); ok('3g the next attempt was accepted', cloud.doc('notes','w3').blocks[0].text==='третя, правка' && !(await A.sync.state('w3')).job);
-  // the phone writes at the very moment of the refusal: the check read meets a newer document and applies it as a server read
+  // the phone writes at the very moment of the refusal (a backend that judges the stale write against the new document instead of retrying
+  // the transaction): the check read finds a newer revision, the attempt is rejected as by a moved cloud, the merge follows, no invalid mark
   await note(A,'w1','локальна'); const b=cloud.doc('notes','w1');
   cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied', then:c=>c.write('notes',{id:'w1', title:b.title, blocks:[{...b.blocks[0], text:'з телефону'}], created:b.created, updated:c.now()+1},{dev:'phone', dn:'Телефон'})});
-  await idle(A); const st4=await A.sync.state('w1'), texts4=JSON.stringify(st4.note)+JSON.stringify(st4.versions);
-  ok('3h the refusal came with a newer document in the cloud: merged here (base rev '+(st4.meta.base||{}).rev+'), the phone\'s text kept, the note marked invalid', !!st4.meta.base && st4.meta.base.rev===2 && cloud.doc('notes','w1').rev===2 && st4.meta.err==='invalid' && !st4.tr && texts4.includes('з телефону') && logs(A,'merged','w1').length>=1);
+  await idle(A); const st4=await A.sync.state('w1'), texts4=JSON.stringify(st4.note)+JSON.stringify(st4.versions), c4=cloud.doc('notes','w1');
+  ok('3h the refusal came with a newer document in the cloud: rejected, not invalid; merged here (base rev '+(st4.meta.base||{}).rev+'), both texts kept, the result sent or equal to the cloud (rev '+c4.rev+')', !!st4.meta.base && st4.meta.base.rev===c4.rev && c4.rev>=2 && !st4.meta.err && !st4.tr && !st4.job && texts4.includes('з телефону') && texts4.includes('локальна') && logs(A,'refused-moved','w1').length===1 && logs(A,'rejected','w1').length===1 && logs(A,'merged','w1').length>=1);
   // a refused manual tombstone does not loop
   await note(A,'t1','буде видалена'); await idle(A); const commits0=cloud.events.length; ok('3i the note to be purged is in the cloud', !!cloud.doc('notes','t1') && commits0>0);
   cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied'}); await A.sync.purgeLocal('t1'); await idle(A); cloud.advance(1000); await idle(A); cloud.advance(1000); await idle(A); const st5=await A.sync.state('t1');

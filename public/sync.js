@@ -468,17 +468,19 @@ function makeSync(deps){
     finally{ S.netBusy=false; } }
   // the rules refused the write (every refusal is permission-denied, §4.16). Nothing was written, so the attempt is resolved; what it means:
   // an automatic tombstone → the server says the 30 days are not over by its clock (the device clock runs ahead): the job waits a day and
-  // is tried again (§4.8); anything else → one server read of the document tells access from content: a refused read is the account
-  // (net() sets denied, the attempt stays for the next sign-in), a read that passes means this document is refused for what it is (invalid,
-  // the rest go on; a newer document found there is applied as a server read); a read lost on the network leaves the decision to the next attempt
+  // is tried again (§4.8); anything else → one server read of the document tells: a refused read is the account (net() sets denied, the
+  // attempt stays for the next sign-in); a read lost on the network leaves the decision to the next attempt; a document whose revision is
+  // no longer the attempt's base means another device wrote first and the rules judged the stale write against the new state (a backend
+  // may report that instead of retrying the transaction), so the attempt is rejected as in step 4 and the refusal says nothing about the
+  // content; the same revision means this document is refused for what it is: invalid, the rest go on
   async function refusedWrite(id, tr){ const same=async t=>{ const cur=await t.get('sync',K.tr('n',id)); return !!cur && cur.op===tr.op; };
     if(tr.result && tr.result.purged && tr.result.auto){ await tx(['sync'], async(t,after)=>{ if(!(await same(t))) return; dropTry(t,id,after); const job=await t.get('sync',K.out('n',id)); if(job) setJob(t,id,{...job, tries:0, next:0, wait:now()+pace.purgeWait},after); log({t:'purge-early', id}); }); return; }
     const got=await net(()=>S.cloud.get('notes',id), {read:true, kind:'check'});
     if(got.error){ if(S.denied) return; await tx(['sync'], async(t,after)=>{ if(await same(t)) dropTry(t,id,after); }); await backoff(id, got.error); return; }
-    countRead(1); const R=got.value;
-    await tx(['notes','sync','versions','blobs'], async(t,after)=>{ if(!(await same(t))) return; dropTry(t,id,after); log({t:'rejected-write', id, code:'permission-denied'});
-      let meta=await getMeta(t,'n',id); if(R && (!meta.base || R.rev>meta.base.rev)){ await applyNote(t, {...R, id}, 'server', after); meta=await getMeta(t,'n',id); }
-      meta.err='invalid'; putMeta(t,meta,after); }); }
+    countRead(1); const R=got.value? {...got.value, id} : null;
+    await tx(['notes','sync','versions','blobs'], async(t,after)=>{ if(!(await same(t))) return;
+      if((R? R.rev : 0)!==tr.expect){ log({t:'refused-moved', id, expect:tr.expect, rev:R? R.rev : null}); return finishCore(t, id, tr, R && R.rev>tr.expect? {kind:'rejected'} : {kind:'invariant', D:R}, after); }
+      dropTry(t,id,after); log({t:'rejected-write', id, code:'permission-denied'}); const meta=await getMeta(t,'n',id); meta.err='invalid'; putMeta(t,meta,after); }); }
   // §4.5 step 5: the finish, only if the attempt is still the same one
   async function finishCore(t, id, tr, outcome, after){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.tries.get(id)===tr) S.tries.delete(id); S.queueAt=0; }); return 'stale'; }   // another runner finished it (§4.5 step 5): this memory forgets the attempt and reads the queue again
     const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id)), Srec=await t.get('notes',id), seen=(await t.get('sync',K.seen('n',id)))||null;
