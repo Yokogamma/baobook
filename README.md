@@ -24,11 +24,13 @@ Each site keeps its own notes, because a site cannot read another site's browser
 
 | Path | What |
 |---|---|
-| `public/` | the site: `index.html` (all CSS and JS), `sw.js`, `manifest.webmanifest`, icons. Only this folder is published |
+| `public/` | the site: `index.html` (all CSS and JS), `sync.js` (the sync core), `cloud.js` (the Firestore adapter), `sw.js`, `manifest.webmanifest`, icons. Only this folder is published |
+| `worker/` | the Cloudflare Worker: static assets are served without it; it answers only `/__/auth/*`, proxied to the Firebase Auth pages of the project so that sign-in runs on the site's own origin |
 | `tests/` | end-to-end Playwright scenarios, see [tests/README.md](tests/README.md) |
 | `docs/` | design plans for sync, mobile and note versions (written in Russian before the move) and [HISTORY.md](docs/HISTORY.md) |
 | `examples/` | early mockups the app grew from |
-| `wrangler.jsonc` | Cloudflare Workers Static Assets configuration |
+| `wrangler.jsonc` | Cloudflare Workers configuration: the static assets of `public/` and the script in `worker/` |
+| `firestore.rules`, `firebase.json` | the Firestore security rules and the emulator setup for their tests |
 
 ## Run locally
 
@@ -49,7 +51,7 @@ GitHub Actions runs every scenario on each pull request and on pushes to `main`.
 
 ## Deploy
 
-Cloudflare Workers Static Assets through Workers Builds, two Workers from this one repository (see `wrangler.jsonc`):
+Cloudflare Workers Static Assets through Workers Builds, two Workers from this one repository (see `wrangler.jsonc`). `public/` is served as static assets; the script in `worker/` runs only for paths under `/__/` (`assets.run_worker_first`) and proxies `/__/auth/*` to the project's Firebase Auth pages:
 
 | Worker | Branch | Deploy command | Site |
 |---|---|---|---|

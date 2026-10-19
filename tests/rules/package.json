@@ -1,14 +1,14 @@
 {
   "name": "baobook-rules-tests",
   "private": true,
-  "description": "Firestore security rules (firestore.rules, docs/SYNC-PLAN.md §4.16) tested on the Firestore emulator",
+  "description": "Firestore security rules (firestore.rules, docs/SYNC-PLAN.md \u00a74.16) and the Firestore adapter (public/cloud.js, \u00a74.6) tested on the Firestore emulator",
   "license": "MIT",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-baobook \"node firestore.mjs\""
+    "test": "firebase emulators:exec --only firestore --project demo-baobook \"node firestore.mjs && node adapter.mjs\""
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "4.0.1",
-    "firebase": "11.10.0",
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0",
     "firebase-tools": "15.32.1"
   }
 }

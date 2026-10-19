@@ -2,3 +2,4 @@ node_modules/
 .wrangler/
 firebase-debug.log
 firestore-debug.log
+tests/emu/.sdk/

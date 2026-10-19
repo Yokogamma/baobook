@@ -3,9 +3,9 @@ name: Baobook tests
 on:
   push:
     branches: [main]
-    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
+    paths: ['public/**', 'tests/**', 'worker/**', 'wrangler.jsonc', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   pull_request:
-    paths: ['public/**', 'tests/**', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
+    paths: ['public/**', 'tests/**', 'worker/**', 'wrangler.jsonc', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   workflow_dispatch:
 
 jobs:
@@ -65,5 +65,59 @@ jobs:
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ hashFiles('tests/rules/package-lock.json') }}
-      - name: Security rules on the Firestore emulator
-        run: npx firebase emulators:exec --only firestore --project demo-baobook "node firestore.mjs"
+      - name: Security rules and the Firestore adapter on the Firestore emulator
+        run: npx firebase emulators:exec --only firestore --project demo-baobook "node firestore.mjs && node adapter.mjs"
+
+  # The sync scenarios on the Auth and Firestore emulators (tests/emu/*.mjs, docs/SYNC-PLAN.md PR 3): Playwright drives the app with the
+  # Firebase SDK served from a local cache in place of gstatic; every other request to a Google host is aborted, so nothing reaches the real
+  # project. The emulators come from firebase-tools in tests/rules; Playwright from the repository root, as in the first job.
+  sync-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/rules/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: firebase-tools (tests/rules)
+        run: npm ci
+        working-directory: tests/rules
+      - name: Playwright and Chromium
+        run: |
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Firebase emulators download cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('tests/rules/package-lock.json') }}
+      - name: Firebase SDK files cache
+        uses: actions/cache@v4
+        with:
+          path: tests/emu/.sdk
+          key: firebase-sdk-${{ hashFiles('tests/emu/lib/emu.mjs') }}
+      - name: Scenarios on the Auth and Firestore emulators
+        working-directory: tests/rules
+        run: |
+          npx firebase emulators:exec --only auth,firestore --project demo-baobook '
+            status=0
+            for f in ../emu/*.mjs; do
+              n=$(basename "$f" .mjs)
+              echo "::group::$n"
+              if node "$f"; then echo "PASS $n"; else echo "FAIL $n"; status=1; fi
+              echo "::endgroup::"
+            done
+            exit $status'
+      - name: Scenario screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emu-screenshots
+          path: /tmp/sheet-tests
+          if-no-files-found: ignore
