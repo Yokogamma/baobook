@@ -61,6 +61,22 @@ await signIn(A.pg, C1); await untilUI(A.pg, 'synced'); await untilNote(B.pg, id1
 const d6=await readDoc(ROOT+'/notes/'+id1), a6b=await acc(A.pg);
 ok('6b signed in again as the same owner: nothing was asked, the queued edit went up (rev 2) and device B has it', a6b.cloud && a6b.lead && d6.rev===2 && d6.blocks.length===3 && d6.blocks[2].text==='Поки без входу');
 
-ok('7 no request went to a real Google host ('+(A.blocked.length+B.blocked.length)+' blocked)', !A.blocked.length && !B.blocked.length); if(A.blocked.length || B.blocked.length) console.log(A.blocked, B.blocked);
-ok('8 no page errors', !A.errs.length && !B.errs.length); if(A.errs.length || B.errs.length) console.log(A.errs, B.errs);
+// 7. a binding refused by the epoch over unsaved text, through the real sign-in handler: the device's owner record lacks the email (bound before 3b),
+// the store's owner and epoch moved under this tab without its message (another tab's change it missed), and an edit here failed to be written;
+// the sign-in finds the same owner, tries to put the email in, is refused by the epoch, and must keep this screen view-only with the text, not reload
+await signOut(A.pg); await until(A.pg, ()=>{ const a=sheetDebug.sync.account(); return !a.user && !a.signingOut; });
+const putSync=(pg, recs)=>pg.evaluate(recs=>new Promise((res,rej)=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), st=t.objectStore('sync'); for(const x of recs) st.put(x); t.oncomplete=()=>{ d.close(); res(); }; t.onerror=()=>rej(t.error); }; r.onerror=()=>rej(r.error); }), recs);
+await putSync(A.pg, [{k:'owner', uid:u1.uid, env:'dev'}]); await A.pg.reload(); await until(A.pg, ()=>{ const a=sheetDebug.sync.account(); return a.sdk && !a.loading && !!a.owner && !a.user; });
+const ep7=(await acc(A.pg)).epoch; await putSync(A.pg, [{k:'owner', uid:'u-foreign', env:'dev', email:'foreign@example.com'}, {k:'epoch', id:'e-foreign'}]);
+await A.pg.evaluate(()=>{ sheetDebug.failSave=true; window.__sameDocument=true; }); await typeAt(A.pg, 500, 640, 'Незаписане перед входом'); await until(A.pg, ()=>sheetDebug.sync.unsavedCount()===1);
+await signIn(A.pg, C1); await until(A.pg, ()=>sheetDebug.sync.locked()==='epoch'); await A.pg.waitForTimeout(2000);
+const l7=await A.pg.evaluate(id=>({same:window.__sameDocument===true, lock:sheetDebug.sync.locked(), unsaved:sheetDebug.sync.unsavedCount(), dying:sheetDebug.sync.account().dying, cloud:sheetDebug.sync.account().cloud, listed:!!document.querySelector('#list .item[data-id="'+id+'"]'), msg:document.getElementById('roMsg').textContent}), id1);
+const own7=await stored(A.pg,'sync','owner');
+ok('7 the refused binding (epoch) over unsaved text kept the screen: no reload, view-only as «epoch» with the note and the text under the unsaved warning, no cloud; the store keeps the foreign owner and epoch', l7.same && l7.lock==='epoch' && l7.unsaved===1 && !l7.dying && !l7.cloud && l7.listed && l7.msg===await loc(A.pg,'lock.epoch') && own7.uid==='u-foreign' && (await stored(A.pg,'sync','epoch')).id==='e-foreign' && ep7!=='e-foreign');
+const dl7=A.pg.waitForEvent('download',{timeout:10000}); await A.pg.evaluate(()=>{ document.getElementById('exportBtn').click(); }); const f7=await dl7;
+ok('7b the export still works there ('+f7.suggestedFilename()+')', /^baobook-.*\.json$/.test(f7.suggestedFilename()));
+await A.pg.evaluate(()=>{ sheetDebug.failSave=false; });
+
+ok('8 no request went to a real Google host ('+(A.blocked.length+B.blocked.length)+' blocked)', !A.blocked.length && !B.blocked.length); if(A.blocked.length || B.blocked.length) console.log(A.blocked, B.blocked);
+ok('9 no page errors', !A.errs.length && !B.errs.length); if(A.errs.length || B.errs.length) console.log(A.errs, B.errs);
 await env.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

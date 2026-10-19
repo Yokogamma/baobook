@@ -1220,7 +1220,12 @@ function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=nu
 async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
   if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
   await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
-const raced=()=>{ if(DYING) return; DYING=true; say(loc('account.raced')); setTimeout(()=>location.reload(),1500); };   // another tab changed the owner first (the epoch moved under the dialog)
+// the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
+// anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
+async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
+  if(unsaved.size || inflight.size || REVIVING.size || dirty){ setLock('epoch'); accUI(); accStatus(); return; }
+  DYING=true; say(text); setTimeout(()=>location.reload(),1500); }
+const raced=()=>epochMoved(loc('account.raced'));   // another tab changed the owner first (the epoch moved under the dialog or under a binding)
 // the notes on the device belong to A and the user signed in as B: one tab asks, the one where the sign-in happened first; the others learn the
 // outcome from the «owner» message (ownerMoved). Without Web Locks every tab asks
 async function ownerDialog(user, owner){ const ep0=SYNC.epoch;
@@ -1305,9 +1310,7 @@ async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ awai
 // another tab changed the owner (the «owner» message of bindOwner / the dialog): after an erase or a decision made there this tab reloads; after a
 // binding that kept the records (a first sign-in, «Додати до хмари») the engine is replaced by one that knows the new owner, and the tab goes on
 async function ownerMoved(m){ if(DYING) return;
-  if(m.erase || ACC.otherTab){ flushSave(); await waitFree(3000);   // what is typed goes to storage first; a write the new epoch refuses stays under the unsaved warning
-    if(unsaved.size || inflight.size || REVIVING.size || dirty){ setLock('epoch'); accUI(); accStatus(); return; }   // something of this screen is not in storage: the screen stays as the old owner's, view-only with the export (lock.epoch), and the reload is the user's
-    DYING=true; say(loc('lock.owner')); setTimeout(()=>location.reload(),1500); return; }
+  if(m.erase || ACC.otherTab) return epochMoved(loc('lock.owner'));   // the records are gone, or the decision was taken in the other tab: this screen is the old owner's
   if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
   LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear();
   ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
