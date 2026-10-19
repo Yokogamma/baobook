@@ -17,12 +17,11 @@ const env=await launch(); const A=await device(env,'A');
 await A.pg.evaluate(()=>{ sheetDebug.sync.signInHow='redirect'; });   // the app decides by (hover:none) and the display mode; the test names the way
 await typeAt(A.pg, 500, 300, 'Перед редиректом'); const id1=await A.pg.evaluate(()=>sheetDebug.cur());
 
-// 1. the first press loads the SDK; the second writes what is typed, marks the sign-in as pending and leaves for the sign-in page
-await press(A.pg); await until(A.pg, ()=>sheetDebug.sync.account().sdk && !sheetDebug.sync.account().loading);
+// 1. one press: the SDK loads, what is typed is written, the sign-in is marked as pending and the page leaves for the sign-in page (no second press on a phone)
 await A.pg.locator('#sheet .blk').last().locator('[contenteditable="true"]').click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' і ще');   // typed and not yet written when the press comes
-const leaving=A.pg.waitForURL(u=>u.href.startsWith(AUTH+'/emulator/auth/handler'), {timeout:15000}); await A.pg.evaluate(()=>{ sheetDebug.sync.press(); }); await leaving;
+const leaving=A.pg.waitForURL(u=>u.href.startsWith(AUTH+'/emulator/auth/handler'), {timeout:20000}); await A.pg.evaluate(()=>{ sheetDebug.sync.press(); }); await leaving;
 const handler=A.pg.url();
-ok('1 the second press took the page to the emulator\'s sign-in handler for Google ('+handler.slice(0,60)+'…)', handler.startsWith(AUTH+'/emulator/auth/handler') && /providerId=google\.com/.test(handler));
+ok('1 the one press loaded the SDK and took the page to the emulator\'s sign-in handler for Google ('+handler.slice(0,60)+'…)', handler.startsWith(AUTH+'/emulator/auth/handler') && /providerId=google\.com/.test(handler));
 await A.pg.waitForTimeout(300); const offers=await A.pg.evaluate(()=>[...document.querySelectorAll('button, [role=button], li')].map(e=>e.textContent.trim().replace(/\s+/g,' ')).filter(Boolean));
 ok('1b the emulator\'s page offers the account made over REST', offers.some(t=>t.includes('one@example.com')));
 
