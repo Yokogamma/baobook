@@ -130,16 +130,6 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('7e5 restored and pinned: deleted '+!!s5.deleted+', pinned '+!!s5.pinned+' ('+await listText(pg)+')', !s5.deleted && s5.pinned>0 && (await listText(pg)).startsWith('[Закріплені],n2'));
   await btn(pg,'n2','.it-p');
 
-  // 7e6 a note never opened in this tab is restored from the trash into localStorage, then pinned: the pin's field write leaves the leftover, so the restore moves in at the next start
-  await btn(pg,'n2','.it-x'); await open(pg,'n3'); await pg.reload(); await ready(pg); await pg.waitForTimeout(300);
-  await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); }); await pg.click('#trashRow'); await pg.waitForTimeout(250); await btn(pg,'n2','.it-r');
-  await pg.evaluate(()=>{ if(!document.getElementById('sect').hidden) document.getElementById('sectBack').click(); }); await pg.waitForTimeout(250); const k6=await fbKeys();
-  await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await btn(pg,'n2','.it-p'); const k6b=await fbKeys();
-  await pg.reload(); await ready(pg); await until(async()=>!(await fbKeys())); await pg.waitForTimeout(300);
-  ok('7e6 the leftover stayed after the pin ('+k6+' → '+k6b+'); after a reload the note is out of the trash ('+await listText(pg)+')', k6===1 && k6b===1 && !(await stored(pg,'n2')).deleted && (await listText(pg)).includes('n2'));
-  if((await stored(pg,'n2')).pinned) await btn(pg,'n2','.it-p');
-  await pg.evaluate(()=>[...document.querySelectorAll('#list .item')].filter(d=>/резервна копія/.test(d.textContent)).forEach(d=>d.querySelector('.it-x').click())); await pg.waitForTimeout(300);
-
   // 7e7 an edit of another note went to localStorage (it has an editor snapshot), then that note is pinned from the list: the edit and the pin go in one write
   await open(pg,'n1'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
   await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type(' 7'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);

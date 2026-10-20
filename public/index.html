@@ -964,7 +964,7 @@ const db={ backend:'local', inited:false, ready:null,
   async save(n, delta){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
     // with IndexedDB every write goes through the sync core as a delta over the stored record (SYNC-PLAN 4.4): lrev, the monotonic clock, the queue with an owner
-    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta||editorDelta(n)); if(r.ok){ if(FELL.has(n.id) && !LOCK && !delta) fbDrop(n.id, g); return r; }   // only a write of the whole note (the editor delta) holds what the leftovers hold; after a field change they stay for the next start (fbPut)
+    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta||editorDelta(n)); if(r.ok){ if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return r; }
         if(r.code==='purged' || r.code==='nosnap' || r.code==='epoch' || r.code==='locked') return {ok:false, code:r.code, reason:loc('save.reason.error',{name:r.code})};   // a refusal, not a storage failure: no fallback copy
         err=r.error||new Error(r.code); }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
@@ -1080,7 +1080,7 @@ function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vn
 function editorDelta(n){ const D0=noteSnap(n); return (C,meta,t)=>{ const D={...D0, updated:t}; if(!C) return D; const E=ESNAP.get(n.id); if(E && E.lrev!=null && E.lrev===meta.lrev) return D;
   if(!E) throw Object.assign(new Error('no editor snapshot'),{code:'nosnap'}); const m=SC.merge3(E.note, D, C, {dev:S.devId, t}); return {note:m.note, copies:m.copies}; }; }
 const fieldDelta=fn=>(C,meta,t)=>C? fn({...C}, t) : null;   // a field change over whatever the record is now
-const chainDelta=(d1,d2)=>(C,meta,t)=>{ const r1=d1(C,meta,t), n1=r1==null? C : (r1.note||r1), r2=n1? d2({...n1},meta,t) : null; if(r2==null) return r1; const n2=r2.note||r2; return r1 && r1.note? {...r1, note:n2} : n2; };   // d2 over what d1 makes of the record (its copies and keepUpdated kept)
+const chainDelta=(d1,d2)=>(C,meta,t)=>{ const r1=d1(C,meta,t), n1=r1==null? C : (r1.note||r1), r2=n1? d2({...n1},meta,t) : null; if(r2==null) return r1; const n2=r2.note||r2; return r1 && r1.copies? {note:n2, copies:r1.copies} : n2; };   // d2 over what d1 makes of the record (its copies kept); what d2 changed is a write of now, so an import's keepUpdated goes
 function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : /OPR\//.test(u)? 'Opera' : /Firefox\//.test(u)? 'Firefox' : /Chrome\//.test(u)? 'Chrome' : /Safari\//.test(u)? 'Safari' : 'Browser', o=/Windows/.test(u)? 'Windows' : /iPhone|iPad/.test(u)? 'iOS' : /Android/.test(u)? 'Android' : /Mac OS/.test(u)? 'macOS' : /Linux/.test(u)? 'Linux' : ''; return o? b+' · '+o : b; }
 function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()}); const ref={};
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
@@ -1398,8 +1398,10 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
 /* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
 /* the panel lists one section: the notes, the archive or the trash. A search in the notes also finds archived notes, in a group «В архіві» below them.
    Pinned notes come first in the notes, in a group «Закріплені» (the last pinned on top; by rank in a search), the rest under «Інші» */
+const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
-function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && a.matches(':focus-visible')? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '';   // a keyboard focus only: a click leaves none behind
+const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
+function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '';   // a keyboard focus only: a click leaves none behind
   drawList(); if(id && !list.contains(document.activeElement)) focusItem(id, cls); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
@@ -1410,7 +1412,7 @@ function drawList(){
   list.innerHTML='';
   if(!items.length && !more.length){ el('div','none',list).textContent=loc(T.length? 'search.none' : sec==='trash'? 'trash.none' : sec==='archive'? 'archive.none' : 'notes.none'); return; }
   const pins=sec==='notes'? items.filter(it=>it.n.pinned) : [], rest=pins.length? items.filter(it=>!it.n.pinned) : items;
-  if(pins.length){ if(!T.length) pins.sort((a,b)=>b.n.pinned-a.n.pinned); el('div','grp',list).textContent=loc('pin.group'); pins.forEach(it=>listItem(it,T)); if(rest.length) el('div','grp',list).textContent=loc('pin.others'); }
+  if(pins.length){ if(!T.length) pins.sort((a,b)=>listOrder(a.n,b.n)); el('div','grp',list).textContent=loc('pin.group'); pins.forEach(it=>listItem(it,T)); if(rest.length) el('div','grp',list).textContent=loc('pin.others'); }
   rest.forEach(it=>listItem(it,T));
   if(more.length){ el('div','grp',list).textContent=loc('archive.group'); more.forEach(it=>listItem(it,T)); }
 }
@@ -1420,18 +1422,18 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
   return items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
 /* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
 function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
-  const [rk,ri]=tr? ['trash.restore','<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'] : ar? ['archive.unarchive','<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'] : ['archive.move','<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>'];
-  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
+  const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box];
+  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'">'+ICO.trash+'</button>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
-  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], at=[...list.querySelectorAll('.item')].indexOf(d);
+  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], kb=e.detail===0, at=kb? [...list.querySelectorAll('.item')].indexOf(d) : -1;
     const done=cls==='it-p'? pinNote(n, !n.pinned) : cls==='it-r'? side() : del();
-    if(e.detail===0) Promise.resolve(done).then(()=>keepFocus(n.id, cls, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
+    if(kb) Promise.resolve(done).then(()=>keepFocus(n.id, cls, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
   d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
     if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, at)); } }); }   // Enter and Space on a nested button are that button's
 function focusItem(id, cls){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }   // the item first: it shows its buttons
 // after a key on an item or its button the focus goes to the same button in the note's new place, or, when the note left the list, to the item now in
 // its place. An action that took the focus itself (a dialog, the next note's field) keeps it
-function keepFocus(id, cls, at){ const a=document.activeElement; if(a && a!==document.body && !list.contains(a)) return; if(!list.contains(a) && !focusItem(id, cls)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); }
+function keepFocus(id, cls, at){ const a=document.activeElement; if(a && a!==document.body && !list.contains(a)) return; if(!list.contains(a) && !focusItem(id, cls)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); }   // renderList keeps a focus that stays; this finds one for a note that left
   const f=document.activeElement; if(f && list.contains(f)) f.scrollIntoView({block:'nearest'}); }   // a pinned note went up to «Закріплені»: its button comes into view
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
   const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
@@ -1792,7 +1794,7 @@ const TRASH_DAYS=30, listed=n=>!n.deleted && !n.archived, trashed=n=>!!n.deleted
 const daysLeft=n=>Math.max(1, Math.ceil((n.deleted+TRASH_DAYS*864e5-now())/864e5));
 let section='notes';   // what the panel lists: 'notes', 'archive' or 'trash'
 const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashed : archived)) setSection('notes'); else renderList(); renderBacklinks(); };   // an emptied section gives way to the notes; a note that links here may have gone or come back
-const firstNote=()=>notes.filter(listed).sort((a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated))[0]||newNote();   // the top of the list: the last pinned, else the latest
+const firstNote=()=>notes.filter(listed).sort(listOrder)[0]||newNote();   // the top of the list
 /* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
    The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
 async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
@@ -1825,8 +1827,8 @@ function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archi
   const u=unsaved.get(n.id), whole=!u && ESNAP.has(n.id) && (n===cur || FELL.has(n.id));
   if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  const pin=fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; });
-  writeNote(n, u? (u.delta? chainDelta(u.delta, pin) : undefined) : whole? undefined : pin); renderList(); }
+  const pin=Object.assign(fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; }), {pin:true}), base=u && u.delta && (u.delta.pin? u.delta.base : u.delta);   // a later pin replaces a failed one: the state it sets is absolute
+  writeNote(n, u? (!u.delta? undefined : base? Object.assign(chainDelta(base, pin), {pin:true, base}) : pin) : whole? undefined : pin); renderList(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
