@@ -135,7 +135,9 @@ function merge3(base, L, R, ctx={}){ const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(
   res.blocks=out; return finishMerge(res, L, R, {...ctx, base}, lost, trace); }
 // first merge of two copies with the same id and no base: equal → the remote; otherwise a union by id, shared ids from the side with the larger key, deleted wins
 function merge0(L, R, ctx={}){ if(sameDoc(L,R)) return {note:noteBody(R), copies:[], lost:{local:false,remote:false}, trace:[], same:true};
-  const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, W=lWins? L : R, trace=[]; const res={};
+  const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, W=lWins? L : R, trace=[];
+  if(sameDoc({...L, pinned:0}, {...R, pinned:0})){ const res={...noteBody(R)}; if(W.pinned) res.pinned=W.pinned; else delete res.pinned; return finishMerge(res, L, R, ctx, {local:false, remote:false}, trace); }   // only the pin differs, a soft field: the key decides, no conflict copies
+  const res={};
   for(const f of ['title','archived','revived','pinned']) if(W[f]!==undefined) res[f]=W[f];
   const d=Math.max(+L.deleted||0, +R.deleted||0); if(d) res.deleted=d;
   res.created=Math.min(+L.created||Infinity, +R.created||Infinity); if(!Number.isFinite(res.created)) res.created=0;

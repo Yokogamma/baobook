@@ -85,6 +85,8 @@ const text=(n,id)=>(n.blocks.find(b=>b.id===id)||{}).text;
   const same=S.merge0({...base},cloud({...base}),ctx);
   ok('8c equal copies: base = remote, no copies', same.same && same.copies.length===0);
   const p=S.merge0({...L,pinned:1800},R,ctx);
+  const po=S.merge0({...base,updated:2000,pinned:1900},cloud({...base,updated:1500}),ctx), po2=S.merge0({...base,updated:1000},cloud({...base,updated:1500,pinned:1400}),ctx);
+  ok('8e merge0 of copies that differ only by the pin: no conflict copies, the key decides (L later → pinned 1900; R later → pinned 1400)', po.copies.length===0 && !po.lost.local && !po.lost.remote && po.note.pinned===1900 && po2.copies.length===0 && po2.note.pinned===1400 && po2.same);
   ok('8d merge0 takes pinned from the side with the larger key', p.note.pinned===1800 && S.merge0(L,cloud({...R,pinned:1700,updated:3000}),ctx).note.pinned===1700); }
 
 // 9 moveInto: {A, B} plus a late {A′} that never saw B → {A′ or A by key, B}, both sources as copies, B stays
