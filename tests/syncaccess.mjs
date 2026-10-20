@@ -169,4 +169,20 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
   const local=A.db.get('notes','m1'), up=cloud2.doc('notes','m1'), texts=n=>(n.blocks||[]).map(b=>b.text).sort().join('|');
   ok('7e u2\'s document of the same id was merged with the local note, not put over it: both texts here and in u2\'s cloud (rev 2), no job left, u1\'s cloud untouched', texts(local)==='текст у хмарі A|текст у хмарі B' && !!up && up.rev===2 && texts(up)===texts(local) && !A.sync.jobs().length && logs(A,'merged','m1').length===1 && cloud1.doc('notes','m1').rev===1); }
 
+/* ── 8. a block in an area's first column: the canonical form drops col 0, the receiver normalizes it back; a note quarantined for its shape by an older
+   normalizer is checked again at start, leaves the quarantine and is read from the cloud again; one that still fails stays ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'), B=await mk(cloud,'B');
+  await edit(A,'ar1',(C,t)=>({title:'з областю', blocks:[{id:'ar',row:2,fx:0.2,kind:'area',cw:20,ch:6},{id:'k0',row:0,parent:'ar',col:0,text:'перша колонка'},{id:'k1',row:2,parent:'ar',col:1,text:'друга колонка'}], created:t, updated:t}));
+  await idle(A,B); const doc=cloud.doc('notes','ar1'), got=B.db.get('notes','ar1');
+  ok('8 the cloud document has no col for the first-column block; device B took the note with col 0 and quarantined nothing', !!doc && doc.blocks.find(b=>b.id==='k0').col===undefined && !!got && got.blocks.find(b=>b.id==='k0').col===0 && got.blocks.find(b=>b.id==='k1').col===1 && !B.db.all('sync').some(r=>r.k.startsWith('quarantine:')));
+  // the state an older normalizer left on a device that removed its notes and signed in again: no note, a quarantine record, the seen registry, the mark
+  const seen=B.db.get('sync','seen:n:ar1');
+  B.sync.stop(); B.db.data.notes.delete('ar1'); B.db.data.sync.set('quarantine:n:ar1',{k:'quarantine:n:ar1', raw:{...doc, id:'ar1'}, reason:'shape', seen:{rev:doc.rev, srv:doc.srv}, at:1});
+  B.db.data.sync.set('meta:n:ar1',{k:'meta:n:ar1', lrev:0, baseLrev:0, base:null, err:'damaged'});
+  B.db.data.sync.set('quarantine:n:bad1',{k:'quarantine:n:bad1', raw:{id:'bad1', title:5, blocks:[], created:1, updated:1, rev:1, srv:doc.srv}, reason:'shape', seen:{rev:1, srv:doc.srv}, at:1});
+  await B.sync.reload(); await B.sync.start(); await idle(B);
+  const back=B.db.get('notes','ar1'), meta=B.db.get('sync','meta:n:ar1');
+  ok('8b at start the quarantined note passes the current normalizer: the quarantine and the mark are gone, the note is read from the cloud again and stored with col 0', !!seen && !!back && back.blocks.find(b=>b.id==='k0').col===0 && !B.db.get('sync','quarantine:n:ar1') && !(meta && meta.err) && logs(B,'unquarantine','ar1').length===1);
+  ok('8c a quarantined document that still fails stays in quarantine', !!B.db.get('sync','quarantine:n:bad1') && !logs(B,'unquarantine','bad1').length); }
+
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

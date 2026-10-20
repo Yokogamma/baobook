@@ -42,6 +42,11 @@ await T2.close();
 const B=await device(env,'B'); await signIn(B.pg, C1); await untilUI(B.pg, 'synced'); await until(B.pg, id=>!!document.querySelector('#list .item[data-id="'+id+'"]'), id1);
 const ownB=await stored(B.pg,'sync','owner');
 ok('4 device B signed in as u1: bound to u1, the note came down from the cloud', ownB && ownB.uid===u1.uid && await listed(B.pg, id1) && /Перша нотатка/.test(await A.pg.evaluate(async id=>(await sheetDebug.sync.state(id)).note.blocks[0].text, id1)));
+// 4b: a note with an area and a block in its first column: the canonical form sends no col for it, and device B must take it, not quarantine it
+await A.pg.evaluate(()=>sheetDebug.sync.engine().writeLocal('ar1',(C,m,t)=>({title:'з областю', blocks:[{id:'ar',row:2,fx:0.2,kind:'area',cw:20,ch:6},{id:'k0',row:0,parent:'ar',col:0,text:'перша колонка'}], created:t, updated:t}))); await A.pg.evaluate(()=>sheetDebug.sync.wake());
+await until(B.pg, ()=>!!document.querySelector('#list .item[data-id="ar1"]'));
+const ar=await readDoc(ROOT+'/notes/ar1'), kB=await B.pg.evaluate(async()=>{ const st=await sheetDebug.sync.state('ar1'); return {col:st.note && st.note.blocks.find(b=>b.id==='k0').col, q:!!st.quarantine}; });
+ok('4b an area note with a first-column block: no col in Firestore, device B has it with col 0 and nothing in quarantine', !!ar && ar.blocks.find(b=>b.id==='k0').col===undefined && kB.col===0 && !kB.q);
 
 // 5. sign-out on A: the owner and the queue stay; an edit waits
 await signOut(A.pg); await until(A.pg, ()=>{ const a=sheetDebug.sync.account(); return !a.user && !a.cloud && !a.signingOut; });

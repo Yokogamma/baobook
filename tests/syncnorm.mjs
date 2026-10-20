@@ -20,6 +20,8 @@ ok('1 shuffled blocks with reversed keys give the same canonical JSON and hash',
 const withDefaults={...NOTE, deleted:0, archived:null, blocks:NOTE.blocks.map(b=>({...b, wrap:b.wrap||false, html:b.html||'', title:b.title||''}))};
 ok('1b defaults (wrap:false, html:"", title:"", deleted:0, archived:null) do not change the canonical form', S.cjson(withDefaults)===S.cjson(NOTE));
 ok('1c -0 reads as 0 and undefined fields are dropped', S.cjson({title:'',blocks:[{id:'z',row:-0,fx:undefined,text:''}],created:1,updated:1})===S.cjson({title:'',blocks:[{id:'z',row:0,fx:0,text:''}],created:1,updated:1}));
+{ const wire=S.canon(NOTE), kid=wire.blocks.find(b=>b.id==='c1'), back=S.normNote(wire,{cleanRich:clean});
+  ok('1e a block in an area\'s first column loses col 0 in the canonical form, as fx 0 does, and normalizes back with col 0 (found on .dev: 7 notes quarantined)', kid && kid.col===undefined && back.note && back.note.blocks.find(b=>b.id==='c1').col===0 && S.cjson(back.note)===S.cjson(NOTE)); }
 ok('1d sameDoc ignores updated only', S.sameDoc(NOTE,{...NOTE,updated:999}) && !S.sameDoc(NOTE,{...NOTE,title:'інша'}));
 
 // 2 the normalizer is idempotent and two devices agree

@@ -51,7 +51,7 @@ const KINDS=[undefined,'code','area'];
 function normBlock(raw, deps){ if(!isObj(raw)) return false; const b={...raw};
   if(!(typeof b.id==='string') || !b.id.length || b.id.length>LIM.id) return false;
   if(!isNum(b.row)) return false;
-  if(b.parent!==undefined){ if(!isStr(b.parent,LIM.id) || !b.parent.length || !isNum(b.col)) return false; delete b.fx; } else { if(b.fx===undefined || b.fx===null) b.fx=0; if(!isNum(b.fx)) return false; delete b.col; }
+  if(b.parent!==undefined){ if(b.col===undefined || b.col===null) b.col=0; if(!isStr(b.parent,LIM.id) || !b.parent.length || !isNum(b.col)) return false; delete b.fx; }   // col 0 is a default the canonical form drops, like fx 0: a block in an area's first column comes from the cloud without col else { if(b.fx===undefined || b.fx===null) b.fx=0; if(!isNum(b.fx)) return false; delete b.col; }
   if(!KINDS.includes(b.kind)) return false; if(b.kind===undefined) delete b.kind;
   if(b.text===undefined || b.text===null) b.text=''; if(typeof b.text!=='string') return false;
   // the fields are checked, not rewritten: a valid record is stored as given (an import keeps the file's shape); defaults are the canonical form's business
@@ -619,7 +619,11 @@ function makeSync(deps){
   // every start has a run id; stop() and a later start move it on, so a start that was waiting on its transaction when either came connects nothing
   // and changes nothing of the run that superseded it (a tab that lost the lead during its start and got it back before that start finished)
   async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; const run=S.runId=(S.runId||0)+1; S.started=true;
-    if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} if(!S.started || S.runId!==run) return; connectCloud(); } }
+    if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} try{ await recheckQuarantine(); }catch(_){} if(!S.started || S.runId!==run) return; connectCloud(); } }
+  // a note quarantined for its shape is checked again under the current normalizer (an update may accept what an older one refused, §4.15): one that passes
+  // leaves the quarantine and is read from the cloud again (its seen record goes, so the document counts as fresh); one that still fails stays
+  async function recheckQuarantine(){ return tx(['sync'], async(t,after)=>{ for(const q of await t.range('sync','quarantine:n:','quarantine:n:\uffff')){ if(q.reason!=='shape' || !q.raw) continue; const id=q.k.slice(13);
+      if(normNote(q.raw, deps).bad) continue; t.del('sync',q.k); t.del('sync',K.seen('n',id)); const meta=await getMeta(t,'n',id); if(meta.err==='damaged'){ delete meta.err; putMeta(t,meta,after); } setRefetch(t,id,after); log({t:'unquarantine', id}); } }); }
   function stop(){ S.started=false; S.runId=(S.runId||0)+1; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
