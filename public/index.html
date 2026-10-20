@@ -1157,15 +1157,18 @@ async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.clo
 // engine restarted only when the engine or the cloud changed (connect); a request already queued is left alone. Returns false under LOCK or without an owner
 async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;   // without a cloud (signed out, the SDK not loaded yet) the leader only runs the store; connectAccount restarts it with the cloud
   if(!hasLocks()){ if(!LEAD.on || LEAD.engine!==SYNC || LEAD.cloud!==CLOUD){ LEAD.name=name; await leadOn(); } return true; }
-  if(LEAD.name===name){ if(LEAD.release && (LEAD.engine!==SYNC || LEAD.cloud!==CLOUD)) await leadOn(); return !!LEAD.release; }
+  if(LEAD.name===name){ if(LEAD.release && (LEAD.engine!==SYNC || LEAD.cloud!==CLOUD)) await leadOn(); else if(!LEAD.release) leadWanted(); return !!LEAD.release; }
   leadOff(); LEAD.name=name;
   const hold=lock=>{ if(!lock || LOCK || LEAD.name!==name) return null;   // released at once: the tab stopped wanting it while the request waited
     return new Promise(res=>{ LEAD.release=res; LEAD.abort=null; LEAD.ready=leadOn(); }); };
   const got=await new Promise(res=>{ try{ navigator.locks.request(name,{ifAvailable:true}, lock=>{ res(!!lock); return hold(lock); }).catch(()=>res(false)); }catch(_){ res(false); } });
   if(got){ await LEAD.ready; return true; } if(LEAD.name!==name) return false;
-  const ac=new AbortController(); LEAD.abort=ac;   // queued: this tab leads when the holder lets go (closes, freezes, enters the cache)
+  const ac=new AbortController(); LEAD.abort=ac;   // queued: this tab leads when the holder lets go (closes, freezes, enters the cache, or is hidden and asked)
   try{ navigator.locks.request(name,{signal:ac.signal}, lock=>hold(lock)).catch(()=>{}); }catch(_){}
-  return false; }
+  leadWanted(); return false; }
+// a visible tab with a cloud, waiting in the queue, asks the leader to step down if it is hidden: Chrome keeps the lock in a hidden tab (it does not
+// freeze a page holding one) but throttles its timers to one a minute after five minutes, so the sync would crawl there while this tab could run it
+function leadWanted(){ if(CLOUD && !document.hidden && hasLocks()) tellTabs({t:'lead?'}); }
 async function leadCheck(){ if(!SYNC || LOCK) return; let same=true; try{ same=await SYNC.checkOwner(); }catch(_){ return; } if(!same){ setLock('epoch'); return; } leadAsk(); }
 /* ══ the account (SYNC-PLAN 4.11–4.13, 4.18; PR 3b): Google sign-in through Firebase Auth, the Firestore adapter (cloud.js) as this tab's CLOUD.
    The SDK (three modules from gstatic, cached by the service worker once used) loads only when needed: at start with an owner, a user Firebase
@@ -1833,10 +1836,11 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
 function tabMsg(m){ if(keptView() || DYING) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
-  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs({t:'st', ...DEBUG.sync.status}); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected)
+  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs({t:'st', ...DEBUG.sync.status}); }
+  else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()) leadOff(); }   // a visible tab wants the lead and this one is hidden: let it go (asked again when shown)   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected)
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
-  if(LEAD.on && SYNC && !['owner','auth','st','st?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
+  if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
 async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev}=await storedWithLrev(); if(keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
 
@@ -1900,10 +1904,11 @@ document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&h
   if((e.ctrlKey||e.metaKey)&&e.altKey&&hotkey(e)==='h'){ e.preventDefault(); H.open? closeHist() : openHist(); } });
 window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else { if(unsaved.size) retrySave(); syncTabs(); } });
 window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // back from the page cache: messages sent meanwhile never came
-// the leadership (LEAD): released on pagehide and freeze, asked again after a check on pageshow and resume; without the freeze event, by visibility
+// the leadership (LEAD): released on pagehide and freeze, asked again after a check on pageshow, resume and when the tab is shown; without the freeze
+// event also released when hidden. A hidden leader with the freeze event keeps the lock until a visible tab asks for it (lead? in tabMsg)
 window.addEventListener('pagehide',()=>leadOff()); document.addEventListener('freeze',()=>leadOff());
 window.addEventListener('pageshow',e=>{ if(e.persisted) leadCheck(); }); document.addEventListener('resume',()=>leadCheck());
-if(!('onfreeze' in document)) document.addEventListener('visibilitychange',()=>{ if(document.hidden) leadOff(); else leadCheck(); });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); } else leadCheck(); });
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 /* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)
