@@ -964,7 +964,7 @@ const db={ backend:'local', inited:false, ready:null,
   async save(n, delta){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
     // with IndexedDB every write goes through the sync core as a delta over the stored record (SYNC-PLAN 4.4): lrev, the monotonic clock, the queue with an owner
-    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta||editorDelta(n)); if(r.ok){ if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return r; }
+    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta||editorDelta(n)); if(r.ok){ if(FELL.has(n.id) && !LOCK && !delta) fbDrop(n.id, g); return r; }   // only a write of the whole note (the editor delta) holds what the leftovers hold; after a field change they stay for the next start (fbPut)
         if(r.code==='purged' || r.code==='nosnap' || r.code==='epoch' || r.code==='locked') return {ok:false, code:r.code, reason:loc('save.reason.error',{name:r.code})};   // a refusal, not a storage failure: no fallback copy
         err=r.error||new Error(r.code); }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
@@ -1070,15 +1070,17 @@ let DYING=false;   // the page is about to reload after a change of owner: nothi
 const LREV=new Map(), ESNAP=new Map(), PENDING=new Map(), ARRIVED=new Map();
 DEBUG.sync={clock:0, status:{code:'none', n:0}};
 let SYNC=null, driveT=null, driving=false;
-const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; if(n.deleted) o.deleted=n.deleted; if(n.archived) o.archived=n.archived; if(n.pinned) o.pinned=n.pinned; if(n.revived) o.revived=n.revived; return o; };
+const OPT_FIELDS=['deleted','archived','pinned','revived'];   // the optional fields of a note: absent when not set
+const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; for(const k of OPT_FIELDS) if(n[k]) o[k]=n[k]; return o; };
 // a stored record taken into the note in memory: the optional fields the record lacks go too
-const OPT_FIELDS=['deleted','archived','pinned','revived'], takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
+const takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
 const snapFor=id=>{ const e=ESNAP.get(id); return e? {...e.note, at:e.at} : null; };   // for vcapture: the state before the edit
 function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow()}); if(lrev!=null) LREV.set(id,lrev); }
 // the editor's delta: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else merge3
 function editorDelta(n){ const D0=noteSnap(n); return (C,meta,t)=>{ const D={...D0, updated:t}; if(!C) return D; const E=ESNAP.get(n.id); if(E && E.lrev!=null && E.lrev===meta.lrev) return D;
   if(!E) throw Object.assign(new Error('no editor snapshot'),{code:'nosnap'}); const m=SC.merge3(E.note, D, C, {dev:S.devId, t}); return {note:m.note, copies:m.copies}; }; }
 const fieldDelta=fn=>(C,meta,t)=>C? fn({...C}, t) : null;   // a field change over whatever the record is now
+const chainDelta=(d1,d2)=>(C,meta,t)=>{ const r1=d1(C,meta,t), n1=r1==null? C : (r1.note||r1), r2=n1? d2({...n1},meta,t) : null; if(r2==null) return r1; const n2=r2.note||r2; return r1 && r1.note? {...r1, note:n2} : n2; };   // d2 over what d1 makes of the record (its copies and keepUpdated kept)
 function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : /OPR\//.test(u)? 'Opera' : /Firefox\//.test(u)? 'Firefox' : /Chrome\//.test(u)? 'Chrome' : /Safari\//.test(u)? 'Safari' : 'Browser', o=/Windows/.test(u)? 'Windows' : /iPhone|iPad/.test(u)? 'iOS' : /Android/.test(u)? 'Android' : /Mac OS/.test(u)? 'macOS' : /Linux/.test(u)? 'Linux' : ''; return o? b+' · '+o : b; }
 function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()}); const ref={};
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
@@ -1396,8 +1398,8 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
 /* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
 /* the panel lists one section: the notes, the archive or the trash. A search in the notes also finds archived notes, in a group «В архіві» below them.
    Pinned notes come first in the notes, in a group «Закріплені» (the last pinned on top; by rank in a search), the rest under «Інші» */
-// the list is drawn anew on every change: a focus inside it stays on the same note's item (and the same button), wherever the item lands
-function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '';
+// the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
+function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && a.matches(':focus-visible')? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '';   // a keyboard focus only: a click leaves none behind
   drawList(); if(id && !list.contains(document.activeElement)) focusItem(id, cls); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
@@ -1424,11 +1426,13 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, p
   d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], at=[...list.querySelectorAll('.item')].indexOf(d);
     const done=cls==='it-p'? pinNote(n, !n.pinned) : cls==='it-r'? side() : del();
     if(e.detail===0) Promise.resolve(done).then(()=>keepFocus(n.id, cls, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
-  d.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, at)); } }); }   // Enter and Space on a nested button are that button's
+  d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
+    if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, at)); } }); }   // Enter and Space on a nested button are that button's
 function focusItem(id, cls){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }   // the item first: it shows its buttons
 // after a key on an item or its button the focus goes to the same button in the note's new place, or, when the note left the list, to the item now in
 // its place. An action that took the focus itself (a dialog, the next note's field) keeps it
-function keepFocus(id, cls, at){ const a=document.activeElement; if(a && a!==document.body) return; if(focusItem(id, cls)) return; const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus(); }
+function keepFocus(id, cls, at){ const a=document.activeElement; if(a && a!==document.body && !list.contains(a)) return; if(!list.contains(a) && !focusItem(id, cls)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); }
+  const f=document.activeElement; if(f && list.contains(f)) f.scrollIntoView({block:'nearest'}); }   // a pinned note went up to «Закріплені»: its button comes into view
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
   const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
@@ -1755,7 +1759,7 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, same? D : D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if((r.note.pinned||0)!==(D.pinned||0)) renderList(); else updateItem(n); } }   // a pin the merge brought moves the note between the groups now
+        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if((r.note.pinned||0)!==(D.pinned||0)) renderList(); else updateItem(n); } }   // a pin the merge brought moves the note between the groups now
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
@@ -1816,12 +1820,13 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
   relist(); storageUI(); }
 /* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
 function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // the pin never takes the place of an edit the store may lack: a failed write is retried with its own delta, which reads the note (the pin included);
-  // the open note and a note with a localStorage leftover go whole, through the editor delta, in one write
+  // the pin never takes the place of an edit the store may lack: a failed write is retried with the pin over it (a failed editor write is the note
+  // itself, pin included); the open note, and a note with a localStorage leftover, go whole through the editor delta (it needs the snapshot), in one write
   const u=unsaved.get(n.id), whole=!u && ESNAP.has(n.id) && (n===cur || FELL.has(n.id));
   if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  writeNote(n, u? u.delta : whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); renderList(); }
+  const pin=fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; });
+  writeNote(n, u? (u.delta? chainDelta(u.delta, pin) : undefined) : whole? undefined : pin); renderList(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash

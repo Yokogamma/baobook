@@ -119,6 +119,34 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('7e3 the failed import showed the warning ('+w1+'); after the pin and a reload the note is stored and pinned ('+await listText(pg)+')', w1 && sx && sx.pinned>0 && sx.blocks.some(b=>b.text==='чекає') && (await listText(pg)).startsWith('[Закріплені],'));
   await btn(pg,'nx','.it-x');
 
+  // 7e4 a pin and then an unpin of a note that is not open, both failing: «Повторити» writes the pin with the unpin over it, so the note ends up unpinned
+  await open(pg,'n1'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await btn(pg,'n2','.it-p'); const w4=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden); await btn(pg,'n2','.it-p');
+  await pg.evaluate(()=>{ sheetDebug.failSave=false; document.getElementById('saveRetry').click(); }); await pg.waitForTimeout(500);
+  ok('7e4 the failed pin showed the warning ('+w4+'); after «Повторити» the unpin is what is stored and listed ('+await listText(pg)+')', w4 && !(await stored(pg,'n2')).pinned && !(await listText(pg)).includes(',n2,[') && await pg.evaluate(()=>document.getElementById('saveWarn').hidden));
+
+  // 7e5 a restore from the trash that failed, then a pin: both are stored
+  await btn(pg,'n2','.it-x'); await pg.click('#trashRow'); await pg.waitForTimeout(250); await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await btn(pg,'n2','.it-r'); await pg.evaluate(()=>{ if(!document.getElementById('sect').hidden) document.getElementById('sectBack').click(); }); await pg.waitForTimeout(250);
+  await pg.evaluate(()=>{ sheetDebug.failSave=false; }); await btn(pg,'n2','.it-p'); await pg.waitForTimeout(300); const s5=await stored(pg,'n2');
+  ok('7e5 restored and pinned: deleted '+!!s5.deleted+', pinned '+!!s5.pinned+' ('+await listText(pg)+')', !s5.deleted && s5.pinned>0 && (await listText(pg)).startsWith('[Закріплені],n2'));
+  await btn(pg,'n2','.it-p');
+
+  // 7e6 a note never opened in this tab is restored from the trash into localStorage, then pinned: the pin's field write leaves the leftover, so the restore moves in at the next start
+  await btn(pg,'n2','.it-x'); await open(pg,'n3'); await pg.reload(); await ready(pg); await pg.waitForTimeout(300);
+  await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); }); await pg.click('#trashRow'); await pg.waitForTimeout(250); await btn(pg,'n2','.it-r');
+  await pg.evaluate(()=>{ if(!document.getElementById('sect').hidden) document.getElementById('sectBack').click(); }); await pg.waitForTimeout(250); const k6=await fbKeys();
+  await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await btn(pg,'n2','.it-p'); const k6b=await fbKeys();
+  await pg.reload(); await ready(pg); await until(async()=>!(await fbKeys())); await pg.waitForTimeout(300);
+  ok('7e6 the leftover stayed after the pin ('+k6+' → '+k6b+'); after a reload the note is out of the trash ('+await listText(pg)+')', k6===1 && k6b===1 && !(await stored(pg,'n2')).deleted && (await listText(pg)).includes('n2'));
+  if((await stored(pg,'n2')).pinned) await btn(pg,'n2','.it-p');
+  await pg.evaluate(()=>[...document.querySelectorAll('#list .item')].filter(d=>/резервна копія/.test(d.textContent)).forEach(d=>d.querySelector('.it-x').click())); await pg.waitForTimeout(300);
+
+  // 7e7 an edit of another note went to localStorage (it has an editor snapshot), then that note is pinned from the list: the edit and the pin go in one write
+  await open(pg,'n1'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
+  await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type(' 7'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
+  await open(pg,'n3'); await pg.waitForTimeout(300); const k7=await fbKeys(); await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await btn(pg,'n1','.it-p'); const s7=await stored(pg,'n1');
+  ok('7e7 the edit went to localStorage ('+k7+' key); the pin from the list stored it with the pin («'+s7.blocks.map(b=>b.text).join(' | ')+'»), the key is gone', k7===1 && s7.pinned>0 && s7.blocks.some(b=>/ 7$/.test(b.text)) && !(await fbKeys()));
+  await btn(pg,'n1','.it-p');
+
   // 7f an edit of a pinned note that missed IndexedDB: at the next start the older stored version is kept as a backup copy, and the copy is not pinned
   await open(pg,'n3'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
   await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type(' нове'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
@@ -129,9 +157,16 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   // 7g Delete on a button of the open note's item sends it to the trash, and the note that opens next is the top of the list (the pinned one), not the latest edited
   await open(pg,'n2'); await pg.waitForTimeout(300); await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type(' і хліб'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
   await open(pg,'n1'); await pg.waitForTimeout(300); const t3=(await stored(pg,'n3')).updated, t2=(await stored(pg,'n2')).updated;
+  const at1=await pg.evaluate(()=>[...document.querySelectorAll('#list .item')].findIndex(d=>d.dataset.id==='n1'));
   await pg.locator('#list .item[data-id="n1"]').focus(); await pg.keyboard.press('Tab'); await pg.keyboard.press('Delete'); await pg.waitForTimeout(500);
   const fk=await pg.evaluate(()=>{ const a=document.activeElement, L=[...document.querySelectorAll('#list .item')]; return a && a.classList.contains('item')? L.indexOf(a)+'/'+L.length : a && a.tagName; });
-  ok('7g2 the focus went to the item now in the deleted one\'s place, the last one here ('+fk+')', /^(\d+)\/(\d+)$/.test(fk) && +fk.split('/')[0]===+fk.split('/')[1]-1);
+  ok('7g2 the focus went to the item now in the deleted one\'s place (was '+at1+', now '+fk+')', /^(\d+)\/(\d+)$/.test(fk) && +fk.split('/')[0]===Math.min(at1, +fk.split('/')[1]-1));
+  // 7h a held Delete trashes one note, not the next ones too
+  const before=await pg.evaluate(()=>document.querySelectorAll('#list .item').length); await pg.keyboard.down('Delete'); await pg.keyboard.down('Delete'); await pg.keyboard.down('Delete'); await pg.keyboard.up('Delete'); await pg.waitForTimeout(600);
+  ok('7h a held Delete with repeats trashed one note ('+before+' → '+await pg.evaluate(()=>document.querySelectorAll('#list .item').length)+')', await pg.evaluate(()=>document.querySelectorAll('#list .item').length)===before-1);
+  // 7i a mouse click on a pin leaves no focus in the list, so the moved item does not keep its buttons shown
+  const id9=await pg.evaluate(()=>document.querySelector('#list .item.pa').dataset.id); await btn(pg,id9,'.it-p'); const f9=await pg.evaluate(()=>{ const a=document.activeElement; return !!(a && document.getElementById('list').contains(a)); });
+  ok('7i after a mouse click on the pin no focus is left in the list ('+f9+')', !f9);
   ok('7g Delete on the pin button trashed «Ключі»; «Komax старий» (pinned) opened rather than «Покупки» (edited later: '+(t2>t3)+')', (await stored(pg,'n1')).deleted>0 && await cur(pg)==='n3' && t2>t3);
   console.log(errs.length? errs.join('\n') : '✓ desktop: no errors'); if(errs.length) fails++;
   await ctx.close(); }
