@@ -153,8 +153,9 @@ await deny('blocks that are not a list', () => put(N('n1'), next(d, { title: 'x'
 await deny('more than 5000 blocks', () => put(N('n1'), next(d, { title: 'x', blocks: Array.from({ length: 5001 }, (_, i) => ({ id: 'b' + i })) })));
 await deny('deleted that is not a number', () => put(N('n1'), next(d, { title: 'x', deleted: true, tsrv: serverTimestamp() })));
 await deny('archived that is not a number', () => put(N('n1'), next(d, { title: 'x', archived: 'yes' })));
+await deny('pinned that is not a number', () => put(N('n1'), next(d, { title: 'x', pinned: true })));
 await deny('revived that is not a map', () => put(N('n1'), next(d, { title: 'x', revived: 'n0' })));
-await allow('archived and revived of the right types', () => put(N('n1'), next(d, { title: 'x', archived: T0, revived: { from: 'n0', dev: 'devB', at: T0 } })));
+await allow('archived, pinned and revived of the right types', () => put(N('n1'), next(d, { title: 'x', archived: T0, pinned: T0, revived: { from: 'n0', dev: 'devB', at: T0 } })));
 d = await read(N('n1'));
 await deny('a live note with tsrv but no deleted (update)', () => put(N('n1'), next(d, { title: 'y', tsrv: serverTimestamp() })));
 await deny('a live note with tsrv but no deleted (create)', () => put(N('n3'), { ...stamp(null), ...body(), tsrv: serverTimestamp() }));
@@ -265,6 +266,7 @@ await scenario('found in review: «not in the trash» values, partial writes, ot
 await deny('a note with deleted: 0 and a server tsrv (a device reads 0 as «not in the trash»)', () => put(N('z0'), { ...stamp(null), ...body({ deleted: 0 }), tsrv: serverTimestamp() }));
 await deny('a note with a negative deleted and a server tsrv', () => put(N('z1'), { ...stamp(null), ...body({ deleted: -5 }), tsrv: serverTimestamp() }));
 await deny('a live note with archived: 0', () => put(N('z2'), { ...stamp(null), ...body({ archived: 0 }) }));
+await deny('a live note with pinned: 0', () => put(N('z2'), { ...stamp(null), ...body({ pinned: 0 }) }));
 await seed(N('z3'), stored({ deleted: 0, tsrv: old(31 * DAY) }));
 await deny('the automatic purge of a note stored with deleted: 0 and an old tsrv (it is not in the trash)', async () => put(N('z3'), { ...stamp(await read(N('z3'))), purged: T0, auto: true }));
 await seed(N('z4'), stored({ deleted: T0, tsrv: old(DAY) }));

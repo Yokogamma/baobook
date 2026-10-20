@@ -17,8 +17,8 @@ const NOTE={title:'Нотатка', created:100, updated:200, blocks:[
 // 1 the canonical form does not depend on the block order or the key order; defaults are dropped
 const reordered={...NOTE, blocks:shuffle(NOTE.blocks,7).map(b=>Object.fromEntries(Object.keys(b).reverse().map(k=>[k,b[k]])))};
 ok('1 shuffled blocks with reversed keys give the same canonical JSON and hash', S.cjson(reordered)===S.cjson(NOTE) && S.hashDoc(reordered)===S.hashDoc(NOTE));
-const withDefaults={...NOTE, deleted:0, archived:null, blocks:NOTE.blocks.map(b=>({...b, wrap:b.wrap||false, html:b.html||'', title:b.title||''}))};
-ok('1b defaults (wrap:false, html:"", title:"", deleted:0, archived:null) do not change the canonical form', S.cjson(withDefaults)===S.cjson(NOTE));
+const withDefaults={...NOTE, deleted:0, archived:null, pinned:0, blocks:NOTE.blocks.map(b=>({...b, wrap:b.wrap||false, html:b.html||'', title:b.title||''}))};
+ok('1b defaults (wrap:false, html:"", title:"", deleted:0, archived:null, pinned:0) do not change the canonical form', S.cjson(withDefaults)===S.cjson(NOTE));
 ok('1c -0 reads as 0 and undefined fields are dropped', S.cjson({title:'',blocks:[{id:'z',row:-0,fx:undefined,text:''}],created:1,updated:1})===S.cjson({title:'',blocks:[{id:'z',row:0,fx:0,text:''}],created:1,updated:1}));
 ok('1d sameDoc ignores updated only', S.sameDoc(NOTE,{...NOTE,updated:999}) && !S.sameDoc(NOTE,{...NOTE,title:'інша'}));
 
@@ -39,9 +39,10 @@ ok('3c a parent to a missing area: the block goes to the sheet with fx 0 and no 
 // 4 shape errors
 const bad=[[null,'shape'],[{title:5,blocks:[],created:1,updated:1},'title'],[{title:'',blocks:'no',created:1,updated:1},'blocks'],[{title:'',blocks:[],created:'x',updated:1},'time'],
   [{title:'',blocks:[{id:'',row:1,fx:0}],created:1,updated:1},'blocks'],[{title:'',blocks:[{id:'a',row:'1',fx:0}],created:1,updated:1},'blocks'],[{title:'',blocks:[{id:'a',row:1,fx:0,kind:'table'}],created:1,updated:1},'blocks'],
-  [{title:'',blocks:[],created:1,updated:1,deleted:'yes'},'deleted'],[{title:'',blocks:[],created:1,updated:1,revived:{from:'',dev:'d',at:1}},'revived'],[{title:'x'.repeat(2001),blocks:[],created:1,updated:1},'title']];
+  [{title:'',blocks:[],created:1,updated:1,deleted:'yes'},'deleted'],[{title:'',blocks:[],created:1,updated:1,pinned:-5},'pinned'],[{title:'',blocks:[],created:1,updated:1,revived:{from:'',dev:'d',at:1}},'revived'],[{title:'x'.repeat(2001),blocks:[],created:1,updated:1},'title']];
 ok('4 bad shapes are reported, not repaired: '+bad.map(([d,why])=>S.normNote(d,{cleanRich:clean}).bad).join(','), bad.every(([d,why])=>S.normNote(d,{cleanRich:clean}).bad===why));
 ok('4b a good revived field with dn and title passes', S.normNote({title:'',blocks:[],created:1,updated:1,revived:{from:'n1',dev:'dev1',dn:'Chrome',title:'Стара',at:5}},{cleanRich:clean}).note.revived.title==='Стара');
+ok('4b2 a pinned note keeps its pin time; pinned:0 or null means «not pinned» and is dropped', S.normNote({title:'',blocks:[],created:1,updated:1,pinned:7},{}).note.pinned===7 && !('pinned' in S.normNote({title:'',blocks:[],created:1,updated:1,pinned:0},{}).note) && !('pinned' in S.normNote({title:'',blocks:[],created:1,updated:1,pinned:null},{}).note));
 ok('4c html goes through cleanRich and an empty result drops the field', S.normNote({title:'',blocks:[{id:'a',row:1,fx:0,text:'t',html:'<i>t</i>'}],created:1,updated:1},{cleanRich:()=>''}).note.blocks[0].html===undefined);
 
 // 5 versions
