@@ -918,7 +918,7 @@ const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.cod
    older save finishing late nor another tab can remove a copy that may be the only one. Plain sheet:note:<id> keys belong to the first
    version and to the mode without IndexedDB (§4.14 of docs/SYNC-PLAN.md) */
 const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);   // a pin is not content: copies that differ only by it are not kept twice, the newer one's pin stands (fbPut)
-const backupOf=n=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});
+const backupOf=({pinned, ...n})=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});   // a backup copy starts unpinned
 const fbPut=(ex,n)=>!ex? [n] : noteSig(ex)===noteSig(n)? ((n.updated||0)>(ex.updated||0) && (n.pinned||0)!==(ex.pinned||0)? [n] : []) : (n.updated||0)>(ex.updated||0)? [n, backupOf(ex)] : [backupOf(n)];
 const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
 const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
@@ -1071,6 +1071,9 @@ const LREV=new Map(), ESNAP=new Map(), PENDING=new Map(), ARRIVED=new Map();
 DEBUG.sync={clock:0, status:{code:'none', n:0}};
 let SYNC=null, driveT=null, driving=false;
 const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; if(n.deleted) o.deleted=n.deleted; if(n.archived) o.archived=n.archived; if(n.pinned) o.pinned=n.pinned; if(n.revived) o.revived=n.revived; return o; };
+// two copies of a note that differ only by the pin: nothing on the sheet differs, so taking the other one needs no redraw and keeps the caret and the undo steps
+const pinOnly=(a,b)=>(a.pinned||0)!==(b.pinned||0) && SC.sameDoc({...noteSnap(a), pinned:0}, {...noteSnap(b), pinned:0});
+const takePin=(n,r)=>{ if(r.pinned) n.pinned=r.pinned; else delete n.pinned; n.updated=r.updated; };
 const snapFor=id=>{ const e=ESNAP.get(id); return e? {...e.note, at:e.at} : null; };   // for vcapture: the state before the edit
 function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow()}); if(lrev!=null) LREV.set(id,lrev); }
 // the editor's delta: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else merge3
@@ -1092,6 +1095,7 @@ function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=
 const keptView=()=>LOCK==='epoch';   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's data comes onto it, by any path
 async function takeStored(id, src){ if(keptView() || DYING) return; const st=await SYNC.state(id); if(keptView() || !st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
+  if(n && !busy(n) && pinOnly(n, r)){ takePin(n, r); LREV.set(id,lrev); PENDING.delete(id); if(n===cur) setSnap(id, n, lrev); relist(); chgUI(); return; }   // only the pin moved
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
   Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; if(!r.pinned) delete n.pinned; if(!r.revived) delete n.revived; LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id);
@@ -1402,9 +1406,9 @@ function renderList(){
   if(!T.length && sec==='trash') items.sort((a,b)=>b.n.deleted-a.n.deleted);
   list.innerHTML='';
   if(!items.length && !more.length){ el('div','none',list).textContent=loc(T.length? 'search.none' : sec==='trash'? 'trash.none' : sec==='archive'? 'archive.none' : 'notes.none'); return; }
-  const pins=sec==='notes'? items.filter(it=>it.n.pinned) : [];
-  if(pins.length){ if(!T.length) pins.sort((a,b)=>b.n.pinned-a.n.pinned); el('div','grp',list).textContent=loc('pin.group'); pins.forEach(it=>listItem(it,T)); if(pins.length<items.length) el('div','grp',list).textContent=loc('pin.others'); }
-  items.forEach(it=>{ if(!pins.includes(it)) listItem(it,T); });
+  const pins=sec==='notes'? items.filter(it=>it.n.pinned) : [], rest=pins.length? items.filter(it=>!it.n.pinned) : items;
+  if(pins.length){ if(!T.length) pins.sort((a,b)=>b.n.pinned-a.n.pinned); el('div','grp',list).textContent=loc('pin.group'); pins.forEach(it=>listItem(it,T)); if(rest.length) el('div','grp',list).textContent=loc('pin.others'); }
+  rest.forEach(it=>listItem(it,T));
   if(more.length){ el('div','grp',list).textContent=loc('archive.group'); more.forEach(it=>listItem(it,T)); }
 }
 function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [...pool].sort((a,b)=>b.updated-a.updated).map(n=>({n}));
@@ -1414,10 +1418,10 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
 /* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
 function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
   const [rk,ri]=tr? ['trash.restore','<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'] : ar? ['archive.unarchive','<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'] : ['archive.move','<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>'];
-  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
+  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
-  d.addEventListener('click',e=>{ if(e.target.closest('.it-p')){ e.stopPropagation(); const kb=e.detail===0; pinNote(n, !n.pinned); if(kb){ const it=list.querySelector('.item[data-id="'+n.id+'"]'), p=it && it.querySelector('.it-p'); if(p){ it.focus(); p.focus(); } } }   /* the list is drawn anew: after Enter or Space (a click with no pointer, detail 0) the focus goes to the same button in its new place, through its item, which shows the button */ else if(e.target.closest('.it-r')){ e.stopPropagation(); side(); } else if(e.target.closest('.it-x')){ e.stopPropagation(); del(); } else openNote(n); });
-  d.addEventListener('keydown',e=>{ if(e.target!==d) return; if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ del(); } }); }   // a key on a nested button is that button's
+  d.addEventListener('click',e=>{ if(e.target.closest('.it-p')){ e.stopPropagation(); const kb=e.detail===0; pinNote(n, !n.pinned); if(kb){ const it=list.querySelector('.item[data-id="'+CSS.escape(n.id)+'"]'), p=it && it.querySelector('.it-p'); if(p){ it.focus(); p.focus(); } } }   /* the list is drawn anew: after Enter or Space (a click with no pointer, detail 0) the focus goes to the same button in its new place, through its item, which shows the button */ else if(e.target.closest('.it-r')){ e.stopPropagation(); side(); } else if(e.target.closest('.it-x')){ e.stopPropagation(); del(); } else openNote(n); });
+  d.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ del(); } }); }   // Enter and Space on a nested button are that button's
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
   const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
@@ -1743,8 +1747,8 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
-    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ Object.assign(n, r.note); if(!r.note.deleted) delete n.deleted; if(!r.note.archived) delete n.archived; if(!r.note.pinned) delete n.pinned; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, same? D : D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) updateItem(n); }
+    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D), pin=!same && pinOnly(r.note, D); n.updated=r.note.updated; if(!same){ Object.assign(n, r.note); if(!r.note.deleted) delete n.deleted; if(!r.note.archived) delete n.archived; if(!r.note.pinned) delete n.pinned; if(!pin && !PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
+        setSnap(n.id, same? D : pin? noteSnap(r.note) : D, same||pin? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) updateItem(n); }   // a result that differs only by the pin (merged over another tab's pin) is the new snapshot: nothing to redraw
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
@@ -1777,7 +1781,7 @@ const TRASH_DAYS=30, listed=n=>!n.deleted && !n.archived, trashed=n=>!!n.deleted
 const daysLeft=n=>Math.max(1, Math.ceil((n.deleted+TRASH_DAYS*864e5-now())/864e5));
 let section='notes';   // what the panel lists: 'notes', 'archive' or 'trash'
 const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashed : archived)) setSection('notes'); else renderList(); renderBacklinks(); };   // an emptied section gives way to the notes; a note that links here may have gone or come back
-const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||newNote();
+const firstNote=()=>notes.filter(listed).sort((a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated))[0]||newNote();   // the top of the list: the last pinned, else the latest
 /* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
    The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
 async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
@@ -1836,6 +1840,7 @@ function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; con
   const mine=LREV.get(r.id), known=lrev!=null && mine!=null;   // both lrevs known: the newer wins, equal ones compare by time (a record written past the core)
   if(known? (lrev<mine || (lrev===mine && (r.updated||0)<=(n.updated||0))) : (r.updated||0)<=(n.updated||0)) return;
   VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
+  if(!busy(n) && pinOnly(n, r)){ takePin(n, r); setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); renderList(); return; }   // only the pin moved
   if(db.backend==='idb' && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(n.id, PENDING.get(n.id)||{tab:true}); chgUI(); return; }   // the pending write merges over the stored record; the redraw waits for the safe point
   if(busy(n)) return;   // without IndexedDB only one tab writes, so this does not happen
   Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; if(!r.pinned) delete n.pinned; if(!r.revived) delete n.revived; setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); undoStacks.delete(n.id);   // undo steps were made on the old copy; with the lrev the snapshot equals the record, so the next write takes the short path

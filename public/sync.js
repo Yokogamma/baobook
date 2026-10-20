@@ -102,7 +102,7 @@ const contentHash=b=>hashOf(gjson(b,false));   // the hash of a block's content 
 // the key of a side in a conflict: (updated, dev, hash of the canonical form); a side without dev (a local record) is this device
 const keyOf=(doc, dev)=>[+doc.updated||0, doc.dev||dev||'', hashDoc(noUpdated(doc))];
 const cmpKey=(a,b)=>{ for(let i=0;i<3;i++){ if(a[i]<b[i]) return -1; if(a[i]>b[i]) return 1; } return 0; };
-const NOTE_FIELDS=['title','deleted','archived','revived'], SOFT_FIELDS=['pinned'];   // a soft field changed differently on both sides goes by the key and makes no conflict copy
+const NOTE_FIELDS=['title','deleted','archived','revived'], SOFT_FIELDS=['pinned'], MERGE_FIELDS=[...NOTE_FIELDS, ...SOFT_FIELDS];   // a soft field changed differently on both sides goes by the key and makes no conflict copy
 function fixParents(blocks){ const areas=new Set(blocks.filter(b=>b.kind==='area').map(b=>b.id)); return blocks.map(b=>{ if(!b.parent || areas.has(b.parent)) return b; const c={...b}; delete c.parent; delete c.col; c.fx=0; return c; }); }
 const byId=blocks=>new Map((blocks||[]).map(b=>[b.id,b]));
 const contentChanged=(a,b)=>JSON.stringify(canon({title:a.title,blocks:a.blocks}))!==JSON.stringify(canon({title:b.title,blocks:b.blocks}));
@@ -116,7 +116,7 @@ function finishMerge(res, L, R, ctx, lost, trace){
   return {note, copies, lost, trace, same}; }
 // three-way: base is the confirmed cloud state, L the local record, R the cloud document that moved ahead
 function merge3(base, L, R, ctx={}){ const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, lost={local:false, remote:false}, trace=[]; const res={};
-  for(const f of [...NOTE_FIELDS, ...SOFT_FIELDS]){ const bv=vjson(base[f]), lv=vjson(L[f]), rv=vjson(R[f]);
+  for(const f of MERGE_FIELDS){ const bv=vjson(base[f]), lv=vjson(L[f]), rv=vjson(R[f]);
     const v = (lv===bv && rv===bv)? L[f] : lv===bv? R[f] : rv===bv? L[f] : lv===rv? L[f] : SOFT_FIELDS.includes(f)? (lWins? L : R)[f] : (lost[lWins? 'remote' : 'local']=true, (lWins? L : R)[f]);
     if(v!==undefined) res[f]=v; }
   res.created=Math.min(+L.created||Infinity, +R.created||Infinity, +base.created||Infinity); if(!Number.isFinite(res.created)) res.created=+L.created||+R.created||0;
