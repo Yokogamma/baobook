@@ -51,7 +51,8 @@ const KINDS=[undefined,'code','area'];
 function normBlock(raw, deps){ if(!isObj(raw)) return false; const b={...raw};
   if(!(typeof b.id==='string') || !b.id.length || b.id.length>LIM.id) return false;
   if(!isNum(b.row)) return false;
-  if(b.parent!==undefined){ if(b.col===undefined || b.col===null) b.col=0; if(!isStr(b.parent,LIM.id) || !b.parent.length || !isNum(b.col)) return false; delete b.fx; }   // col 0 is a default the canonical form drops, like fx 0: a block in an area's first column comes from the cloud without col else { if(b.fx===undefined || b.fx===null) b.fx=0; if(!isNum(b.fx)) return false; delete b.col; }
+  // col 0 is a default the canonical form drops, like fx 0: a block in an area's first column comes from the cloud without col
+  if(b.parent!==undefined){ if(b.col===undefined || b.col===null) b.col=0; if(!isStr(b.parent,LIM.id) || !b.parent.length || !isNum(b.col)) return false; delete b.fx; } else { if(b.fx===undefined || b.fx===null) b.fx=0; if(!isNum(b.fx)) return false; delete b.col; }
   if(!KINDS.includes(b.kind)) return false; if(b.kind===undefined) delete b.kind;
   if(b.text===undefined || b.text===null) b.text=''; if(typeof b.text!=='string') return false;
   // the fields are checked, not rewritten: a valid record is stored as given (an import keeps the file's shape); defaults are the canonical form's business
@@ -356,8 +357,10 @@ function makeSync(deps){
     setSeen(t,'n',id,{rev:doc.rev, srv:doc.srv}, seen);
     const C=await t.get('notes',id), purgedRec=await t.get('sync',K.purged(id)), tr=await t.get('sync',K.tr('n',id)), job=await t.get('sync',K.out('n',id));
     if(recreated) meta.base=null;
-    if(!doc.purged){ const q=await t.get('sync',K.quarantine('n',id)); if(q && (!q.raw || !q.raw.srv || clearlyNewer(doc.srv, q.raw.srv))){ t.del('sync',K.quarantine('n',id)); if(meta.err==='damaged'){ delete meta.err; putMeta(t,meta,after); } } }
-    if(meta.base && doc.rev===meta.base.rev && !recreated){ let ch=false; if(!meta.base.srv && doc.srv){ meta.base.srv=doc.srv; ch=true; } if(doc.tsrv && !meta.base.tsrv){ meta.base.tsrv=doc.tsrv; ch=true; } if(ch) putMeta(t,meta,after); return 'done'; }
+    // a quarantine marked for a recheck (§4.15) keeps its copy until this transaction applies the document; any other goes when a clearly newer one comes
+    let q=doc.purged? null : await t.get('sync',K.quarantine('n',id)); const unq=()=>{ t.del('sync',K.quarantine('n',id)); if(meta.err==='damaged'){ delete meta.err; putMeta(t,meta,after); } if(q.recheck) log({t:'unquarantine', id}); q=null; };
+    if(q && !q.recheck && (!q.raw || !q.raw.srv || clearlyNewer(doc.srv, q.raw.srv))) unq();
+    if(meta.base && doc.rev===meta.base.rev && !recreated && !(q && q.recheck)){ let ch=false; if(!meta.base.srv && doc.srv){ meta.base.srv=doc.srv; ch=true; } if(doc.tsrv && !meta.base.tsrv){ meta.base.tsrv=doc.tsrv; ch=true; } if(ch) putMeta(t,meta,after); return 'done'; }
     if(tr){ if(doc.rcpt && doc.rcpt[devId]===tr.op && doc.rev===tr.expect+1){ await finishCore(t, id, tr, {kind:'accepted', rev:doc.rev, srv:doc.srv, echo:doc}, after); return 'done'; } setRefetch(t,id,after); return 'done'; }
     if(doc.purged){   // a tombstone
       if(!C && purgedRec){ if(doc.rev>(purgedRec.rev||0)){ purgedRec.rev=doc.rev; t.put('sync',purgedRec); } if(job && job.tomb) dropJob(t,id,after); if(await t.get('sync',K.meta('n',id))) t.del('sync',K.meta('n',id)); return 'done'; }   // the echo of an own tombstone, or another device's after ours
@@ -365,6 +368,7 @@ function makeSync(deps){
       if(job && job.tomb && job.auto && sameDoc(C, meta.base||{})){ log({t:'tombstone', id, changed:false, hashes:(C.blocks||[]).map(contentHash)}); await deleteRecord(t,id); t.del('sync',K.meta('n',id)); t.put('sync',{k:K.purged(id), rev:doc.rev}); dropJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return 'done'; }
       await tombstoneLocal(t, id, C, meta, doc, after); return 'done'; }
     const nn=normNote(doc, deps); if(nn.bad){ quarantine(t,'n',id,doc,'shape',{rev:doc.rev, srv:doc.srv},after); meta.err='damaged'; putMeta(t,meta,after); return 'damaged'; }
+    if(q && q.recheck) unq();   // every branch below applies the document in this transaction
     const body=nn.note, tt=now();
     if(purgedRec){   // the deletion stands: a live document of a purged id goes into the revived note
       await revive(t, id, {...body, dev:doc.dev, dn:doc.dn}, {t:tt}, after); if(job){ meta.base=storeBase(doc); putMeta(t,meta,after); } log({t:'moved-in', id}); return job? 'again' : 'done'; }
@@ -621,9 +625,10 @@ function makeSync(deps){
   async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; const run=S.runId=(S.runId||0)+1; S.started=true;
     if(S.owner && S.cloud){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:3}); }); }catch(_){} try{ await recheckQuarantine(); }catch(_){} if(!S.started || S.runId!==run) return; connectCloud(); } }
   // a note quarantined for its shape is checked again under the current normalizer (an update may accept what an older one refused, §4.15): one that passes
-  // leaves the quarantine and is read from the cloud again (its seen record goes, so the document counts as fresh); one that still fails stays
-  async function recheckQuarantine(){ return tx(['sync'], async(t,after)=>{ for(const q of await t.range('sync','quarantine:n:','quarantine:n:\uffff')){ if(q.reason!=='shape' || !q.raw) continue; const id=q.k.slice(13);
-      if(normNote(q.raw, deps).bad) continue; t.del('sync',q.k); t.del('sync',K.seen('n',id)); const meta=await getMeta(t,'n',id); if(meta.err==='damaged'){ delete meta.err; putMeta(t,meta,after); } setRefetch(t,id,after); log({t:'unquarantine', id}); } }); }
+  // is marked and read from the cloud again; the read goes through rule 1 against the kept seen record (an equal document is fresh, a recreated one is
+  // recognized), and the quarantine with its copy leaves only in the transaction that applies the document. One that still fails stays as it is
+  async function recheckQuarantine(){ return tx(['sync'], async(t,after)=>{ for(const q of await t.range('sync','quarantine:n:','quarantine:n:\uffff')){ if(q.reason!=='shape' || !q.raw || q.recheck) continue; const id=q.k.slice(13);
+      if(normNote(q.raw, deps).bad) continue; t.put('sync',{...q, recheck:true}); setRefetch(t,id,after); log({t:'recheck', id}); } }); }
   function stop(){ S.started=false; S.runId=(S.runId||0)+1; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
   function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
