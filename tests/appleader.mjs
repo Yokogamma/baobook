@@ -146,5 +146,22 @@ await G.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onu
 const gone=await until(async()=>!(await lead(N)).held && !(await locks(G)).held.includes(LOCK), 5000);
 ok('5 the leader was locked out by the newer database («updated»): the lock is free, nobody leads', gone && (await locked(N)).strip && !(await lead(N)).on);
 
-const errs=A.errs; console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
+/* ── 6. a hidden leader hands the lead to a visible tab that asks: Chrome keeps the lock in a hidden tab (no freeze while it holds one) but throttles
+   its timers, so the visible tab, queued for the lock, sends «lead?» when shown and the hidden leader lets go; shown again, it queues behind ── */
+const QD=await newDevice(br, cloud, SITE, 'Q', {ctx:CTX, connect:{pace:PACE}}), Q=QD.pg; const R=await newTab(QD, SITE, {connect:{pace:PACE}}); await until(async()=>(await lead(Q)).on && (await lead(R)).queued, 5000);
+const hide=pg=>pg.evaluate(()=>{ Object.defineProperty(document,'hidden',{configurable:true, get:()=>true}); Object.defineProperty(document,'visibilityState',{configurable:true, get:()=>'hidden'}); document.dispatchEvent(new Event('visibilitychange')); });
+const show=pg=>pg.evaluate(()=>{ delete document.hidden; delete document.visibilityState; document.dispatchEvent(new Event('visibilitychange')); });
+await show(R); await R.waitForTimeout(400);
+ok('6 a visible leader keeps the lock when another visible tab asks', (await lead(Q)).on && (await lead(Q)).held && (await lead(R)).queued && !(await lead(R)).on);
+await hide(Q); await Q.waitForTimeout(300); ok('6b hidden, the leader with the freeze event keeps the lock until asked', (await lead(Q)).held);
+await show(R); const handed=await until(async()=>(await lead(R)).on && !(await lead(Q)).held, 5000);
+ok('6c the visible tab asked: the hidden leader let go and the visible one leads', handed && (await lead(R)).held && !(await lead(Q)).on && !(await lead(Q)).queued);
+await show(Q); const back=await until(async()=>(await lead(Q)).queued, 5000);
+ok('6d shown again, the former leader queues behind the visible one', back && (await lead(R)).on);
+await hide(R); await show(Q); const again=await until(async()=>(await lead(Q)).on && !(await lead(R)).held, 5000);
+ok('6e and takes the lead back once that one is hidden and it asks', again);
+await Q.evaluate(()=>{ document.getElementById('newBtn').click(); }); await Q.waitForTimeout(300); const qid=await curId(Q); await typeAt(Q,500,300,'після передачі лідерства'); const sentQ=await until(()=>!!cloud.doc('notes',qid) && cloud.doc('notes',qid).blocks.some(b=>b.text==='після передачі лідерства'), 6000);
+ok('6f its edit reaches the cloud', !!sentQ); const errsQ=QD.errs; await QD.close();
+
+const errs=A.errs.concat(errsQ); console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await A.close(); await br.close(); await srv.close(); process.exit(fails?1:0);

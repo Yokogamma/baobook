@@ -19,7 +19,7 @@ The sign-in works, the data does not move yet: the first read is refused by the 
 8. **Offline:** airplane mode → an edit → «Офлайн · 1 зміна чекає»; back online → «Синхронізовано», the edit on the other device.
 9. **Sign-out with an edit waiting:** «Вийти» while the status says «Надсилаю…» → «Завершую надсилання…» for a moment, then «Вийшли · n змін чекає»; the sign-in again sends them.
 10. **Another Google account (not in the rules):** sign out, sign in with a second account → «Синхронізація за запрошеннями», no dialog, the notes stay; sign out, sign in with the owner's account → «Синхронізовано», nothing asked.
-11. **Two tabs:** both show the status; «Вийти» in one signs out both; the sign-in in one shows the account in the other (reload it if its SDK was not loaded).
+11. **Two tabs:** both show the status; «Вийти» in one signs out both; the sign-in in one shows the account in the other (reload it if its SDK was not loaded). A tab left in the background for over five minutes while the other is used: the visible one syncs (an edit reaches the other device within seconds, the status moves there), not the hidden one.
 12. **«Прибрати нотатки з пристрою»:** the dialog says what is not in the cloud and offers the export; «Прибрати» → the page reloads empty, signed out, with the sign-in offered; the cloud keeps everything (item 6); the sign-in brings the notes back.
 13. **Phone, Chrome on Android, in the browser:** the gear → the sign-in → one press: the SDK loads and the page itself goes to Google (no popup, no second press) and comes back signed in, with the status; everything typed before the press is there.
 14. **Installed app (Android):** item 13 inside the app window; the return lands in the app, not in the browser.
