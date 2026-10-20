@@ -328,7 +328,7 @@ There is no PIN, no encryption of the local storage by the app, and no end-to-en
 | 1 | Hosting: A (Worker), B (Cloud Run, Blaze), C (VPS) | **A** (§4.1) |
 | 2 | Which assistant for the first check (M1): Claude Code with a token, or claude.ai/ChatGPT directly (M1 + M2 together) | **Claude Code** first |
 | 3 | Scope: all notes; only marked notes (off by default); all with a «hide» mark | all except the trash, archive included; the «hide» mark in M3 if wanted |
-| 4 | Search store for real notes: a mirror at Cloudflare (a copy of titles and plain text in Durable Object storage), a memory-only cache (one full read per cold start), or Blaze with full reads | the **mirror**, erased on «Відключити всі» |
+| 4 | Search store for real notes: a mirror at Cloudflare (a copy of titles and plain text in Durable Object storage), a memory-only cache (one full read per cold start), or Blaze with full reads | the **mirror**, erased on «Відключити всі»; once the project is on Blaze ([STACK-COMPARISON.md](STACK-COMPARISON.md) §8), full reads cost cents a day and the mirror becomes optional |
 | 5 | Notes passing through Cloudflare at all (a change from «Cloudflare never sees a note») | accept, for the tools only |
 | 6 | Workers Paid at $5 a month if CPU needs it | yes if M1 measures the need |
 | 7 | Refresh token limits: idle 30 days, absolute 180 days (then the consent again) | as written |
