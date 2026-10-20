@@ -169,4 +169,54 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
   const local=A.db.get('notes','m1'), up=cloud2.doc('notes','m1'), texts=n=>(n.blocks||[]).map(b=>b.text).sort().join('|');
   ok('7e u2\'s document of the same id was merged with the local note, not put over it: both texts here and in u2\'s cloud (rev 2), no job left, u1\'s cloud untouched', texts(local)==='текст у хмарі A|текст у хмарі B' && !!up && up.rev===2 && texts(up)===texts(local) && !A.sync.jobs().length && logs(A,'merged','m1').length===1 && cloud1.doc('notes','m1').rev===1); }
 
+/* ── 8. a block in an area's first column: the canonical form drops col 0, the receiver normalizes it back; a note quarantined for its shape by an older
+   normalizer is checked again at start and read from the cloud again, its seen record and its quarantined copy kept until the document is applied;
+   one that still fails stays ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'), B=await mk(cloud,'B');
+  await edit(A,'ar1',(C,t)=>({title:'з областю', blocks:[{id:'ar',row:2,fx:0.2,kind:'area',cw:20,ch:6},{id:'k0',row:0,parent:'ar',col:0,text:'перша колонка'},{id:'k1',row:2,parent:'ar',col:1,text:'друга колонка'}], created:t, updated:t}));
+  await idle(A,B); const doc=cloud.doc('notes','ar1'), got=B.db.get('notes','ar1');
+  ok('8 the cloud document has no col for the first-column block; device B took the note with col 0 and quarantined nothing', !!doc && doc.blocks.find(b=>b.id==='k0').col===undefined && !!got && got.blocks.find(b=>b.id==='k0').col===0 && got.blocks.find(b=>b.id==='k1').col===1 && !B.db.all('sync').some(r=>r.k.startsWith('quarantine:')));
+  // the state an older normalizer left on a device that removed its notes and signed in again: no note, a quarantine record, the seen registry, the mark
+  const seen=B.db.get('sync','seen:n:ar1');
+  B.sync.stop(); B.db.data.notes.delete('ar1'); B.db.data.sync.set('quarantine:n:ar1',{k:'quarantine:n:ar1', raw:{...doc, id:'ar1'}, reason:'shape', seen:{rev:doc.rev, srv:doc.srv}, at:1});
+  B.db.data.sync.set('meta:n:ar1',{k:'meta:n:ar1', lrev:0, baseLrev:0, base:null, err:'damaged'});
+  B.db.data.sync.set('quarantine:n:bad1',{k:'quarantine:n:bad1', raw:{id:'bad1', title:5, blocks:[], created:1, updated:1, rev:1, srv:doc.srv}, reason:'shape', seen:{rev:1, srv:doc.srv}, at:1});
+  await B.sync.reload(); await B.sync.start(); await idle(B);
+  const back=B.db.get('notes','ar1'), meta=B.db.get('sync','meta:n:ar1');
+  const seen2=B.db.get('sync','seen:n:ar1');
+  ok('8b at start the quarantined note passes the current normalizer: it is read from the cloud again against the kept seen record (the same revision counts as fresh), stored with col 0; the quarantine and the mark are gone', !!seen && !!back && back.blocks.find(b=>b.id==='k0').col===0 && !B.db.get('sync','quarantine:n:ar1') && !(meta && meta.err) && logs(B,'recheck','ar1').length===1 && logs(B,'unquarantine','ar1').length===1 && !!seen2 && seen2.rev===doc.rev && !logs(B,'recreated','ar1').length);
+  ok('8c a quarantined document that still fails stays in quarantine', !!B.db.get('sync','quarantine:n:bad1') && !logs(B,'recheck','bad1').length && !logs(B,'unquarantine','bad1').length); }
+
+// the state an older normalizer left: the cloud document in quarantine with its seen record, the note marked; what the device had before stays
+const quarantined=(d,id,doc)=>{ d.db.data.sync.set('quarantine:n:'+id,{k:'quarantine:n:'+id, raw:{...doc, id}, reason:'shape', seen:{rev:doc.rev, srv:doc.srv}, at:1}); d.db.data.sync.set('seen:n:'+id,{k:'seen:n:'+id, rev:doc.rev, srv:doc.srv});
+  const m=d.db.get('sync','meta:n:'+id)||{k:'meta:n:'+id, lrev:0, baseLrev:0, base:null}; d.db.data.sync.set('meta:n:'+id,{...m, err:'damaged'}); };
+const areaNote=(cloud,id)=>cloud.write('notes',{id, title:'з областю', blocks:[{id:'ar',row:2,fx:0.2,kind:'area',cw:20,ch:6},{id:'k0',row:0,parent:'ar',text:'перша колонка'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+
+/* ── 8d. the read after the restart fails (no network, then a refused read): the quarantined copy, the seen record and the read stay; the next
+   start reads the document and the note comes back ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const B=await mk(cloud,'B'); const doc=areaNote(cloud,'ar2'); await idle(B);
+  B.sync.stop(); B.db.data.notes.delete('ar2'); B.db.data.sync.set('meta:n:ar2',{k:'meta:n:ar2', lrev:0, baseLrev:0, base:null}); quarantined(B,'ar2',doc);   // as after «Прибрати нотатки з пристрою» and a sign-in
+  for(const op of ['get','page','totals','scan']) cloud.fault('fail',{dev:'B', op, n:1000}); cloud.fault('fail',{dev:'B', op:'listen', n:1000});
+  await B.sync.reload(); await B.sync.start(); await idle(B);
+  const kept=()=>{ const q=B.db.get('sync','quarantine:n:ar2'), sn=B.db.get('sync','seen:n:ar2'), m=B.db.get('sync','meta:n:ar2'); return !!q && !!q.raw && q.raw.rev===doc.rev && q.recheck===true && !!sn && sn.rev===doc.rev && !!B.db.get('sync','refetch:n:ar2') && !B.db.get('notes','ar2') && !!m && m.err==='damaged'; };
+  ok('8d no read passes after the restart: the quarantined copy (marked for the recheck), the seen record, the read to do and the mark all stay; no note yet', kept() && logs(B,'refetch-error','ar2').length>=1 && !logs(B,'unquarantine','ar2').length);
+  B.sync.stop(); cloud.faults.length=0; for(const op of ['get','page']) cloud.fault('fail',{dev:'B', op, n:1000, code:'permission-denied'}); cloud.fault('fail',{dev:'B', op:'listen', n:1000, code:'permission-denied'});
+  await B.sync.reload(); await B.sync.start(); await idle(B);
+  ok('8e the next start meets a refused read: still nothing lost, the recheck is not marked twice', kept() && logs(B,'recheck','ar2').length===1);
+  B.sync.stop(); cloud.faults.length=0; await B.sync.reload(); await B.sync.start(); await idle(B);
+  const back=B.db.get('notes','ar2'), m=B.db.get('sync','meta:n:ar2');
+  ok('8f with the network back the document is read and applied: the note with col 0, the quarantine, the read and the mark gone in that step', !!back && back.blocks.find(b=>b.id==='k0').col===0 && !B.db.get('sync','quarantine:n:ar2') && !B.db.get('sync','refetch:n:ar2') && !(m && m.err) && logs(B,'unquarantine','ar2').length===1); }
+
+/* ── 8g. the cloud document was recreated meanwhile (a lower revision, a clearly newer server time): the kept seen record recognizes it, so it is
+   merged with the note here, with and without a local edit waiting, instead of being taken for the base and written over ── */
+for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_000_000}); const B=await mk(cloud,'B'), id='rc'+(+local);
+  cloud.write('notes',{id, title:'', blocks:[{id:'b',row:1,fx:0,text:'перший текст'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); await idle(B);
+  B.sync.stop(); cloud.advance(2000); const doc2=cloud.write('notes',{id, title:'', blocks:[{id:'b',row:1,fx:0,text:'друга ревізія'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  quarantined(B,id,doc2);   // the note here stays at rev 1, as when rev 2 was refused
+  cloud.advance(5000); cloud.rewrite('notes',id,{title:'', blocks:[{id:'n',row:3,fx:0,text:'відновлений текст'}], created:cloud.now(), updated:cloud.now(), v:1, rev:1, dev:'phone', op:'r1', rcpt:{phone:'r1'}});
+  if(local) await B.sync.writeLocal(id,(C,m,t)=>({...C, blocks:[{...C.blocks[0], text:'локальна правка'}], updated:t}));
+  await B.sync.reload(); await B.sync.start(); await idle(B);
+  const here=B.db.get('notes',id), up=cloud.doc('notes',id), texts=n=>(n && n.blocks||[]).map(b=>b.text).sort().join('|'), want=local? 'відновлений текст|локальна правка' : 'відновлений текст|перший текст';
+  ok('8'+(local? 'h' : 'g')+' the recreated document '+(local? 'and a local edit waiting' : 'with no local edit')+': recognized as recreated, merged with the note here; the recreated text is here and stays in the cloud ('+texts(here)+' / '+texts(up)+'), the quarantine gone', logs(B,'recreated',id).length>=1 && texts(here)===want && texts(up)===want && up.rev===2 && !B.db.get('sync','quarantine:n:'+id) && !B.sync.jobs().length); }
+
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
