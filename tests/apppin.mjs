@@ -89,6 +89,21 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('7b a newer copy without «pinned» unpins it ('+await listText(pg)+')', !/\[/.test(await listText(pg)) && !(await stored(pg,'n1')).pinned);
   await load(pg,[{...NOTES[2], pinned:Date.now(), updated:Date.now()+2000}]);
   ok('7c a newer copy with «pinned» pins it ('+await listText(pg)+')', /^\[Закріплені\],n3,\[Інші\]/.test(await listText(pg)) && (await stored(pg,'n3')).pinned>0);
+
+  // 7d the keyboard: Tab from the item reaches the pin first; Enter and Space toggle it, keep the focus on it and do not open the note
+  await open(pg,'n1'); await pg.waitForTimeout(300); const item=pg.locator('#list .item[data-id="n2"]');
+  await item.focus(); await pg.keyboard.press('Tab'); const f1=await pg.evaluate(()=>document.activeElement.className);
+  await pg.keyboard.press('Enter'); await pg.waitForTimeout(400); const k1=!!(await stored(pg,'n2')).pinned, f2=await pg.evaluate(()=>document.activeElement.className+'@'+(document.activeElement.closest('.item')||{dataset:{}}).dataset.id);
+  await pg.keyboard.press(' '); await pg.waitForTimeout(400);
+  ok('7d Tab → «'+f1+'»; Enter pins «Покупки» (focus on '+f2+'), Space unpins it; «Ключі» stays open', f1==='it-p' && k1 && f2==='it-p on@n2' && !(await stored(pg,'n2')).pinned && await cur(pg)==='n1');
+
+  // 7e a pin or an unpin that missed IndexedDB lands in localStorage and moves in at the next start, with no backup copy
+  const fbKeys=()=>pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')).length);
+  const viaFallback=async(id)=>{ await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); }); await btn(pg,id,'.it-p'); const k=await fbKeys();
+    await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await pg.reload(); await ready(pg); await until(async()=>!(await fbKeys())); await pg.waitForTimeout(300); return k; };
+  const kp=await viaFallback('n2'), sp=await stored(pg,'n2'), lp=await listText(pg);
+  const ku=await viaFallback('n2'), su=await stored(pg,'n2'), lu=await listText(pg);
+  ok('7e pinned through localStorage ('+kp+' key): stored pinned after a reload ('+lp+'); unpinned the same way ('+ku+' key): stored without it ('+lu+'); no backup notes', kp===1 && sp.pinned>0 && lp.startsWith('[Закріплені],n2,') && ku===1 && !su.pinned && !lu.includes(',n2,[') && (await pg.locator('#list .item').count())===3);
   console.log(errs.length? errs.join('\n') : '✓ desktop: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
@@ -100,6 +115,16 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('8a pinned in A, B shows the group: '+await listText(B), await listText(B)==='[Закріплені],n2,[Інші],n1,n3');
   await btn(A,'n2','.it-p'); await until(async()=>!(await listText(B)).includes('['));
   ok('8b unpinned in A, B drops it: '+await listText(B), await listText(B)==='n1,n2,n3' || await listText(B)==='n2,n1,n3');
+  // 8c A edits a pinned note while B unpins it: A's write merges over the unpin, and its message to B carries the stored result, not A's old pin
+  await btn(A,'n2','.it-p'); await until(async()=>(await listText(B)).startsWith('[Закріплені]')); await open(A,'n2'); await A.waitForTimeout(300);
+  await A.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });
+  await A.locator('#sheet .blk .txt').first().click(); await A.keyboard.press('End'); await A.keyboard.type(' 2%'); await A.keyboard.press('Escape'); await A.waitForTimeout(500);   // A's write waits at the gate
+  await B.bringToFront(); await btn(B,'n2','.it-p'); await until(async()=>!(await stored(B,'n2')).pinned);
+  await A.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await until(async()=>(await stored(A,'n2')).blocks.some(b=>/2%$/.test(b.text))); await B.waitForTimeout(800);
+  const s8=await stored(B,'n2');
+  ok('8c A\'s edit is stored without the pin, and B still lists it unpinned: '+await listText(B), !s8.pinned && s8.blocks.some(b=>/2%$/.test(b.text)) && !(await listText(B)).includes('['));
+  await open(B,'n2'); await B.locator('#sheet .blk .txt').first().click(); await B.keyboard.press('End'); await B.keyboard.type('!'); await B.keyboard.press('Escape'); await B.waitForTimeout(800);
+  ok('8d B\'s next edit does not write the pin back', !(await stored(B,'n2')).pinned && (await stored(B,'n2')).blocks.some(b=>/2%!$/.test(b.text)));
   console.log(errs.length? errs.join('\n') : '✓ tabs: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
