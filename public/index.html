@@ -1073,15 +1073,6 @@ let SYNC=null, driveT=null, driving=false;
 const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; if(n.deleted) o.deleted=n.deleted; if(n.archived) o.archived=n.archived; if(n.pinned) o.pinned=n.pinned; if(n.revived) o.revived=n.revived; return o; };
 // a stored record taken into the note in memory: the optional fields the record lacks go too
 const OPT_FIELDS=['deleted','archived','pinned','revived'], takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
-// two copies of a note that differ by nothing but the pin: nothing on the sheet differs, so taking the other one needs no redraw and keeps the caret and the undo steps
-const pinOnly=(a,b)=>SC.sameDoc({...noteSnap(a), pinned:0}, {...noteSnap(b), pinned:0});
-const takePin=(n,r)=>{ if(r.pinned) n.pinned=r.pinned; else delete n.pinned; n.updated=r.updated; };
-// no write of the note is in flight, failed or reviving: typing may go on, since the next write starts from the note in memory (the pin included)
-const quiet=n=>!inflight.has(n.id) && !REVIVING.has(n.id) && !unsaved.has(n.id);
-// the stored record moved only by the pin since this tab last knew it (its editor snapshot): a write in flight carries the note in memory ahead of the store, so that copy is no measure
-const pinMoved=(n,r)=>{ const E=ESNAP.get(n.id); return pinOnly(n, r) || !!(E && pinOnly(E.note, r)); };
-// a change to redraw at the safe point; one that moved only the pin is marked so, and shows no «Є зміни» strip (a later real change replaces the mark)
-function pend(id, po, src, fallback){ const p=PENDING.get(id); PENDING.set(id, po? (p||{...(src||fallback), pin:true}) : (src || (p && !p.pin? p : fallback))); }
 const snapFor=id=>{ const e=ESNAP.get(id); return e? {...e.note, at:e.at} : null; };   // for vcapture: the state before the edit
 function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow()}); if(lrev!=null) LREV.set(id,lrev); }
 // the editor's delta: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else merge3
@@ -1103,9 +1094,7 @@ function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=
 const keptView=()=>LOCK==='epoch';   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's data comes onto it, by any path
 async function takeStored(id, src){ if(keptView() || DYING) return; const st=await SYNC.state(id); if(keptView() || !st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
-  const po=!!n && pinOnly(n, r);
-  if(po && quiet(n)){ takePin(n, r); LREV.set(id,lrev); PENDING.delete(id); if(n===cur) setSnap(id, n, lrev); relist(); chgUI(); return; }   // only the pin moved, or nothing
-  if(n && (busy(n) || (n===cur && fieldActive()))){ pend(id, po || pinMoved(n, r), src, srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
+  if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
   takeRec(n, r); LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id);
   if(n===cur){ setSnap(id, n, lrev); redrawCur(n); } else { liveLinks(sheet); renderBacklinks(); }
@@ -1120,7 +1109,7 @@ function redrawCur(n){ const tb=tempBlock(), spot=tb && !tb.parent? {col:tb.col,
 // the strip «Є зміни з {device} · Оновити»: the open note has a change waiting in storage, and the wait is for the caret (or for an unsaved write), not
 // for a write in flight, which resolves itself in a moment. «Оновити» saves what is typed and takes the caret out: the safe point follows
 const chgStrip=$('chgStrip'), chgMsg=$('chgMsg'), chgApply=$('chgApply');
-function chgUI(){ const src=cur && !LOCK? PENDING.get(cur.id) : null, show=!!src && !src.pin && (fieldActive() || unsaved.has(cur.id)), rc=!show && !!cur && !LOCK && RECEIPTS.has(cur.id); chgStrip.hidden=!show; rcStrip.hidden=!rc; app.classList.toggle('chg', show || rc);   // rc: the receipts strip of the account code, in the same place
+function chgUI(){ const src=cur && !LOCK? PENDING.get(cur.id) : null, show=!!src && (fieldActive() || unsaved.has(cur.id)), rc=!show && !!cur && !LOCK && RECEIPTS.has(cur.id); chgStrip.hidden=!show; rcStrip.hidden=!rc; app.classList.toggle('chg', show || rc);   // rc: the receipts strip of the account code, in the same place
   if(show) chgMsg.textContent=src.tab? loc('sync.changesTab') : src.dn? loc('sync.changesFrom',{device:src.dn}) : loc('sync.changesDevice'); }
 chgApply.addEventListener('click',()=>{ if(!cur) return; flushSave(); const a=document.activeElement; if(a && a!==document.body && a.blur) a.blur(); setTimeout(flushPending,0); });   // an explicit blur: a tap does not move the focus on iOS
 // a safe point: the open note is not being edited, nothing is in flight and the caret is not in one of its fields (a redraw would take the field
@@ -1436,7 +1425,7 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, p
     const done=cls==='it-p'? pinNote(n, !n.pinned) : cls==='it-r'? side() : del();
     if(e.detail===0) Promise.resolve(done).then(()=>keepFocus(n.id, cls, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
   d.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, at)); } }); }   // Enter and Space on a nested button are that button's
-function focusItem(id, cls){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus(); const b=cls && it.querySelector('.'+cls); if(b) b.focus(); return true; }   // the item first: it shows its buttons
+function focusItem(id, cls){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }   // the item first: it shows its buttons
 // after a key on an item or its button the focus goes to the same button in the note's new place, or, when the note left the list, to the item now in
 // its place. An action that took the focus itself (a dialog, the next note's field) keeps it
 function keepFocus(id, cls, at){ const a=document.activeElement; if(a && a!==document.body) return; if(focusItem(id, cls)) return; const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus(); }
@@ -1765,8 +1754,8 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
-    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D), pin=!same && pinOnly(r.note, D); n.updated=r.note.updated; if(pin) takePin(n, r.note); else if(!same){ takeRec(n, r.note); const p=PENDING.get(n.id); if(!p || p.pin){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point; a pin merged in is taken alone, keeping what was typed meanwhile
-        setSnap(n.id, same? D : pin? noteSnap(r.note) : D, same||pin? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(pin) renderList(); else if(!same) updateItem(n); }   // a result that differs only by the pin (merged over another tab's pin) is the new snapshot: nothing to redraw
+    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
+        setSnap(n.id, same? D : D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if((r.note.pinned||0)!==(D.pinned||0)) renderList(); else updateItem(n); } }   // a pin the merge brought moves the note between the groups now
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
@@ -1826,9 +1815,13 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
 /* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
-function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return; if(n===cur) flushSave(); const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  const whole=ESNAP.has(n.id) && (n===cur || unsaved.has(n.id) || FELL.has(n.id));   // edits made here that the store may lack (a failed or localStorage write) go in the same write, so the pin never takes their place
-  writeNote(n, whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); renderList(); }
+function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
+  // the pin never takes the place of an edit the store may lack: a failed write is retried with its own delta, which reads the note (the pin included);
+  // the open note and a note with a localStorage leftover go whole, through the editor delta, in one write
+  const u=unsaved.get(n.id), whole=!u && ESNAP.has(n.id) && (n===cur || FELL.has(n.id));
+  if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
+  const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
+  writeNote(n, u? u.delta : whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); renderList(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
@@ -1859,9 +1852,7 @@ function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; con
   const mine=LREV.get(r.id), known=lrev!=null && mine!=null;   // both lrevs known: the newer wins, equal ones compare by time (a record written past the core)
   if(known? (lrev<mine || (lrev===mine && (r.updated||0)<=(n.updated||0))) : (r.updated||0)<=(n.updated||0)) return;
   VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
-  const po=pinOnly(n, r);
-  if(po && quiet(n)){ takePin(n, r); setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); renderList(); return; }   // only the pin moved, or nothing
-  if(db.backend==='idb' && (busy(n) || (n===cur && fieldActive()))){ pend(n.id, po || pinMoved(n, r), null, {tab:true}); chgUI(); return; }   // the pending write merges over the stored record; the redraw waits for the safe point
+  if(db.backend==='idb' && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(n.id, PENDING.get(n.id)||{tab:true}); chgUI(); return; }   // the pending write merges over the stored record; the redraw waits for the safe point
   if(busy(n)) return;   // without IndexedDB only one tab writes, so this does not happen
   takeRec(n, r); setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); undoStacks.delete(n.id);   // undo steps were made on the old copy; with the lrev the snapshot equals the record, so the next write takes the short path
   if(n===cur) redrawCur(n); else { liveLinks(sheet); renderBacklinks(); }   // another note may be renamed, or link here now

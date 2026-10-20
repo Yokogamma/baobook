@@ -112,6 +112,13 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('7e2 the edit went to localStorage ('+k2+' key); the pin stored it with the pin ('+s2.blocks.map(b=>b.text).join(' | ')+'), the key is gone and the sheet still shows it', k2===1 && s2.pinned>0 && s2.blocks.some(b=>/ сир$/.test(b.text)) && !(await fbKeys()) && /сир/.test(await pg.locator('#sheet').innerText()));
   await btn(pg,'n2','.it-p');
 
+  // 7e3 a new note whose import failed waits in memory as unsaved; a pin retries that import with the pin, so the note is stored, not dropped
+  await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await load(pg,[{id:'nx',title:'Не збережена',blocks:[{id:'x1',row:2,text:'чекає',fx:0.2}],created:1,updated:Date.now()}]);
+  const w1=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden); await pg.evaluate(()=>{ sheetDebug.failSave=false; });
+  await btn(pg,'nx','.it-p'); await pg.reload(); await ready(pg); await pg.waitForTimeout(300); const sx=await stored(pg,'nx');
+  ok('7e3 the failed import showed the warning ('+w1+'); after the pin and a reload the note is stored and pinned ('+await listText(pg)+')', w1 && sx && sx.pinned>0 && sx.blocks.some(b=>b.text==='чекає') && (await listText(pg)).startsWith('[Закріплені],'));
+  await btn(pg,'nx','.it-x');
+
   // 7f an edit of a pinned note that missed IndexedDB: at the next start the older stored version is kept as a backup copy, and the copy is not pinned
   await open(pg,'n3'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
   await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type(' нове'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
@@ -147,29 +154,26 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('8c A\'s edit is stored without the pin, and B still lists it unpinned: '+await listText(B), !s8.pinned && s8.blocks.some(b=>/2%$/.test(b.text)) && !(await listText(B)).includes('['));
   await open(B,'n2'); await B.locator('#sheet .blk .txt').first().click(); await B.keyboard.press('End'); await B.keyboard.type('!'); await B.keyboard.press('Escape'); await B.waitForTimeout(800);
   ok('8d B\'s next edit does not write the pin back', !(await stored(B,'n2')).pinned && (await stored(B,'n2')).blocks.some(b=>/2%!$/.test(b.text)));
-  // 8g A's write is in flight while B pins: no strip in A, and when A's write merges over the pin, A lists the note pinned with its button pressed
+  // 8g A's write is in flight while B pins: A's write merges over the pin, and A lists the note pinned with its button pressed
   await A.bringToFront(); await open(A,'n3'); await A.waitForTimeout(300); await A.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });
-  await A.locator('#sheet .blk .txt').first().click(); await A.keyboard.press('End'); await A.keyboard.type(' 3%'); await A.waitForTimeout(500); await A.evaluate(()=>{ document.querySelector('#sheet .blk').__mark=1; });
+  await A.locator('#sheet .blk .txt').first().click(); await A.keyboard.press('End'); await A.keyboard.type(' 3%'); await A.waitForTimeout(500);
   await B.evaluate(()=>document.querySelector('#list .item[data-id="n3"] .it-p').click()); await until(async()=>(await stored(B,'n3')).pinned>0); await A.waitForTimeout(400);
-  const strip8=await A.evaluate(()=>document.getElementById('app').classList.contains('chg'));
   await A.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await until(async()=>(await stored(A,'n3')).blocks.some(b=>/3%$/.test(b.text))); await A.waitForTimeout(400);
-  const g8=await A.evaluate(()=>({mark:document.querySelector('#sheet .blk').__mark===1, strip:document.getElementById('app').classList.contains('chg'), on:!!document.querySelector('#list .item[data-id="n3"] .it-p.on')}));
-  ok('8g no strip while A\'s write waited ('+strip8+'); after it: '+JSON.stringify(g8)+', A lists '+await listText(A), !strip8 && g8.mark && !g8.strip && g8.on && (await listText(A)).startsWith('[Закріплені],n3') && (await stored(A,'n3')).pinned>0);
+  const on8=await A.evaluate(()=>!!document.querySelector('#list .item[data-id="n3"] .it-p.on'));
+  ok('8g A\'s edit and B\'s pin are both stored, and A lists the note pinned with its button pressed ('+await listText(A)+')', on8 && (await listText(A)).startsWith('[Закріплені],n3') && (await stored(A,'n3')).pinned>0 && (await stored(A,'n3')).blocks.some(b=>/3%$/.test(b.text)));
   await A.keyboard.press('Escape'); await A.waitForTimeout(500);
-  ok('8h the caret left: still no redraw', await A.evaluate(()=>document.querySelector('#sheet .blk').__mark===1) && !(await A.evaluate(()=>document.getElementById('app').classList.contains('chg'))));
-  // 8i A is typing (the autosave not yet run, or just run) while B unpins: no strip, no redraw, and A's text and B's unpin are both stored
+  ok('8h the caret left: the sheet shows the stored text, nothing is waiting', /3%/.test(await A.locator('#sheet').innerText()) && !(await A.evaluate(()=>document.getElementById('app').classList.contains('chg'))));
+  // 8i A is typing (the autosave not yet run, or just run) while B unpins: A's text and B's unpin are both stored
   await A.locator('#sheet .blk .txt').first().click(); await A.keyboard.press('End'); await A.keyboard.type(' 4'); await B.evaluate(()=>document.querySelector('#list .item[data-id="n3"] .it-p').click());
-  await until(async()=>!(await stored(B,'n3')).pinned); await A.waitForTimeout(300); const strip9=await A.evaluate(()=>document.getElementById('app').classList.contains('chg'));
+  await until(async()=>!(await stored(B,'n3')).pinned); await A.waitForTimeout(300);
   await A.keyboard.press('Escape'); await A.waitForTimeout(800); const s9=await stored(A,'n3');
-  ok('8i no strip while typing ('+strip9+'), no redraw; stored «'+s9.blocks.map(b=>b.text).join(' | ')+'», pinned '+!!s9.pinned+'; A lists '+await listText(A), !strip9 && await A.evaluate(()=>document.querySelector('#sheet .blk').__mark===1) && s9.blocks.some(b=>/3% 4$/.test(b.text)) && !s9.pinned && !(await listText(A)).includes('[З'));
+  ok('8i stored «'+s9.blocks.map(b=>b.text).join(' | ')+'», pinned '+!!s9.pinned+'; A lists '+await listText(A), s9.blocks.some(b=>/3% 4$/.test(b.text)) && !s9.pinned && !(await listText(A)).includes('[З'));
 
-  // 8e a pin from the other tab does not redraw the open note: the caret stays in its block, no «Є зміни» strip, the list shows the group
-  await open(A,'n1'); await A.waitForTimeout(300); await A.bringToFront(); await A.locator('#sheet .blk .txt').first().click(); await A.evaluate(()=>{ document.querySelector('#sheet .blk').__mark=1; });
+  // 8e a pin from the other tab while the caret is in A's block: A's next edit keeps the pin, and A lists the note pinned once the caret leaves
+  await open(A,'n1'); await A.waitForTimeout(300); await A.bringToFront(); await A.locator('#sheet .blk .txt').first().click();
   await B.evaluate(()=>{ const it=document.querySelector('#list .item[data-id="n1"]'); it.querySelector('.it-p').click(); }); await until(async()=>(await listText(A)).startsWith('[Закріплені],n1'));
-  await A.waitForTimeout(400); const a8=await A.evaluate(()=>({mark:document.querySelector('#sheet .blk').__mark===1, caret:!!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet .blk .txt')), strip:document.getElementById('app').classList.contains('chg')}));
-  ok('8e pinned in B while A types in it: '+JSON.stringify(a8)+', A lists '+await listText(A), a8.mark && a8.caret && !a8.strip);
   await A.keyboard.press('End'); await A.keyboard.type(' ok'); await A.keyboard.press('Escape'); await A.waitForTimeout(700); const s8f=await stored(A,'n1');
-  ok('8f A\'s next edit keeps the pin ('+s8f.pinned+', «'+s8f.blocks.map(b=>b.text).join(' | ')+'»)', s8f.pinned>0 && s8f.blocks.some(b=>/ ok$/.test(b.text)));
+  ok('8e A\'s next edit keeps B\'s pin ('+s8f.pinned+', «'+s8f.blocks.map(b=>b.text).join(' | ')+'»); A lists '+await listText(A), s8f.pinned>0 && s8f.blocks.some(b=>/ ok$/.test(b.text)) && (await listText(A)).startsWith('[Закріплені],n1'));
   console.log(errs.length? errs.join('\n') : '✓ tabs: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
@@ -185,12 +189,12 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('9c unpinned on B: gone from the cloud document and from A\'s group', !('pinned' in cloud.doc('notes',id)) && !(await stored(A.pg,id)).pinned && !(await listText(A.pg)).includes('['));
   const copies=(await A.pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('versions','readonly').objectStore('versions').getAll(); g.onsuccess=()=>{ d.close(); res(g.result.filter(v=>v.reason==='copy').length); }; }; })));
   ok('9d no conflict copies ('+copies+'); status «'+await A.pg.evaluate(()=>sheetDebug.sync.status.code)+'»', copies===0 && await A.pg.evaluate(()=>sheetDebug.sync.status.code)==='synced');
-  // 9e a pin from the other device does not redraw the open note: the caret stays, no strip
+  // 9e a pin from the other device while A has the caret in the note: A lists it pinned once the caret leaves, and the text is untouched
   await A.pg.bringToFront(); await A.pg.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"]').click(), id); await A.pg.waitForTimeout(300);
-  await A.pg.locator('#sheet .blk .txt').first().click(); await A.pg.evaluate(()=>{ document.querySelector('#sheet .blk').__mark=1; });
+  await A.pg.locator('#sheet .blk .txt').first().click();
   await B.pg.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"] .it-p').click(), id); await settle(B.pg); await settle(A.pg,600); await settle(A.pg);
-  const a9=await A.pg.evaluate(()=>({mark:document.querySelector('#sheet .blk').__mark===1, caret:!!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet .blk .txt')), strip:document.getElementById('app').classList.contains('chg')}));
-  ok('9e pinned on B while A has the caret in it: '+JSON.stringify(a9)+', A lists '+await listText(A.pg), a9.mark && a9.caret && !a9.strip && (await listText(A.pg)).startsWith('[Закріплені],'+id));
+  await A.pg.keyboard.press('Escape'); await A.pg.waitForTimeout(500); await settle(A.pg);
+  ok('9e pinned on B while A had the caret in it: A lists '+await listText(A.pg)+', stored pinned with its text', (await listText(A.pg)).startsWith('[Закріплені],'+id) && (await stored(A.pg,id)).pinned>0 && /нотатка для закріплення/.test(await A.pg.locator('#sheet').innerText()));
   const errs=[...A.errs, ...B.errs]; console.log(errs.length? errs.join('\n') : '✓ devices: no errors'); if(errs.length) fails++;
   await A.close(); await B.close(); }
 
