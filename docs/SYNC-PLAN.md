@@ -1,6 +1,6 @@
 # Sync between devices and Google sign-in
 
-**Status: approved plan; PR 0 ([#55](https://github.com/Yokogamma/baobook/pull/55), released by [#58](https://github.com/Yokogamma/baobook/pull/58)) and PR 1 ([#61](https://github.com/Yokogamma/baobook/pull/61), released by [#62](https://github.com/Yokogamma/baobook/pull/62) on 2026-10-18) are done and in production (the PR 1 row in §5 names what differs); PR 2 is built (its row in §5 names what differs); PR 3 is split in three: 3a (the cloud infrastructure) and 3b (sign-in and the account) are built, their row in §5 names what differs; 3c (the owner's uid in the rules) is in and the owner publishes the rules (§6); PR 4–5 are not implemented yet; the manual checks of 3b are in [SYNC-CHECKLIST.md](SYNC-CHECKLIST.md).** Approved on 2026-10-16 after five review rounds (issue [#18](https://github.com/Yokogamma/baobook/issues/18)) and amended on 2026-10-17 with the free-quota estimate ([#56](https://github.com/Yokogamma/baobook/issues/56)), an independent design review and the owner's answers to it. PR 0, the storage groundwork ([#55](https://github.com/Yokogamma/baobook/pull/55)), ships to production on its own. The rest is built in PR 1–4. PR 5 updates this document to match what was actually built. The earlier plan («Чистий аркуш», September 2026) is in the git history of this file.
+**Status: approved plan; PR 0 ([#55](https://github.com/Yokogamma/baobook/pull/55), released by [#58](https://github.com/Yokogamma/baobook/pull/58)) and PR 1 ([#61](https://github.com/Yokogamma/baobook/pull/61), released by [#62](https://github.com/Yokogamma/baobook/pull/62) on 2026-10-18) are done and in production (the PR 1 row in §5 names what differs); PR 2 is built (its row in §5 names what differs); PR 3 is split in three: 3a (the cloud infrastructure) and 3b (sign-in and the account) are built, their row in §5 names what differs; 3c (the owner's uid in the rules) is in and the owner published the rules on 2026-10-20; PR 4 is planned in three parts, 4a–4c (§4.9, §4.11, §4.18, §4.19, §5.1), and waits for the owner's approval; PR 5 is not implemented yet; the manual checks of 3b are in [SYNC-CHECKLIST.md](SYNC-CHECKLIST.md).** Approved on 2026-10-16 after five review rounds (issue [#18](https://github.com/Yokogamma/baobook/issues/18)) and amended on 2026-10-17 with the free-quota estimate ([#56](https://github.com/Yokogamma/baobook/issues/56)), an independent design review and the owner's answers to it. PR 0, the storage groundwork ([#55](https://github.com/Yokogamma/baobook/pull/55)), ships to production on its own. The rest is built in PR 1–4. PR 5 updates this document to match what was actually built. The earlier plan («Чистий аркуш», September 2026) is in the git history of this file.
 
 Mockups of the interface: a private claude.ai page owned by the project owner (ask for access).
 
@@ -79,8 +79,8 @@ IndexedDB `sheet` v3 adds the store `sync` (key path `k`). The stores `notes`, `
 | `format` | data format number (3); older code reads it to see that the data is newer (§4.14) |
 | `owner` | {env, uid, email}; survives sign-out |
 | `epoch` | random id of the local set; changes on clearing and on **any** change of owner |
-| `meta:n:{id}`, `meta:v:{id}` | `lrev`, the base (the full confirmed cloud state with `rev`, `srv`, `tsrv`), `baseLrev`, loop-guard counters |
-| `out:n:{id}`, `out:v:{id}` | queue job {tries, next, err} |
+| `meta:n:{id}`, `meta:v:{id}` | `lrev`, the base (the full confirmed cloud state with `rev`, `srv`, `tsrv`), `baseLrev`, loop-guard counters; a version's also `wait` (a document waiting for its note), `local` (`big` or `partial`: this named version stays on the device, §4.9) and `err` |
+| `out:n:{id}`, `out:v:{id}` | queue job {tries, next, err}; `tomb` for a tombstone (a note's «forever», a version's «Видалити версію») |
 | `try:n:{id}`, `try:v:{id}` | immutable attempt: {op, expect, result, sentLrev, epoch} |
 | `refetch:n:{id}`, `refetch:v:{id}` | «read this document from the server again» |
 | `seen:n:{id}`, `seen:v:{id}` | {rev, srv, after?}: the newest cloud state this device knows for the id (from a page, the listener, a server read, or its own accepted attempt), whether or not the document was applied; ordered by rule 1 of §4.6. After an own accepted attempt `srv` is unknown until the echo, and `after` holds the `srv` of the state it wrote over. Kept forever; the local side of the totals check |
@@ -258,15 +258,72 @@ Deleting forever with an owner removes the note, its history and blobs locally a
 
 ### 4.9 Named versions
 
-- Naming the current state creates a record with `keep` and `inline`: full bodies from the start.
-- A named old version that lacks a block body is marked «неповна» and stays on the device only. The history shows «текст цього блоку не зберігся» instead of putting today's text there (PR 1).
-- «Назвати», «перейменувати» and «Видалити версію» are one IndexedDB transaction over `versions` + `sync` with an `out:v:` job. Sending follows §4.5.
-- **Created and deleted before the first send:**
-  - no base and no `try:` → delete locally, drop the job, nothing goes to the cloud;
-  - a `try:` → resolve it first: accepted → a tombstone, with `seen` = `expect+1` and `after` (§4.5 step 5); rejected → delete locally.
-- **Rules:** deletion beats renaming, and a deleted version never comes back; creating and renaming need a live note, deleting is always allowed.
-- **Order:** a version is sent only after its note (`base.rev ≥ 1`). A version of a note in `purged:` is not sent, and its cloud copy gets a tombstone.
-- **States:** «у хмарі» (base confirmed), «ще не надіслано», «лише тут: завелика» (over 960 KiB), «лише тут: неповна».
+Planned in detail for PR 4a (§5.1). What exists before it: versions are received (`applyVersionDoc` in `public/sync.js`), and `out:v:` jobs are queued when «Зараз» is named and when a device is bound to an account (`setOwner`), but the engine loads only `out:n:` jobs and nothing sends them; naming a shown version and renaming queue nothing; there is no «Видалити версію».
+
+**What goes to the cloud.** Only a version with a `name` (and so `keep`/`inline`). Automatic records (`base`, `auto`, `import`, `incoming`, `restore`, `conflict`) and conflict copies (`reason: 'copy'`) never go: they stay on the device that made them (§2, §4.19).
+
+**The document** is `{note, t, name, title, blocks}` with the stamp of §4.5 (`v`, `rev`, `op`, `srv`, `dev`, `dn`, `rcpt`), as the rules of §4.16 require (`vlive`). `blocks` are the record's entries without `h`, each with its body in `s` and `r: 1` for rich text: the form `applyVersionDoc` and `normVersion` already read. `t` is the record's `t`. The record's local fields (`keep`, `inline`, `w`, `reason`, `sig`, `size`, `sum`, the record's own `dev`/`dn`) are not sent; the rules refuse `keep` and `inline`. After creation only `name` changes; `t`, `title` and `blocks` never do (the rules refuse it).
+
+**Local operations** are one core call, `SYNC.versionLocal(op)`, one IndexedDB transaction over `versions` + `sync` with the (epoch, env, uid) check of §4.4. `index.html` builds the record as it does now (`vwrite`, with the bodies inline) and passes it in; the core writes it, bumps `meta:v:{id}.lrev` and queues the job. Without an owner the same call only writes the record.
+
+| Operation | From | Effect |
+|---|---|---|
+| `create {rec}` | «Зафіксувати версію…» on «Зараз» | the new named record; a job, unless the version is local-only |
+| `name {id, name, bodies}` | «Назвати цю версію…» on a shown automatic version | the record gets `name`, `keep`, `inline` and the bodies the history still has; a body that is gone leaves the entry without `s`, so the version is «неповна» and local-only |
+| `rename {id, name}` | «Перейменувати версію…» on a shown named version | only `name`; a job if the version is (or will be) in the cloud |
+| `delete {id}` | «Видалити версію» (§4.19 has the dialog) | below |
+
+- **Local-only** is decided when the job would be queued, and never changes afterwards, since the content of a version never changes: `partial` when an entry has no `s` (a named old version that lost a body; the history shows «текст цього блоку не зберігся»), `big` when the document is over 960 KiB (§4.17). Such a version has no job and does not count as waiting; `meta:v:{id}.local` says why. `setOwner` (a first sign-in, «Додати до хмари») uses the same check when it queues the device's named versions.
+- **Deleting:**
+  - no base and no `try:` (never sent, or local-only) → the record, the job and the meta go; nothing goes to the cloud;
+  - a base (the version is in the cloud) → the record goes locally at once (it leaves «Історія»), the job becomes `{tomb: true}`, the meta keeps the base until the tombstone is accepted; then base = the tombstone, `seen` = `expect+1` with `after`;
+  - a `try:` in flight (a create or a rename) → the job becomes `{tomb: true}` and waits for the outcome: accepted → the tombstone goes as the next attempt over `expect+1`; rejected → step 2 reads the cloud and decides below; a refused create (the note was purged meanwhile) → nothing is in the cloud, the job goes.
+
+**Sending** follows §4.5 with `try:v:` and the same receipts. The differences:
+
+1. **Order.** A version job is picked only when its note is in the cloud (`meta:n:{note}.base.rev ≥ 1`) and not in `purged:n:`. Until then it waits without a read and without spending the budget; the accepted attempt of its note wakes it. A version of a purged note drops its job (the record is already gone with the note, §4.7). Notes go first: a version job is picked only when no note job is ready, so what other devices show changes first. Versions share the device pace (one send per 3 s) and the budget; a create or a rename costs one write and, besides the reads of §4.17, the rules' `noteAlive` read, which is counted.
+2. **Prepare** reads `R` as in §4.5 step 2, skipped on the same condition (the listener of `versions` delivered `base.rev`). Versions have no `merge3`: only the name and the deletion can change, and deletion beats renaming:
+   - `R` is a tombstone → the record and the job go here, base = `R`; a rename waiting here is dropped;
+   - `R` is live and newer than the base, and the job here is a tombstone → the tombstone goes over `R.rev`;
+   - `R` is live and newer, and the job here is a rename → the name here goes over `R.rev`: the rename sent last wins on every device (open question 1 of §5.1), with no copy;
+   - `R` exists and there is no base (a resend after the cloud lost the base, or an id collision) → equal `note`, `t`, `title` and `blocks` → base = `R`, and a job only if the names differ; anything else → the record here takes a new id and is queued as a new version;
+   - no `R` and a base → the document vanished past the rules: created again (`expect = 0`), as for notes (§4.5 step 4).
+3. **A refused write** (`permission-denied`) is judged like a note's (§4.5, `refusedWrite`): one check read of the version; a moved revision → rejected, back to step 2; the same revision → one read of the note: absent → an invariant (the note's base said it was there), logged, the job waits for the note's next accepted attempt; purged → the job and the record go (the note's tombstone is on its way here); live → `err: 'invalid'`, «Не синхронізовано» for this version only, the others go on.
+4. **Finish** as §4.5 step 5: accepted → base = the written document, the job goes if `lrev == sentLrev`; an accepted tombstone → the meta keeps the tombstone as base, the record is already gone.
+
+**Receiving** (`applyVersionDoc`) learns the local side, in its one transaction:
+
+- a `try:` → a receipt with `rev == expect+1` finishes it as accepted, otherwise `refetch:`, as for notes;
+- a tombstone → the record goes, a rename waiting here goes, base = the tombstone; a tombstone waiting here is resolved (nothing more to send);
+- live with `rev == base.rev` → only the server fields of the base, as §4.6 rule 2;
+- live and newer, nothing waiting here → the record takes the document (in practice its name);
+- live and newer, a rename waiting here → the record keeps its name, base = the document, the job stays and goes over it;
+- live and newer, a tombstone waiting here → the record stays deleted, base = the document, the tombstone goes over it;
+- **a version of a note in `purged:`** is ignored as now, and with an owner it gets a tombstone job (meta base = the document), so the text of a note deleted forever does not stay in the cloud in its named versions (open question 5). The device that sends a note's tombstone queues the same in the finish transaction of the accepted tombstone, for every version whose live base names that note (`meta:v:` records). Two devices doing it for one version cost one rejected attempt, which then reads the tombstone and stops.
+- After applying, the leader sends `ver {note}` over BroadcastChannel, so a tab with that note's «Історія» open reloads it (today only the leader's own panel does).
+
+**Revival** (§4.7): a named version of the original that never reached the cloud (no base) moves with the text into the revived note (`note` = the revived id; its job stays; the cloud document does not exist yet, so the rule that a version keeps its note does not apply); one already in the cloud goes with the original (open question 3).
+
+**Import** with an owner: a named version from the file whose id has a tombstone here (`meta:v:{id}.base.deleted`) is skipped, so a deleted version never comes back from an old export; an unknown id is queued as a new version (with the local-only check); a known live one is left as it is. Conflict copies and automatic records import as now, local only.
+
+**States** in «Історія», on the rows of named versions, only when the device has an owner:
+
+| State | When |
+|---|---|
+| у хмарі | a live base, no job, no `try:` |
+| ще не надіслано | a job or a `try:`, also while it waits for its note |
+| лише тут: завелика | `local: 'big'` |
+| лише тут: неповна | `local: 'partial'` |
+| не синхронізовано | `err: 'invalid'` |
+
+The core answers them through `SYNC.versionStates(note)` (one read transaction over `meta:v:`, `out:v:` and `try:v:` of the note's versions); the status of §4.18 counts the jobs and attempts of both streams.
+
+**The rules of §4.16 are enough for this; PR 4 changes none.** Checked against `firestore.rules` and `tests/rules/firestore.mjs`:
+- deletion beats renaming: an update over a version with `deleted` is refused, so a rename sent after a tombstone is rejected and its device takes the tombstone (step 2); a tombstone sent after a rename is rejected on `rev`, reads the rename and goes over it;
+- a deleted version never comes back: a tombstone is final (`!('deleted' in resource.data)`), and a create over an existing id is an update, refused by the same condition; `allow delete: if false`;
+- creating and renaming need a live note (`noteAlive`: the note exists and has no `purged`); a note in the trash is enough; deleting is always allowed, also after the note is purged;
+- a rename changes only `name` and the stamp (`affectedKeys().hasOnly`), and keeps `note`.
+PR 4a adds two rules tests: a create-shaped write (`rev` 1) over an existing tombstone is refused, and a tombstone of a version whose note is in the trash is allowed. The test cloud (`tests/lib/cloud.mjs`) gains the checks it lacks for versions: a rename that changes anything but `name` and a tombstone that changes `note` are refused.
 
 ### 4.10 Tabs and the open note
 
@@ -298,6 +355,14 @@ Deleting forever with an owner removes the note, its history and blobs locally a
   3. BroadcastChannel, release the lock, `signOut()`, `terminate()`.
   The owner and the queue stay.
 - **«Прибрати нотатки з пристрою»** is a change of owner to «nobody»: a new epoch, everything erased. The dialog lists what is not in the cloud and offers an export with history.
+- **The account panel** (PR 4c). Today the account is a row in the gear menu (the email, the status line, «Увійти через Google» / «Вийти», «Прибрати нотатки з пристрою») and the cloud button only says its status in a toast. PR 4c adds a panel «Обліковий запис»: a dialog on a computer, a bottom sheet on a phone with its own history entry (Back closes it), opened by the cloud button and by the account row of the menu. It reads the leader's state (mirrored in other tabs by `st`, which gains the fields below) and the store; it never reads the cloud. From the top:
+  1. The email of the signed-in account, or of the owner when signed out («Вийшли»).
+  2. The status of §4.18 with one sentence of explanation for its code («Зміни з цього пристрою ще не дійшли до хмари», «Перевіряю, чи хмара має все, що бачив цей пристрій»…). For «Не синхронізовано» a list of what is stuck, at most 20 rows, each with its reason (too large, a loop, a damaged record in the cloud, refused by the rules, too many devices) and a link that opens the note.
+  3. Counts, each shown only when not zero: notes waiting, named versions waiting, named versions only on this device (too large or incomplete), notes with conflict copies (a link to the first, §4.19).
+  4. «Перевірено о HH:MM»: the time of the last matching totals check of both collections (§4.6), so «Синхронізовано» has a date.
+  5. Today's use of the device budget (§4.17): «Сьогодні: N читань, M записів із лімітів пристрою» (open question 6).
+  6. «Назва пристрою»: the name other devices see in «Є зміни з {пристрій}», conflict copies and revived notes (`dn`). Editable, up to 80 characters, empty restores the default (the browser and system). It is written to `sheet:settings.devName` and the store's `device` record in one step; the leader's engine takes it before its next write (`checkOwner` already refreshes the device record), the other tabs hear `dev` over BroadcastChannel. Old documents keep the name they were written with.
+  7. The buttons: «Увійти через Google» or «Вийти», «Експортувати з історією», «Прибрати нотатки з пристрою». The menu row stays as it is and opens the panel.
 - **Without IndexedDB** sync is paused.
 - **Keeping the data on an iPhone:** WebKit may erase a site's storage after seven days of Safari use without a visit; an app on the Home Screen has its own counter. With an owner, `navigator.storage.persist()` is also asked at start (now it is asked only after a save), and Safari on an iPhone, outside the installed app, shows once a hint to add Baobook to the Home Screen.
 
@@ -466,22 +531,62 @@ service cloud.firestore {
 
 ### 4.18 Status
 
-| State | When |
-|---|---|
-| no icon | no owner, not signed in |
-| Синхронізовано | signed in; no jobs, attempts, `refetch:` marks or errors for notes and versions; both listeners got a server snapshot and the totals check matched since connecting |
-| Надсилаю… | jobs or attempts, online |
-| Очікую підтвердження | an attempt unresolved for over 30 s while online |
-| Офлайн · N змін чекають | offline; N = jobs and attempts |
-| Не вдалося перевірити доступ | the first read after sign-in failed on the network |
-| Синхронізація за запрошеннями | the rules refused the first read: the account is not on the list |
-| Увійдіть знову | the sign-in must be repeated |
-| Вийшли · N змін чекають | an owner, not signed in |
-| Перевіряю повноту · N | a full pass after a lasting totals mismatch (§4.6); N documents read so far |
-| Ліміт на сьогодні · N змін чекають | the device budget is spent |
-| Не синхронізовано | a lasting error with its reason (too large, loop, damaged record) |
+The full status of PR 4c covers both streams: notes and named versions. What 3b built is a minimal status: the core's `status()` counts only note jobs, its code `checking` (the full pass) is shown as «Перевіряю доступ…» (the account's own `checking`), and «Очікую підтвердження» shows as «Надсилаю…». PR 4c fixes the three.
 
-Icons differ in shape, not only colour. The button has an `aria-label`; on a phone a tap explains the state.
+The core computes the code in the leader tab, the other tabs mirror it (`st`), and the account code of `index.html` puts its own states first. The first row that holds wins:
+
+| Code | Text | When | Icon |
+|---|---|---|---|
+| — | no icon | no owner and not signed in | — |
+| `signingOut` | Завершую надсилання… | sign-out waits for the step in flight (§4.11) | busy |
+| `loading` | Завантажую… | the SDK is loading | busy |
+| `signingIn` | Вхід… | a sign-in is under way | busy |
+| `checking` | Перевіряю доступ… | the access probe or the owner dialog (§4.11) | busy |
+| `denied` | Синхронізація за запрошеннями | the rules refused the first read: the account is not on the list | bad |
+| `open` | База не захищена: правила не опубліковано | the probe's write passed | bad |
+| `unverified` | Не вдалося перевірити доступ | the first read after the sign-in failed on the network | bad |
+| `reauth` | Увійдіть знову | the sign-in must be repeated | bad |
+| `other` | Інший обліковий запис — оберіть дію в іншій вкладці | the owner dialog runs in another tab | bad |
+| `signedOut` | Вийшли · N змін чекають | an owner, not signed in | off |
+| `nospace` | Немає місця на пристрої | receiving stopped for lack of space (§4.6) | bad |
+| `limit` | Ліміт на сьогодні · N змін чекають | the device budget is spent | off |
+| `offline` | Офлайн · N змін чекають | offline | off |
+| `error` | Не синхронізовано · N | a note or a version with `size`, `loop`, `invalid`, `damaged` or `receipts`; N = how many; the panel lists them with their reasons | bad |
+| `scan` | Перевіряю повноту · N | a full pass after a lasting totals mismatch (§4.6); N documents read so far | busy |
+| `waiting` | Очікую підтвердження | an attempt unresolved for over 30 s while online | sending |
+| `sending` | Надсилаю… · N | jobs or attempts of either stream, or `refetch:` marks | sending |
+| `versions` | Отримую версії… | the notes' first catch-up is done and the versions' is still running (§4.17) | busy |
+| `synced` | Синхронізовано | no jobs, attempts, `refetch:` marks or errors in either stream; both listeners got a server snapshot; the totals check of both collections matched since connecting | synced |
+| `pending` | Синхронізація… | anything else (connecting, the first snapshot or check still to come) | busy |
+
+- **N** counts the jobs and attempts of both streams, a note or a version once each. Not counted: a job waiting out its day (an automatic purge the rules refused as early), local-only named versions (§4.9, they have no job), and conflict copies, which never sync.
+- The core's codes are `none`, `denied`, `reauth`, `nospace`, `limit`, `offline`, `unverified`, `error`, `scan` (renamed from `checking`), `waiting`, `sending`, `versions`, `synced` and `pending`; the leader's `st` message carries the code, N, the error count, the time of the last matching totals check and the counts of the panel (§4.11), so a second tab shows the same panel.
+- «Історія» of a note whose versions have not arrived yet (`versions` above, or no versions cursor while the device has an owner) says «версії ще завантажуються» under the list.
+- Icons differ in shape, not only colour (the five shapes 3b drew: a check, an arrow, a slash, an exclamation mark, three dots). The button has an `aria-label` with the text. A press, or a tap on a phone, opens the account panel with the explanation; today's toast goes.
+
+### 4.19 Conflicts in the interface
+
+The owner's decision (§2): conflict copies are kept until the owner removes them; a «N конфлікт» mark on the history button, «Відновити» and «Прибрати» on the copy. Planned for PR 4b (§5.1), with the history actions of named versions from PR 4a.
+
+**What a conflict copy is** (built in PR 1): a record in `versions` with `reason: 'copy'`, `keep: 1`, `inline: 1`, the full bodies, the losing side's `updated`, `dev` and `dn`. A merge makes it (§4.7: `merge3`, `merge0`, a move into a revived note; also two tabs of one device without an owner, §4.10). It lives only on the device that merged: it is never sent (§2), never thinned, not counted in the history budget, not removed by «Очистити історію», and a note in the trash with a copy is not purged automatically (§4.8); «Видалити назавжди» names how many copies go with the note.
+
+**On the screen:**
+
+- **The history button** of the open note shows the number of its copies as a small badge; its `title` and `aria-label` become «Історія · N конфлікт» (plural forms in the language files: «1 конфлікт», «2 конфлікти», «5 конфліктів»). No copies, no badge.
+- **The note list** marks a note with copies by the same small sign after its title, and the account panel counts such notes (§4.11). When a merge in the open note makes a copy, a toast says «Конфлікт із {пристрій}: іншу версію збережено в історії · Показати»; «Показати» opens «Історія» on the copy (open question 4).
+- **The row of a copy** in «Історія» reads «конфліктна копія · {пристрій}» (as now) with the time of the losing side's `updated`, and under it «лише на цьому пристрої».
+- **A shown copy** puts two buttons in the panel's footer instead of «Відновити цю версію»:
+  - «Відновити»: the note takes the copy's state the way «Відновити цю версію» works (the state before becomes «base», the result is written as «restore» from the copy), and the copy is removed, since the conflict is resolved (open question 2); «Скасувати» in the toast brings back both the note and the copy.
+  - «Прибрати»: the copy goes, the badge counts down, and a toast «Копію прибрано · Скасувати» brings it back (the record is kept in memory until the toast goes).
+  «Повернути цей блок» works on a copy as on any version and leaves the copy in place: taking one block resolves nothing on its own.
+- **«⋯» of the panel** gains «Прибрати конфліктні копії (N)» when the note has more than one; it asks in the in-app dialog (`ask()`), with no undo.
+- Removing a copy is local, one IndexedDB transaction over `versions` (no job: copies never sync). Once a note in the trash has no copies left, the automatic purge takes it at its next hourly look (§4.8).
+- The other tabs: the leader's `ver {note}` (§4.9) and a tab's own removal both refresh the badge, the list mark and an open «Історія».
+
+**Named versions in «Історія»** (PR 4a, §4.9):
+- the row of a named version shows its state under the name, only with an owner: «у хмарі», «ще не надіслано», «лише тут: завелика», «лише тут: неповна», «не синхронізовано»;
+- «⋯» on a shown named version: «Перейменувати версію…» (the existing «Назвати цю версію…» takes this label on a named version) and «Видалити версію»;
+- «Видалити версію» asks in the in-app dialog: «Видалити версію «{name}»?» with «Її буде видалено на всіх пристроях.» when the device has an owner, else «Її буде видалено з цього пристрою.»; there is no undo, since the tombstone is final in the cloud. The panel then shows «Зараз».
 
 ## 5. Pull requests (into `main`, checked on .dev)
 
@@ -491,8 +596,68 @@ Icons differ in shape, not only colour. The button has an `aria-label`; on a pho
 | 1. Core, one tab | **Merged ([#61](https://github.com/Yokogamma/baobook/pull/61)), released by [#62](https://github.com/Yokogamma/baobook/pull/62) on 2026-10-18.** Built: the core in `public/sync.js` (UMD, no build step), the wiring in `index.html`, the test cloud in `tests/lib`. What differs from the row: the editor snapshot `E` and the safe point came in with PR 1, since one tab needs them too; versions are received but not sent until PR 4 (`out:v:` jobs are queued); the `sync` store also holds `scan:{col}` and `device` (§4.3); a note that was certainly never in the cloud is purged without a tombstone. The plan as approved: `sync` (v3); epoch; writes as deltas; the queue with an owner; sending (local merge, insured attempt, cloud transaction with a receipt, finish); receiving with the cursor and `refetch:`; `merge3`/`merge0`; the monotonic device clock; the canonical form; the `seen` registry and the totals check; revival after «forever»; `keep`/`inline` on every deletion path; the new «Очистити історію»; `verBlocks` without substitution; exporting copies; the normalizer and quarantine; the rate limiter and budgets; the import contract; the cloud adapter interface. **A test cloud** in `tests/lib` with failures: «commit accepted, response lost», a later write by another device, a retry, a delay, a repeated delivery, reordering, a commit that becomes visible long after later ones (beyond any window), the `count`/`sum(rev)` totals, two runners of one `op`. | Node: merging; the normalizer and the canonical form (two «devices», keys in another order); the monotonic clock (two edits in one millisecond, the clock set back). **A randomized simulation** with a fixed seed and an operation log for replay: three test devices, random operations (field-group edits, moves, block deletion, trash, restore, «forever», import), random offline spells, test-cloud failures and leader changes; the invariants: every device converges, no edit vanishes without a conflict copy, no empty `op`, no write after repeated deliveries. CI runs a few seeds and prints a failing one. Playwright, two contexts: the cloud moved ahead and the local result equals the cloud (copies kept, base and queue right); a lost confirmation followed by another device's write; a failure after each local commit; a failed insurance; two runners of one `op`; two devices reviving the same note (two marked revived notes, nothing lost); importing the original again after its tombstone was confirmed (the text goes into the same revived note); importing it again after the revived note was purged too (one new revived note, and both entries point to it); a tombstone of a note never seen here; an incoming revived note becomes this device's pointer; an import keeps the file's `updated`; a future `updated` shows as the arrival time in the list; the totals check in every state of §4.6 (ignored and waiting versions, quarantine, unresolved attempts, a document deleted past the rules and recreated, a full pass over several days); moving {A′} into an existing revived note {A, B} (B stays); purging the revived note and a new late edit (a new revived note from the original, also offline); a deletion started → local `lrev` changed → the cloud confirmed the tombstone (the edits are in the revived note); a restore from the trash during the automatic purge (`auto: true`) → the note in the list, also when the revived note was already in the trash; the same after a manual «forever» → the note in the trash; a vanished document or a smaller `rev` (quarantine); a local «forever» against a cloud edit; an incoming tombstone with local conflict copies; a shifted clock (concurrent edits decided by the key, the losing side kept with its device and time); a commit visible only after the window (found by the totals check); an incoming edit kept in «Історія»; over 200 documents with one `srv`; convergence; size; v2 → v3. |
 | 2. Tabs and the open note | **Built.** The leader tab under the Web Lock `baobook-sync:{env}`: released on `pagehide` and `freeze` with the queued request aborted, asked again after the owner check on `pageshow` and `resume` and on another tab's «owner» message, released by any view-only mode, released on `visibilitychange: hidden` in browsers without `freeze`, and handed over by a hidden leader to a visible tab that asks for it (`lead?`, sent by a queued visible tab when it queues, when it is shown, when it writes, at most once in 2 s for writes, and when the leader says it is hidden: the leader's status message carries `hidden`, sent when it starts leading, when it is hidden and with every status; the leader that lets go queues again at once, so the lock returns to it when the asker is gone and passes on through hidden tabs queued ahead of the asker; added after 3b: Chrome does not freeze a page holding a lock but throttles a hidden tab's timers to one a minute after five minutes, so the sync crawled in a tab left in the background while the visible one waited); a new leader reloads the engine from the store; the other tabs' messages wake it. What differs from the row: the messages are `put {n, lrev}`, `chg {id, lrev, dn, dev}` (the leader applied a document), `gone {id}` (a tombstone purged) and `owner`, and `takeNote` compares `lrev` whenever both sides know it, with or without an owner; the engine's `devId` and `devName` come from the store's `device` record (written once per device), so every tab writes as one device and a receipt proves any tab's attempt; `insureTx` refuses to insure over another runner's attempt, a runner whose attempt another one finished forgets it, and the cursor is bumped against the stored one so a late runner never moves it back; a change of owner met by a write, by the «owner» message, by the `resume` check or by the load that comes with the lock (`reload()` refuses a store whose owner changed while the tab waited, inside the transaction that reads it) turns the tab view-only («epoch») with the refused text under the unsaved warning; a catch-up page or a full-pass page that meets the change applies nothing and leaves no cursor or scan state to the new owner; the leadership has a generation and every engine start a run id, so a start still running when the lock goes (pagehide, freeze, a LOCK) connects nothing and changes nothing of a start that took over meanwhile; a tab locked as «epoch» keeps its screen as it is on every path (messages, the storage check when shown again, pending changes); the old tab protocol's «conflict» record and toast are gone (the pending write merges, the same field edited in two tabs leaves a conflict copy); the safe point is the caret leaving every field of the note, except the empty block a click on the sheet makes, which holds nothing back and is put back with the caret after the redraw (the owner's decision); the strip «Є зміни з {пристрій} · Оновити» shows while a change waits for the caret or for a failed write, names the device from `dn` or «інша вкладка», and «Оновити» saves what is typed and takes the caret out. A frozen leader is tested with a synthetic `freeze` (headless Chromium does not freeze through CDP); the real one is on the phone checklist. | Node (`syncguard`): two engines over one store. Browser: `appleader`, `apptablrev`, `appeditor`, `appbfcache` (a browser launched with the cache on; the test reads `pageshow.persisted` and, when not restored, `notRestoredReasons`). |
 | 3. Firebase, sign-in, account | **Built in part: 3a (the cloud infrastructure) and 3b (sign-in and the account); 3c (the owner's uid in the rules, 2026-10-19; the owner publishes them).** 3a: the Worker proxy for `/__/auth/*` (`worker/index.js`, `wrangler.jsonc`); the service worker (v8) leaves `/__/` alone and caches the SDK when used; the Firestore adapter as its own file `public/cloud.js` (the SDK module and the instance come in as dependencies, so the same file runs in the browser over gstatic and under Node over the npm package; the server time is stamped there; times cross as `{s, ns}` with nanoseconds; the listener asks for metadata changes so a re-subscription reports its server snapshot); the core: a refused read is «denied» and a refused write is judged by one check read (the account, the content, or a moved revision, since the emulator refuses a transaction's stale write by the rules instead of retrying it), the first read lost on the network is «could not check», `unauthenticated` answers in a row are «reauth», a refused early automatic purge waits a day (`wait` on the job, cancelled by an edit), the receipt limit is seen in the transaction's own read, the automatic purge runs as a step action after a catch-up and then hourly, `setOwner` covers `blobs` and takes `erase` and `expectEpoch`; the Firebase SDK is 12.19.0 (`tests/rules` test the same version); CI: the adapter test in the rules job and a `sync-emulator` job over the Auth and Firestore emulators with the SDK served from a local cache and every request to a real host aborted. 3b: the account in `index.html` over the SDK 12.19.0 loaded on demand (at start with an owner, a remembered user or a redirect under way, else on the first press of «Увійти через Google», which then goes on to the sign-in itself: the redirect at once, the popup while the press is still fresh, else the button says «Продовжити з Google» for the next press; a module that failed stays failed in the document, so the message asks for a reload); the hosts of §4.12 with the emulator config on localhost behind the `emulator` flag in the settings (the pace and budgets too, for the tests); `authDomain` is the site's host. What differs from the row: the access and the rules are checked by a probe before the owner is compared (one `limit(1)` read of the notes, refused → «Синхронізація за запрошенням», lost → «Не вдалося перевірити доступ», tried again when the network is back; then one write of `probe/{devId}` the rules must refuse, accepted → «База не захищена», deleted again), and only for a new or another account: the same owner connects at once and the catch-up's own reads are the check; the owner dialog («Нотатки на цьому пристрої належать A»: export with history, «Додати до хмари B», «Прибрати й увійти», cancel = sign out) runs in one tab under the Web Lock `baobook-owner-dialog`, the tab where the sign-in happened first and the others 1.5 s later, which show «виберіть у іншій вкладці» and reload after the decision (or re-adopt the engine when the records stayed); every change of owner is `setOwner` with `expectEpoch`, a race says so and reloads; before it everything typed is written (`saveNow`, up to 5 s) and the page stops writing and taking (`DYING`); the signed-in user is mirrored in the settings (`fbUser`) before the lock is released on sign-out, so the next leader checks it synchronously (`authGate`) and never starts a cloud of a user who left; the tabs exchange `auth` (a sign-in loads the SDK elsewhere, a sign-out drops the cloud at once) and `st`/`st?` (the leader's status, mirrored); sign-out stops the engine, waits up to 10 s for the step in flight («Завершую надсилання…»), detaches a stuck engine (a fresh one takes its place, the old one's callbacks are ignored), signs out and terminates the Firestore instance, keeping the owner and the queue («Вийшли · n змін чекає»); «Прибрати нотатки з пристрою» counts the unsent notes and named versions, offers the export, then signs out, erases and reloads; the redirect (touch or the installed app) saves everything, marks `signin:'pending'` in the settings and the tab in sessionStorage, and a failed result is reported; three `unauthenticated` answers (`reauth`) sign the user out locally with «Увійдіть знову»; the status is a cloud button in the header and a line under the account in the menu (a job waiting out its day is not «sending»); the receipt limit shows the strip «Не синхронізовано: забагато пристроїв · Створити копію нотатки» (the copy syncs in its place, the original's job goes: `unqueue` in the core); `persist()` at start with an owner; the Home Screen hint once on an iPhone outside the app. After the review of 3b: every binding passes the epoch the tab's engine knows (`expectEpoch`, the same owner's email update included), so a stale tab never writes the owner back over another tab's change; the owner question is dropped when the device is no longer A's as when it came up (a decision taken elsewhere within the 1.5 s); a tab with text not in storage (a failed write, typing) keeps its screen view-only as «epoch» with the export instead of reloading, both after another tab's decision and after its own binding was refused by the epoch (one path, `epochMoved`); the tab that signed in tells the others (`auth`), so a tab without the SDK loads it; and `setOwner` marks every queued note as a local change over no base (`lrev` 1), so a document of the same id in the new account's cloud is merged with it (`merge0`) instead of replacing it and dropping the job (found by the account scenario: «Додати до хмари» onto an account that already had the note). The plan as approved: SDK; Worker; service worker; hosts; popup/redirect; the owner's uid in the rules; owner and owner change with the epoch; sign-out; «прибрати»; `tsrv` and the automatic purge by the device clock; `persist()` at start and the iPhone Home Screen hint; `firestore.rules`; a minimal status. | 3a: `worker` (Node), `appsw`, `syncaccess` (Node), `apppurge`, `rules/adapter` (the Firestore emulator), `emu/smoke` (both emulators). 3b: `appaccount` (the test cloud: a host without a project, the SDK that cannot load, the status button and the menu, the leader's status mirrored in a second tab, the receipts strip and the copy); on both emulators `emu/signin` (the first press, the sign-in binding the device and sending its notes, a second device of the account, sign-out keeping the owner and the queue, the SDK at start, the sign-in again sending what waited), `emu/account` (the dialog and its cancel, the export, «Додати до хмари», a second tab following a sign-out, «in the other tab», «Прибрати й увійти» reloading both tabs, «Прибрати нотатки з пристрою»), `emu/trash` (`tsrv` on entering the trash, the early purge refused by the rules and the day's wait, the purge after the month), `emu/receipts` (200 receipts, the strip, the copy), `emu/redirect` (the way out with the note written and the mark set; the way back needs Google's gapi script, so the failed return is checked and the successful one by hand). Not as tests: a frozen tab of A after the change (the epoch tests of PR 2 cover it); the billing of a refused request and the read estimate, by hand on .dev (SYNC-CHECKLIST.md). The rules tests on the emulator already exist (#64); PR 3 extends them with the Auth emulator for sign-in. The receipt limit: device 201 is refused and the note offers a copy. No requests to the real Firebase in CI. A load measurement on .dev. |
-| 4. Versions, conflicts, status | Syncing named versions; «Видалити версію»; version states; conflicts in the interface; the account panel; the full status. | A version created and deleted before the first send; renaming after the note was purged (refused by the rules); incomplete and large versions; the status over both streams. |
+| 4. Versions, conflicts, status | **Planned in three parts (§5.1), waiting for the owner's approval.** 4a: named versions in the cloud (the version sender of the core, «Перейменувати версію…» and «Видалити версію», the version states, tombstones for the versions of a purged note); 4b: conflicts in the interface (§4.19: the badge «N конфлікт», «Відновити» and «Прибрати» on a copy, the list mark); 4c: the account panel (§4.11) and the full status over both streams (§4.18). | 4a: `syncversions` (Node), `syncsim` with version operations, two rules tests, `appvsync`, `emu/versions`. 4b: `appconflict`. 4c: `syncaccess` (the status codes), `appaccpanel`, a check in `emu/signin`. The scenarios of each part are in §5.1. |
 | 5. Documentation | This document updated to what was built, README, CLAUDE.md. | — |
+
+### 5.1 PR 4 in three parts
+
+PR 4 touches the core's queue, the history panel and the account, so it is built in three PRs into `main`, in this order, each with its own scenarios and checked on .dev before the next. The design is in §4.9, §4.11, §4.18 and §4.19; this section says what each part builds and how it is tested. Every new scenario must fail on the code before it (checked by putting the file from `HEAD` back), and the full run of `tests/` passes before each PR.
+
+**4a. Named versions in the cloud.**
+- The core (`public/sync.js`):
+  - the queue covers both streams: the engine loads `out:v:`, `try:v:` and `refetch:v:` beside the note ones; the in-memory maps are keyed by stream and id; `backoff`, `pickJob`, `nextWake` and `status()` take the stream; the note paths keep their behaviour;
+  - the version sender of §4.9: the order after the note, the prepare step without `merge3`, the insured attempt, the cloud transaction with the receipt, the finish, the refusal by one or two check reads;
+  - `applyVersionDoc` with the local side (a waiting rename or tombstone, a `try:`), the tombstone job for a version of a purged note, the version tombstones queued by an accepted note tombstone;
+  - `versionLocal(op)` and `versionStates(note)`; `setOwner` with the local-only check; the revival moves unsent named versions; the import skips a deleted version;
+  - the status counts both streams (§4.18 for its full form comes in 4c, 4a only counts).
+- `public/index.html`: naming «Зараз», naming a shown version, renaming and deleting go through `versionLocal` (the direct `out:v:` write in `vwrite` goes); the state line on named rows; «Перейменувати версію…» and «Видалити версію» with the dialog; `ver {note}` between tabs; `unsyncedCount` from the core (local-only versions are not «unsynced», they are «only here»). The strings in both language files.
+- Tests:
+  - `tests/syncversions.mjs` (new, Node over the test cloud):
+    - naming queues one job with `lrev` 1; a version waits for its note (the note offline-queued: no version read or write) and goes after the note's accepted attempt, one write;
+    - created and deleted before the first send: the cloud never sees it; deleted while its create is in flight: accepted → the tombstone follows, rejected → nothing remains;
+    - a rename is one write that changes only the name; renames on two devices converge on the one sent last; a rename against a deletion, in both orders: deleted on both, the rename never comes back;
+    - a rename after the note was purged is refused by the rules, the job and the record go, nothing loops;
+    - a version of a purged note received from the cloud gets a tombstone; an accepted note tombstone queues tombstones for its versions; two devices doing it leave one tombstone;
+    - local-only: a version over 960 KiB and one with a missing body are never sent and not counted as waiting, before and after `setOwner`;
+    - a lost confirmation is resolved by the receipt; two runners of one version attempt leave one commit; a vanished version is created again;
+    - the budget counts a version write and its `noteAlive` read; notes are picked before versions;
+    - the totals of `versions` match after creates, renames and tombstones (`seen:v:`);
+    - the import of a file with a version deleted here leaves it deleted; the revival takes an unsent named version along and drops a sent one.
+  - `tests/syncsim.mjs`: the random operations gain naming, renaming and deleting versions; new invariants: every device holds the same named versions with the same names, no deleted version comes back, no device keeps a version of a purged note.
+  - `tests/rules/firestore.mjs`: the two tests of §4.9.
+  - `tests/appvsync.mjs` (new, browser, two devices over the shared test cloud): «Зафіксувати версію…» offline shows «ще не надіслано», online «у хмарі»; device B shows it named with A's device; a rename on B reaches A; «Видалити версію» on A asks with «на всіх пристроях» and the version leaves B's open «Історія»; naming an old automatic version whose body is gone shows «лише тут: неповна»; a huge version shows «лише тут: завелика»; a second tab of A with «Історія» open refreshes on `ver`.
+  - `tests/emu/versions.mjs` (new, both emulators): create, rename and delete through the real rules; a rename after the note is purged on the other device is refused and handled; a version queued before its note makes no refused write.
+
+**4b. Conflicts in the interface** (§4.19).
+- `public/index.html`: the badge and the label of the history button; the list mark; the toast with «Показати»; the row «лише на цьому пристрої»; «Відновити» and «Прибрати» on a shown copy with undo; «Прибрати конфліктні копії (N)»; the refresh on `ver` and after a removal in another tab. The core gains `dropCopies(note, ids)` (one transaction, with the epoch check) and `copiesCount()` for the list.
+- Tests: `tests/appconflict.mjs` (new, browser, two devices over the test cloud):
+  - the same block edited on two offline devices: the device that merges has one copy, the other none; the button reads «Історія · 1 конфлікт», the list marks the note, the toast's «Показати» opens the copy;
+  - «Відновити» puts the copy's text in the note and removes the copy, «Скасувати» brings both back; «Прибрати» removes it and the badge goes, «Скасувати» brings it back; «Прибрати конфліктні копії (2)» asks and removes both;
+  - the cloud never holds a copy (no version document of `reason: 'copy'` in the test cloud);
+  - a note in the trash with a copy is not purged; after «Прибрати» the next look purges it;
+  - two tabs of one device without an owner: a copy made by a tab merge shows the badge in both tabs;
+  - on a phone (390 wide) the two buttons fit the bottom sheet and the badge is visible.
+
+**4c. The account panel and the full status** (§4.11, §4.18).
+- `public/sync.js`: `status()` by the table of §4.18 (`scan`, `waiting`, `versions`, the error count and the errors list, the time of the last match); `deviceName(name)` writes the `device` record.
+- `public/index.html`: the panel; the button and the menu row open it; the texts and icons of every code; `st` with the new fields; «версії ще завантажуються» in «Історія»; the device name field.
+- Tests:
+  - Node, in `tests/syncaccess.mjs`: every code of the core reached by its cause with both streams (a version job alone is `sending`, a version error alone is `error` with its reason, a version catch-up still running is `versions`, `synced` only when both totals matched); the error list names notes and versions.
+  - `tests/appaccpanel.mjs` (new, browser over the test cloud): the panel opens from the button and from the menu, Esc and Back close it; each state reached through the test cloud's faults and the hooks: offline with N, a held attempt over 30 s is «Очікую підтвердження», a refused version is «Не синхронізовано · 1» with the row and its link, a full pass is «Перевіряю повноту · N», the spent budget, signed out; the counts and «Перевірено о»; a new device name goes as `dn` in the next document and shows in the second tab; a second tab shows the same panel from `st`; a phone bottom sheet at 390 and 320 wide; `tests/appaccount.mjs` keeps passing with the toast replaced by the panel.
+  - `tests/emu/signin.mjs` gains one check: after the sign-in and a named version, «Синхронізовано» is reached on the emulators over both collections.
+
+**Manual checks** of PR 4 go into [SYNC-CHECKLIST.md](SYNC-CHECKLIST.md) with the code of each part: a version named on the phone and renamed on the computer; a conflict made with the phone in flight mode, resolved with «Відновити» and with «Прибрати»; the panel on a phone and with TalkBack/VoiceOver; the device name in «Є зміни з {пристрій}».
+
+**Open questions for the owner.** Each has a default; the plan above is written with the defaults.
+
+1. **Two devices rename the same version while offline.** Default: the rename sent last wins on every device, with no copy (a name is short and visible, and a version keeps no `updated` the rules would let it change). The alternative, the later rename by its device's clock, needs a new field and a change of the rules.
+2. **«Відновити» on a conflict copy.** Default: the note takes the copy and the copy is removed (the conflict is resolved); «Скасувати» brings both back. The alternative: the copy stays until «Прибрати».
+3. **A named version not yet sent when its note is deleted forever elsewhere and revived here.** Default: it moves into the revived note and goes to the cloud with it; a named version already in the cloud is deleted with the original. The alternative: every named version of the original goes.
+4. **Where conflicts show besides the history button.** Default: a mark in the note list, a toast with «Показати» when a copy appears in the open note, and a count in the account panel. The alternative: only the history button, as §2 says.
+5. **The named versions of a note deleted forever.** Default: they get tombstones in the cloud (one write each), so the note's text does not stay there; the device that deletes and any device that meets one does it. The alternative: they stay in the cloud, ignored by every device.
+6. **The device budget in the account panel.** Default: one line, «Сьогодні: N читань, M записів». The alternative: no numbers in the interface (they stay in the sync log).
+7. **«Видалити версію».** Default: the in-app dialog, no undo (the tombstone is final in the cloud), only for named versions; automatic ones go only with «Очистити історію». The alternative: an undo toast that delays the tombstone for a few seconds.
+8. **The order of PR 4a–4c.** Default: 4a, 4b, 4c, each checked on .dev, then the release of PR 1–4 as §5 «Release» says.
 
 **CI:** Java 21, a pinned `firebase-tools`, `emulators:exec` with `demo-baobook`, a clean emulator between scenarios; `paths` extended with `worker/**`, `wrangler.jsonc`, `firestore.rules`, `firebase.json`. The real OAuth, the Worker and iOS are checked by hand on .dev with a checklist.
 
@@ -510,7 +675,7 @@ Icons differ in shape, not only colour. The button has an `aria-label`; on a pho
 Done on 2026-10-16: the project `baobook-3fe7f` (Spark, Google Analytics off), the Google provider, the authorized domains `baobook.matamata.dev` and `baobook.matamata.app`, Firestore `(default)` in `eur3`, the web app `Baobook web`, the OAuth client's origins and redirect URIs with the branding, and the first index exemptions (`blocks`, `title`, `rcpt`). On 2026-10-18 the rest of the exemptions: every field of `notes` and `versions` except `srv` and `rev` (36 in all). Left:
 
 1. **Done on 2026-10-19:** the first sign-in on .dev (3b), Authentication → Users → the owner's User UID, into `firestore.rules` (3c).
-2. **Firestore → Rules:** the text of `firestore.rules` from `main` → Publish (the owner). Until then the status after a sign-in says «Синхронізація за запрошеннями» and the device is not bound to the account.
+2. **Done on 2026-10-20:** Firestore → Rules: the text of `firestore.rules` from `main` → Publish (the owner). PR 4 needs no change of the rules (§4.9).
 
 The `access/{email}` document made on 2026-10-16 is not used any more; it can stay or be deleted. The quota is one per project, shared by .dev and .app; the budgets in §4.17 account for that.
 
