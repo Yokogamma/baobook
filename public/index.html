@@ -1167,8 +1167,9 @@ async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;
   try{ navigator.locks.request(name,{signal:ac.signal}, lock=>hold(lock)).catch(()=>{}); }catch(_){}
   leadWanted(); return false; }
 // a visible tab with a cloud, waiting in the queue, asks the leader to step down if it is hidden: Chrome keeps the lock in a hidden tab (it does not
-// freeze a page holding one) but throttles its timers to one a minute after five minutes, so the sync would crawl there while this tab could run it
-function leadWanted(){ if(CLOUD && !document.hidden && hasLocks()) tellTabs({t:'lead?'}); }
+// freeze a page holding one) but throttles its timers to one a minute after five minutes, so the sync would crawl there while this tab could run it.
+// It asks when it queues, when it is shown, and when it writes (o.write: the user is editing here; at most once in 2 s)
+function leadWanted(o={}){ if(!CLOUD || document.hidden || !hasLocks() || !LEAD.abort) return; if(o.write){ const t=Date.now(); if(t-(LEAD.askedW||0)<2000) return; LEAD.askedW=t; } tellTabs({t:'lead?'}); }   // askedW: the writes' own pace, so an ask on showing does not mute the first edit's
 async function leadCheck(){ if(!SYNC || LOCK) return; let same=true; try{ same=await SYNC.checkOwner(); }catch(_){ return; } if(!same){ setLock('epoch'); return; } leadAsk(); }
 /* ══ the account (SYNC-PLAN 4.11–4.13, 4.18; PR 3b): Google sign-in through Firebase Auth, the Firestore adapter (cloud.js) as this tab's CLOUD.
    The SDK (three modules from gstatic, cached by the service worker once used) loads only when needed: at start with an owner, a user Firebase
@@ -1741,7 +1742,7 @@ function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
     if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
-    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
+    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
 // a change met by a write, whose source nobody told this tab: the record's base says whether it came from another device
 async function srcLater(id){ try{ const st=await SYNC.state(id); if(PENDING.has(id) && st.note) PENDING.set(id, srcOf(st)); chgUI(); }catch(_){} }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here

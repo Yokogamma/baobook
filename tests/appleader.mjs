@@ -161,7 +161,14 @@ ok('6d shown again, the former leader queues behind the visible one', back && (a
 await hide(R); await show(Q); const again=await until(async()=>(await lead(Q)).on && !(await lead(R)).held, 5000);
 ok('6e and takes the lead back once that one is hidden and it asks', again);
 await Q.evaluate(()=>{ document.getElementById('newBtn').click(); }); await Q.waitForTimeout(300); const qid=await curId(Q); await typeAt(Q,500,300,'після передачі лідерства'); const sentQ=await until(()=>!!cloud.doc('notes',qid) && cloud.doc('notes',qid).blocks.some(b=>b.text==='після передачі лідерства'), 6000);
-ok('6f its edit reaches the cloud', !!sentQ); const errsQ=QD.errs; await QD.close();
+ok('6f its edit reaches the cloud', !!sentQ);
+// 6g: the queued tab was shown before the leader went into the background, so no visibility change asks for the lead; its edit does
+await show(R); await R.waitForTimeout(400); await hide(Q); await Q.waitForTimeout(300);
+ok('6g a hidden leader keeps the lock while the visible queued tab only reads', (await lead(Q)).held && (await lead(R)).queued);
+await R.evaluate(()=>{ document.getElementById('newBtn').click(); }); await R.waitForTimeout(300); const rid=await curId(R); await typeAt(R,500,300,'правка у черзі');
+const tookR=await until(async()=>(await lead(R)).on && !(await lead(Q)).held, 5000), sentR=await until(()=>!!cloud.doc('notes',rid) && cloud.doc('notes',rid).blocks.some(b=>b.text==='правка у черзі'), 6000);
+ok('6h an edit in the queued visible tab asks for the lead: the hidden leader lets go, the editing tab leads and its edit reaches the cloud', !!tookR && !!sentR);
+const errsQ=QD.errs; await QD.close();
 
 const errs=A.errs.concat(errsQ); console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await A.close(); await br.close(); await srv.close(); process.exit(fails?1:0);
