@@ -112,22 +112,26 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('7e2 the edit went to localStorage ('+k2+' key); the pin stored it with the pin ('+s2.blocks.map(b=>b.text).join(' | ')+'), the key is gone and the sheet still shows it', k2===1 && s2.pinned>0 && s2.blocks.some(b=>/ сир$/.test(b.text)) && !(await fbKeys()) && /сир/.test(await pg.locator('#sheet').innerText()));
   await btn(pg,'n2','.it-p');
 
-  // 7e3 a new note whose import failed waits in memory as unsaved; a pin retries that import with the pin, so the note is stored, not dropped
+  // 7e3 a new note whose import failed waits in memory as unsaved: a pin is refused with a hint (it would take the import's place); after «Повторити» it pins
   await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await load(pg,[{id:'nx',title:'Не збережена',blocks:[{id:'x1',row:2,text:'чекає',fx:0.2}],created:1,updated:Date.now()}]);
-  const w1=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden); await pg.evaluate(()=>{ sheetDebug.failSave=false; });
-  await btn(pg,'nx','.it-p'); await pg.reload(); await ready(pg); await pg.waitForTimeout(300); const sx=await stored(pg,'nx');
-  ok('7e3 the failed import showed the warning ('+w1+'); after the pin and a reload the note is stored and pinned ('+await listText(pg)+')', w1 && sx && sx.pinned>0 && sx.blocks.some(b=>b.text==='чекає') && (await listText(pg)).startsWith('[Закріплені],'));
+  const w1=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden); await btn(pg,'nx','.it-p'); const t1=await pg.locator('#toast').innerText(), px=await pinOf(pg,'nx');
+  await pg.evaluate(()=>{ sheetDebug.failSave=false; document.getElementById('saveRetry').click(); }); await pg.waitForTimeout(500); await btn(pg,'nx','.it-p');
+  await pg.reload(); await ready(pg); await pg.waitForTimeout(300); const sx=await stored(pg,'nx');
+  ok('7e3 the failed import showed the warning ('+w1+'); the pin was refused: «'+t1+'»; after «Повторити» it pinned, stored after a reload ('+await listText(pg)+')', w1 && /не збережено повністю/.test(t1) && !px.on && sx && sx.pinned>0 && sx.blocks.some(b=>b.text==='чекає') && (await listText(pg)).startsWith('[Закріплені],'));
   await btn(pg,'nx','.it-x');
 
-  // 7e4 a pin and then an unpin of a note that is not open, both failing: «Повторити» writes the pin with the unpin over it, so the note ends up unpinned
-  await open(pg,'n1'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await btn(pg,'n2','.it-p'); const w4=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden); await btn(pg,'n2','.it-p');
+  // 7e4 a pin of a note that is not open fails: an unpin is refused while the failed pin waits; «Повторити» stores the pin
+  await open(pg,'n1'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await btn(pg,'n2','.it-p'); const w4=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden);
+  await btn(pg,'n2','.it-p'); const t4=await pg.locator('#toast').innerText(), p4=await pinOf(pg,'n2');
   await pg.evaluate(()=>{ sheetDebug.failSave=false; document.getElementById('saveRetry').click(); }); await pg.waitForTimeout(500);
-  ok('7e4 the failed pin showed the warning ('+w4+'); after «Повторити» the unpin is what is stored and listed ('+await listText(pg)+')', w4 && !(await stored(pg,'n2')).pinned && !(await listText(pg)).includes(',n2,[') && await pg.evaluate(()=>document.getElementById('saveWarn').hidden));
+  ok('7e4 the failed pin showed the warning ('+w4+'); the unpin was refused («'+t4+'»), the note stays pinned; after «Повторити» the pin is stored ('+await listText(pg)+')', w4 && /не збережено повністю/.test(t4) && p4.on && (await stored(pg,'n2')).pinned>0 && await pg.evaluate(()=>document.getElementById('saveWarn').hidden));
+  await btn(pg,'n2','.it-p');
 
-  // 7e5 a restore from the trash that failed, then a pin: both are stored
+  // 7e5 a restore from the trash fails: a pin is refused until «Повторити» stores the restore; then it pins
   await btn(pg,'n2','.it-x'); await pg.click('#trashRow'); await pg.waitForTimeout(250); await pg.evaluate(()=>{ sheetDebug.failSave=true; }); await btn(pg,'n2','.it-r'); await pg.evaluate(()=>{ if(!document.getElementById('sect').hidden) document.getElementById('sectBack').click(); }); await pg.waitForTimeout(250);
-  await pg.evaluate(()=>{ sheetDebug.failSave=false; }); await btn(pg,'n2','.it-p'); await pg.waitForTimeout(300); const s5=await stored(pg,'n2');
-  ok('7e5 restored and pinned: deleted '+!!s5.deleted+', pinned '+!!s5.pinned+' ('+await listText(pg)+')', !s5.deleted && s5.pinned>0 && (await listText(pg)).startsWith('[Закріплені],n2'));
+  await btn(pg,'n2','.it-p'); const t5=await pg.locator('#toast').innerText(), d5=!!(await stored(pg,'n2')).deleted;
+  await pg.evaluate(()=>{ sheetDebug.failSave=false; document.getElementById('saveRetry').click(); }); await pg.waitForTimeout(500); await btn(pg,'n2','.it-p'); await pg.waitForTimeout(300); const s5=await stored(pg,'n2');
+  ok('7e5 the pin over a failed restore was refused («'+t5+'», still in the trash in storage: '+d5+'); after «Повторити» and a pin: deleted '+!!s5.deleted+', pinned '+!!s5.pinned, /не збережено повністю/.test(t5) && d5 && !s5.deleted && s5.pinned>0 && (await listText(pg)).startsWith('[Закріплені],n2'));
   await btn(pg,'n2','.it-p');
 
   // 7e7 an edit of another note went to localStorage (it has an editor snapshot), then that note is pinned from the list: the edit and the pin go in one write
@@ -158,6 +162,12 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   const id9=await pg.evaluate(()=>document.querySelector('#list .item.pa').dataset.id); await btn(pg,id9,'.it-p'); const f9=await pg.evaluate(()=>{ const a=document.activeElement; return !!(a && document.getElementById('list').contains(a)); });
   ok('7i after a mouse click on the pin no focus is left in the list ('+f9+')', !f9);
   ok('7g Delete on the pin button trashed «Ключі»; «Komax старий» (pinned) opened rather than «Покупки» (edited later: '+(t2>t3)+')', (await stored(pg,'n1')).deleted>0 && await cur(pg)==='n3' && t2>t3);
+  // 7j Enter on «Відновити» of the only note in the trash: the notes come back and the focus is on that note's item, not on its archive button
+  if(await pg.locator('#trashRow').isVisible()){ await pg.click('#trashRow'); await pg.waitForTimeout(250); await pg.click('#trashEmpty'); await pg.waitForTimeout(250); await pg.click('#askYes'); await pg.waitForTimeout(500); }   // an empty trash first
+  const id10=await pg.evaluate(()=>document.querySelector('#list .item.pa:not(.cur)').dataset.id); await btn(pg,id10,'.it-x'); await pg.click('#trashRow'); await pg.waitForTimeout(250);
+  const trashN=await pg.evaluate(()=>document.querySelectorAll('#list .item').length); await pg.locator('#list .item[data-id="'+id10+'"]').focus(); await pg.keyboard.press('Tab'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(600);
+  const f10=await pg.evaluate(()=>{ const a=document.activeElement; return (a.className||a.tagName)+'@'+((a.closest&&a.closest('.item'))||{dataset:{}}).dataset.id; });
+  ok('7j restored from a trash of '+trashN+' with Enter: the notes are back, the focus is on «'+f10+'»', trashN===1 && /^item/.test(f10) && f10.endsWith('@'+id10) && await pg.locator('#sect').isHidden());
   console.log(errs.length? errs.join('\n') : '✓ desktop: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 

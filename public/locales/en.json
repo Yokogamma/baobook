@@ -40,6 +40,7 @@
   "pin.others": "Others",
   "pin.pinned": "Note «{title}» pinned to the top",
   "pin.unpinned": "Note «{title}» unpinned",
+  "pin.unsaved": "This note is not fully saved yet. Pin it after «Retry» or after a reload.",
   "trash.restore": "Restore",
   "trash.purge": "Delete forever",
   "trash.purgeTitle": "Delete the note «{title}» forever?",
