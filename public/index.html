@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Baobook">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-maskable-512.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
 /* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
@@ -1845,7 +1845,7 @@ function tabMsg(m){ if(keptView() || DYING) return;
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
-async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev}=await storedWithLrev(); if(keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
+async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok}=await storedWithLrev(); if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
@@ -1882,8 +1882,8 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ return (await storedWithLrev()).m; }
 // the stored notes with the lrev of each (the fallback copies have none): records and metadata from one read, so a write between them cannot pair a new lrev with an old body
-async function storedWithLrev(){ const m=fbNewest(store.keys(NK)), lrev={};   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
-  if(db.backend==='idb'){ try{ const {notes:list, meta}=await SDB.tx(['notes','sync'],'readonly', async t=>({notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')})); for(const n of list) if(validNote(n)) m.set(n.id,n); for(const x of meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){} } return {m, lrev}; }
+async function storedWithLrev(){ const m=fbNewest(store.keys(NK)), lrev={}; let ok=true;   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
+  if(db.backend==='idb'){ try{ const {notes:list, meta}=await SDB.tx(['notes','sync'],'readonly', async t=>({notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')})); for(const n of list) if(validNote(n)) m.set(n.id,n); for(const x of meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){ ok=false; } } return {m, lrev, ok}; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
   if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); }
   if(typeof s.grid==='boolean'){ p.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); }
