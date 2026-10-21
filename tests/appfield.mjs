@@ -96,5 +96,28 @@ await reload(); const b9=await stored('n2'), c9=await backups();
 ok('9 a trash in localStorage ('+k9+' key), then the restore: stored in the trash '+!!(a9&&a9.deleted)+' «'+texts(a9)+'», keys left '+k9b+'; after a reload in the trash '+!!(b9&&b9.deleted)+', backup copies '+c9,
   k9===1 && a9 && !a9.deleted && texts(a9)==='молоко' && k9b===0 && b9 && !b9.deleted && c9===0);
 
+// a second tab of the same browser
+const tab=async()=>{ const p=await ctx.newPage(); p.on('pageerror',e=>errs.push('PAGEERROR B '+e.message)); await p.goto(SITE); await ready(p); await p.waitForTimeout(300); return p; };
+const openIn=async(p,id)=>{ await p.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"]').click(), id); await p.waitForTimeout(300); };
+
+// 10 the open note's edit only in localStorage, and another tab's write of the note (its caret was in the title, so it kept its own text) reaches this tab
+// meanwhile: the leftover keeps the note from being replaced, so the pin that follows stores both, and the key goes only then
+await fresh(); await open('n2'); const B=await tab(); await openIn(B,'n2'); await B.evaluate(()=>document.getElementById('ttl').focus());
+await pg.bringToFront(); await idbFails(); await type(' LOCALONLY'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700); const k10=await fbKeys(); await healed();
+await B.bringToFront(); await B.evaluate(()=>{ const e=document.getElementById('ttl'); e.textContent='Покупки B'; e.dispatchEvent(new Event('input',{bubbles:true})); }); await B.waitForTimeout(800); await B.evaluate(()=>document.getElementById('ttl').blur()); await B.waitForTimeout(600);
+const s10b=await stored('n2'); await pg.bringToFront(); await pg.waitForTimeout(400); await btn('n2','.it-p'); await pg.waitForTimeout(400); const a10=await stored('n2'), k10b=await fbKeys();
+await B.close(); await reload(); const b10=await stored('n2'), all10=await pg.evaluate(()=>[...document.querySelectorAll('#list .item')].map(d=>d.textContent).join(' | '));
+ok('10 an edit in localStorage ('+k10+' key), another tab stored «'+(s10b&&s10b.title)+'» / «'+texts(s10b)+'»; the pin here stored «'+(a10&&a10.title)+'» / «'+texts(a10)+'», pinned '+!!(a10&&a10.pinned)+', keys left '+k10b+'; after a reload «'+(b10&&b10.title)+'» / «'+texts(b10)+'»',
+  k10===1 && s10b && s10b.title==='Покупки B' && !/LOCALONLY/.test(texts(s10b)) && a10 && a10.pinned>0 && /LOCALONLY/.test(texts(a10)) && a10.title==='Покупки B' && k10b===0 && b10 && /LOCALONLY/.test(texts(b10)) && b10.title==='Покупки B' && b10.pinned>0);
+
+// 11 the open note archived with its write held, while another tab moves it to the trash: the archive does not land on the trashed note, so a restore takes it back to the notes
+await fresh(); await open('n3'); const B2=await tab(); await pg.bringToFront();
+await pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; }); await btn('n3','.it-r');
+await B2.bringToFront(); { const it=B2.locator('#list .item[data-id="n3"]'); await it.hover(); await it.locator('.it-x').click(); } await B2.waitForTimeout(600); const s11b=await stored('n3');
+await pg.bringToFront(); await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await pg.waitForTimeout(800); const a11=await stored('n3');
+await B2.close(); await reload(); const b11=await stored('n3');
+ok('11 archived here under a held write, trashed in the other tab (stored: in the trash '+!!(s11b&&s11b.deleted)+'): stored in the trash '+!!(a11&&a11.deleted)+', archived '+!!(a11&&a11.archived)+'; after a reload in the trash '+!!(b11&&b11.deleted)+', archived '+!!(b11&&b11.archived),
+  s11b && s11b.deleted>0 && a11 && a11.deleted>0 && !a11.archived && b11 && b11.deleted>0 && !b11.archived && texts(b11)==='відпустка');
+
 console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

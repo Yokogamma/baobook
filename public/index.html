@@ -1816,7 +1816,7 @@ function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)
    cannot undo the change. Otherwise the field alone goes over the record as it is now, which keeps a change another tab or device put there. Only a
    write that carried the whole note clears the warning (writeNote) and drops the leftovers (db.save) */
 function fieldWrite(n, set, fn){ if(!ESNAP.has(n.id)) setSnap(n.id, n, LREV.get(n.id)??0);   // the base of a whole write: the note before its first change here, as openNote takes it (a note never opened has none yet)
-  const whole=busy(n) || FELL.has(n.id) || n===cur;
+  const whole=busy(n) || n===cur;
   if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }   // what is typed goes in this write
   set(n); n.updated=now(); if(!whole) return writeNote(n, fieldDelta(fn));
   const ed=editorDelta(n, (REV.get(n.id)||0)+1);   // the note as it is now, the same state writeNote compares the result with (an edit made while the write waits is not part of it), and the revision writeNote gives the write
@@ -1848,7 +1848,9 @@ function purgeOld(){ if(LOCK || db.backend!=='idb' || (SYNC && SYNC.hasOwner()))
 function setSection(s){ if(section===s) return; section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
-function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; fieldWrite(n, x=>{ x.archived=now(); }, (x,t)=>x.archived || x.deleted? null : {...x, archived:t});
+function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; fieldWrite(n, x=>{ x.archived=now(); }, (x,t,C)=>{
+    if(x.deleted){ const a=(C && C.archived)||0; if((x.archived||0)===a) return null; if(a) x.archived=a; else delete x.archived; return x; }   // in the trash (another tab's, met by a merge): no archive on top, the stored one stays, so a restore goes where it would have
+    return x.archived? null : {...x, archived:t}; });
   if(was) openNote(firstNote()); renderList(); storageUI(); offerUndo(loc('archive.moved',{title:titleOf(n)}), ()=>unarchive(n, was)); }
 function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); fieldWrite(n, x=>{ delete x.archived; }, x=>{ if(!x.archived) return null; delete x.archived; return x; });
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
@@ -1888,7 +1890,7 @@ const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
 // the leader's status for the other tabs, with whether the leader is hidden: a visible tab waiting for the lock answers a hidden leader with «lead?»
 function stMsg(){ return {t:'st', ...DEBUG.sync.status, hidden:!!document.hidden}; }
-const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || REVIVING.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet: a failed or in-flight write, a revival being written, typing
+const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || REVIVING.has(n.id) || FELL.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet: a failed or in-flight write, a revival being written, a localStorage leftover (memory and the key are its only copies until a whole write merges it in, so another tab's record waits), typing
 function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; const n=notes.find(x=>x.id===r.id);
   if(!n){ notes.push(r); if(lrev!=null) LREV.set(r.id,lrev); renderList(); storageUI(); return; }
   const mine=LREV.get(r.id), known=lrev!=null && mine!=null;   // both lrevs known: the newer wins, equal ones compare by time (a record written past the core)

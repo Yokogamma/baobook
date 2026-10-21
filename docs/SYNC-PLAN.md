@@ -281,6 +281,8 @@ Deleting forever with an owner removes the note, its history and blobs locally a
   - while the note in memory may be ahead of the store (a write failed or on its way, a localStorage fallback copy, the open note), it goes whole: the editor delta with the field set outright on its result, so a merge over an older `E` cannot undo it;
   - otherwise only the field goes over the current `C`, which keeps a change another tab or device put there;
   - a note never opened takes its `E` before its first field write;
+  - a note with a localStorage fallback copy counts as one with unsaved edits: memory and the key are the copy's only places, so a record from another tab or device waits (as for a write in flight) until a whole write merges the copy in, and only that write drops the key;
+  - a field write keeps the stored value of a field it may not set: an archive merged over a note another tab moved to the trash leaves `archived` as stored, as a pin does with `pinned`;
   - only a write that carried the whole note clears the «не збережено» warning and drops the fallback copies (a field write clears the warning only as the retry of its own failure). A write a newer one replaced keeps its failure unless a write begun after it stored the whole note; such a failure is retried whole.
 - **A safe point:** wait for `compositionend` → save → redraw from IndexedDB, `E := C`.
 - **Tests:** several saves without a redraw; IME; two tabs; a frozen leader; two runners of one `op`; bfcache (a tab that still holds a Web Lock may not enter it: the test reads `notRestoredReasons` instead of assuming either).
