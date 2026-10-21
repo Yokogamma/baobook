@@ -1754,14 +1754,14 @@ function savedShow(cls, long, short){ savedL.textContent=long; savedS.textConten
 function markDirty(){ if(H.view || ro() || !STARTED || DYING) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
-let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), WP=new Map();   // WP: id → the promise of the last write started   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
+let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
-function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); WP.set(n.id,p); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
+function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) renderList(); }   // what the merge brought (a pin, an archive, the trash) may move the note in the list now
+        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if(['pinned','archived','deleted'].some(k=>!!r.note[k]!==!!D[k])) renderList(); else updateItem(n); } }   // what the merge brought may move the note between the groups or sections now
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
@@ -1821,19 +1821,18 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
 /* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
+const PINREV=new Map();   // id → the revision of the last pin write started: a pin in flight is superseded by the next one, which sets the state outright
 function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // a failed write, or a localStorage leftover this tab cannot merge without the editor snapshot: a pin written over the stored record would take the
-  // place of that change, so it waits
-  if(unsaved.has(n.id)){ say(loc('pin.unsaved')); return; } if(FELL.has(n.id) && !ESNAP.has(n.id)){ say(loc('pin.wait')); return; }
-  if(n===cur){ if(dirty && !H.view && ESNAP.has(n.id)){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }   // the open note's typing goes in the pin's own write
-  if(on) n.pinned=now(); else delete n.pinned; n.updated=now(); renderList(); pinWrite(n); }
-// the pin is written after a write of the note that is on its way, over what that write leaves (its result is the new editor snapshot); what is written is the
-// state in memory by then, so the last click wins. The open note and a note with a leftover go whole through the editor delta: the store may lack what they hold
-const PWAIT=new Set();
-function pinWrite(n){ const p=inflight.has(n.id) && WP.get(n.id); if(p){ if(!PWAIT.has(n.id)){ PWAIT.add(n.id); p.then(()=>{ PWAIT.delete(n.id); if(notes.includes(n)) pinWrite(n); }); } return; }
-  if(unsaved.has(n.id)){ say(loc('pin.unsaved')); return; }   // the write it waited for failed: the warning offers «Повторити»
-  const on=!!n.pinned, at=n.pinned||0, whole=ESNAP.has(n.id) && (n===cur || FELL.has(n.id));
-  writeNote(n, whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); }
+  // a change of this note the store may lack must not lose its place to the pin. After a failed write the pin waits for «Повторити»; a localStorage
+  // leftover, or another write still on its way, without the editor snapshot to merge with, waits too (a pin in flight is replaced by this one)
+  const snapE=ESNAP.has(n.id), other=inflight.has(n.id) && inflight.get(n.id)!==PINREV.get(n.id);
+  if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(!snapE && (FELL.has(n.id) || other)){ say(loc('pin.wait')); return; }
+  const whole=snapE && (n===cur || FELL.has(n.id) || other);   // the note in memory may be ahead of the store: it goes whole, read when the write runs
+  if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
+  const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
+  const pin=C=>{ if(!C || C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
+  writeNote(n, whole? (C,meta,t)=>{ const r=editorDelta(n)(C,meta,t), m=r && (r.note||r), x=pin(m); return !x? r : r.note? {...r, note:x} : x; } : fieldDelta(C=>pin(C)));
+  PINREV.set(n.id, REV.get(n.id)); renderList(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
@@ -2484,7 +2483,7 @@ moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), '
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
   {node:textStepper()},
   ...(cur? [{ico:ICO.link, label:loc('link.copyNote'), act:()=>copyLink(cur.id)}] : []),
-  ...(ro() || !cur || cur.archived? [] : [{ico:ICO.pin, label:loc(cur.pinned? 'pin.unpin' : 'pin.pin'), act:()=>{ const n=cur, on=!n.pinned; pinNote(n, on); if(!!n.pinned===on) say(loc(on? 'pin.pinned' : 'pin.unpinned',{title:titleOf(n)})); }}]),
+  ...(ro() || !cur || cur.archived? [] : [{ico:ICO.pin, label:loc(cur.pinned? 'pin.unpin' : 'pin.pin'), act:(n=>{ const on=!n.pinned; return ()=>{ pinNote(n, on); if(!!n.pinned===on) say(loc(on? 'pin.pinned' : 'pin.unpinned',{title:titleOf(n)})); }; })(cur)}]),
   ...(ro()? [] : [cur && cur.archived? {ico:ICO.back, label:loc('archive.unarchive'), act:()=>unarchive(cur)} : {ico:ICO.box, label:loc('archive.move'), act:()=>archiveNote(cur)}]),
   ...(ro()? [] : [{ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()}]) ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
