@@ -555,6 +555,18 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .amenu .mi{padding:11px 12px;min-height:44px}
   .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none}
 }
+/* a phone (narrow and touch): the panel covers the screen and has its own close button; an item's buttons are 44 px targets 8 px apart, and the title
+   and the snippet make room for them while they show */
+.side-x{display:none}
+@media (hover:none) and (max-width:600px){
+  .side{width:100vw} .side-h{justify-content:flex-start} .side-h .new{margin-left:auto}
+  .side-x{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:44px;height:44px;margin:-4px -4px -4px 0;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink-2);cursor:pointer} .side-x .i{font-size:1.25rem}
+  .it-x,.it-r,.it-p{top:4px;width:44px;height:44px;border-radius:8px} .it-x .i,.it-r .i,.it-p .i{font-size:1.125rem}
+  .it-x{right:4px} .it-r,.it-p{right:56px} .it-p{right:108px}
+  .item:hover .it-t,.item.cur .it-t,.item:focus-within .it-t,.item:hover .it-s,.item.cur .it-s,.item:focus-within .it-s{padding-right:76px}
+  .item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t,.item.pa:hover .it-s,.item.pa.cur .it-s,.item.pa:focus-within .it-s{padding-right:128px}
+  .item:hover,.item.cur,.item:focus-within{min-height:52px}
+}
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
 /* ── version history (VERSIONS-PLAN 3.5): a column right of the sheet; on a phone a bottom sheet with a slider. A shown version is read-only (the sheet is inert) ── */
@@ -604,7 +616,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <aside class="side" id="side" data-i18n-attr="aria-label:panel.label">
     <div class="side-h">
       <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<span class="devtag" id="devTag" data-i18n="dev.badge" data-i18n-attr="title:dev.title"></span><button class="gear" id="setBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" data-i18n-attr="title:settings.title;aria-label:settings.title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><small data-i18n="brand.tagline"></small></span></b>
-      <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button class="side-x" id="sideX" type="button" data-i18n-attr="title:panel.close;aria-label:panel.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
         <div class="acc" id="accRow" hidden><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
         <button class="mi" id="signInBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7.1z"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5a9.5 9.5 0 0 0 8.5 5.2z"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6l3.2-2.5z"/><path d="M12 6.3c1.4 0 2.7.5 3.7 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5c.7-2.2 2.8-3.9 5.3-3.9z"/></svg><span id="signInLbl" data-i18n="account.signIn"></span></button>
@@ -1982,6 +1994,7 @@ function setSide(open, o={}){ if(!open){ setMenu(false); if(side.contains(docume
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
 backdrop.addEventListener('click',()=>setSide(false));
+document.getElementById('sideX').addEventListener('click',()=>setSide(false));
 matchMedia('(max-width:900px)').addEventListener('change',e=>{ app.classList.toggle('open', e.matches? false : S.side!==false); });
 
 /* ══ аркуш ════════════════════════════════════════════════════════════════
