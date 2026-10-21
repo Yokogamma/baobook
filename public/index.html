@@ -144,12 +144,11 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
 .it-x:hover{background:var(--hover-2);color:#c33}
 /* trash (TRASH-PLAN): the panel shows it in place of the list; a footer row leads there while it is not empty */
-.it-r{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i{font-size:.875rem}
-.item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r{display:inline-flex} .it-r:hover{background:var(--hover-2);color:var(--ink)}
+.it-r,.it-p{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i,.it-p .i{font-size:.875rem}
+.item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r,.item:hover .it-p,.item.cur .it-p,.item:focus-within .it-p{display:inline-flex} .it-r:hover,.it-p:hover{background:var(--hover-2);color:var(--ink)}
 .it-t{padding-right:28px}   /* room for the second button of an item (archive, restore) next to the bin */
 /* the pin, left of the archive button: shown with the other buttons; it makes room in the title only while it shows */
-.it-p{position:absolute;right:58px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-p .i{font-size:.875rem}
-.item:hover .it-p,.item.cur .it-p,.item:focus-within .it-p{display:inline-flex} .it-p:hover{background:var(--hover-2);color:var(--ink)} .it-p.on .i{fill:currentColor}
+.it-p{right:58px} .it-p.on .i{fill:currentColor}
 .item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t{padding-right:54px}
 .grp{padding:12px 10px 4px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}   /* «Закріплені» and «Інші» in the notes; «В архіві»: archived notes found by a search, below the notes */
 .sect{display:flex;flex-direction:column;gap:2px;margin:0 10px 4px;padding:0 0 6px;border-bottom:.5px solid var(--line)} .sect[hidden]{display:none}
@@ -1401,7 +1400,7 @@ const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   /
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
 const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
 function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '';   // a keyboard focus only: a click leaves none behind
-  drawList(); if(id && !list.contains(document.activeElement)) focusItem(id, cls==='it-p'? cls : ''); }   // only the pin keeps the same meaning wherever its note lands
+  drawList(); if(id && !list.contains(document.activeElement)) focusItem(id, cls, it.dataset.k); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
   sect.hidden=sec==='notes'; trashEmpty.hidden=sec!=='trash' || !pool.length; trashRow.hidden=sec!=='notes' || !bin; trashN.textContent=bin; archRow.hidden=sec!=='notes' || !box; archN.textContent=box;
@@ -1420,19 +1419,21 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
     if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
   return items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
 /* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
-function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
+function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
   const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box];
   d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'">'+ICO.trash+'</button>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
   d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], kb=e.detail===0, at=kb? [...list.querySelectorAll('.item')].indexOf(d) : -1;
     const done=cls==='it-p'? pinNote(n, !n.pinned) : cls==='it-r'? side() : del();
-    if(kb) Promise.resolve(done).then(()=>keepFocus(n.id, cls, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
+    if(kb) Promise.resolve(done).then(()=>keepFocus(n.id, cls, d.dataset.k, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
   d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
-    if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, at)); } }); }   // Enter and Space on a nested button are that button's
-function focusItem(id, cls){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }   // the item first: it shows its buttons
+    if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, d.dataset.k, at)); } }); }   // Enter and Space on a nested button are that button's
+// the item first: it shows its buttons. A button keeps the focus while it means the same: the pin always, the others while the note stays in its section
+// (k: notes, archive or trash, as the item was drawn); otherwise the item takes it, so a second Enter does not archive a note just restored
+function focusItem(id, cls, k){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && (cls==='it-p' || it.dataset.k===k) && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }
 // after a key on an item or its button the focus goes to the same button in the note's new place, or, when the note left the list, to the item now in
 // its place. An action that took the focus itself (a dialog, the next note's field) keeps it
-function keepFocus(id, cls, at){ const a=document.activeElement; if(!list.getClientRects().length || (a && a!==document.body && !list.contains(a))) return; if(!list.contains(a) && !focusItem(id, cls==='it-p'? cls : '')){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); }   // renderList keeps a focus that stays; this finds one for a note that left
+function keepFocus(id, cls, k, at){ const a=document.activeElement; if(!list.getClientRects().length || (a && a!==document.body && !list.contains(a))) return; if(!list.contains(a) && !focusItem(id, cls, k)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); }   // renderList keeps a focus that stays; this finds one for a note that left
   const f=document.activeElement; if(f && list.contains(f)) f.scrollIntoView({block:'nearest'}); }   // a pinned note went up to «Закріплені»: its button comes into view
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
   const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
@@ -1760,7 +1761,7 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if((r.note.pinned||0)!==(D.pinned||0)) renderList(); else updateItem(n); } }   // a pin the merge brought moves the note between the groups now
+        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) renderList(); }   // what the merge brought (a pin, an archive, the trash) may move the note in the list now
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
@@ -1821,10 +1822,11 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
   relist(); storageUI(); }
 /* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
 function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // a change of this note the store does not hold yet (a failed write, or a localStorage leftover this tab cannot merge without its editor snapshot): a pin
-  // written over the stored record would take its place, so it waits for «Повторити» or the next start
-  if(unsaved.has(n.id) || (FELL.has(n.id) && !ESNAP.has(n.id))){ say(loc('pin.unsaved')); return; }
-  const whole=ESNAP.has(n.id) && (n===cur || FELL.has(n.id));   // the open note, and a note with a leftover, go whole through the editor delta, in one write
+  // the note in memory may be ahead of the store (open, a write in flight, a localStorage leftover): it goes whole through the editor delta, in one write, so
+  // the pin never takes the place of a change. Without the editor snapshot that delta needs, and after a failed write, the pin waits
+  const ahead=n===cur || inflight.has(n.id) || FELL.has(n.id);
+  if(unsaved.has(n.id)){ say(loc('pin.unsaved')); return; } if(ahead && !ESNAP.has(n.id)){ say(loc('pin.wait')); return; }
+  const whole=ahead;
   if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
   writeNote(n, whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); renderList(); }
