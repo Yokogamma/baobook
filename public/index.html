@@ -965,12 +965,12 @@ const db={ backend:'local', inited:false, ready:null,
   async save(n, delta){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')}; if(DEBUG.failSave) return {ok:false,reason:loc('save.reason.test')}; let err=null;
     // with IndexedDB every write goes through the sync core as a delta over the stored record (SYNC-PLAN 4.4): lrev, the monotonic clock, the queue with an owner
-    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta||editorDelta(n)); if(r.ok){ if(FELL.has(n.id) && !LOCK) fbDrop(n.id, g); return r; }
+    if(db.backend==='idb'){ try{ const r=await SYNC.writeLocal(n.id, delta); if(r.ok){ if(FELL.has(n.id) && !LOCK && !(delta && delta.field)) fbDrop(n.id, g); return r; }   // a leftover goes only with a write that carried the note as it is in memory: a field written over the record would drop a change the record lacks
         if(r.code==='purged' || r.code==='nosnap' || r.code==='epoch' || r.code==='locked') return {ok:false, code:r.code, reason:loc('save.reason.error',{name:r.code})};   // a refusal, not a storage failure: no fallback copy
         err=r.error||new Error(r.code); }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
-    if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2) MEM.delete(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
-    const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true}; },
+    if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2) MEM.delete(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true, whole:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
+    const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true, whole:true}; },   // whole: a localStorage copy is the note as it is in memory
   // deleting for good (only with IndexedDB): the note and this tab's own fallback keys of it. Another tab's key is left alone: if it holds a
   // copy not moved in yet, the note comes back at the next start rather than that copy being lost
   async remove(id){ if(!db.inited && db.ready) await db.ready; if(LOCK || db.backend!=='idb') return; fbDrop(id, Infinity); try{ await idb.del(id); }catch(_){} },
@@ -1076,11 +1076,13 @@ const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.c
 // a stored record taken into the note in memory: the optional fields the record lacks go too
 const takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
 const snapFor=id=>{ const e=ESNAP.get(id); return e? {...e.note, at:e.at} : null; };   // for vcapture: the state before the edit
-function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow()}); if(lrev!=null) LREV.set(id,lrev); }
-// the editor's delta: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else merge3
-function editorDelta(n){ const D0=noteSnap(n); return (C,meta,t)=>{ const D={...D0, updated:t}; if(!C) return D; const E=ESNAP.get(n.id); if(E && E.lrev!=null && E.lrev===meta.lrev) return D;
+function setSnap(id, note, lrev, w=REV.get(id)||0){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow(), w}); if(lrev!=null) LREV.set(id,lrev); }   // w: the write revision the snapshot follows (writeNote), else the latest begun
+// the editor's delta of write `rev`: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else
+// merge3. The snapshot is read when the write runs, unless a newer write's result has replaced it meanwhile (writes held out of order): D does not hold what that
+// write added, so the snapshot taken with D is its base
+function editorDelta(n, rev){ const D0=noteSnap(n), E0=ESNAP.get(n.id); return (C,meta,t)=>{ const D={...D0, updated:t}; if(!C) return D; const Er=ESNAP.get(n.id), E=Er && Er.w>rev? E0 : Er; if(E && E.lrev!=null && E.lrev===meta.lrev) return D;
   if(!E) throw Object.assign(new Error('no editor snapshot'),{code:'nosnap'}); const m=SC.merge3(E.note, D, C, {dev:S.devId, t}); return {note:m.note, copies:m.copies}; }; }
-const fieldDelta=fn=>(C,meta,t)=>C? fn({...C}, t) : null;   // a field change over whatever the record is now
+const fieldDelta=fn=>Object.assign((C,meta,t)=>C? fn({...C}, t, C) : null, {field:true});   // a field change over whatever the record is now (fieldWrite); `field`: it does not carry the note as it is in memory
 function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : /OPR\//.test(u)? 'Opera' : /Firefox\//.test(u)? 'Firefox' : /Chrome\//.test(u)? 'Chrome' : /Safari\//.test(u)? 'Safari' : 'Browser', o=/Windows/.test(u)? 'Windows' : /iPhone|iPad/.test(u)? 'iOS' : /Android/.test(u)? 'Android' : /Mac OS/.test(u)? 'macOS' : /Linux/.test(u)? 'Linux' : ''; return o? b+' · '+o : b; }
 function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()}); const ref={};
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
@@ -1759,20 +1761,33 @@ function savedShow(cls, long, short){ savedL.textContent=long; savedS.textConten
 function markDirty(){ if(H.view || ro() || !STARTED || DYING) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
-let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
+let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), STORED=new Map(), LAG=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
+// STORED: id → the latest revision that stored the whole note (every change of it made before that write is in the store); LAG: id → {rev, reason} of the latest
+// write that failed after a newer one began, while the newest is on its way: that write decides whether the failure is covered
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
-   edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
-function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
-  p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
-    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ const typed=n===cur && n.title!==D.title? n.title : null; takeRec(n, r.note); if(typed!==null) n.title=typed; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point. A title typed after this write
+   edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands. A field write (fieldWrite) clears the warning
+   only when it is the retry of the failed write itself: the warning, and an older write's failure, go only with a write that stored the whole note */
+function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const whole=!(delta && delta.field), snap={...n}, D=noteSnap(n), p=db.save(n, delta||editorDelta(n, rev)); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs; whole: it carries the note as it is in memory
+  p.then(r=>{ if(r.ok && (whole || r.whole)) STORED.set(n.id, Math.max(STORED.get(n.id)||0, rev));
+    if(REV.get(n.id)!==rev){ if(!r.ok && r.code!=='purged') lagged(n, rev, r.reason); return; }   // a newer write decides the status, but this failure does not vanish
+    inflight.delete(n.id); const lag=LAG.get(n.id); LAG.delete(n.id); const left=lag && (STORED.get(n.id)||0)<lag.rev? lag : null;   // an older write failed and no write begun after it stored the whole note
+    if(r.ok){ if(left) unsaved.set(n.id,{reason:left.reason, since:now()}); else if(whole || r.whole || (unsaved.get(n.id)||{}).delta===delta) unsaved.delete(n.id);   // the older failure stays, retried whole
+      if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ const typed=n===cur && n.title!==D.title? n.title : null; takeRec(n, r.note); if(typed!==null) n.title=typed; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point. A title typed after this write
         // began is newer than its result: it stays, and the next write merges it over the result (the snapshot below is this write's)
-        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) relist(); }   // what the merge brought may move the note between the groups or sections, or empty the section shown
+        setSnap(n.id, D, same? r.lrev : null, rev); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) relist(); }   // what the merge brought may move the note between the groups or sections, or empty the section shown
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
-    else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
-    if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
+    else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta:left && !whole? undefined : delta}); }   // the same delta is retried later (the whole note when it is a field write and an older failure is left); another owner in the store: view-only, the text stays under the unsaved warning
+    const good=r.ok && !unsaved.has(n.id);
+    if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(good?'ok':'err', good? loc('save.ok') : loc('save.failedReason',{reason:r.ok? unsaved.get(n.id).reason : r.reason}), good?'✓':''); clearTimeout(savedEl._t); if(good){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
     saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
+// a write a newer one replaced has failed. Covered when a write begun after it stored the whole note; while the newest write is on its way, that one decides
+// (LAG); otherwise the note stays unsaved and «Повторити» writes it whole, unless the newest write failed too and its retry carries the whole note already
+function lagged(n, rev, reason){ if((STORED.get(n.id)||0)>rev || !notes.includes(n)) return;
+  if(inflight.has(n.id)){ const l=LAG.get(n.id); if(!l || rev>l.rev) LAG.set(n.id,{rev, reason}); return; }
+  const u=unsaved.get(n.id); if(u && !(u.delta && u.delta.field)) return;
+  unsaved.set(n.id,{reason, since:now()}); if(n===cur){ clearTimeout(savedEl._t); savedShow('err', loc('save.failedReason',{reason}), ''); } saveUI(); storageUI(); chgUI(); }
 // a change met by a write, whose source nobody told this tab: the record's base says whether it came from another device
 async function srcLater(id){ try{ const st=await SYNC.state(id); if(PENDING.has(id) && st.note) PENDING.set(id, srcOf(st)); chgUI(); }catch(_){} }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here
@@ -1794,6 +1809,18 @@ function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); roSync(); renderBacklinks(); }
 function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; makeAll(list); }
 function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }   // areas first: their blocks go inside
+/* a field write: archive, unarchive, trash, restore and pin change one field of a note. set(n) makes the change in memory; fn(x, t, C) makes it on x, a copy
+   of the record the write lands on (C is the stored record, undefined when there is none; t the write's time) and returns x, or null when x has it already.
+   A field write never takes the place of a change the store lacks: while memory may be ahead of the store (a write failed or on its way, a localStorage
+   leftover, the open note) the note goes whole, the editor delta of the note as it is now with fn applied to its result, so a merge over an older snapshot
+   cannot undo the change. Otherwise the field alone goes over the record as it is now, which keeps a change another tab or device put there. Only a
+   write that carried the whole note clears the warning (writeNote) and drops the leftovers (db.save) */
+function fieldWrite(n, set, fn){ if(!ESNAP.has(n.id)) setSnap(n.id, n, LREV.get(n.id)??0);   // the base of a whole write: the note before its first change here, as openNote takes it (a note never opened has none yet)
+  const whole=busy(n) || FELL.has(n.id) || n===cur;
+  if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }   // what is typed goes in this write
+  set(n); n.updated=now(); if(!whole) return writeNote(n, fieldDelta(fn));
+  const ed=editorDelta(n, (REV.get(n.id)||0)+1);   // the note as it is now, the same state writeNote compares the result with (an edit made while the write waits is not part of it), and the revision writeNote gives the write
+  return writeNote(n, (C,meta,t)=>{ const r=ed(C,meta,t), m=r.note||r, x=fn({...m}, t, C)||m; return r.note? {...r, note:x} : x; }); }
 /* ══ trash (docs/TRASH-PLAN.md): a deleted note keeps its record with `deleted` (ms) for TRASH_DAYS, then goes for good with its versions.
    Moving it there and back is a change of the note (`updated`), so other tabs and import pick it up; the versions stay with it ══ */
 const TRASH_DAYS=30, listed=n=>!n.deleted && !n.archived, trashed=n=>!!n.deleted, archived=n=>!n.deleted && !!n.archived;   // a trashed note keeps `archived`: a restore takes it back there
@@ -1806,9 +1833,9 @@ const firstNote=()=>notes.filter(listed).sort(listOrder)[0]||newNote();   // the
 async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
   if(!notes.includes(n) || n.deleted) return;   // another tab deleted it meanwhile
   if(bare && db.backend==='idb'){ purgeNote(n); return; }
-  const was=cur===n; n.deleted=now(); n.updated=now(); writeNote(n, fieldDelta((C,t)=>C.deleted? null : {...C, deleted:t})); if(was) openNote(firstNote()); relist(); storageUI();
+  const was=cur===n; fieldWrite(n, x=>{ x.deleted=now(); }, (x,t)=>x.deleted? null : {...x, deleted:t}); if(was) openNote(firstNote()); relist(); storageUI();
   offerUndo(loc('trash.moved',{title:titleOf(n)}), ()=>restoreNote(n, was)); }
-function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.deleted) return null; delete C.deleted; return C; }));
+function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; fieldWrite(n, x=>{ delete x.deleted; }, x=>{ if(!x.deleted) return null; delete x.deleted; return x; });
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
 function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } notes=notes.filter(x=>x!==n);
@@ -1821,27 +1848,20 @@ function purgeOld(){ if(LOCK || db.backend!=='idb' || (SYNC && SYNC.hasOwner()))
 function setSection(s){ if(section===s) return; section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
-function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n, fieldDelta((C,t)=>C.archived || C.deleted? null : {...C, archived:t}));
+function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; fieldWrite(n, x=>{ x.archived=now(); }, (x,t)=>x.archived || x.deleted? null : {...x, archived:t});
   if(was) openNote(firstNote()); renderList(); storageUI(); offerUndo(loc('archive.moved',{title:titleOf(n)}), ()=>unarchive(n, was)); }
-function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.archived) return null; delete C.archived; return C; }));
+function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); fieldWrite(n, x=>{ delete x.archived; }, x=>{ if(!x.archived) return null; delete x.archived; return x; });
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
-/* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
-const PINREV=new Map();   // id → {rev, whole} of the last pin write started: a field-only pin in flight is replaced by the next pin, which sets the state outright
+/* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A field write (fieldWrite), so it
+   moves `updated` (SYNC-PLAN 4.4), and quick clicks store the last one: a pin on its way makes the next one go whole, with the state set outright */
 function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // a change of this note the store may lack must not lose its place to the pin, so the pin waits: after a failed write for «Повторити»; with a localStorage
-  // leftover for the next start, which moves it in; while the note is being revived, or another write is on its way with no editor snapshot to merge with
-  const pw=PINREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
-  if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc('pin.wait')); return; }
-  if(REVIVING.has(n.id) || (other && !snapE)){ say(loc('pin.busy')); return; }
-  const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole (the open note always has its snapshot)
-  if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
-  const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
-  const pinMerged=(C,m)=>{ if(!m.deleted && !m.archived) return pin(m)||m; const x={...m}; if(C && C.pinned) x.pinned=C.pinned; else delete x.pinned; return x; };   // a note the merge put in the archive or the trash keeps its stored pin
-  const ed=whole && editorDelta(n);   // the note as it is now, the same snapshot writeNote compares the result with: an edit made while the write waits is not part of it
-  const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=pinMerged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(pin)), rev=REV.get(n.id);
-  PINREV.set(n.id, {rev, whole}); p.then(()=>{ if((PINREV.get(n.id)||{}).rev===rev) PINREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
+  if(REVIVING.has(n.id)){ say(loc('pin.busy')); return; }   // the record was purged and the note is on its way into the revived note, which starts unpinned
+  const at=now();
+  fieldWrite(n, x=>{ if(on) x.pinned=at; else delete x.pinned; }, (x,t,C)=>{
+    if(x.deleted || x.archived){ const p=(C && C.pinned)||0; if((x.pinned||0)===p) return null; if(p) x.pinned=p; else delete x.pinned; return x; }   // a note in the archive or the trash (another tab's, met by a merge) keeps its stored pin
+    if(!!x.pinned===on) return null; if(on) x.pinned=at; else delete x.pinned; return x; });
+  renderList(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
