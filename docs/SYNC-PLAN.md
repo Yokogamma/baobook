@@ -511,7 +511,7 @@ Done on 2026-10-16: the project `baobook-3fe7f` (Spark, Google Analytics off), t
 
 1. **Done on 2026-10-19:** the first sign-in on .dev (3b), Authentication → Users → the owner's User UID, into `firestore.rules` (3c).
 2. **Firestore → Rules:** the text of `firestore.rules` from `main` → Publish (the owner). Until then the status after a sign-in says «Синхронізація за запрошеннями» and the device is not bound to the account.
-3. **Pinned notes (2026-10-20):** the rules allow the note field `pinned`. The rules published before it refuse a pinned note, so publish `firestore.rules` from `main` again once that change is merged, and add a single-field exemption for `pinned` in `notes`, like the other fields (§4.2).
+3. **Pinned notes (2026-10-20):** the rules allow the note field `pinned`. The rules published before it refuse a pinned note, and a merge to `main` deploys to .dev at once, so the rules go first (§4.16): if item 2 is done before that change is merged, publish `firestore.rules` from its branch, which refuses nothing the earlier rules allowed, and then merge; otherwise item 2 after the merge covers it. Add a single-field exemption for `pinned` in `notes`, like the other fields (§4.2).
 
 The `access/{email}` document made on 2026-10-16 is not used any more; it can stay or be deleted. The quota is one per project, shared by .dev and .app; the budgets in §4.17 account for that.
 

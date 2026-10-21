@@ -1098,8 +1098,8 @@ async function takeStored(id, src){ if(keptView() || DYING) return; const st=awa
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
-  takeRec(n, r); LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id);
-  if(n===cur){ setSnap(id, n, lrev); redrawCur(n); } else { liveLinks(sheet); renderBacklinks(); }
+  takeRec(n, r); LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id); setSnap(id, n, lrev);   // the snapshot follows the record, as in takeNote: a whole write of a note not open (a pin) merges over it
+  if(n===cur) redrawCur(n); else { liveLinks(sheet); renderBacklinks(); }
   relist(); storageUI(); chgUI(); }
 // the source of a change found in storage without a message: the record equals the cloud base written by another device, else another tab of this one
 const srcOf=st=>(st.meta && st.meta.base && st.meta.base.dev && st.meta.lrev===st.meta.baseLrev && SYNC && st.meta.base.dev!==SYNC.devId)? {dn:st.meta.base.dn, dev:st.meta.base.dev} : {tab:true};
@@ -1970,7 +1970,7 @@ try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточни�
 window.addEventListener('popstate',e=>{ nav.onPop(e); if(e.state && 'd' in e.state && hashNow) setHash(hashNow); });   // our own entry (an overlay, a link step): the address stays the open note's, before hashchange reads it
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
-function setSide(open, o={}){ if(!open) setMenu(false); if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
+function setSide(open, o={}){ if(!open){ setMenu(false); if(side.contains(document.activeElement)) document.activeElement.blur(); } if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
   app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()) saveS({side:open});
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));

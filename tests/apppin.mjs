@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
 import { ready, armClick, clicked, until } from './lib/wait.mjs';
 import { TestCloud } from './lib/cloud.mjs';
-import { newDevice, settle, typeAt, curId } from './lib/cloudpage.mjs';
+import { newDevice, settle, typeAt, curId, cloudWrite } from './lib/cloudpage.mjs';
 const SITE=(await serve()).url;
 const fs=await import('node:fs');
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -274,6 +274,18 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   await B.pg.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"] .it-p').click(), id); await settle(B.pg); await settle(A.pg,600); await settle(A.pg);
   await A.pg.keyboard.press('Escape'); await A.pg.waitForTimeout(500); await settle(A.pg);
   ok('9e pinned on B while A had the caret in it: A lists '+await listText(A.pg)+', stored pinned with its text', (await listText(A.pg)).startsWith('[Закріплені],'+id) && (await stored(A.pg,id)).pinned>0 && /нотатка для закріплення/.test(await A.pg.locator('#sheet').innerText()));
+  // 9f a note A opened once, then took from the cloud while not open, is pinned while A's archive and unarchive of it wait and a newer cloud edit has landed:
+  // the pin merges over what A took, so the newer edit stays and there is no conflict copy
+  cloudWrite(cloud,'x9',{title:'З хмари', blocks:[{id:'xb',row:2,fx:0.2,text:'x1'}]}); await settle(A.pg,600); await settle(A.pg);
+  await A.pg.bringToFront(); await open(A.pg,'x9'); await A.pg.waitForTimeout(300); await open(A.pg,id); await A.pg.waitForTimeout(300);
+  cloudWrite(cloud,'x9',{title:'З хмари', blocks:[{id:'xb',row:2,fx:0.2,text:'x2'}]}); await settle(A.pg,600); await settle(A.pg);
+  const t9=(await stored(A.pg,'x9')).blocks[0].text;
+  await A.pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });
+  await btn(A.pg,'x9','.it-r'); await A.pg.click('#archRow'); await A.pg.waitForTimeout(300); await btn(A.pg,'x9','.it-r'); await A.pg.evaluate(()=>{ sheetDebug.saveGate=null; });
+  cloudWrite(cloud,'x9',{title:'З хмари', blocks:[{id:'xb',row:2,fx:0.2,text:'x3'}]}); await settle(A.pg,600); await settle(A.pg);
+  await btn(A.pg,'x9','.it-p'); await A.pg.evaluate(()=>window.__open()); await A.pg.waitForTimeout(400); await settle(A.pg); await settle(A.pg);
+  const s9=await stored(A.pg,'x9'), c9=(await A.pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('versions','readonly').objectStore('versions').getAll(); g.onsuccess=()=>{ d.close(); res(g.result.filter(v=>v.reason==='copy' && v.note==='x9').length); }; }; })));
+  ok('9f A took «'+t9+'» from the cloud, then pinned the note under its waiting archive and unarchive: it stores «'+s9.blocks.map(b=>b.text).join(' | ')+'», pinned '+!!s9.pinned+', archived '+!!s9.archived+', '+c9+' conflict copies', t9==='x2' && s9.blocks.length===1 && s9.blocks[0].text==='x3' && s9.pinned>0 && !s9.archived && c9===0);
   const errs=[...A.errs, ...B.errs]; console.log(errs.length? errs.join('\n') : '✓ devices: no errors'); if(errs.length) fails++;
   await A.close(); await B.close(); }
 
@@ -284,6 +296,12 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   const st=await pg.evaluate(()=>{ const a=document.activeElement, r=document.getElementById('list').getBoundingClientRect(); return {inList:!!(a && document.getElementById('list').contains(a)), shown:r.right>0 && r.width>0}; });
   await pg.keyboard.press('Delete'); await pg.waitForTimeout(700); const gone=(await Promise.all(['n1','n2','n3'].map(id=>stored(pg,id)))).filter(n=>n && n.deleted).length;
   ok('11 at 800px: Delete trashed the open note, the panel '+(st.shown? 'stays' : 'closed')+', the focus '+(st.inList? 'is in' : 'left')+' the list, and a second Delete trashed nothing more ('+gone+' in the trash)', (st.shown || !st.inList) && gone===1);
+  // 11b Enter on an item opens its note and closes the panel: the focus leaves the panel with it, so a Delete then trashes nothing
+  if(!(await pg.evaluate(()=>document.getElementById('app').classList.contains('open')))){ await pg.click('#sideBtn'); await pg.waitForTimeout(400); }
+  await pg.locator('#list .item[data-id="n3"]').focus(); await pg.keyboard.press('Enter'); await pg.waitForTimeout(700);
+  const st2=await pg.evaluate(()=>({cur:sheetDebug.cur(), open:document.getElementById('app').classList.contains('open'), inSide:document.getElementById('side').contains(document.activeElement)}));
+  await pg.keyboard.press('Delete'); await pg.waitForTimeout(700); const gone2=(await Promise.all(['n1','n2','n3'].map(id=>stored(pg,id)))).filter(n=>n && n.deleted).length;
+  ok('11b at 800px: Enter opened '+st2.cur+', the panel '+(st2.open? 'stays' : 'closed')+', the focus '+(st2.inSide? 'is in' : 'left')+' the panel, and a Delete trashed nothing more ('+gone2+' in the trash)', st2.cur==='n3' && (st2.open || !st2.inSide) && gone2===1);
   console.log(errs.length? errs.join('\n') : '✓ narrow: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
