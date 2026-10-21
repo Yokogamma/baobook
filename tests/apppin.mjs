@@ -171,6 +171,23 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('7o the second click after a failing whole pin write stored the typing: «'+s7o.blocks.map(b=>b.text).join(' | ')+'», pinned '+!!s7o.pinned, s7o.blocks.some(b=>/ 10$/.test(b.text)) && !s7o.pinned);
   await pg.evaluate(()=>{ for(const k of Object.keys(localStorage)) if(k.startsWith('sheet:note:')) localStorage.removeItem(k); }); await pg.reload(); await ready(pg); await pg.waitForTimeout(300);
 
+  // 7p a title typed while the pin's write is held, then more of it while the write's result is held: the later title stays on the screen, in storage and after a reload.
+  // The control does the same under an ordinary autosave held instead of the pin
+  const title7=t=>pg.evaluate(t=>{ const e=document.getElementById('ttl'); e.focus(); e.textContent=t; e.dispatchEvent(new Event('input',{bubbles:true})); }, t);
+  const run7p=async(pin)=>{ await open(pg,'n2'); await pg.waitForTimeout(300); await title7('T7'); await pg.waitForTimeout(800); await pg.evaluate(()=>document.getElementById('ttl').blur()); await pg.waitForTimeout(300);
+    await pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=st=>st.includes('notes')? window.__gate : Promise.resolve(); });
+    if(pin) await pg.evaluate(()=>document.querySelector('#list .item[data-id="n2"] .it-p').click());
+    else { await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type('x'); await pg.waitForTimeout(600); }
+    await title7('T7A'); await pg.evaluate(()=>{ window.__held=new Promise(r=>{ window.__reached=r; }); window.__out=new Promise(r=>{ window.__go=r; }); sheetDebug.saveHold=()=>{ window.__reached(); return window.__out; }; sheetDebug.saveGate=null; window.__open(); });
+    await pg.evaluate(()=>window.__held); await title7('T7AB'); await pg.evaluate(()=>{ sheetDebug.saveHold=null; window.__go(); });
+    await pg.waitForTimeout(900); const strip=await pg.evaluate(()=>!document.getElementById('chgStrip').hidden); await pg.evaluate(()=>document.getElementById('ttl').blur()); await pg.waitForTimeout(600);
+    const r={stored:(await stored(pg,'n2')).title, shown:await pg.locator('#ttl').innerText(), pinned:!!(await stored(pg,'n2')).pinned, strip};
+    await pg.reload(); await ready(pg); await pg.waitForTimeout(300); r.reloaded=await pg.locator('#ttl').innerText(); return r; };
+  const c7=await run7p(false), p7=await run7p(true);
+  ok('7p control, an ordinary save held: stored «'+c7.stored+'», shown «'+c7.shown+'», after a reload «'+c7.reloaded+'»; «Є зміни» '+(c7.strip? 'shown' : 'not shown'), c7.stored==='T7AB' && c7.shown==='T7AB' && c7.reloaded==='T7AB' && !c7.strip);
+  ok('7p the pin held: stored «'+p7.stored+'» (pinned '+p7.pinned+'), shown «'+p7.shown+'», after a reload «'+p7.reloaded+'»; «Є зміни» '+(p7.strip? 'shown' : 'not shown')+' with no other tab', p7.stored==='T7AB' && p7.shown==='T7AB' && p7.reloaded==='T7AB' && p7.pinned && !p7.strip);
+  await btn(pg,'n2','.it-p'); await title7('Покупки'); await pg.waitForTimeout(800); await pg.evaluate(()=>document.getElementById('ttl').blur()); await pg.waitForTimeout(400);
+
   // 7f an edit of a pinned note that missed IndexedDB: at the next start the older stored version is kept as a backup copy, and the copy is not pinned
   await open(pg,'n3'); await pg.waitForTimeout(300); await pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
   await pg.locator('#sheet .blk .txt').first().click(); await pg.keyboard.press('End'); await pg.keyboard.type(' нове'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(700);
@@ -260,6 +277,16 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   const s8l=await stored(A,'n3'), sec8=await A.evaluate(()=>document.getElementById('sect').hidden), l8=await listText(A);
   ok('8l A typed in n3 from the archive while B unarchived it: stored '+(s8l.archived? 'archived' : 'unarchived')+' with «'+s8l.blocks.map(b=>b.text).join(' | ')+'»; A shows '+(sec8? 'the notes' : 'the archive')+': '+l8, !s8l.archived && s8l.blocks.some(b=>/ 8l$/.test(b.text)) && sec8 && l8.includes('n3'));
   await A.keyboard.press('Escape'); await A.waitForTimeout(500);
+  // 8m A's autosave is held while B pins the same note; A types a new title, and the autosave's merged result comes back: the title typed after it stays
+  await A.bringToFront(); await open(A,'n2'); await A.waitForTimeout(300);
+  await A.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=st=>st.includes('notes')? window.__gate : Promise.resolve(); });
+  await A.locator('#sheet .blk .txt').first().click(); await A.keyboard.press('End'); await A.keyboard.type(' 8m'); await A.waitForTimeout(600);
+  await B.evaluate(()=>document.querySelector('#list .item[data-id="n2"] .it-p').click()); await until(async()=>!!(await stored(A,'n2')).pinned);
+  await A.evaluate(()=>{ const e=document.getElementById('ttl'); e.focus(); e.textContent='Т8m'; e.dispatchEvent(new Event('input',{bubbles:true}));
+    window.__held=new Promise(r=>{ window.__reached=r; }); window.__out=new Promise(r=>{ window.__go=r; }); sheetDebug.saveHold=()=>{ window.__reached(); return window.__out; }; sheetDebug.saveGate=null; window.__open(); });
+  await A.evaluate(()=>window.__held); await A.evaluate(()=>{ sheetDebug.saveHold=null; window.__go(); }); await A.waitForTimeout(900);
+  await A.evaluate(()=>document.getElementById('ttl').blur()); await A.waitForTimeout(700); const s8m=await stored(A,'n2');
+  ok('8m A\'s title typed while its merged autosave came back: stored «'+s8m.title+'», shown «'+await A.locator('#ttl').innerText()+'», with B\'s pin '+!!s8m.pinned+' and A\'s text '+s8m.blocks.some(b=>/ 8m$/.test(b.text)), s8m.title==='Т8m' && (await A.locator('#ttl').innerText())==='Т8m' && s8m.pinned>0 && s8m.blocks.some(b=>/ 8m$/.test(b.text)));
   console.log(errs.length? errs.join('\n') : '✓ tabs: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 

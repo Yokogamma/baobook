@@ -1765,7 +1765,8 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
-    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
+    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ const typed=n===cur && n.title!==D.title? n.title : null; takeRec(n, r.note); if(typed!==null) n.title=typed; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point. A title typed after this write
+        // began is newer than its result: it stays, and the next write merges it over the result (the snapshot below is this write's)
         setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) relist(); }   // what the merge brought may move the note between the groups or sections, or empty the section shown
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
@@ -1833,12 +1834,13 @@ function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archi
   const pw=PINREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
   if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc('pin.wait')); return; }
   if(REVIVING.has(n.id) || (other && !snapE)){ say(loc('pin.busy')); return; }
-  const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole, read when the write runs (the open note always has its snapshot)
+  const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole (the open note always has its snapshot)
   if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
   const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
   const pinMerged=(C,m)=>{ if(!m.deleted && !m.archived) return pin(m)||m; const x={...m}; if(C && C.pinned) x.pinned=C.pinned; else delete x.pinned; return x; };   // a note the merge put in the archive or the trash keeps its stored pin
-  const p=writeNote(n, whole? (C,meta,t)=>{ const r=editorDelta(n)(C,meta,t), x=pinMerged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(pin)), rev=REV.get(n.id);
+  const ed=whole && editorDelta(n);   // the note as it is now, the same snapshot writeNote compares the result with: an edit made while the write waits is not part of it
+  const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=pinMerged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(pin)), rev=REV.get(n.id);
   PINREV.set(n.id, {rev, whole}); p.then(()=>{ if((PINREV.get(n.id)||{}).rev===rev) PINREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
