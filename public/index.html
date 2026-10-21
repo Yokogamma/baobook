@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Baobook">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-maskable-512.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
 /* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
@@ -1086,7 +1086,7 @@ function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
   // the tab (a replaced one may still finish a step), and after the transaction that reported it, since the status comes from inside its callback
   ref.eng=SC.makeSync({db:SDB, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
-    onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status={code,n}; if(LEAD.on) tellTabs({t:'st', code, n}); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
+    onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status={code,n}; if(LEAD.on) tellTabs(stMsg()); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
   return ref.eng; }
 function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=SYNC; driving=true; clearTimeout(driveT);   // not before the start is done: documents applied then would not reach the list (syncChanged drops them)
   (async()=>{ let r={did:'idle', next:Infinity}; try{ for(let i=0;i<500;i++){ if(SYNC!==eng) break; r=await eng.step(); if(r.did==='idle') break; } }catch(e){ if(/[?&]debug=1/.test(location.search)) console.warn('sync:',e); } finally{ if(SYNC===eng) driving=false; }   // a detached engine (a sign-out that could not wait) ends its run quietly: the flag belongs to the engine in place
@@ -1160,7 +1160,7 @@ function leadOff(){ LEAD.gen++; const ac=LEAD.abort, rel=LEAD.release; LEAD.abor
 async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
   try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(over()) return;
     if(!authGate()){ CLOUD=null; ACC.cloud=null; leadOff(); accStatus(); return; }   // the user of this cloud signed out while the tab waited for the lock: the lock goes back, nothing of theirs is sent
-    await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; accStatus(); tellTabs({t:'st', ...DEBUG.sync.status}); syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile; the other tabs mirror the leader's status from here
+    await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; accStatus(); tellTabs(stMsg()); syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile; the other tabs mirror the leader's status from here
   catch(e){ if(e && e.code==='epoch'){ setLock('epoch'); return; } if(/[?&]debug=1/.test(location.search)) console.warn('lead:',e); if(!over()) leadOff(); } }
 // ask for the lock; resolves to whether this tab leads now (granted at once) or waits in the queue (false). Idempotent: a held lock is kept, the
 // engine restarted only when the engine or the cloud changed (connect); a request already queued is left alone. Returns false under LOCK or without an owner
@@ -1176,8 +1176,9 @@ async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;
   try{ navigator.locks.request(name,{signal:ac.signal}, lock=>hold(lock)).catch(()=>{}); }catch(_){}
   leadWanted(); return false; }
 // a visible tab with a cloud, waiting in the queue, asks the leader to step down if it is hidden: Chrome keeps the lock in a hidden tab (it does not
-// freeze a page holding one) but throttles its timers to one a minute after five minutes, so the sync would crawl there while this tab could run it
-function leadWanted(){ if(CLOUD && !document.hidden && hasLocks()) tellTabs({t:'lead?'}); }
+// freeze a page holding one) but throttles its timers to one a minute after five minutes, so the sync would crawl there while this tab could run it.
+// It asks when it queues, when it is shown, and when it writes (o.write: the user is editing here; at most once in 2 s)
+function leadWanted(o={}){ if(!CLOUD || document.hidden || !hasLocks() || !LEAD.abort) return; if(o.write){ const t=Date.now(); if(t-(LEAD.askedW||0)<2000) return; LEAD.askedW=t; } tellTabs({t:'lead?'}); }   // askedW: the writes' own pace, so an ask on showing does not mute the first edit's
 async function leadCheck(){ if(!SYNC || LOCK) return; let same=true; try{ same=await SYNC.checkOwner(); }catch(_){ return; } if(!same){ setLock('epoch'); return; } leadAsk(); }
 /* ══ the account (SYNC-PLAN 4.11–4.13, 4.18; PR 3b): Google sign-in through Firebase Auth, the Firestore adapter (cloud.js) as this tab's CLOUD.
    The SDK (three modules from gstatic, cached by the service worker once used) loads only when needed: at start with an owner, a user Firebase
@@ -1770,7 +1771,7 @@ function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
     if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
-    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone
+    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
 // a change met by a write, whose source nobody told this tab: the record's base says whether it came from another device
 async function srcLater(id){ try{ const st=await SYNC.state(id); if(PENDING.has(id) && st.note) PENDING.set(id, srcOf(st)); chgUI(); }catch(_){} }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here
@@ -1863,6 +1864,8 @@ newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection
    is redrawn at the safe point. A tab that missed messages (hidden, frozen, back from the page cache) compares its notes with the storage when it is shown again. */
 const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
+// the leader's status for the other tabs, with whether the leader is hidden: a visible tab waiting for the lock answers a hidden leader with «lead?»
+function stMsg(){ return {t:'st', ...DEBUG.sync.status, hidden:!!document.hidden}; }
 const busy=n=>unsaved.has(n.id) || inflight.has(n.id) || REVIVING.has(n.id) || (n===cur && dirty);   // edits here that the storage does not have yet: a failed or in-flight write, a revival being written, typing
 function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; const n=notes.find(x=>x.id===r.id);
   if(!n){ notes.push(r); if(lrev!=null) LREV.set(r.id,lrev); renderList(); storageUI(); return; }
@@ -1880,13 +1883,13 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
 function tabMsg(m){ if(keptView() || DYING) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
-  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs({t:'st', ...DEBUG.sync.status}); }
-  else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()) leadOff(); }   // a visible tab wants the lead and this one is hidden: let it go (asked again when shown)   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected)
+  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
+  else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
-async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev}=await storedWithLrev(); if(keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }
+async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok}=await storedWithLrev(); if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
@@ -1923,8 +1926,8 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ return (await storedWithLrev()).m; }
 // the stored notes with the lrev of each (the fallback copies have none): records and metadata from one read, so a write between them cannot pair a new lrev with an old body
-async function storedWithLrev(){ const m=fbNewest(store.keys(NK)), lrev={};   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
-  if(db.backend==='idb'){ try{ const {notes:list, meta}=await SDB.tx(['notes','sync'],'readonly', async t=>({notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')})); for(const n of list) if(validNote(n)) m.set(n.id,n); for(const x of meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){} } return {m, lrev}; }
+async function storedWithLrev(){ const m=fbNewest(store.keys(NK)), lrev={}; let ok=true;   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
+  if(db.backend==='idb'){ try{ const {notes:list, meta}=await SDB.tx(['notes','sync'],'readonly', async t=>({notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')})); for(const n of list) if(validNote(n)) m.set(n.id,n); for(const x of meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){ ok=false; } } return {m, lrev, ok}; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
   if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); }
   if(typeof s.grid==='boolean'){ p.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); }
@@ -1949,10 +1952,12 @@ document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&h
 window.addEventListener('pagehide',flushSave); document.addEventListener('visibilitychange',()=>{ if(document.hidden) flushSave(); else { if(unsaved.size) retrySave(); syncTabs(); } });
 window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // back from the page cache: messages sent meanwhile never came
 // the leadership (LEAD): released on pagehide and freeze, asked again after a check on pageshow, resume and when the tab is shown; without the freeze
-// event also released when hidden. A hidden leader with the freeze event keeps the lock until a visible tab asks for it (lead? in tabMsg)
+// event also released when hidden. A hidden leader with the freeze event keeps the lock until a visible tab asks for it (lead? in tabMsg); it says it is
+// hidden when it starts leading, when it is hidden and with every status (stMsg), and a visible tab waiting for the lock answers with lead?; a leader
+// that lets go queues again at once, so the lock returns to it when the asker is gone and passes on through hidden tabs queued ahead of the asker
 window.addEventListener('pagehide',()=>leadOff()); document.addEventListener('freeze',()=>leadOff());
 window.addEventListener('pageshow',e=>{ if(e.persisted) leadCheck(); }); document.addEventListener('resume',()=>leadCheck());
-document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); } else leadCheck(); });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); else if(LEAD.on) tellTabs(stMsg()); } else leadCheck(); });   // a leader going hidden says so: a visible tab waiting for the lock asks for it
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 /* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)

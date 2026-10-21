@@ -20,6 +20,13 @@ ok('1 shuffled blocks with reversed keys give the same canonical JSON and hash',
 const withDefaults={...NOTE, deleted:0, archived:null, pinned:0, blocks:NOTE.blocks.map(b=>({...b, wrap:b.wrap||false, html:b.html||'', title:b.title||''}))};
 ok('1b defaults (wrap:false, html:"", title:"", deleted:0, archived:null, pinned:0) do not change the canonical form', S.cjson(withDefaults)===S.cjson(NOTE));
 ok('1c -0 reads as 0 and undefined fields are dropped', S.cjson({title:'',blocks:[{id:'z',row:-0,fx:undefined,text:''}],created:1,updated:1})===S.cjson({title:'',blocks:[{id:'z',row:0,fx:0,text:''}],created:1,updated:1}));
+{ const wire=S.canon(NOTE), kid=wire.blocks.find(b=>b.id==='c1'), back=S.normNote(wire,{cleanRich:clean});
+  ok('1e a block in an area\'s first column loses col 0 in the canonical form, as fx 0 does, and normalizes back with col 0 (found on .dev: 7 notes quarantined)', kid && kid.col===undefined && back.note && back.note.blocks.find(b=>b.id==='c1').col===0 && S.cjson(back.note)===S.cjson(NOTE)); }
+{ const one=(...blocks)=>S.normNote({title:'',created:1,updated:1,blocks},{cleanRich:clean}), AR={id:'ar',row:1,fx:0,kind:'area',cw:3};
+  const miss=one({id:'s',row:1,text:'t'}), nul=one({id:'s',row:1,fx:null,col:2,text:'t'}), str=one({id:'s',row:1,fx:'0.5',text:'t'}), obj=one({id:'s',row:1,fx:{},text:'t'}), nan=one({id:'s',row:1,fx:NaN,text:'t'});
+  ok('1f a block on the sheet: a missing or null fx reads as 0 and a stray col goes; a string, an object or NaN as fx is refused', miss.note && miss.note.blocks[0].fx===0 && nul.note && nul.note.blocks[0].fx===0 && nul.note.blocks[0].col===undefined && str.bad && obj.bad && nan.bad);
+  const kn=one(AR,{id:'k',row:1,parent:'ar',col:null,fx:0.3,text:'t'}), ks=one(AR,{id:'k',row:1,parent:'ar',col:'1',text:'t'});
+  ok('1g a block in an area: a null col reads as 0 and a stray fx goes; a string col is refused', kn.note && kn.note.blocks.find(b=>b.id==='k').col===0 && kn.note.blocks.find(b=>b.id==='k').fx===undefined && ks.bad); }
 ok('1d sameDoc ignores updated only', S.sameDoc(NOTE,{...NOTE,updated:999}) && !S.sameDoc(NOTE,{...NOTE,title:'інша'}));
 
 // 2 the normalizer is idempotent and two devices agree
