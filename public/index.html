@@ -918,7 +918,9 @@ const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.cod
    version and to the mode without IndexedDB (§4.14 of docs/SYNC-PLAN.md) */
 const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);   // a pin is not content: copies that differ only by it are not kept twice, the newer one's pin stands (fbPut)
 const backupOf=({pinned, ...n})=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});   // a backup copy starts unpinned
-const fbPut=(ex,n)=>!ex? [n] : noteSig(ex)===noteSig(n)? ((n.updated||0)>(ex.updated||0) && (n.pinned||0)!==(ex.pinned||0)? [n] : []) : (n.updated||0)>(ex.updated||0)? [n, backupOf(ex)] : [backupOf(n)];
+function fbPut(ex, n){ if(!ex) return [n]; const newer=(n.updated||0)>(ex.updated||0);
+  if(noteSig(ex)===noteSig(n)) return newer && (n.pinned||0)!==(ex.pinned||0)? [n] : [];   // the same content: only a newer pin moves in, with no backup
+  return newer? [n, backupOf(ex)] : [backupOf(n)]; }   // other content: the newer copy is the note, the older one a backup
 const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
 const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
 const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=store.get(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
@@ -1399,8 +1401,10 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
 const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
 const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
+const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
+const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
 function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
-  drawList(); if(id && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); } }   // the note left: the item now in its place
+  drawList(); if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
   sect.hidden=sec==='notes'; trashEmpty.hidden=sec!=='trash' || !pool.length; trashRow.hidden=sec!=='notes' || !bin; trashN.textContent=bin; archRow.hidden=sec!=='notes' || !box; archN.textContent=box;
@@ -1433,7 +1437,7 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, p
 function focusItem(id, cls, k){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && (cls==='it-p' || it.dataset.k===k) && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }
 // after a key on an item or its button the focus goes to the same button in the note's new place, or, when the note left the list, to the item now in
 // its place. An action that took the focus itself (a dialog, the next note's field) keeps it
-function keepFocus(id, cls, k, at){ const a=document.activeElement; if(!list.getClientRects().length || (a && a!==document.body && !list.contains(a))) return; if(!list.contains(a) && !focusItem(id, cls, k)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); }   // renderList keeps a focus that stays; this finds one for a note that left
+function keepFocus(id, cls, k, at){ const a=document.activeElement; if(!listShown()){ if(a && list.contains(a)) a.blur(); return; } if(a && a!==document.body && !list.contains(a)) return; if(!list.contains(a) && !focusItem(id, cls, k)) focusSlot(at);   // renderList keeps a focus that stays; this finds one for a note that left. A panel the action closed keeps none
   const f=document.activeElement; if(f && list.contains(f)) f.scrollIntoView({block:'nearest'}); }   // a pinned note went up to «Закріплені»: its button comes into view
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
   const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
@@ -1832,8 +1836,9 @@ function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archi
   if(n===cur){ if(dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
   const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
-  writeNote(n, whole? (C,meta,t)=>{ const r=editorDelta(n)(C,meta,t), m=r.note||r, x=pin(m); return !x? r : r.note? {...r, note:x} : x; } : fieldDelta(pin));
-  PINREV.set(n.id, {rev:REV.get(n.id), whole}); renderList(); }
+  const pinMerged=(C,m)=>{ if(!m.deleted && !m.archived) return pin(m)||m; const x={...m}; if(C && C.pinned) x.pinned=C.pinned; else delete x.pinned; return x; };   // a note the merge put in the archive or the trash keeps its stored pin
+  const p=writeNote(n, whole? (C,meta,t)=>{ const r=editorDelta(n)(C,meta,t), x=pinMerged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(pin)), rev=REV.get(n.id);
+  PINREV.set(n.id, {rev, whole}); p.then(()=>{ if((PINREV.get(n.id)||{}).rev===rev) PINREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash

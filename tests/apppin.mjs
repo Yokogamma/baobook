@@ -277,6 +277,16 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   const errs=[...A.errs, ...B.errs]; console.log(errs.length? errs.join('\n') : '✓ devices: no errors'); if(errs.length) fails++;
   await A.close(); await B.close(); }
 
+/* ── a narrow window: the panel closes after an action, and the keyboard focus does not stay in it ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:800,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+  await fresh(pg); await open(pg,'n1'); await pg.waitForTimeout(300); if(!(await pg.evaluate(()=>document.getElementById('app').classList.contains('open')))){ await pg.click('#sideBtn'); await pg.waitForTimeout(400); }
+  await pg.locator('#list .item[data-id="n1"]').focus(); await pg.keyboard.press('Delete'); await pg.waitForTimeout(700);
+  const st=await pg.evaluate(()=>{ const a=document.activeElement, r=document.getElementById('list').getBoundingClientRect(); return {inList:!!(a && document.getElementById('list').contains(a)), shown:r.right>0 && r.width>0}; });
+  await pg.keyboard.press('Delete'); await pg.waitForTimeout(700); const gone=(await Promise.all(['n1','n2','n3'].map(id=>stored(pg,id)))).filter(n=>n && n.deleted).length;
+  ok('11 at 800px: Delete trashed the open note, the panel '+(st.shown? 'stays' : 'closed')+', the focus '+(st.inList? 'is in' : 'left')+' the list, and a second Delete trashed nothing more ('+gone+' in the trash)', (st.shown || !st.inList) && gone===1);
+  console.log(errs.length? errs.join('\n') : '✓ narrow: no errors'); if(errs.length) fails++;
+  await ctx.close(); }
+
 /* ── phone ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:390,height:844}, hasTouch:true, isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
