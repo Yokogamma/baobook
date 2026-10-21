@@ -24,7 +24,7 @@ function blockCmp(a,b){ const ra=+a.row||0, rb=+b.row||0; if(ra!==rb) return ra-
 function canon(doc){ if(!isObj(doc)) return canonValue(doc); const o={};
   for(const k of Object.keys(doc).sort()){ const v=doc[k]; if(v===undefined) continue;
     if(k==='blocks' && Array.isArray(v)){ o.blocks=v.filter(isObj).slice().sort(blockCmp).map(canonBlock); continue; }
-    if((k==='deleted' || k==='archived') && !v) continue;   // absent, 0 or null all mean «not»
+    if((k==='deleted' || k==='archived' || k==='pinned') && !v) continue;   // absent, 0 or null all mean «not»
     if(k==='revived' && !v) continue;
     o[k]=canonValue(v); }
   return o; }
@@ -81,7 +81,7 @@ function normNote(raw, deps){ if(!isObj(raw)) return {bad:'shape'};
   const blocks=normBlocks(raw.blocks, deps); if(blocks===false) return {bad:'blocks'};
   if(!isNum(raw.created) || !isNum(raw.updated)) return {bad:'time'};
   const note={title:raw.title, blocks, created:raw.created, updated:raw.updated};
-  for(const k of ['deleted','archived']){ const v=raw[k]; if(v===undefined || v===null || v===0 || v===false) continue; if(!isNum(v) || v<=0) return {bad:k}; note[k]=v; }
+  for(const k of ['deleted','archived','pinned']){ const v=raw[k]; if(v===undefined || v===null || v===0 || v===false) continue; if(!isNum(v) || v<=0) return {bad:k}; note[k]=v; }
   const rv=normRevived(raw.revived); if(rv===false) return {bad:'revived'}; if(rv) note.revived=rv;
   return {note}; }
 // a named version or conflict copy from the cloud: full bodies in `s`
@@ -103,7 +103,7 @@ const contentHash=b=>hashOf(gjson(b,false));   // the hash of a block's content 
 // the key of a side in a conflict: (updated, dev, hash of the canonical form); a side without dev (a local record) is this device
 const keyOf=(doc, dev)=>[+doc.updated||0, doc.dev||dev||'', hashDoc(noUpdated(doc))];
 const cmpKey=(a,b)=>{ for(let i=0;i<3;i++){ if(a[i]<b[i]) return -1; if(a[i]>b[i]) return 1; } return 0; };
-const NOTE_FIELDS=['title','deleted','archived','revived'];
+const NOTE_FIELDS=['title','deleted','archived','revived'], SOFT_FIELDS=['pinned'], MERGE_FIELDS=[...NOTE_FIELDS, ...SOFT_FIELDS];   // a soft field changed differently on both sides goes by the key and makes no conflict copy
 function fixParents(blocks){ const areas=new Set(blocks.filter(b=>b.kind==='area').map(b=>b.id)); return blocks.map(b=>{ if(!b.parent || areas.has(b.parent)) return b; const c={...b}; delete c.parent; delete c.col; c.fx=0; return c; }); }
 const byId=blocks=>new Map((blocks||[]).map(b=>[b.id,b]));
 const contentChanged=(a,b)=>JSON.stringify(canon({title:a.title,blocks:a.blocks}))!==JSON.stringify(canon({title:b.title,blocks:b.blocks}));
@@ -117,8 +117,8 @@ function finishMerge(res, L, R, ctx, lost, trace){
   return {note, copies, lost, trace, same}; }
 // three-way: base is the confirmed cloud state, L the local record, R the cloud document that moved ahead
 function merge3(base, L, R, ctx={}){ const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, lost={local:false, remote:false}, trace=[]; const res={};
-  for(const f of NOTE_FIELDS){ const bv=vjson(base[f]), lv=vjson(L[f]), rv=vjson(R[f]);
-    const v = (lv===bv && rv===bv)? L[f] : lv===bv? R[f] : rv===bv? L[f] : lv===rv? L[f] : (lost[lWins? 'remote' : 'local']=true, (lWins? L : R)[f]);
+  for(const f of MERGE_FIELDS){ const bv=vjson(base[f]), lv=vjson(L[f]), rv=vjson(R[f]);
+    const v = (lv===bv && rv===bv)? L[f] : lv===bv? R[f] : rv===bv? L[f] : lv===rv? L[f] : SOFT_FIELDS.includes(f)? (lWins? L : R)[f] : (lost[lWins? 'remote' : 'local']=true, (lWins? L : R)[f]);
     if(v!==undefined) res[f]=v; }
   res.created=Math.min(+L.created||Infinity, +R.created||Infinity, +base.created||Infinity); if(!Number.isFinite(res.created)) res.created=+L.created||+R.created||0;
   const B=byId(base.blocks), Lm=byId(L.blocks), Rm=byId(R.blocks), ids=[...Lm.keys(), ...[...Rm.keys()].filter(id=>!Lm.has(id))], out=[];
@@ -135,9 +135,12 @@ function merge3(base, L, R, ctx={}){ const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(
     out.push(m); }
   res.blocks=out; return finishMerge(res, L, R, {...ctx, base}, lost, trace); }
 // first merge of two copies with the same id and no base: equal → the remote; otherwise a union by id, shared ids from the side with the larger key, deleted wins
+const unsoft=d=>{ const o={...d}; for(const f of SOFT_FIELDS) delete o[f]; return o; };
 function merge0(L, R, ctx={}){ if(sameDoc(L,R)) return {note:noteBody(R), copies:[], lost:{local:false,remote:false}, trace:[], same:true};
-  const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, W=lWins? L : R, trace=[]; const res={};
-  for(const f of ['title','archived','revived']) if(W[f]!==undefined) res[f]=W[f];
+  const lWins=cmpKey(keyOf(L,ctx.dev), keyOf(R,ctx.dev))>=0, W=lWins? L : R, trace=[];
+  if(sameDoc(unsoft(L), unsoft(R))){ const res=unsoft(noteBody(R)); for(const f of SOFT_FIELDS) if(W[f]) res[f]=W[f]; return finishMerge(res, L, R, ctx, {local:false, remote:false}, trace); }   // only soft fields differ: the key decides, no conflict copies
+  const res={};
+  for(const f of ['title','archived','revived',...SOFT_FIELDS]) if(W[f]!==undefined) res[f]=W[f];
   const d=Math.max(+L.deleted||0, +R.deleted||0); if(d) res.deleted=d;
   res.created=Math.min(+L.created||Infinity, +R.created||Infinity); if(!Number.isFinite(res.created)) res.created=0;
   const Lm=byId(L.blocks), Rm=byId(R.blocks), ids=[...Lm.keys(), ...[...Rm.keys()].filter(id=>!Lm.has(id))];
