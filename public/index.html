@@ -1069,7 +1069,7 @@ let DYING=false;   // the page is about to reload after a change of owner: nothi
 const LREV=new Map(), ESNAP=new Map(), PENDING=new Map(), ARRIVED=new Map();
 DEBUG.sync={clock:0, status:{code:'none', n:0}};
 let SYNC=null, driveT=null, driving=false;
-const OPT_FIELDS=['deleted','archived','pinned','revived'];   // the optional fields of a note: absent when not set
+const TIME_FIELDS=['deleted','archived','pinned'], OPT_FIELDS=[...TIME_FIELDS,'revived'];   // the optional fields of a note, absent when not set; the first three are times
 const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; for(const k of OPT_FIELDS) if(n[k]) o[k]=n[k]; return o; };
 // a stored record taken into the note in memory: the optional fields the record lacks go too
 const takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
@@ -1399,8 +1399,8 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
 const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
 const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
-function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '';   // a keyboard focus only: a click leaves none behind
-  drawList(); if(id && !list.contains(document.activeElement)) focusItem(id, cls, it.dataset.k); }
+function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
+  drawList(); if(id && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)){ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); } }   // the note left: the item now in its place
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
   sect.hidden=sec==='notes'; trashEmpty.hidden=sec!=='trash' || !pool.length; trashRow.hidden=sec!=='notes' || !bin; trashN.textContent=bin; archRow.hidden=sec!=='notes' || !box; archN.textContent=box;
@@ -1761,7 +1761,7 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if(['pinned','archived','deleted'].some(k=>!!r.note[k]!==!!D[k])) renderList(); else updateItem(n); } }   // what the merge brought may move the note between the groups or sections now
+        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if(TIME_FIELDS.some(k=>(r.note[k]||0)!==(D[k]||0) && (k==='pinned' || !r.note[k]!==!D[k]))) renderList(); else updateItem(n); } }   // what the merge brought may move the note between the groups or sections, or within «Закріплені», now
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
@@ -1821,18 +1821,19 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
 /* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
-const PINREV=new Map();   // id → the revision of the last pin write started: a pin in flight is superseded by the next one, which sets the state outright
+const PINREV=new Map();   // id → {rev, whole} of the last pin write started: a field-only pin in flight is replaced by the next pin, which sets the state outright
 function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // a change of this note the store may lack must not lose its place to the pin. After a failed write the pin waits for «Повторити»; a localStorage
-  // leftover, or another write still on its way, without the editor snapshot to merge with, waits too (a pin in flight is replaced by this one)
-  const snapE=ESNAP.has(n.id), other=inflight.has(n.id) && inflight.get(n.id)!==PINREV.get(n.id);
-  if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(!snapE && (FELL.has(n.id) || other)){ say(loc('pin.wait')); return; }
-  const whole=snapE && (n===cur || FELL.has(n.id) || other);   // the note in memory may be ahead of the store: it goes whole, read when the write runs
-  if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
+  // a change of this note the store may lack must not lose its place to the pin, so the pin waits: after a failed write for «Повторити»; with a localStorage
+  // leftover for the next start, which moves it in; while the note is being revived, or another write is on its way with no editor snapshot to merge with
+  const pw=PINREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
+  if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc('pin.wait')); return; }
+  if(REVIVING.has(n.id) || (other && !snapE)){ say(loc('pin.busy')); return; }
+  const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole, read when the write runs (the open note always has its snapshot)
+  if(n===cur){ if(dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  const pin=C=>{ if(!C || C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
-  writeNote(n, whole? (C,meta,t)=>{ const r=editorDelta(n)(C,meta,t), m=r && (r.note||r), x=pin(m); return !x? r : r.note? {...r, note:x} : x; } : fieldDelta(C=>pin(C)));
-  PINREV.set(n.id, REV.get(n.id)); renderList(); }
+  const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
+  writeNote(n, whole? (C,meta,t)=>{ const r=editorDelta(n)(C,meta,t), m=r.note||r, x=pin(m); return !x? r : r.note? {...r, note:x} : x; } : fieldDelta(pin));
+  PINREV.set(n.id, {rev:REV.get(n.id), whole}); renderList(); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
@@ -1898,7 +1899,7 @@ async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
-  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; for(const k of ['deleted','archived','pinned']) if(+raw[k]>0) n[k]=+raw[k]; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed, archived or pinned note carries the field
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; for(const k of TIME_FIELDS) if(+raw[k]>0) n[k]=+raw[k]; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed, archived or pinned note carries the field
     const ex=notes.find(x=>x.id===n.id);
     if(db.backend==='idb' && !LOCK){   // the import contract (SYNC-PLAN 4.14): a local write through the core, keeping the file's `updated`; an id purged here goes into the revived note
       if(ex && n.updated>ex.updated) await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import');   // R2: стан до перезапису — у версію
