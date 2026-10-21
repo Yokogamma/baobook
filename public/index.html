@@ -1765,12 +1765,12 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same){ if(TIME_FIELDS.some(k=>(r.note[k]||0)!==(D[k]||0) && (k==='pinned' || !r.note[k]!==!D[k]))) renderList(); else updateItem(n); } }   // what the merge brought may move the note between the groups or sections, or within «Закріплені», now
+        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) relist(); }   // what the merge brought may move the note between the groups or sections, or empty the section shown
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
     if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
-    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає
+    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone
 // a change met by a write, whose source nobody told this tab: the record's base says whether it came from another device
 async function srcLater(id){ try{ const st=await SYNC.state(id); if(PENDING.has(id) && st.note) PENDING.set(id, srcOf(st)); chgUI(); }catch(_){} }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here
@@ -1833,7 +1833,7 @@ function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archi
   if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc('pin.wait')); return; }
   if(REVIVING.has(n.id) || (other && !snapE)){ say(loc('pin.busy')); return; }
   const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole, read when the write runs (the open note always has its snapshot)
-  if(n===cur){ if(dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
+  if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
   const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
   const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
   const pinMerged=(C,m)=>{ if(!m.deleted && !m.archived) return pin(m)||m; const x={...m}; if(C && C.pinned) x.pinned=C.pinned; else delete x.pinned; return x; };   // a note the merge put in the archive or the trash keeps its stored pin
@@ -1970,7 +1970,7 @@ try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточни�
 window.addEventListener('popstate',e=>{ nav.onPop(e); if(e.state && 'd' in e.state && hashNow) setHash(hashNow); });   // our own entry (an overlay, a link step): the address stays the open note's, before hashchange reads it
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
-function setSide(open, o={}){ if(!open){ setMenu(false); if(side.contains(document.activeElement)) document.activeElement.blur(); } if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
+function setSide(open, o={}){ if(!open){ setMenu(false); if(side.contains(document.activeElement)) document.activeElement.blur(); } if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: the panel hides or shows on the route «note → Back», with no history entry of its own; a closed panel keeps no focus
   app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()) saveS({side:open});
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));

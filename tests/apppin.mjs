@@ -253,6 +253,13 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   await B.evaluate(()=>{ const it=document.querySelector('#list .item[data-id="n1"]'); it.querySelector('.it-p').click(); }); await until(async()=>(await listText(A)).startsWith('[Закріплені],n1'));
   await A.keyboard.press('End'); await A.keyboard.type(' ok'); await A.keyboard.press('Escape'); await A.waitForTimeout(700); const s8f=await stored(A,'n1');
   ok('8e A\'s next edit keeps B\'s pin ('+s8f.pinned+', «'+s8f.blocks.map(b=>b.text).join(' | ')+'»); A lists '+await listText(A), s8f.pinned>0 && s8f.blocks.some(b=>/ ok$/.test(b.text)) && (await listText(A)).startsWith('[Закріплені],n1'));
+  // 8l A types in an archived note open from the archive section while B unarchives it: A's write merges, and the emptied section gives way to the notes at once
+  await A.bringToFront(); await btn(A,'n3','.it-r'); await A.click('#archRow'); await A.waitForTimeout(300); await open(A,'n3'); await A.waitForTimeout(300); await A.locator('#sheet .blk .txt').first().click();
+  await B.evaluate(()=>document.getElementById('archRow').click()); await B.waitForTimeout(300); await B.evaluate(()=>document.querySelector('#list .item[data-id="n3"] .it-r').click());
+  await until(async()=>!(await stored(A,'n3')).archived); await A.keyboard.press('End'); await A.keyboard.type(' 8l'); await A.waitForTimeout(1000);
+  const s8l=await stored(A,'n3'), sec8=await A.evaluate(()=>document.getElementById('sect').hidden), l8=await listText(A);
+  ok('8l A typed in n3 from the archive while B unarchived it: stored '+(s8l.archived? 'archived' : 'unarchived')+' with «'+s8l.blocks.map(b=>b.text).join(' | ')+'»; A shows '+(sec8? 'the notes' : 'the archive')+': '+l8, !s8l.archived && s8l.blocks.some(b=>/ 8l$/.test(b.text)) && sec8 && l8.includes('n3'));
+  await A.keyboard.press('Escape'); await A.waitForTimeout(500);
   console.log(errs.length? errs.join('\n') : '✓ tabs: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
