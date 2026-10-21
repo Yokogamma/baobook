@@ -1423,11 +1423,11 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, p
   const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box];
   d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'">'+ICO.trash+'</button>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
-  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], kb=e.detail===0, at=kb? [...list.querySelectorAll('.item')].indexOf(d) : -1;
-    const done=cls==='it-p'? pinNote(n, !n.pinned) : cls==='it-r'? side() : del();
-    if(kb) Promise.resolve(done).then(()=>keepFocus(n.id, cls, d.dataset.k, at)); });   // Enter or Space: a click with no pointer; the focus moves once the action is done (a delete waits for the history)
+  const keyed=(act, cls)=>{ const at=[...list.querySelectorAll('.item')].indexOf(d), k=d.dataset.k; Promise.resolve(act()).then(()=>keepFocus(n.id, cls, k, at)); };   // a key action: the focus moves once it is done (a delete waits for the history)
+  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], act=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del;
+    if(e.detail===0) keyed(act, cls); else act(); });   // Enter or Space: a click with no pointer
   d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
-    if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ const at=[...list.querySelectorAll('.item')].indexOf(d), cls=e.target===d? '' : e.target.classList[0]; Promise.resolve(del()).then(()=>keepFocus(n.id, cls, d.dataset.k, at)); } }); }   // Enter and Space on a nested button are that button's
+    if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete') keyed(del, e.target===d? '' : e.target.classList[0]); }); }   // Enter and Space on a nested button are that button's
 // the item first: it shows its buttons. A button keeps the focus while it means the same: the pin always, the others while the note stays in its section
 // (k: notes, archive or trash, as the item was drawn); otherwise the item takes it, so a second Enter does not archive a note just restored
 function focusItem(id, cls, k){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && (cls==='it-p' || it.dataset.k===k) && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }
@@ -1754,11 +1754,11 @@ function savedShow(cls, long, short){ savedL.textContent=long; savedS.textConten
 function markDirty(){ if(H.view || ro() || !STARTED || DYING) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
-let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
+let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), WP=new Map();   // WP: id → the promise of the last write started   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
-function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
+function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); WP.set(n.id,p); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
     if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ takeRec(n, r.note); if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
         setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) renderList(); }   // what the merge brought (a pin, an archive, the trash) may move the note in the list now
@@ -1822,14 +1822,18 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
   relist(); storageUI(); }
 /* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
 function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // the note in memory may be ahead of the store (open, a write in flight, a localStorage leftover): it goes whole through the editor delta, in one write, so
-  // the pin never takes the place of a change. Without the editor snapshot that delta needs, and after a failed write, the pin waits
-  const ahead=n===cur || inflight.has(n.id) || FELL.has(n.id);
-  if(unsaved.has(n.id)){ say(loc('pin.unsaved')); return; } if(ahead && !ESNAP.has(n.id)){ say(loc('pin.wait')); return; }
-  const whole=ahead;
-  if(n===cur){ if(whole && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }
-  const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  writeNote(n, whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); renderList(); }
+  // a failed write, or a localStorage leftover this tab cannot merge without the editor snapshot: a pin written over the stored record would take the
+  // place of that change, so it waits
+  if(unsaved.has(n.id)){ say(loc('pin.unsaved')); return; } if(FELL.has(n.id) && !ESNAP.has(n.id)){ say(loc('pin.wait')); return; }
+  if(n===cur){ if(dirty && !H.view && ESNAP.has(n.id)){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); } else flushSave(); }   // the open note's typing goes in the pin's own write
+  if(on) n.pinned=now(); else delete n.pinned; n.updated=now(); renderList(); pinWrite(n); }
+// the pin is written after a write of the note that is on its way, over what that write leaves (its result is the new editor snapshot); what is written is the
+// state in memory by then, so the last click wins. The open note and a note with a leftover go whole through the editor delta: the store may lack what they hold
+const PWAIT=new Set();
+function pinWrite(n){ const p=inflight.has(n.id) && WP.get(n.id); if(p){ if(!PWAIT.has(n.id)){ PWAIT.add(n.id); p.then(()=>{ PWAIT.delete(n.id); if(notes.includes(n)) pinWrite(n); }); } return; }
+  if(unsaved.has(n.id)){ say(loc('pin.unsaved')); return; }   // the write it waited for failed: the warning offers «Повторити»
+  const on=!!n.pinned, at=n.pinned||0, whole=ESNAP.has(n.id) && (n===cur || FELL.has(n.id));
+  writeNote(n, whole? undefined : fieldDelta(C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; if(on) C.pinned=at; else delete C.pinned; return C; })); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
@@ -1895,7 +1899,7 @@ async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
-  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; if(+raw.deleted>0) n.deleted=+raw.deleted; if(+raw.archived>0) n.archived=+raw.archived; if(+raw.pinned>0) n.pinned=+raw.pinned; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed, archived or pinned note carries the field
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; for(const k of ['deleted','archived','pinned']) if(+raw[k]>0) n[k]=+raw[k]; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed, archived or pinned note carries the field
     const ex=notes.find(x=>x.id===n.id);
     if(db.backend==='idb' && !LOCK){   // the import contract (SYNC-PLAN 4.14): a local write through the core, keeping the file's `updated`; an id purged here goes into the revived note
       if(ex && n.updated>ex.updated) await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import');   // R2: стан до перезапису — у версію
