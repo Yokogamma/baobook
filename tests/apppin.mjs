@@ -149,8 +149,8 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   const hold=()=>pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; }), letgo=()=>pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); });
   const clicks=k=>pg.evaluate(k=>{ for(let i=0;i<k;i++) document.querySelector('#list .item[data-id="n2"] .it-p').click(); }, k);
   await hold(); await clicks(2); const t7l=await pg.locator('#toast').innerText(); await letgo(); await pg.waitForTimeout(600); const a7=!!(await stored(pg,'n2')).pinned, l7=await listText(pg);
-  await hold(); await clicks(3); await letgo(); await pg.waitForTimeout(600); const b7=!!(await stored(pg,'n2')).pinned;
-  ok('7l two quick clicks: no hint («'+t7l+'»), stored pinned '+a7+' ('+l7+'); three: stored pinned '+b7, !/записано/.test(t7l) && !a7 && !l7.includes(',n2,[') && b7 && (await listText(pg)).startsWith('[Закріплені],n2'));
+  await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await hold(); await clicks(3); const t7l3=await pg.locator('#toast').innerText(); await letgo(); await pg.waitForTimeout(600); const b7=!!(await stored(pg,'n2')).pinned;
+  ok('7l two quick clicks: no hint («'+t7l+'»), stored pinned '+a7+' ('+l7+'); three: no hint («'+t7l3+'»), stored pinned '+b7, !t7l && !t7l3 && !a7 && !l7.includes(',n2,[') && b7 && (await listText(pg)).startsWith('[Закріплені],n2'));
   await btn(pg,'n2','.it-p');
 
   // 7m typing whose autosave is held in flight, more typing, at once the pin and a switch to another note: the later typing goes in the pin's write and is stored with the pin
