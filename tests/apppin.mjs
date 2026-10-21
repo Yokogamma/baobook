@@ -28,6 +28,13 @@ const listText=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list > *')].m
 const stored=(pg,id)=>pg.evaluate(id=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('notes','readonly').objectStore('notes').get(id); g.onsuccess=()=>{ d.close(); res(g.result||null); }; }; }), id);
 const open=(pg,id)=>pg.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"]').click(), id);
 const cur=pg=>pg.evaluate(()=>window.sheetDebug.cur());
+// the boxes of an item's buttons (pin, archive, bin) and of the panel, and what a tap at the pin's centre lands on
+const targets=(pg,id)=>pg.evaluate(id=>{ const it=document.querySelector('#list .item[data-id="'+id+'"]'), r=e=>{ const b=e.getBoundingClientRect(); return {x:b.x,y:b.y,w:b.width,h:b.height,r:b.right}; };
+  const bs=['.it-p','.it-r','.it-x'].map(c=>r(it.querySelector(c))), p=bs[0], hit=document.elementFromPoint(p.x+p.w/2, p.y+p.h/2), t=it.querySelector('.it-t');
+  return {bs, gaps:[bs[1].x-bs[0].r, bs[2].x-bs[1].r], side:document.getElementById('side').getBoundingClientRect().width, vw:innerWidth,
+    hit:hit && hit.closest('.it-p,.it-r,.it-x') ? hit.closest('.it-p,.it-r,.it-x').classList[0] : (hit && hit.className),
+    room:t.getBoundingClientRect().right-parseFloat(getComputedStyle(t).paddingRight)<=p.x, clip:getComputedStyle(t).textOverflow}; }, id);
+const sz=t=>t.bs.map(b=>Math.round(b.w)+'×'+Math.round(b.h)).join(', ')+'; gaps '+t.gaps.map(g=>Math.round(g)).join(', ');
 const btn=async(pg,id,cls)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]'); await it.hover(); await it.locator(cls).click(); await pg.waitForTimeout(400); };
 const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .item[data-id="'+id+'"] .it-p'); return b? {on:b.classList.contains('on'), title:b.title, label:b.getAttribute('aria-label'), pressed:b.getAttribute('aria-pressed')} : null; }, id);
 
@@ -325,6 +332,8 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
 /* ── a narrow window: the panel closes after an action, and the keyboard focus does not stay in it ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:800,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await fresh(pg); await open(pg,'n1'); await pg.waitForTimeout(300); if(!(await pg.evaluate(()=>document.getElementById('app').classList.contains('open')))){ await pg.click('#sideBtn'); await pg.waitForTimeout(400); }
+  const t11=await targets(pg,'n1');
+  ok('11a at 800px without touch the item buttons stay 24×24, 2 px apart ('+sz(t11)+'), and the panel is narrower than the window ('+Math.round(t11.side)+' of '+t11.vw+')', t11.bs.every(b=>Math.round(b.w)===24 && Math.round(b.h)===24) && t11.gaps.every(g=>Math.round(g)===2) && t11.side<t11.vw);
   await pg.locator('#list .item[data-id="n1"]').focus(); await pg.keyboard.press('Delete'); await pg.waitForTimeout(700);
   const st=await pg.evaluate(()=>{ const a=document.activeElement, r=document.getElementById('list').getBoundingClientRect(); return {inList:!!(a && document.getElementById('list').contains(a)), shown:r.right>0 && r.width>0}; });
   await pg.keyboard.press('Delete'); await pg.waitForTimeout(700); const gone=(await Promise.all(['n1','n2','n3'].map(id=>stored(pg,id)))).filter(n=>n && n.deleted).length;
@@ -359,6 +368,22 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('10e for a pinned note the «⋯» offers «Відкріпити»', (await mu.count())===1);
   await tapBtn(mu); await until(async()=>!((await stored(pg,'n3'))||{}).pinned);
   ok('10f it unpins: «'+await pg.locator('#toast').innerText()+'»', /відкріплено/.test(await pg.locator('#toast').innerText()));
+  // 10g–10l the panel covers the phone screen, the item buttons are 44 px targets with gaps, a tap on the pin pins, and the panel's «×» and «back» close it
+  await pg.click('#sideBtn'); await pg.waitForTimeout(400); const tp=await targets(pg,'n3');
+  ok('10g the panel takes the full width ('+Math.round(tp.side)+' of '+tp.vw+')', Math.round(tp.side)===tp.vw);
+  ok('10h the pin, archive and bin are at least 44×44 and apart ('+sz(tp)+')', tp.bs.every(b=>b.w>=44 && b.h>=44) && tp.gaps.every(g=>g>=6));
+  ok('10i the title makes room for the buttons and ends with an ellipsis ('+tp.clip+'), and the pin\'s centre hits the pin ('+tp.hit+')', tp.room && tp.clip==='ellipsis' && tp.hit==='it-p');
+  await tapEl(pg.locator('#list .item[data-id="n3"] .it-p')); await until(async()=>((await stored(pg,'n3'))||{}).pinned>0);
+  const n3=await stored(pg,'n3');
+  ok('10j a tap at the pin\'s centre pins the note and archives or trashes nothing', n3.pinned>0 && !n3.archived && !n3.deleted && await listText(pg)==='[Закріплені],n3,[Інші],n1,n2');
+  await tapBtn(pg.locator('#sideX')); await pg.waitForTimeout(400);
+  const c1=await pg.evaluate(()=>({open:document.getElementById('app').classList.contains('open'), inSide:document.getElementById('side').contains(document.activeElement)}));
+  ok('10k the panel\'s «×» closes it and the focus leaves the panel', !c1.open && !c1.inSide);
+  await pg.click('#sideBtn'); await pg.waitForTimeout(400); await pg.goBack(); await pg.waitForTimeout(400);
+  ok('10l «back» closes the panel and keeps the note open', !(await pg.evaluate(()=>document.getElementById('app').classList.contains('open'))) && await cur(pg)==='n3');
+  // 10m a touch tablet (800 px) keeps the panel and the buttons as they were, without the «×»
+  await pg.setViewportSize({width:800,height:1000}); await pg.click('#sideBtn'); await pg.waitForTimeout(400); const tt=await targets(pg,'n3');
+  ok('10m at 800px on touch: the panel '+Math.round(tt.side)+' of '+tt.vw+', buttons '+sz(tt)+', no «×»', tt.side<tt.vw && tt.bs.every(b=>Math.round(b.w)===24 && Math.round(b.h)===24) && !(await pg.locator('#sideX').isVisible()));
   console.log(errs.length? errs.join('\n') : '✓ phone: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
