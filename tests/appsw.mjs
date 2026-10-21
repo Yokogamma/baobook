@@ -52,10 +52,10 @@ await ctx.route('https://www.gstatic.com/firebasejs/**', r=>{ sdkHits++; r.fulfi
   ok('7b after a reload the module comes from the cache: still '+sdkHits+' network fetch', v2==='stub' && sdkHits===1); }
 
 // an update of the worker (the next version of sw.js on the server): the old shell goes, the SDK and font caches stay
-{ const sw=fs.readFileSync(new URL('../public/sw.js', import.meta.url),'utf8'); site.override.set('/sw.js', sw.replace("VERSION='v8'","VERSION='v99'"));
+{ const sw=fs.readFileSync(new URL('../public/sw.js', import.meta.url),'utf8'); const OLD='baobook-shell-'+/VERSION='(v\d+)'/.exec(sw)[1]; site.override.set('/sw.js', sw.replace(/VERSION='v\d+'/,"VERSION='v99'"));
   await pg.evaluate(async()=>{ const reg=await navigator.serviceWorker.getRegistration(); await reg.update(); });
-  const k2=await until(async()=>{ const k=await keys(pg); return k.includes('baobook-shell-v99') && !k.includes('baobook-shell-v8')? k : null; }, 10000) || await keys(pg);
-  ok('8 after the update the shell is v99, the old shell is gone and baobook-sdk is kept ('+k2.join(', ')+')', k2.includes('baobook-shell-v99') && !k2.includes('baobook-shell-v8') && k2.includes('baobook-sdk') && k2.includes('other-app-cache'));
+  const k2=await until(async()=>{ const k=await keys(pg); return k.includes('baobook-shell-v99') && !k.includes(OLD)? k : null; }, 10000) || await keys(pg);
+  ok('8 after the update the shell is v99, the old shell is gone and baobook-sdk is kept ('+k2.join(', ')+')', k2.includes('baobook-shell-v99') && !k2.includes(OLD) && k2.includes('baobook-sdk') && k2.includes('other-app-cache'));
   await pg.reload(); await pg.waitForTimeout(500); }
 
 // the server goes away: the app still opens from the cache, with its notes

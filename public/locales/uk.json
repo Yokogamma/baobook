@@ -406,5 +406,9 @@
   "text.summary": "{fs} · {pct} %",
   "text.reset": "Скинути",
   "text.smaller": "Менший текст",
-  "text.larger": "Більший текст"
+  "text.larger": "Більший текст",
+  "update.available": "Доступна нова версія",
+  "update.reload": "Оновити",
+  "update.waiting": "Оновлю, щойно все збережеться",
+  "settings.build": "Версія {build}"
 }
