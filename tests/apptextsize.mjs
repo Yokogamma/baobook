@@ -81,7 +81,7 @@ const openDlg=async pg=>{ await pg.click('#setBtn'); await pg.click('#textBtn');
   const s={title:await size(pg,'.it-t'), sub:await size(pg,'.it-s'), date:await size(pg,'.it-d'), search:await size(pg,'#q'), brand:await size(pg,'.brand'), foot:await size(pg,'.stor')};
   const side=await pg.evaluate(()=>{ const r=document.getElementById('side').getBoundingClientRect(), q=document.getElementById('searchBox').getBoundingClientRect(); return {w:Math.round(r.width), q:Math.round(q.height)}; });
   ok('12b the phone scale: list title 16, preview 14, date 13, brand 17, footer 13 ('+[s.title,s.sub,s.date,s.brand,s.foot].join(', ')+')', s.title===16 && s.sub===14 && s.date===13 && s.brand===17 && s.foot===13);
-  ok('12c the search field is 16px, so iOS does not zoom into it, and 44px tall; the panel is 340px ('+s.search+', '+side.q+', '+side.w+')', s.search>=16 && side.q===44 && side.w===340);
+  ok('12c the search field is 16px, so iOS does not zoom into it, and 44px tall; the panel takes the full width ('+s.search+', '+side.q+', '+side.w+')', s.search>=16 && side.q===44 && side.w===390);
   await pg.click('#setBtn'); await pg.waitForTimeout(150);
   ok('13 the settings menu reads 16px on a phone', await size(pg,'.setpop .mi')===16);
   await pg.click('#textBtn'); await pg.waitForTimeout(250);
@@ -89,7 +89,7 @@ const openDlg=async pg=>{ await pg.click('#setBtn'); await pg.click('#textBtn');
   ok('14 on a phone the dialog is a bottom sheet across the screen, its steps 44px tall ('+JSON.stringify(dlg)+')', dlg.l===0 && dlg.w===390 && Math.abs(dlg.bottom-dlg.h)<=1 && dlg.b.every(h=>h>=44));
   await pg.goBack(); await pg.waitForTimeout(250);
   ok('14b system Back closes it', !(await pg.evaluate(()=>document.getElementById('tsz').open)));
-  if(await pg.evaluate(()=>document.getElementById('app').classList.contains('open'))){ await pg.click('#backdrop',{position:{x:370,y:400}}); await pg.waitForTimeout(350); }
+  if(await pg.evaluate(()=>document.getElementById('app').classList.contains('open'))){ await pg.click('#sideX'); await pg.waitForTimeout(350); }
   await pg.click('#moreBtn'); await pg.waitForTimeout(200);
   const st=await pg.evaluate(()=>{ const s=document.querySelector('.amenu .mi-step'); return s && {out:s.querySelector('output').textContent, label:s.getAttribute('aria-label'), h:[...s.querySelectorAll('button')].map(b=>Math.round(b.getBoundingClientRect().height))}; });
   ok('15 the header «⋯» has «Текст нотаток» with − 18 + (buttons 44px) ('+JSON.stringify(st)+')', st && st.out==='18' && st.label==='Текст нотаток' && st.h.every(h=>h===44));
