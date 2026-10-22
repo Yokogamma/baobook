@@ -82,6 +82,11 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   const kbNew=async key=>{ await panel(); await hold(item(pg,'n1')); await tap(pg.locator('#newBtn')); const before=await count(pg); await pg.focus('#newBtn'); await pg.keyboard.press(key); await until(async()=>await count(pg)>before, 3000); return (await count(pg))-before; };
   const kb=[await kbNew('Enter'), await kbNew('Space'), await kbNew('Control+Alt+KeyN')];
   ok('7c right after a tap outside closed the mode, Enter, Space and Ctrl+Alt+N each make a note: '+kb.join(', '), kb.every(k=>k===1));
+  // 7d a mouse press on «Нова» held 1.2 s while the mode is open only closes it; the next quick click makes a note
+  await pg.evaluate(()=>document.querySelector('#list .item[data-id="n4"]').click()); await pg.waitForTimeout(400); await panel(); await hold(item(pg,'n1'));
+  const nb=await boxOf(pg.locator('#newBtn')), c0=await count(pg); await pg.mouse.move(nb.cx, nb.cy); await pg.mouse.down(); await pg.waitForTimeout(1200); await pg.mouse.up(); await pg.waitForTimeout(400);
+  const longClose=[await actsOn(pg), (await count(pg))-c0]; await pg.mouse.click(nb.cx, nb.cy); await until(async()=>await count(pg)>c0, 3000);
+  ok('7d a mouse press held 1.2 s on «Нова» only closes the mode (mode '+longClose[0]+', new notes '+longClose[1]+'); the next click makes one ('+((await count(pg))-c0)+')', longClose[0]===null && longClose[1]===0 && (await count(pg))-c0===1);
   await pg.evaluate(()=>document.querySelector('#list .item[data-id="n4"]').click()); await pg.waitForTimeout(400); await panel();
 
   // 8 a scroll of the list by the user, Escape and Back close the mode; after Back the panel stays, the next Back closes it
