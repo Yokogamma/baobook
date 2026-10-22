@@ -24,8 +24,8 @@ const count=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet
 const sideOpen=pg=>pg.evaluate(()=>document.getElementById('app').classList.contains('open'));
 const actsOn=pg=>pg.evaluate(()=>{ const a=document.querySelector('#list .item.acts'); return a? a.dataset.id : null; });
 const item=(pg,id)=>pg.locator('#list .item[data-id="'+id+'"]');
-// an item's box once it is drawn (a busy machine draws the list later)
-const boxOf=async loc=>{ await loc.waitFor({state:'visible', timeout:5000}).catch(()=>{}); const b=await loc.boundingBox(); return b && {x:b.x, y:b.y, w:b.width, h:b.height, cx:b.x+b.width/2, cy:b.y+b.height/2}; };
+// an item's box once it is drawn (a busy machine draws the list later) and, for an item near an edge of the list, scrolled to its middle (new notes push the others down, and the panel's footer lies over the bottom of the list)
+const boxOf=async loc=>{ await loc.waitFor({state:'visible', timeout:5000}).catch(()=>{}); if(await loc.evaluate(e=>{ if(!e.classList.contains('item')) return false; const r=e.getBoundingClientRect(), L=e.closest('.list').getBoundingClientRect(); if(r.top>=L.top+40 && r.bottom<=L.bottom-90) return false; e.scrollIntoView({block:'center'}); return true; }).catch(()=>false)) await loc.page().waitForTimeout(250); const b=await loc.boundingBox(); return b && {x:b.x, y:b.y, w:b.width, h:b.height, cx:b.x+b.width/2, cy:b.y+b.height/2}; };
 const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .item .it-p,#list .item .it-r,#list .item .it-x')].some(b=>{ const r=b.getBoundingClientRect(); return r.width>0 && r.height>0 && getComputedStyle(b).display!=='none'; }));
 
 /* ── touch: a phone ── */
@@ -78,6 +78,11 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   ok('7 a tap on another item closes the mode and opens nothing (open: '+await cur(pg)+', mode: '+await actsOn(pg)+')', await actsOn(pg)===null && await cur(pg)==='n4' && await sideOpen(pg));
   const n0=await count(pg); await hold(item(pg,'n1')); await tap(pg.locator('#newBtn')); await pg.waitForTimeout(300);
   ok('7b a tap on «Нова» outside the list only closes the mode: no new note ('+n0+' → '+await count(pg)+'), the open note stays ('+await cur(pg)+'), mode '+await actsOn(pg), await actsOn(pg)===null && await count(pg)===n0 && await cur(pg)==='n4' && await sideOpen(pg));
+  // 7c right after such a tap the keyboard still works: Enter and Space on «Нова», and Ctrl+Alt+N, each make a note
+  const kbNew=async key=>{ await panel(); await hold(item(pg,'n1')); await tap(pg.locator('#newBtn')); const before=await count(pg); await pg.focus('#newBtn'); await pg.keyboard.press(key); await until(async()=>await count(pg)>before, 3000); return (await count(pg))-before; };
+  const kb=[await kbNew('Enter'), await kbNew('Space'), await kbNew('Control+Alt+KeyN')];
+  ok('7c right after a tap outside closed the mode, Enter, Space and Ctrl+Alt+N each make a note: '+kb.join(', '), kb.every(k=>k===1));
+  await pg.evaluate(()=>document.querySelector('#list .item[data-id="n4"]').click()); await pg.waitForTimeout(400); await panel();
 
   // 8 a scroll of the list by the user, Escape and Back close the mode; after Back the panel stays, the next Back closes it
   await hold(item(pg,'n1')); await pg.waitForTimeout(100); await pg.evaluate(()=>{ document.getElementById('list').scrollTop=120; }); await pg.waitForTimeout(250);
