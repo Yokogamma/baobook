@@ -50,7 +50,7 @@ ok('7 offline at /index.html: the same page C ('+await tver(p4)+')', await tver(
 await p4.close();
 await ctx.setOffline(false);
 
-// a page that stays open while D is deployed: it says so when the network comes back or it is shown again
+// a page that stays open while D, then E is deployed: it says so when the network comes back or it is shown again
 const p5=await open(); await p5.waitForTimeout(500);
 ok('8 the current build: no strip', await tver(p5)==='C' && await strip(p5)==='');
 { const v=await p5.evaluate(()=>document.getElementById('buildV').textContent); ok('8a the settings menu shows the build as «Версія '+NAME+'» ('+v+')', v==='Версія '+NAME); }
@@ -60,9 +60,14 @@ ok('8 the current build: no strip', await tver(p5)==='C' && await strip(p5)===''
   ok('8b a second instance next to an open one is not locked ('+JSON.stringify(st)+')', !st.ro && !st.inert && !st.locked); await p6.close(); }
 deploy('D', BUILD+1);
 await nudge(p5);
-const s5=await until(()=>strip(p5), 5000);
+const s5=await until(async()=>{ const s=await strip(p5); return /версія/.test(s)? s : null; }, 5000);
 ok('9 D on the server: the open page C shows «'+s5+'»', /Доступна нова версія/.test(s5||'') && /Оновити/.test(s5||''));
 ok('9b the worker never stores build.json', await p5.evaluate(async()=>{ for(const k of await caches.keys()) for(const q of await (await caches.open(k)).keys()) if(/build\.json/.test(q.url)) return false; return true; }));
+await p5.click('#updX'); await nudge(p5); await p5.waitForTimeout(800);
+ok('9c ✕ hides the strip, and the same build does not bring it back', await strip(p5)==='');
+deploy('E', BUILD+2); await nudge(p5);
+const s9=await until(async()=>{ const s=await strip(p5); return /версія/.test(s)? s : null; }, 5000);
+ok('9d a newer build E shows it again («'+s9+'»)', /Доступна нова версія/.test(s9||''));
 
 // «Оновити» while a write fails: no reload until the note is saved, then the reload brings D and the text is there
 await p5.evaluate(()=>{ sheetDebug.failSave=true; });
@@ -75,7 +80,7 @@ await p5.evaluate(()=>{ sheetDebug.failSave=false; });
 const nav=p5.waitForEvent('framenavigated', {timeout:8000}).catch(()=>null);
 await p5.evaluate(()=>document.getElementById('saveRetry').click());
 await nav; await p5.waitForSelector('#sheet'); await p5.waitForTimeout(600);
-ok('12 saved, then reloaded by itself: D ('+await tver(p5)+'), no strip', await tver(p5)==='D' && await strip(p5)==='');
+ok('12 saved, then reloaded by itself: E ('+await tver(p5)+'), no strip', await tver(p5)==='E' && await strip(p5)==='');
 ok('12b the text typed before the reload is there', await p5.locator('.blk .txt').filter({hasText:'правка перед оновленням'}).count()===1);
 
 // the cache holds only this app's caches, and the shell has no separate /index.html copy to go stale

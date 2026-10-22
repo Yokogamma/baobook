@@ -410,5 +410,6 @@
   "update.available": "Доступна нова версія",
   "update.reload": "Оновити",
   "update.waiting": "Оновлю, щойно все збережеться",
+  "update.dismiss": "Сховати",
   "settings.build": "Версія {build}"
 }

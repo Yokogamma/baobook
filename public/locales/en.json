@@ -410,5 +410,6 @@
   "update.available": "A new version is available",
   "update.reload": "Reload",
   "update.waiting": "Will reload once everything is saved",
+  "update.dismiss": "Hide",
   "settings.build": "Version {build}"
 }

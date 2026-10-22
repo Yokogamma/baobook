@@ -455,9 +455,9 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast b{font-weight:500;color:var(--ink)}
 @media (max-width:640px){ .toast{white-space:normal;max-width:calc(100vw - 32px);text-align:center} }
-/* «Доступна нова версія · Оновити»: a newer build is on the server; above the toast, over everything but the dialogs */
-.updstrip{position:fixed;left:50%;bottom:calc(64px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%);z-index:29;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100vw - 32px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:var(--t-md);color:var(--ink-2)}
-.updstrip[hidden]{display:none} .updstrip .fbtn{flex:0 0 auto;height:30px;padding:0 12px} @media (hover:none){ .updstrip .fbtn{height:40px} }
+/* «Доступна нова версія · Оновити ✕»: a newer build is on the server. Above the undo bar and the phone's round button; it does not follow the keyboard, which covers it while typing */
+.updstrip{position:fixed;left:50%;bottom:calc(80px + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%);width:max-content;box-sizing:border-box;z-index:29;display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100vw - 32px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:var(--t-md);color:var(--ink-2)}
+.updstrip[hidden]{display:none} #updMsg{flex:0 1 auto;min-width:0} .updstrip .fbtn{flex:0 0 auto;height:30px;padding:0 12px} .updstrip .uclose{flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font-size:1.125rem;cursor:pointer} @media (hover:none){ .updstrip .fbtn,.updstrip .uclose{height:40px} .updstrip .uclose{width:40px} }
 /* плашка «Скасувати»: дія вже виконана, кілька секунд її можна повернути */
 .undo{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:31;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;background:var(--ink);color:var(--page);font-family:var(--sans);font-size:var(--t-md);box-shadow:var(--shadow);opacity:0;transition:opacity .2s,transform .2s}
 .undo.show{opacity:1;transform:translateX(-50%)}
@@ -694,7 +694,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
 <div class="toast" id="toast" data-i18n-html="toast.help"></div>
-<div class="updstrip" id="updStrip" hidden role="status"><span id="updMsg"></span><button class="fbtn pri" id="updGo" type="button" data-i18n="update.reload"></button></div>
+<div class="updstrip" id="updStrip" hidden role="status"><span id="updMsg"></span><button class="fbtn pri" id="updGo" type="button" data-i18n="update.reload"></button><button class="uclose" id="updX" type="button" data-i18n-attr="title:update.dismiss;aria-label:update.dismiss">✕</button></div>
 <dialog class="ask choice" id="choice" role="dialog" aria-labelledby="choiceTitle" aria-describedby="choiceText"><div class="ask-t" id="choiceTitle"></div><div class="ask-x" id="choiceText"></div><div class="ask-b" id="choiceBtns"></div></dialog>
 <dialog class="ask" id="ask" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askText"><div class="ask-t" id="askTitle"></div><div class="ask-x" id="askText"></div><div class="ask-b"><button class="fbtn" id="askNo" type="button" data-i18n="common.cancel"></button><button class="fbtn danger" id="askYes" type="button" data-i18n="common.delete"></button></div></dialog>
 <dialog class="ask tsz" id="tsz" aria-labelledby="tszTitle">
@@ -2978,13 +2978,15 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator
 /* a newer build on the server: «Доступна нова версія · Оновити». An open page keeps its code until it is reloaded (a tab left open, the
    installed app kept in memory, a start from the cache while the network was down), so it asks for build.json (never cached by the worker)
    at start, when it is shown again, when the network comes back and every half hour. «Оновити» reloads once nothing is left to save. */
-const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});
+const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false, updSeen=BUILD; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});   // updSeen: the newest build shown or hidden with ✕; only a newer one shows the strip again
 async function updCheck(force){ if(!/^https?:/.test(location.protocol) || document.hidden || !navigator.onLine || !updStrip.hidden) return; const t=Date.now(); if(!force && t-updAt<6e4) return; updAt=t; clearTimeout(updT);
-  let b; try{ const r=await fetch('./build.json',{cache:'no-store'}); if(!r.ok) return; b=+(await r.json()).build; }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet: again in a while
-  if(b>BUILD && updStrip.hidden){ updMsg.textContent=loc('update.available'); updStrip.hidden=false; } }
+  let r; try{ r=await fetch('./build.json',{cache:'no-store'}); }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet: again in a while
+  let b=0; try{ if(r.ok && /json/.test(r.headers.get('content-type')||'')) b=+(await r.json()).build||0; }catch(_){}   // not our JSON (a captive portal, a fallback page): nothing to compare
+  if(b>updSeen && updStrip.hidden){ updSeen=b; updMsg.textContent=''; updStrip.hidden=false; requestAnimationFrame(()=>{ updMsg.textContent=loc('update.available'); }); } }   // the text goes in after the strip shows, so a screen reader announces it
 const updBusy=()=>dirty || unsaved.size>0 || inflight.size>0 || REVIVING.size>0;
-function updTry(){ if(!updWant) return; if(updBusy()){ updMsg.textContent=loc('update.waiting'); setTimeout(updTry,500); return; } location.reload(); }
-updGo.addEventListener('click',()=>{ if(updWant) return; updWant=true; updGo.disabled=true; flushSave(); updTry(); });
+function updTry(){ if(!updWant) return; if(updBusy() && !LOCK){ updMsg.textContent=loc('update.waiting'); setTimeout(updTry,500); return; } location.reload(); }   // a view-only tab can never save: its own strip offers the export, and the reload is what it needs
+updGo.addEventListener('click',()=>{ if(updWant){ location.reload(); return; } updWant=true; flushSave(); updTry(); });   // a second tap while waiting reloads anyway; the browser still asks first if something is unsaved
+$('updX').addEventListener('click',()=>{ updWant=false; updStrip.hidden=true; });
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) updCheck(); }); window.addEventListener('online',()=>updCheck(true));
 if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange',()=>updCheck(true));   // a new worker took over: a deploy happened
 setTimeout(()=>updCheck(true),3000); setInterval(()=>updCheck(true),18e5);
