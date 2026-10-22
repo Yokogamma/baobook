@@ -1438,7 +1438,7 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
    Pinned notes come first in the notes, in a group «Закріплені» (the last pinned on top; by rank in a search), the rest under «Інші» */
 // the list on touch (LIST-ACTIONS-PLAN 4.1–4.4): a tap opens, a long press opens the action mode of one note (actsId). LISTTOUCH: by input, not width
 const LISTTOUCH=matchMedia('(hover:none)');
-let actsId=null, modeAt=0, pressId=null, btnDown=null, closedBy=null, lastTouch={id:null, at:-Infinity}, redrawing=false;
+let actsId=null, modeAt=0, pressId=null, btnDown=null, closedBy=null, swallow=null, lastTouch={id:null, at:-Infinity}, redrawing=false;
 const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
 const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
@@ -2681,9 +2681,12 @@ const listGest=gesture(list,{ holdMs:HOLD_MS, filter:e=>e.pointerType!=='mouse' 
   onCancel:()=>unpress() });
 list.addEventListener('pointerdown',e=>{ if(!e.isPrimary && listGest.state){ listGest.cancel(); unpress(); } const b=e.target.closest && e.target.closest('.item button'); if(b) btnDown={id:b.closest('.item').dataset.id, cls:b.classList[0], at:performance.now()}; },true);   // a second finger ends the press; a fresh press on a button is what lets it act in the action mode
 list.addEventListener('lostpointercapture',e=>{ const g=listGest.state; if(g && g.id===e.pointerId){ listGest.cancel(); unpress(); } });
-document.addEventListener('touchend',e=>{ if(listGest.state || listGest.last) e.preventDefault(); },{passive:false,capture:true});   // on the document: a redraw may have taken the touched item out of the list, and then its touchend does not reach it
+document.addEventListener('touchend',e=>{ if(listGest.state || listGest.last || (swallow && performance.now()-swallow.at<1000)) e.preventDefault(); },{passive:false,capture:true});   // on the document: a redraw may have taken the touched item out of the list, and then its touchend does not reach it
 list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs(); },{passive:true});   // a scroll by the user; a redraw's own scroll is not one
-document.addEventListener('pointerdown',e=>{ closedBy=null; if(actsId===null) return; if(e.target.closest && e.target.closest('.item.acts button')) return; closedBy={id:e.pointerId, at:performance.now()}; closeActs(); },true);   // runs before the list gesture, which reads closedBy
+document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
+  if(e.target.closest('.item.acts button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
+  closedBy={id:e.pointerId, at:performance.now()}; if(!list.contains(e.target)) swallow={at:performance.now()}; closeActs(); },true);
+addEventListener('click',e=>{ if(!swallow || performance.now()-swallow.at>=1000) return; swallow=null; e.preventDefault(); e.stopPropagation(); },true);   // a tap outside the list that closed the mode does only that («+», the panel's «×», a section row)   // runs before the list gesture, which reads closedBy
 document.addEventListener('keydown',e=>{ if(e.key!=='Escape' || actsId===null || popOpen) return; const a=document.activeElement, it=a && list.contains(a) && a.closest('.item'), id=it && it.dataset.id; closeActs(); if(id) focusItem(id, ''); });   // Escape from a button of the mode leaves the focus on its item
 LISTTOUCH.addEventListener('change',()=>closeActs());
 sheet.addEventListener('touchmove',e=>{ const g=sheetGest.state; if(g && (g.data.made||g.data.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання

@@ -20,6 +20,7 @@ const fresh=async(pg)=>{ await pg.goto(SITE); await ready(pg); await pg.waitForT
   await until(()=>pg.evaluate(ids=>[...document.querySelectorAll('#list .item')].every(d=>ids.includes(d.dataset.id)), ids)); await pg.waitForTimeout(200); };
 const stored=(pg,id)=>pg.evaluate(id=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('notes','readonly').objectStore('notes').get(id); g.onsuccess=()=>{ d.close(); res(g.result||null); }; }; }), id);
 const cur=pg=>pg.evaluate(()=>window.sheetDebug.cur());
+const count=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('notes','readonly').objectStore('notes').count(); g.onsuccess=()=>{ d.close(); res(g.result); }; }; }));
 const sideOpen=pg=>pg.evaluate(()=>document.getElementById('app').classList.contains('open'));
 const actsOn=pg=>pg.evaluate(()=>{ const a=document.querySelector('#list .item.acts'); return a? a.dataset.id : null; });
 const item=(pg,id)=>pg.locator('#list .item[data-id="'+id+'"]');
@@ -75,6 +76,8 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   // 7 a tap on another item while a mode is open only closes the mode
   await panel(); await hold(item(pg,'n1')); await tap(item(pg,'n5'));
   ok('7 a tap on another item closes the mode and opens nothing (open: '+await cur(pg)+', mode: '+await actsOn(pg)+')', await actsOn(pg)===null && await cur(pg)==='n4' && await sideOpen(pg));
+  const n0=await count(pg); await hold(item(pg,'n1')); await tap(pg.locator('#newBtn')); await pg.waitForTimeout(300);
+  ok('7b a tap on «Нова» outside the list only closes the mode: no new note ('+n0+' → '+await count(pg)+'), the open note stays ('+await cur(pg)+'), mode '+await actsOn(pg), await actsOn(pg)===null && await count(pg)===n0 && await cur(pg)==='n4' && await sideOpen(pg));
 
   // 8 a scroll of the list by the user, Escape and Back close the mode; after Back the panel stays, the next Back closes it
   await hold(item(pg,'n1')); await pg.waitForTimeout(100); await pg.evaluate(()=>{ document.getElementById('list').scrollTop=120; }); await pg.waitForTimeout(250);
@@ -106,6 +109,9 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   const tt=await item(pg,'n8').evaluate(d=>[d.querySelector('.it-r').title, d.querySelector('.it-x').title, !!d.querySelector('.it-p')]);
   await tap(item(pg,'n8').locator('.it-x')); await until(()=>pg.evaluate(()=>document.getElementById('ask').open),3000); const asked=await pg.evaluate(()=>document.getElementById('ask').open);
   ok('11 in the trash the mode offers «'+tt[0]+'» and «'+tt[1]+'» (no pin: '+!tt[2]+'); delete forever asks ('+asked+')', tt[0]==='Відновити' && tt[1]==='Видалити назавжди' && !tt[2] && asked && natives===0);
+  await tap(pg.locator('#askTitle')); const still=await pg.evaluate(()=>document.getElementById('ask').open); await pg.goBack(); await pg.waitForTimeout(400);
+  const askAfterBack=await pg.evaluate(()=>document.getElementById('ask').open), s8=await stored(pg,'n8');
+  ok('11b a touch on the dialog\'s text keeps it open ('+still+'), Back then closes it ('+!askAfterBack+') and deletes nothing', still && !askAfterBack && s8 && s8.deleted>0);
   await escape(); await escape();
 
   // 12 the pinned look: a pin mark and a background of its own
