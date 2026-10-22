@@ -13,6 +13,7 @@ const PUB=new URL('../public/', import.meta.url), HTML=fs.readFileSync(new URL('
 const BUILD=+((/const BUILD=(\d+)/.exec(HTML)||[])[1]||0), META=+((/<meta name="baobook-build" content="(\d+)">/.exec(HTML)||[])[1]||-1);
 const FILE=fs.existsSync(new URL('build.json', PUB))? +JSON.parse(fs.readFileSync(new URL('build.json', PUB),'utf8')).build : -2;
 ok('1 the build marker is one number in the constant, the meta tag and build.json ('+[BUILD,META,FILE].join(', ')+')', BUILD>2026010100 && BUILD===META && BUILD===FILE);
+const NAME=String(BUILD).replace(/^\d\d(\d\d)(\d\d)(\d\d)(\d\d)$/,(_,y,m,d,n)=>y+'.'+m+'.'+d+'.'+(+n));   // 2026102201 → 26.10.22.1
 
 // a version of the app: the marker t-ver tells the versions apart on screen, the build number goes everywhere BUILD is
 const site=await serve(); site.redirect.set('/index.html','/');   // as on Cloudflare: the app lives at /, /index.html answers 307
@@ -52,6 +53,7 @@ await ctx.setOffline(false);
 // a page that stays open while D is deployed: it says so when the network comes back or it is shown again
 const p5=await open(); await p5.waitForTimeout(500);
 ok('8 the current build: no strip', await tver(p5)==='C' && await strip(p5)==='');
+{ const v=await p5.evaluate(()=>document.getElementById('buildV').textContent); ok('8a the settings menu shows the build as «Версія '+NAME+'» ('+v+')', v==='Версія '+NAME); }
 // a second instance while the first stays open (Android may keep the old one in memory): it is not view-only, the sheet takes typing
 { const p6=await open(); await p6.waitForTimeout(600);
   const st=await p6.evaluate(()=>({ro:!document.getElementById('roStrip').hidden, inert:document.getElementById('sheet').inert, locked:document.querySelector('.app').classList.contains('locked')}));

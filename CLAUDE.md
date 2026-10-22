@@ -12,7 +12,7 @@ A notes app "on a blank sheet", formerly «Чистий аркуш» in `Yokogam
 - Only `public/` is published. Don't put tests, docs or tooling there.
 - User data lives in IndexedDB `sheet` (stores `notes`, `versions`, `blobs`) and localStorage `sheet:settings`. Don't rename stores, and don't rename or drop fields, without a migration. New fields are optional and get defaults on read. Export files from older versions must keep importing.
 - The service worker may delete only caches with its own prefix: other apps can share the origin.
-- Every PR that changes `public/` raises the build marker `BUILD` (`YYYYMMDDn`): the constant and `<meta name="baobook-build">` in `public/index.html`, and `public/build.json`. An open page older than the server shows «Доступна нова версія · Оновити»; CI (`build-marker`) fails a PR that changes `public/` without raising it, and `tests/appupdate.mjs` checks the three agree. After a merge, `curl -s https://baobook.matamata.dev/build.json` shows the build that is live.
+- Every PR that changes `public/` raises the build marker `BUILD` (`YYYYMMDDnn`, shown in the settings menu as «Версія 26.10.22.1»: the date and the build of that day): the constant and `<meta name="baobook-build">` in `public/index.html`, and `public/build.json`. An open page older than the server shows «Доступна нова версія · Оновити»; CI (`build-marker`) fails a PR that changes `public/` without raising it, and `tests/appupdate.mjs` checks the three agree. After a merge, `curl -s https://baobook.matamata.dev/build.json` shows the build that is live.
 - `public/index.html` writes the zero-width space as an escape sequence in the chip code. Editing tools may turn such escapes into the real character, so check the bytes after editing those lines.
 
 ## Current stage

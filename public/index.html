@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102101">
+<meta name="baobook-build" content="2026102201">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -722,7 +722,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102101;   // the build marker, YYYYMMDDn: raised by every change of public/, also in <meta name="baobook-build"> and build.json (tests/appupdate checks they agree)
+const BUILD=2026102201;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build"> and build.json (tests/appupdate checks they agree)
+const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
 addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); EARLY.install=e; });
@@ -2977,7 +2978,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator
 /* a newer build on the server: «Доступна нова версія · Оновити». An open page keeps its code until it is reloaded (a tab left open, the
    installed app kept in memory, a start from the cache while the network was down), so it asks for build.json (never cached by the worker)
    at start, when it is shown again, when the network comes back and every half hour. «Оновити» reloads once nothing is left to save. */
-const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false; $('buildV').textContent=loc('settings.build',{build:BUILD});
+const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});
 async function updCheck(force){ if(!/^https?:/.test(location.protocol) || document.hidden || !navigator.onLine || !updStrip.hidden) return; const t=Date.now(); if(!force && t-updAt<6e4) return; updAt=t; clearTimeout(updT);
   let b; try{ const r=await fetch('./build.json',{cache:'no-store'}); if(!r.ok) return; b=+(await r.json()).build; }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet: again in a while
   if(b>BUILD && updStrip.hidden){ updMsg.textContent=loc('update.available'); updStrip.hidden=false; } }
