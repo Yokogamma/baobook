@@ -407,5 +407,11 @@
   "text.summary": "{fs} · {pct} %",
   "text.reset": "Скинути",
   "text.smaller": "Менший текст",
-  "text.larger": "Більший текст"
+  "text.larger": "Більший текст",
+  "update.available": "Доступна нова версія",
+  "update.reload": "Оновити",
+  "update.waiting": "Оновлю, щойно все збережеться",
+  "update.dismiss": "Сховати",
+  "update.lockedUnsaved": "Остання правка не збережена: спершу експортуйте її. Натисніть «{button}» ще раз, щоб оновити все одно.",
+  "settings.build": "Версія {build}"
 }
