@@ -93,6 +93,11 @@ ok('12b the text typed before the reload is there', await p5.locator('.blk .txt'
   await q.waitForTimeout(400);
   const ov=await q.evaluate(()=>{ const a=document.getElementById('updStrip').getBoundingClientRect(), b=document.getElementById('toast').getBoundingClientRect(); return {strip:[Math.round(a.top),Math.round(a.bottom)], toast:[Math.round(b.top),Math.round(b.bottom)]}; });
   ok('14 a long toast on a 320 px phone does not cover the strip ('+JSON.stringify(ov)+')', ov.strip[1]<=ov.toast[0]);
+  await q.evaluate(()=>document.getElementById('toast').classList.remove('show')); await q.setViewportSize({width:640,height:360}); await q.waitForTimeout(300);
+  await q.evaluate(()=>document.getElementById('toast').classList.add('show')); await q.waitForTimeout(300);
+  await q.setViewportSize({width:320,height:640}); await q.waitForTimeout(400);   // shown in landscape, then the phone turns: the toast wraps into more lines
+  const ov2=await q.evaluate(()=>{ const a=document.getElementById('updStrip').getBoundingClientRect(), b=document.getElementById('toast').getBoundingClientRect(); return {strip:[Math.round(a.top),Math.round(a.bottom)], toast:[Math.round(b.top),Math.round(b.bottom)]}; });
+  ok('14b the phone turns while the toast shows: still no overlap ('+JSON.stringify(ov2)+')', ov2.strip[1]<=ov2.toast[0]);
   await q.evaluate(()=>{ document.getElementById('toast').classList.remove('show'); sheetDebug.failSave=true; });
   await q.mouse.click(160,300); await q.keyboard.type('незбережена правка'); await q.waitForTimeout(700);
   await q.evaluate(()=>{ const r=indexedDB.open('sheet', 99); r.onsuccess=()=>r.result.close(); });   // a newer app upgrades the database (as another tab would): this tab goes view-only

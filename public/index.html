@@ -3001,7 +3001,8 @@ const updBusy=()=>dirty || unsaved.size>0 || inflight.size>0 || REVIVING.size>0;
 function updTry(){ if(!updWant) return; if(updBusy()){ if(LOCK){ updMsg.textContent=loc('update.lockedUnsaved',{button:loc('update.reload')}); return; } updMsg.textContent=loc('update.waiting'); setTimeout(updTry,500); return; } location.reload(); }   // a view-only tab can never save: with nothing unsaved it reloads at once; with an unsaved edit it asks for the export first (its lock strip has it), and the second tap reloads
 updGo.addEventListener('click',()=>{ if(updWant){ location.reload(); return; } updWant=true; flushSave(); updTry(); });   // a second tap while waiting reloads anyway; the browser still asks first if something is unsaved
 $('updX').addEventListener('click',()=>{ updWant=false; updStrip.hidden=true; });
-new MutationObserver(()=>{ updStrip.style.setProperty('--toastH', toast.classList.contains('show')? toast.offsetHeight+'px' : '0px'); }).observe(toast,{attributes:true, attributeFilter:['class']});   // a toast (a long one wraps on a phone) pushes the strip up while it shows
+{ const toastH=()=>updStrip.style.setProperty('--toastH', toast.classList.contains('show')? toast.offsetHeight+'px' : '0px');   // a toast (a long one wraps on a phone) pushes the strip up while it shows
+  new MutationObserver(toastH).observe(toast,{attributes:true, attributeFilter:['class']}); if(window.ResizeObserver) new ResizeObserver(toastH).observe(toast); }   // its height changes too when the phone turns
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) updCheck(); }); window.addEventListener('online',()=>updCheck(true));
 if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange',()=>updCheck(true));   // a new worker took over: a deploy happened
 setTimeout(()=>updCheck(true),3000); setInterval(()=>updCheck(true),18e5);
