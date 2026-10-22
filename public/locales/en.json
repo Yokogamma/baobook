@@ -411,5 +411,6 @@
   "update.reload": "Reload",
   "update.waiting": "Will reload once everything is saved",
   "update.dismiss": "Hide",
+  "update.lockedUnsaved": "The last edit is not saved: export it first. Tap «{button}» again to reload anyway.",
   "settings.build": "Version {build}"
 }

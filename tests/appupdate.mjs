@@ -37,6 +37,7 @@ await p1.close();
 // C is deployed and the app is opened at an address with a query; then the network is down at the next start
 deploy('C', BUILD);
 const p2=await open(site.url+'?src=home'); await p2.waitForTimeout(500);
+await until(()=>p2.evaluate(async()=>{ const k=(await caches.keys()).find(k=>/^baobook-shell-/.test(k)); const r=k && await (await caches.open(k)).match('/'); return r && /name="t-ver" content="C"/.test(await r.text()); }), 5000);   // the copy is written before the network goes
 ok('4 opened online at /?src=home: C ('+await tver(p2)+')', await tver(p2)==='C');
 await p2.close();
 await ctx.setOffline(true);
@@ -82,6 +83,28 @@ await p5.evaluate(()=>document.getElementById('saveRetry').click());
 await nav; await p5.waitForSelector('#sheet'); await p5.waitForTimeout(600);
 ok('12 saved, then reloaded by itself: E ('+await tver(p5)+'), no strip', await tver(p5)==='E' && await strip(p5)==='');
 ok('12b the text typed before the reload is there', await p5.locator('.blk .txt').filter({hasText:'правка перед оновленням'}).count()===1);
+
+// a phone (320 px): a view-only tab with an unsaved edit never reloads on the first tap; a toast pushes the strip up
+{ const c2=await br.newContext({...CTX, viewport:{width:320,height:640}, hasTouch:true, isMobile:true}); const q=await c2.newPage(); q.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+  await q.goto(site.url); await q.waitForSelector('#sheet'); await q.waitForTimeout(600);
+  deploy('F', BUILD+3); await nudge(q);
+  await until(async()=>/версія/.test(await strip(q)), 5000);
+  await q.evaluate(()=>{ const t=document.getElementById('toast'); t.textContent='Довге повідомлення, яке на вузькому екрані телефона займає кілька рядків і не повинно закривати смугу оновлення.'; t.classList.add('show'); clearTimeout(t._t); });
+  await q.waitForTimeout(400);
+  const ov=await q.evaluate(()=>{ const a=document.getElementById('updStrip').getBoundingClientRect(), b=document.getElementById('toast').getBoundingClientRect(); return {strip:[Math.round(a.top),Math.round(a.bottom)], toast:[Math.round(b.top),Math.round(b.bottom)]}; });
+  ok('14 a long toast on a 320 px phone does not cover the strip ('+JSON.stringify(ov)+')', ov.strip[1]<=ov.toast[0]);
+  await q.evaluate(()=>{ document.getElementById('toast').classList.remove('show'); sheetDebug.failSave=true; });
+  await q.mouse.click(160,300); await q.keyboard.type('незбережена правка'); await q.waitForTimeout(700);
+  await q.evaluate(()=>{ const r=indexedDB.open('sheet', 99); r.onsuccess=()=>r.result.close(); });   // a newer app upgrades the database (as another tab would): this tab goes view-only
+  const locked=await until(()=>q.evaluate(()=>document.querySelector('.app').classList.contains('locked')), 5000);
+  let dialogs=0; q.on('dialog',d=>{ dialogs++; d.accept(); });
+  await q.click('#updGo'); await q.waitForTimeout(1500);
+  const s14=await strip(q);
+  ok('15 view-only with an unsaved edit: the first tap does not reload and asks for the export («'+s14+'»)', locked && dialogs===0 && await tver(q)==='E' && /експортуйте/.test(s14));
+  const nav=q.waitForEvent('framenavigated',{timeout:8000}).catch(()=>null);
+  await q.click('#updGo'); await nav; await q.waitForTimeout(500);
+  ok('15b the second tap reloads after the browser asked ('+dialogs+' dialog)', dialogs===1 && await tver(q)==='F');
+  await c2.close(); }
 
 // the cache holds only this app's caches, and the shell has no separate /index.html copy to go stale
 { const r=await p5.evaluate(async()=>{ const out={}; for(const k of await caches.keys()) out[k]=(await (await caches.open(k)).keys()).map(q=>new URL(q.url).pathname+new URL(q.url).search); return out; });
