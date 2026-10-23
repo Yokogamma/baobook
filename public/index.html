@@ -518,7 +518,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .app.ro .sheet,.app.arch .sheet,.app.chg .sheet{margin-top:48px} .app.ro .empty,.app.arch .empty{display:none} .rostrip .fbtn[hidden]{display:none} .app.ro .sheet .grip,.app.ro .sheet .rz,.app.ro .sheet .bact{visibility:hidden}
 /* «Є зміни з … · Оновити» (SYNC-PLAN 4.10): the same strip, below the archive strip when both show, the sheet lower by both */
 .app.arch #chgStrip{top:98px} .app.arch.chg .sheet{margin-top:96px}
-@media (max-width:640px){ .app.ro .rostrip,.app.chg .chgstrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:96px} .app.chg .sheet{margin-top:96px} .app.arch.chg .sheet{margin-top:144px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower; the change strip may wrap onto two rows too */
+.app.ro .sheet{margin-top:max(48px, calc(var(--roH,0px) + 4px))}   /* a strip taller than its usual rows (the storage lock's text) pushes the sheet down by its own height (--roH), so it covers no block */
+@media (max-width:640px){ .app.ro .rostrip,.app.chg .chgstrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:max(96px, calc(var(--roH,0px) + 4px))} .app.chg .sheet{margin-top:96px} .app.arch.chg .sheet{margin-top:144px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower; the change strip may wrap onto two rows too */
 @media (hover:none){ .rostrip .fbtn,.chgstrip .fbtn{height:40px} }
 .app.ro #clearBtn,.app.ro #areaBtn,.app.ro #histBtn{display:none}
 .app.local #roPurge,.app.local #trashEmpty{display:none}   /* without IndexedDB nothing is deleted for good */
@@ -768,6 +769,7 @@ const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — пер�
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
+if(window.ResizeObserver) new ResizeObserver(()=>app.style.setProperty('--roH', roStrip.firstElementChild.offsetHeight+'px')).observe(roStrip.firstElementChild);   // the read-only strip's real height (0 while hidden): the sheet keeps below it
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const TEXT_CW=26;                                   // a text block without a set width wraps at 26 cells (624px): about 75 characters, the text column of an A4 page
@@ -1052,8 +1054,8 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden && watchi
 let reloading=false, backT=0;
 function idbBack(){ if(LOCK!=='storage' || reloading) return; idb.want=true;
   if(askDlg.open || choiceDlg.open || tszDlg.open || EXPORTING){ if(!backT) backT=setTimeout(()=>{ backT=0; idbBack(); }, 2000); return; }
-  let n=0; try{ n=+sessionStorage.getItem('sheet:idb-reloads')||0; }catch(_){}
-  if(n<RELOADS_MAX){ try{ sessionStorage.setItem('sheet:idb-reloads', String(n+1)); }catch(_){} reloading=true; location.reload(); return; }
+  let n; try{ n=+sessionStorage.getItem('sheet:idb-reloads')||0; sessionStorage.setItem('sheet:idb-reloads', String(n+1)); }catch(_){ n=RELOADS_MAX; }   // a count that cannot be read or kept counts as spent: no reload without a limit
+  if(n<RELOADS_MAX){ reloading=true; location.reload(); return; }
   if(!idb.back){ idb.back=true; if(STARTED) roSync(); } }
 /* ══ версії нотаток (VERSIONS-PLAN, PR 1: лише сховище, без інтерфейсу) ═══════════════════════════════════════
    versions: {id, note, t (час вмісту), w (час запису), reason: base|auto|import|manual|restore, name?, title, sig, from?, size, sum:{ch,add,del,mv,ttl}, blocks:[запис маніфесту…]}

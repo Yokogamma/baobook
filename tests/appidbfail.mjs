@@ -61,7 +61,7 @@ const storLine=pg=>pg.locator('#storInfo').innerText();
 const buttons=pg=>pg.evaluate(()=>Object.fromEntries(['roRestore','roPurge','roExport','roReload'].map(id=>[id, !document.getElementById(id).hidden])));
 const reloads=pg=>pg.evaluate(()=>sessionStorage.getItem('sheet:idb-reloads'));
 // the main frame navigates within t ms (a reload the app makes by itself), or does not
-const navWait=(pg,t)=>pg.waitForEvent('framenavigated',{timeout:t, predicate:f=>f===pg.mainFrame()}).then(()=>true).catch(()=>false);
+const navWait=(pg,t)=>pg.waitForEvent('domcontentloaded',{timeout:t}).then(()=>true).catch(()=>false);   // a new document (an address change inside the page is no reload)
 // a reload from inside the page ('clear' removes the failing mode in the same evaluate, so the probe due 5 s after a lock cannot pre-empt the
 // navigation); the new document has committed when it returns, so ready() cannot see the old one
 const reload=async(pg, pre)=>{ const nav=navWait(pg,8000); await pg.evaluate(pre=>{ if(pre==='clear') localStorage.removeItem('__idbfail'); setTimeout(()=>location.reload(),0); }, pre||''); await nav; };
@@ -147,13 +147,13 @@ await setMode(pg,'hang'); await resetOpens(pg); await reload(pg);
 
 /* ── 7. recovery: the probe reloads the page by itself; the lock → reload → lock loop stops at three ── */
 async function recover(mode){ await setMode(pg, mode); await reload(pg); await lockMsg(pg, LOCKED, 15000); await ready(pg);
-  await setMode(pg,''); const nav=navWait(pg,10000);
+  const nav=navWait(pg,10000); await setMode(pg,'');   // the wait first: the probe may reload the page as soon as the mode is clear
   ok('7 '+mode+': the storage back, the page reloads by itself within 10 s', await nav); await ready(pg);
   ok('7a '+mode+': editable with the real note, sheet:idb-reloads cleared by the healthy start', !(await roMsg(pg)) && /перша нотатка/.test((await items(pg))[0]||'') && (await reloads(pg))===null && !(await pg.evaluate(()=>document.getElementById('sheet').inert))); }
 await recover('error'); await recover('throw');
 { await setMode(pg,'error'); await reload(pg); await lockMsg(pg, LOCKED, 15000); await ready(pg);
   const counts=[];
-  for(let i=1;i<=3;i++){ await pg.evaluate(()=>sessionStorage.setItem('__idbpass','1')); const nav=navWait(pg,10000); const went=await nav;   // only the next probe passes; the reload's start fails again
+  for(let i=1;i<=3;i++){ const nav=navWait(pg,10000); await pg.evaluate(()=>sessionStorage.setItem('__idbpass','1')); const went=await nav;   // only the next probe passes; the reload's start fails again
     await lockMsg(pg, LOCKED, 15000); await ready(pg); counts.push((went? '' : 'no reload ')+(await reloads(pg))); }
   ok('7b three automatic reloads, each landing in the lock again, counted 1, 2, 3 ('+counts.join(', ')+')', counts.join(',')==='1,2,3');
   await pg.evaluate(()=>sessionStorage.setItem('__idbpass','1')); const m=await lockMsg(pg, BACK, 10000); const nav=navWait(pg,12000);
@@ -279,6 +279,25 @@ await ownerRun({t:'owner', by:'account', erase:true}, 'erase'); await ownerRun({
   ok('18b released: the upgrade ran and aborted ('+JSON.stringify(cst)+'), the queued request answered and the tab reloaded by itself', !!(cst && cst.upgraded && cst.error==='AbortError') && await nav); await ready(a);
   ok('18c a healthy start with the note', !(await roMsg(a)) && (await items(a)).some(t=>/перша нотатка/.test(t)) && (await a.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const v=r.result.version; r.result.close(); res(v); }; })))===3);
   await d.close(); }
+
+/* ── 19. a reload count that cannot be kept (sessionStorage refuses the write) counts as spent: the strip asks, no reload without a limit ── */
+{ const c=await context(); await c.addInitScript(()=>{ const set=Storage.prototype.setItem; Storage.prototype.setItem=function(k,v){ if(k==='sheet:idb-reloads' && localStorage.getItem('__ssfail')) throw new DOMException('full','QuotaExceededError'); return set.call(this,k,v); }; });
+  const p=await fresh(c); await go(p); await ready(p);
+  await p.evaluate(()=>localStorage.setItem('__ssfail','1')); await setMode(p,'error'); await reload(p); await lockMsg(p, LOCKED, 15000); await ready(p);
+  const nav=navWait(p,12000); await p.evaluate(()=>sessionStorage.setItem('__idbpass','1'));
+  const m=await lockMsg(p, BACK, 12000), went=await nav;
+  ok('19 sessionStorage refuses the count: no automatic reload, the strip asks for the tap ('+(m||'').slice(0,40)+'…)', !went && BACK.test(m||'') && (await reloads(p))===null);
+  await c.close(); }
+
+/* ── 20. a phone (390 px): the storage strip, several lines high, covers no block of the open copy ── */
+{ const c=await context({viewport:{width:390,height:844}, isMobile:true, hasTouch:true}); const p=await fresh(c); await go(p); await ready(p);
+  await p.evaluate(()=>localStorage.setItem('sheet:note:lay', JSON.stringify({id:'lay', title:'Копія', blocks:[{id:'l1', row:2, fx:0.1, text:'видимий рядок копії'}], created:1, updated:Date.now()})));
+  await setMode(p,'error'); await reload(p); await lockMsg(p, LOCKED, 15000); await ready(p);
+  await p.locator('#list .item').filter({hasText:'Копія'}).click().catch(()=>{}); await p.waitForTimeout(400);
+  const g=await p.evaluate(()=>{ const s=document.querySelector('#roStrip .rostrip').getBoundingClientRect(), b=[...document.querySelectorAll('#sheet .blk')].find(x=>/видимий рядок/.test(x.textContent)); const r=b && b.getBoundingClientRect(); return {strip:Math.round(s.bottom), block:r? Math.round(r.top) : null}; });
+  await shot(p,'phone-strip');
+  ok('20 the strip ends above the copy\'s first block ('+JSON.stringify(g)+')', g.block!==null && g.strip<=g.block);
+  await p.evaluate(()=>localStorage.removeItem('sheet:note:lay')); await c.close(); }
 
 /* ── 10. no page errors over the run ── */
 console.log(errs.length? errs.join('\n') : '✓ 10 no page errors'); if(errs.length) fails++;
