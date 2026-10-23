@@ -1075,8 +1075,8 @@ const vid=()=>'v'+vnow().toString(36)+Math.random().toString(36).slice(2,6);
 function vlast(note){ return idb.tx(['versions'],'readonly',t=>{ const q={result:null}; const c=t.objectStore('versions').index('note_t').openCursor(IDBKeyRange.bound([note,-Infinity],[note,Infinity]),'prev'); c.onsuccess=()=>{ const r=c.result; if(r) q.result=r.value; }; return q; }); }
 function vload(note){ return vqueue(note, async()=>{ if(VLAST.has(note)) return; const r=await vlast(note); VLAST.set(note, r? {id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason} : null); }); }   // остання версія нотатки — перш ніж щось писати
 function vqueue(note, fn){ const p=(VQ.get(note)||Promise.resolve()).then(fn).catch(e=>{ DEBUG.vers.errors++; if(/[?&]debug=1/.test(location.search)) console.warn('versions:',e); if(/Quota/i.test((e&&e.name)||'')) vsweep(); }); VQ.set(note,p); return p; }
-/* a named version is written with keep:1 and inline:1 (SYNC-PLAN 4.3): full bodies inside the record (`s`, `r` for rich text), no thinning, no budget,
-   no plain «Очистити історію». Every record's t is at most vnow(), so a note with an `updated` far ahead cannot make vthin drop the rest as too old */
+/* an automatic record: bodies in blobs by their hash. A named version goes through the core instead (vwriteNamed). Every record's t is at most vnow(),
+   so a note with an `updated` far ahead cannot make vthin drop the rest as too old */
 // a named version goes through the sync core (SYNC-PLAN 4.9): the record with every body inline, a block over the history's body limit included, written
 // with its job and lrev in one transaction; the core judges it local-only (too large, incomplete) itself
 async function vwriteNamed(note, m, blocks, meta){ const src=new Map(blocks.map(d=>[d.id,d])), L=VLAST.get(note);
@@ -1085,14 +1085,13 @@ async function vwriteNamed(note, m, blocks, meta){ const src=new Map(blocks.map(
   const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
   const rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev||null), name:meta.name, keep:1, inline:1};
   const r=await SYNC.versionLocal({op:'create', rec}); if(!r || !r.ok) throw (r && r.error) || new Error('version: '+((r && r.code)||'failed'));
-  const out=r.rec||rec; VLAST.set(note,{id:out.id,t:out.t,w:out.w,sig:out.sig,reason:out.reason}); DEBUG.vers.size+=out.size||0; storageUI(); return out; }
-function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); if(meta.name && SYNC) return vwriteNamed(note, m, blocks, meta); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); const inline=!!meta.name; let size=0, rec=null;
-  return idb.tx(['versions','blobs','sync'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
+  const out=r.rec||rec; VLAST.set(note,{id:out.id,t:out.t,w:out.w,sig:out.sig,reason:out.reason}); DEBUG.vers.size+=out.size||0; storageUI(); tellTabs({t:'vput', note}); return out; }   // vput: the leader reads its queue at once, an open «Історія» of the note elsewhere reloads
+function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); if(meta.name) return SYNC? vwriteNamed(note, m, blocks, meta) : Promise.reject(new Error('no sync core')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); let size=0, rec=null;
+  return idb.tx(['versions','blobs'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
     const finish=()=>{ if(--pending) return; const prev=prevQ&&prevQ.result? prevQ.result : null; const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
-      rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name){ rec.name=meta.name; rec.keep=1; rec.inline=1; } if(meta.from) rec.from=meta.from; V.put(rec);
-      };
+      rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.from) rec.from=meta.from; V.put(rec); };
     if(prevQ){ pending++; prevQ.onsuccess=prevQ.onerror=()=>finish(); }   // the previous record is read before the record is built: with bodies inline there may be no other request to wait for
-    m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); if(inline){ e.s=body; if(!d.kind && d.html) e.r=1; return; } pending++;
+    m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); pending++;
       const tryKey=(h,k)=>{ const g=B.get([note,h]); g.onsuccess=()=>{ const ex=g.result; if(!ex){ const z=new Blob([body]).size; B.put({note,h,s:body,r:(!d.kind&&d.html)?1:0,z}); e.h=h; size+=z; finish(); } else if(ex.s!==body) tryKey(e.h+'~'+(k+1),k+1); else { e.h=h; finish(); } }; };   // колізія хешу — сусідній ключ
       tryKey(e.h,0); });
     finish(); return {get result(){ return rec; }}; }).then(r=>{ VLAST.set(note,{id:r.id,t:r.t,w:r.w,sig:r.sig,reason:r.reason}); DEBUG.vers.size+=r.size; storageUI(); return r; }); }
@@ -1227,7 +1226,7 @@ async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) ret
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id); EDITS.delete(id);
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); chgUI(); }
 // the engine (this tab leads) applied a document: this tab takes it, and the other tabs are told which record changed, to what lrev and from which device
-function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(H.open && cur && (ev.kind==='version' || ev.kind==='quarantine')) loadHist(); }
+function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(ev.kind==='version' || ev.kind==='quarantine'){ if(H.open && cur) loadHist(); if(ev.note) tellTabs({t:'ver', note:ev.note}); } }
 function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
 /* ══ the leader tab (SYNC-PLAN 4.10): one tab per data space talks to the cloud, under the Web Lock `baobook-sync:{env}`; the others only write locally.
    The lock goes on pagehide and freeze, so the page may enter the back/forward cache and a frozen tab blocks nobody; a request still waiting in the
@@ -1976,6 +1975,7 @@ function tabMsg(m){ if(keptView() || DYING) return;
   else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
+  else if(m.t==='ver' || m.t==='vput'){ if(H.open && cur && cur.id===m.note) loadHist(); }   // a version changed in another tab (SYNC-PLAN 4.9): an open «Історія» of that note reloads
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
 async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok}=await storedWithLrev(); if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
@@ -2927,16 +2927,16 @@ function restoreBlock(id){ const v=H.view; if(!v || !cur) return; const d=verBlo
   offerUndo(loc('hist.blockRestored',{time:at}), ()=>{ if(cur!==n) return; flushSave(); putState(n, {title:n.title, blocks: old? n.blocks.map(x=>x.id===id? old : x) : n.blocks.filter(x=>x.id!==id)}); }, {big:true}); }   // undo puts back only this block
 function nameHist(){ histNameRow.hidden=false; histName.value=(H.view&&H.view.name)||''; histName.focus(); histName.select(); }
 async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if(!name || !n) return; histNameRow.hidden=true;
-  if(v) await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:v.name? 'rename' : 'name', id:v.id, name}); if(!r || !r.ok) throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); });   // through the core (SYNC-PLAN 4.9): the name, keep/inline and the bodies the history still has (a missing one makes it «неповна»), with its job and lrev
-  else { flushSave(); await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name); }   // «Зараз» becomes a named version (R4)
-  say(loc('hist.named',{name})); await loadHist(); }
+  let done=true; if(v) await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:v.name? 'rename' : 'name', id:v.id, name}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } tellTabs({t:'vput', note:n.id}); });   // through the core (SYNC-PLAN 4.9): the name, keep/inline and the bodies the history still has (a missing one makes it «неповна»), with its job and lrev
+  else { flushSave(); done=!!(await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name)); }   // «Зараз» becomes a named version (R4)
+  if(done) say(loc('hist.named',{name})); await loadHist(); }   // a refusal of the core (another owner, a locked tab) names nothing, so it says nothing
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
   await vqueue(n.id, async()=>{ const list=await vlist(n.id), stay=list.filter(v=>v.keep || v.name); await vdelete(n.id, list.filter(v=>!v.keep && !v.name), stay); const top=stay.sort((a,b)=>b.t-a.t)[0]; VLAST.set(n.id, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); }); storageUI(); await loadHist(); }   // only this device's automatic history goes; named versions and conflict copies stay (SYNC-PLAN §2)
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
 histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });
 histRestore.addEventListener('click',restoreVersion);
 histMore.addEventListener('click',()=>{ if(db.backend!=='idb') return; popMenu(histMore, histMore.closest('.hist-h'), 'hm', [
-  {label:loc(H.view? 'hist.nameShown' : 'hist.nameNow'), act:nameHist},
+  ...(H.view && H.view.reason==='copy'? [] : [{label:loc(H.view? 'hist.nameShown' : 'hist.nameNow'), act:nameHist}]),   // a conflict copy is never named: it stays on this device (SYNC-PLAN 4.19)
   ...(narrowQ.matches? [{label:loc('hist.search'), act:()=>{ histQBox.classList.add('on'); histQ.focus(); }}] : []),
   {ico:ICO.trash, label:loc('hist.clear'), danger:true, act:clearHist} ]); });
 histNameRow.addEventListener('submit',e=>{ e.preventDefault(); saveName(); });

@@ -557,11 +557,12 @@ function makeSync(deps){
   // one call for every local operation on a named version, one transaction with the owner check (§4.9): create {rec}, name {id, name}, rename {id, name}, delete {id}
   async function versionLocal(op){ if(!S.loaded) await load();
     try{ return await tx(['notes','versions','blobs','sync'], async(t,after)=>{
-      if(op.op==='create'){ const name=cutName(op.rec && op.rec.name); if(!name.trim()) return {ok:false, code:'name'}; const rec={...op.rec, name, keep:1, inline:1}; t.put('versions',rec);
+      if(op.op==='create'){ const name=cutName(op.rec && op.rec.name); if(!name.trim()) return {ok:false, code:'name'}; if(op.rec.reason==='copy') return {ok:false, code:'copy'}; const rec={...op.rec, name, keep:1, inline:1}; t.put('versions',rec);
         const q=await queueV(t, rec, after); after(()=>emit(deps.onChange,{id:rec.id, kind:'version', note:rec.note})); return {ok:true, rec:q.rec, local:q.local||null}; }
       const rec=await t.get('versions',op.id); if(!rec) return {ok:false, code:'missing'};
       if(op.op==='delete') return vdeleteLocal(t, rec, after);
       if(op.op!=='name' && op.op!=='rename') return {ok:false, code:'op'};
+      if(rec.reason==='copy') return {ok:false, code:'copy'};   // a conflict copy is never named: it stays on the device that merged (§2, §4.19)
       const name=String(op.name||''); if(!name.trim() || name.length>LIM.name) return {ok:false, code:'name'};
       const wasNamed=!!rec.name; let nr={...rec, name, keep:1, inline:1}; if(!wasNamed || !rec.keep) nr=(await vinline(t, nr)).rec;   // a shown automatic version becomes named: the bodies the history still has go inside it
       t.put('versions',nr); after(()=>emit(deps.onChange,{id:nr.id, kind:'version', note:nr.note}));
@@ -588,10 +589,12 @@ function makeSync(deps){
       for(const n of touched) after(()=>emit(deps.onHistory,n)); if(skipped) log({t:'import-vskip', n:skipped}); return {ok:true, added, size, skipped}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   // the migration (§4.9): every named record without a sync decision, also a job written by code before 4a with no meta, is judged once; an orphan job goes
-  async function vmigrate(){ if(!S.owner) return; S.vjudge=false; return tx(['notes','versions','blobs','sync'], async(t,after)=>{ let n=0;
+  // o.jobs: only the jobs without a meta (S.vjudge, written by an old tab meanwhile); the full pass over the records runs once per epoch (`vmigrated`)
+  async function vmigrate(o={}){ if(!S.owner) return; S.vjudge=false; return tx(['notes','versions','blobs','sync'], async(t,after)=>{ let n=0; const mark=await t.get('sync','vmigrated'), full=!o.jobs && !(mark && mark.epoch===S.epoch);
+    if(full){ t.put('sync',{k:'vmigrated', epoch:S.epoch});
     for(const v of await t.range('versions','','\uffff')){ if(!v.name || v.reason==='copy') continue; const m=await t.get('sync',K.meta('v',v.id)); if(m && (m.base || m.local || m.gone || m.lrev)) continue;
-      if(await t.get('sync',K.tr('v',v.id))) continue; await queueV(t, v, after); n++; }
-    for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); if(j.tomb || await t.get('versions',id) || await t.get('sync',K.tr('v',id))) continue; const m=await getMeta(t,'v',id); if(m.base || m.held) continue; dropVJob(t,id,after); n++; }
+      if(await t.get('sync',K.tr('v',v.id))) continue; await queueV(t, v, after); n++; } }
+    for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const jm=await t.get('sync',K.meta('v',j.k.slice(6))); if(!j.tomb && !jm){ const v=await t.get('versions',j.k.slice(6)); if(v && v.name && v.reason!=='copy'){ await queueV(t, v, after); n++; continue; } } const id=j.k.slice(6); if(j.tomb || await t.get('versions',id) || await t.get('sync',K.tr('v',id))) continue; const m=await getMeta(t,'v',id); if(m.base || m.held) continue; dropVJob(t,id,after); n++; }
     if(n) log({t:'vmigrate', n}); }); }
   // a named version whose note goes from this device (§4.9 «Receiving»): one with an attempt out is held until the attempt resolves; the
   // device that purges the note tombstones the versions that are or may be in the cloud; a device that only receives the note's tombstone
@@ -630,6 +633,7 @@ function makeSync(deps){
     // a live version of a purged note, or of an id deleted here before it reached the cloud: no record, and a tombstone job over it (the moved
     // version of a revived note whose document turns up lands here too: its document names the original, which is purged)
     if(await t.get('sync',K.purged(doc.note)) || meta.gone){ if(rec){ t.del('versions',id); changed(); } for(const k of ['wait','movedFrom']) delete meta[k]; meta.base=storeBase(doc); putMeta(t,meta,after); if(S.owner) setVJob(t,id,vjob(id,{tomb:true}),after); log({t:'vtomb-due', id}); return 'done'; }
+    if(!rec && job && job.tomb){ meta.base=storeBase(doc); delete meta.wait; putMeta(t,meta,after); return 'done'; }   // deleted here: the tombstone goes over this state, whether or not its note is here (a tombstone needs no note)
     if(!(await t.get('notes',doc.note))){ meta.wait=doc; putMeta(t,meta,after); after(()=>addWaiting(doc)); return 'done'; }
     const nv=normVersion(doc, deps); if(nv.bad){ quarantine(t,'v',id,doc,'shape',{rev:doc.rev, srv:doc.srv},after); meta.err='damaged'; putMeta(t,meta,after); return 'damaged'; }
     if(meta.err==='damaged'){ delete meta.err; t.del('sync',K.quarantine('v',id)); }
@@ -642,7 +646,6 @@ function makeSync(deps){
         putMeta(t,meta,after); log({t:'vjoined', id, renamed}); return 'done'; }
       const nid=vid(); t.put('versions',{...rec, id:nid}); t.put('sync',{...defMeta('v',nid), lrev:1, ...(meta.local? {local:meta.local} : {})});   // an id collision: the local snapshot is kept under a new id first
       if(S.owner && !meta.local) setVJob(t,nid,vjob(nid),after); if(job) dropVJob(t,id,after); delete meta.local; log({t:'vcollision', id, nid}); }
-    else if(!rec && job && job.tomb){ meta.base=storeBase(doc); delete meta.wait; putMeta(t,meta,after); return 'done'; }   // deleted here: the tombstone goes over this state
     else if(rec && meta.base && job && !job.tomb){ meta.base=storeBase(doc); delete meta.wait; putMeta(t,meta,after); return 'done'; }   // a rename waiting here goes over this state: the rename sent last wins
     t.put('versions',built); meta.base=storeBase(doc); meta.baseLrev=meta.lrev; for(const k of ['wait','local']) delete meta[k]; putMeta(t,meta,after); changed(); return 'done'; }
   async function applyVersionDoc(doc, source){ try{ const r=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyVersionCore(t, doc, source, after); if(source==='delivery' && res!=='skipped') await bumpCursor(t,'versions',{srv:doc.srv, id:doc.id},after); return res; });
@@ -792,8 +795,9 @@ function makeSync(deps){
     const st={code, n: code==='checking'? S.scanFound : jobs}; setStatus(code, st.n); return st; }
   // every status report goes through here, so a direct report (a pass's progress, denied, no space) and the computed one never disagree
   function setStatus(code, n){ const st={code, n:n||0}; if(!S.lastStatus || S.lastStatus.code!==code || S.lastStatus.n!==st.n){ S.lastStatus=st; emit(deps.onStatus, code, st.n); } }
-  // the next step's time; the version queue counts with its retry time and the device pace
-  function nextWake(nowT){ let next=Infinity; if(!S.paused) for(const [id,job] of S.vjobs){ if(S.vblocked.has(id)) continue; const q=quotaNow(), d=Math.max(job.next||0, Math.min(q.lastSend||0, nowT)+pace.dev); next=Math.min(next, d>nowT? d : nowT+50); } for(const [id,job] of S.jobs){ if(S.paused){ const tr=S.tries.get(id); if(!(tr && tr.result && tr.result.purged)) continue; }   // paused: only a tombstone's attempt may still run; the other jobs wait for the next day, not for the next step
+  // the next step's time; the version queue counts with its retry time and the device pace; a job no pick would take (an error that blocks it) sets no time
+  function nextWake(nowT){ let next=Infinity; if(!S.paused) for(const [id,job] of S.vjobs){ if(S.vblocked.has(id) || S.vtries.has(id)) continue; const verr=S.verr.get(id); if(verr && (!job.tomb || verr==='invalid' || verr==='receipts')) continue; const q=quotaNow(), d=Math.max(job.next||0, Math.min(q.lastSend||0, nowT)+pace.dev); next=Math.min(next, d>nowT? d : nowT+50); } if(!S.paused) for(const [id] of S.vtries){ const j=S.vjobs.get(id), d=j? (j.next||0) : 0; next=Math.min(next, d>nowT? d : nowT+50); } for(const [id,job] of S.jobs){ if(S.paused){ const tr=S.tries.get(id); if(!(tr && tr.result && tr.result.purged)) continue; }   // paused: only a tombstone's attempt may still run; the other jobs wait for the next day, not for the next step
+      if(!S.tries.has(id)){ const err=S.err.get(id); if(err && (!job.tomb || err==='invalid' || err==='receipts')) continue; }
       const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, job.wait||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
     if(S.everCaughtUp && !S.paused && S.online && !blocked()) next=Math.min(next, Math.max(nowT+50, (S.lastPurge||0)+pace.purgeEvery));   // the next look for trash old enough to purge (§4.8)
     if(!S.paused) for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }   // paused: pages, refetches and totals are not allowed, so they set no time; the inbox (already paid) still does
@@ -805,7 +809,7 @@ function makeSync(deps){
     // no space (§4.6): receiving stops for an hour, deliveries meanwhile are dropped (the totals check finds them later); then the listener and catch-up start over
     if(S.nospace){ if(nowT<(S.nospaceAt||0)+3600000){ S.inbox.length=0; return {did:'idle', next:S.nospaceAt+3600000, status:status()}; } S.nospace=false; S.sweptOnce=false; log({t:'nospace-over'}); reconnect(); }
     if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000) await reloadQueue();
-    if(S.vjudge) await vmigrate();   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
+    if(S.vjudge) await vmigrate({jobs:true});   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
     try{
       if(S.inbox.length){ const m=S.inbox.shift(); await applyIncoming(m.col, m.doc, m.source); return {did:'inbox', next:nowT}; }
       if(S.online && !blocked()){ for(const [id,tr] of S.tries){ const job=S.jobs.get(id); if(job && (job.next||0)>nowT+pace.retryMax) job.next=nowT; if(job && (job.next||0)>nowT) continue; if(S.paused && !(tr.result && tr.result.purged)) continue; await guarded('try', id, ()=>runTry(id)); return {did:'try', next:nowT}; } }

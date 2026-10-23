@@ -162,8 +162,10 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   ok('11 the empty note was queued for its version: both in the cloud', !!cloud.doc('notes','n1') && vdoc(cloud,'v1') && vdoc(cloud,'v1').rev===1);
   ok('11a the legacy record was inlined from blobs and sent, not «неповна»', vdoc(cloud,'vL') && vdoc(cloud,'vL').blocks[0].s==='тіло в блобах' && A.db.get('versions','vL').keep===1);
   // on a bound device: a record named by the old saveName (keep, no job, no meta) and an old job of an oversized version without meta
-  await db.tx(['versions','sync'],'readwrite', async t=>{ t.put('versions',{...vrec(A.db.get('notes','n2'),'vO','Старий saveName')}); const big=vrec(A.db.get('notes','n2'),'vB','Стара велика'); big.blocks=[{...big.blocks[0], s:'Ж'.repeat(500000)}]; t.put('versions',big); t.put('sync',{k:'out:v:vB', tries:0, next:0}); t.put('sync',{k:'out:v:vGone', tries:0, next:0}); });
-  A.sync.nudge(); await A.sync.step(); await idle(A);
+  await db.tx(['versions','sync'],'readwrite', async t=>{ t.put('versions',{...vrec(A.db.get('notes','n2'),'vO','Старий saveName')}); const big=vrec(A.db.get('notes','n2'),'vB','Стара велика'); big.blocks=[{...big.blocks[0], s:'Ж'.repeat(500000)}]; t.put('versions',big); t.put('sync',{k:'out:v:vB', tries:0, next:0}); t.put('sync',{k:'out:v:vGone', tries:0, next:0}); t.del('sync','vmigrated'); });   // as on the first start of 4a over records the old code left
+  A.sync.stop(); await A.sync.start(); await idle(A);
+  const runs=A.logs.filter(e=>e.t==='vmigrate').length; A.sync.stop(); await A.sync.start(); await idle(A);
+  ok('11d the full migration pass runs once per epoch: a second start scans nothing', A.logs.filter(e=>e.t==='vmigrate').length===runs && (A.db.get('sync','vmigrated')||{}).epoch===A.sync.epoch);
   ok('11b on a bound device, without a new binding: the old saveName record goes to the cloud', vdoc(cloud,'vO') && vdoc(cloud,'vO').name==='Старий saveName');
   ok('11c the old job of an oversized version is judged before sending: «завелика», not sent; an orphan job went', !vdoc(cloud,'vB') && A.db.get('sync','meta:v:vB').local==='big' && !A.db.get('sync','out:v:vB') && !A.db.get('sync','out:v:vGone')); }
 
@@ -222,5 +224,26 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
 { const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await nameNow(A,'n1','v1','Зникне'); await idle(A);
   cloud.docs.versions.delete('v1'); await A.sync.versionLocal({op:'rename', id:'v1', name:'Після зникнення'}); await idle(A);
   ok('16 the rename found no document: the version is created again with the new name', vdoc(cloud,'v1') && vdoc(cloud,'v1').rev===1 && vdoc(cloud,'v1').name==='Після зникнення'); }
+
+/* ── 17. a conflict copy is never named or created as a named version ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A);
+  const c={...vrec(A.db.get('notes','n1'),'vC','x'), reason:'copy'}; delete c.name; await A.db.tx(['versions'],'readwrite', async t=>{ t.put('versions',c); });
+  const r1=await A.sync.versionLocal({op:'name', id:'vC', name:'Спроба'}), r2=await A.sync.versionLocal({op:'create', rec:{...c, id:'vC2', name:'Друга спроба'}}); await idle(A);
+  ok('17 naming a conflict copy is refused (code copy), nothing is queued or sent', r1.ok===false && r1.code==='copy' && r2.ok===false && r2.code==='copy' && !A.db.get('versions','vC').name && !vdoc(cloud,'vC') && !vdoc(cloud,'vC2') && !A.sync.vjobs().length); }
+
+/* ── 18. a tombstone job over a document whose note is not on this device: it goes, no loop ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A');
+  cloud.write('notes',{id:'nx', title:'', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone', commitAt:cloud.now()+3600000});   // hidden from pages and the listener, but a get sees it
+  cloud.write('versions',{id:'vZ', note:'nx', t:cloud.now(), name:'Чужа', title:'', blocks:[]},{dev:'phone', commitAt:cloud.now()+3600000});
+  await A.db.tx(['sync'],'readwrite', async t=>{ t.put('sync',{k:'out:v:vZ', tries:0, next:0, tomb:true}); t.put('sync',{k:'meta:v:vZ', lrev:1, baseLrev:0, base:null}); }); A.sync.nudge(); await idle(A);
+  ok('18 the tombstone went over the document of a note this device does not hold; few rounds, no wait mark', vdoc(cloud,'vZ').deleted===true && A.logs.filter(e=>e.t==='vinsure' && e.id==='vZ').length<=4 && !(A.db.get('sync','meta:v:vZ')||{}).wait); }
+
+/* ── 19. a rename while the create is in flight; 20. a quarantined version counts as an error ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A);
+  const h=defer(); cloud.fault('hold',{dev:'A', op:'txn', promise:h.promise}); await nameNow(A,'n1','v1','Перша'); const run=A.sync.idle(400); await new Promise(r=>setTimeout(r,30));
+  await A.sync.versionLocal({op:'rename', id:'v1', name:'Друга'}); h.resolve(); await run; await idle(A);
+  ok('19 a rename made while the create was in flight reaches the cloud after it (rev 2), no job left', vdoc(cloud,'v1').rev===2 && vdoc(cloud,'v1').name==='Друга' && !A.sync.vjobs().length);
+  cloud.strict=false; cloud.write('versions',{id:'vQ', note:'n1', t:cloud.now(), name:'Зіпсована', title:'', blocks:'not a list'},{dev:'phone'}); cloud.strict=true; await idle(A);
+  ok('20 a version of the wrong shape is quarantined and the status says error', !!A.db.get('sync','quarantine:v:vQ') && A.sync.status().code==='error'); }
 
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);
