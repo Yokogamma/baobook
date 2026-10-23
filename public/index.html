@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102308">
+<meta name="baobook-build" content="2026102309">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -789,8 +789,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102308" integrity="sha384-VgcrsgPLmgHm49W2niDZIvyFsdv4Zpfg03TMCvCQZNzkNN8lVfCmfwsnYcqza860"></script>
-<script src="cloud.js?b=2026102308" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102309" integrity="sha384-w3UEBznI8jzAkQM+PgGLWwQHToaLDhWC7xFaPkyJDJVKy3m4wjoCNzKC9OLNpT+1"></script>
+<script src="cloud.js?b=2026102309" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -803,7 +803,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
 const SRI={'locales/en.json':'sha384-Nj4SGTMpliSUZTyA41murM/UgS74dKM2L6B6r3ayyt/Ie6xEetaH4VBywf8CeL13', 'locales/uk.json':'sha384-P6Pnt9yFqxXaxgJn58l0gLtcpRBdp+nDhjGWxGXrwD0bDsjYE8XYikB/fkVyVn+2'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102308;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102309;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads

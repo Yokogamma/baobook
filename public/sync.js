@@ -208,7 +208,7 @@ function makeSync(deps){
     totals:{notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}, scan:{notes:null, versions:null}, scanFound:0,
     waiting:new Map(), netBusy:false, stepping:null, typed:new Map(), left:new Set(), lastStatus:null, retryAt:{notes:0, versions:0}, lastReconnect:0, rejected:new Set(),
     readOk:false, unverified:false, reauth:false, unauth:0, lastPurge:0,
-    vjobs:new Map(), vtries:new Map(), vrefetch:new Set(), verr:new Map(), vblocked:new Set(), vrejected:new Set(), vlastDelivered:new Map(), vjudge:false};   // the version queue (§4.9): its own maps; vblocked: creates and renames waiting for their note to reach the cloud   // access (§4.11, §4.18): the first read since connecting failed on the network (unverified) or the sign-in must be repeated (reauth)
+    vjobs:new Map(), vtries:new Map(), vrefetch:new Set(), verr:new Map(), vblocked:new Set(), vrejected:new Set(), vlastDelivered:new Map(), vjudge:false, relisten:{notes:null, versions:null}};   // the version queue (§4.9): its own maps; vblocked: creates and renames waiting for their note to reach the cloud   // access (§4.11, §4.18): the first read since connecting failed on the network (unverified) or the sign-in must be repeated (reauth)
   const LOG=[]; const log=ev=>{ ev.at=now(); LOG.push(ev); if(LOG.length>3000) LOG.shift(); emit(deps.log, ev); };
   const budgets=()=>deps.budgets||budgetOf(deps.env);
   const K={meta:(c,id)=>'meta:'+c+':'+id, out:(c,id)=>'out:'+c+':'+id, tr:(c,id)=>'try:'+c+':'+id, refetch:(c,id)=>'refetch:'+c+':'+id, seen:(c,id)=>'seen:'+c+':'+id, purged:id=>'purged:n:'+id, quarantine:(c,id)=>'quarantine:'+c+':'+id, cursor:col=>'cursor:'+col, scan:col=>'scan:'+col};
@@ -757,11 +757,17 @@ function makeSync(deps){
       if(docs.length<200 && col==='versions'){ try{ await tx(['sync'], async t=>{ const st=await t.get('sync',K.cursor('versions')); if(!st || !st.done) t.put('sync',{...(st||{}), k:K.cursor('versions'), done:true}); }); }catch(e){ if(e.code==='epoch') return true; throw e; } }   // the first catch-up of versions has ended, also with no document at all
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
+  // a listener that ends with an error is not restarted by the SDK: unless refused, the step starts it again after a growing pause (`relisten`), from the
+  // cursor as a reconnect does (§4.6); a callback of a listener already replaced or stopped changes nothing
   function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
-    S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000);
-    S.listen[col]=S.cloud.listen(col, from, (docs, info)=>{ if(info && info.snapshot){ S.snapshot[col]=true; S.readOk=true; } if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); },
-      err=>{ const code=errOf(err).code; log({t:'listen-error', col, code}); S.snapshot[col]=false; S.listen[col]=null; if(code==='permission-denied' && !S.denied){ S.denied=true; log({t:'denied', kind:'listen'}); setStatus('denied'); } }); }   // every delivered document is a billed read (§4.17); a refused listener is a refused read
-  function stopListeners(){ for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } S.snapshot[col]=false; } }
+    let tries=S.relisten[col]? S.relisten[col].tries : 0; S.relisten[col]=null; S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000), me={};
+    S.listenId={...S.listenId, [col]:me}; const mine=()=>S.listenId && S.listenId[col]===me;
+    const off=S.cloud.listen(col, from, (docs, info)=>{ if(!mine()) return; if(info && info.snapshot){ S.snapshot[col]=true; S.readOk=true; tries=0; } if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); },
+      err=>{ if(!mine()) return; const code=errOf(err).code; log({t:'listen-error', col, code}); S.snapshot[col]=false; S.listen[col]=null; S.listenId={...S.listenId, [col]:null};
+        if(code==='permission-denied'){ if(!S.denied){ S.denied=true; log({t:'denied', kind:'listen'}); setStatus('denied'); } return; }
+        const n=tries+1; S.relisten[col]={tries:n, at:now()+backoffMs(n)}; emit(deps.wake); });   // every delivered document is a billed read (§4.17); a refused listener is a refused read
+    if(mine()) S.listen[col]=off; else{ try{ off(); }catch(_){} } }   // an error reported before listen() returned has already dropped it
+  function stopListeners(){ for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } S.snapshot[col]=false; S.relisten[col]=null; } S.listenId=null; }
   async function doRefetch(id){ S.netBusy=true; try{ const got=await net(()=>S.cloud.get('notes',id), {read:true, kind:'refetch'}); if(got.error){ log({t:'refetch-error', id, code:got.error.code}); S.refetchRetry=now()+backoffMs(1); return; } countRead(1);
       try{ await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropRefetch(t,id,after); const R=got.value; if(R) await applyNote(t, {...R, id}, 'server', after); }); }
       catch(e){ if(e.code==='epoch') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id); return; } log({t:'apply-error', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }   // the record stays for the next try
@@ -810,6 +816,7 @@ function makeSync(deps){
       const d=S.tries.has(id)? (job.next||0) : Math.max(job.next||0, job.wait||0, sendDelay(id,nowT)); if(d>nowT) next=Math.min(next,d); else next=Math.min(next, nowT+50); }
     if(S.everCaughtUp && !S.paused && S.online && !blocked()) next=Math.min(next, Math.max(nowT+50, (S.lastPurge||0)+pace.purgeEvery));   // the next look for trash old enough to purge (§4.8)
     if(!S.paused && net) for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }   // paused: pages, refetches and totals are not allowed, so they set no time; the inbox (already paid) still does
+    if(!S.paused && S.online && !blocked()) for(const col of ['notes','versions']){ const r=S.relisten[col]; if(r) next=Math.min(next, Math.max(nowT+50, r.at)); }
     if(S.inbox.length || ((S.refetch.size || S.vrefetch.size) && !S.paused && net)) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); if(S.paused) next=Math.min(next, nextDay(nowT)); return next; }   // paused: the step runs again when the budget counts anew
   async function stepOnce(){ if(!S.loaded) await load(); const nowT=now(); quotaNow();
     if(!S.started || !S.cloud || !S.owner){ return {did:'idle', next:Infinity, status:status()}; }
@@ -821,6 +828,7 @@ function makeSync(deps){
     if(S.vjudge) await vmigrate({jobs:true});   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
     try{
       if(S.inbox.length){ const m=S.inbox.shift(); await applyIncoming(m.col, m.doc, m.source); return {did:'inbox', next:nowT}; }
+      if(S.online && !S.paused && !blocked()) for(const col of ['notes','versions']){ const r=S.relisten[col]; if(r && r.at<=nowT){ log({t:'relisten', col, tries:r.tries}); startListener(col); S.totals[col].pending=true; return {did:'relisten', next:nowT}; } }   // a lost listener comes back; the totals check after its snapshot finds what it missed meanwhile
       if(S.online && !blocked()){ for(const [id,tr] of S.tries){ const job=S.jobs.get(id); if(job && (job.next||0)>nowT+pace.retryMax) job.next=nowT; if(job && (job.next||0)>nowT) continue; if(S.paused && !(tr.result && tr.result.purged)) continue; await guarded('try', id, ()=>runTry(id)); return {did:'try', next:nowT}; } }
       if(S.online && !blocked() && !S.paused){ for(const [id] of S.vtries){ const job=S.vjobs.get(id); if(job && (job.next||0)>nowT) continue; await vguarded('try', id, ()=>runVTry(id)); return {did:'vtry', next:nowT}; } }
       for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active && S.online && !S.paused && !blocked() && (col==='notes' || !(S.catchup.notes && S.catchup.notes.active))){ if(await fetchPage(col)) return {did:'page', next:nowT}; } }

@@ -1,8 +1,8 @@
 // A randomized simulation of the sync core (docs/SYNC-PLAN.md §5, PR 1): three devices over in-memory stores and one test cloud,
 // random operations from a fixed seed (edits of the content and place groups, block deletion and creation, new notes, trash, restore,
 // «forever», import of another device's copy), random offline spells, cloud failures by name (lost response, errors, repeated and
-// reordered deliveries, delayed and late commits, two runners of one op) and leader changes (a new engine over the same store, the old
-// one stepping once more beside it). Checked on every write: seen.rev never above the cloud's rev, lrev never decreasing, no insured
+// reordered deliveries, delayed and late commits, two runners of one op, listeners ended by an error) and leader changes (a new engine over
+// the same store, the old one stepping once more beside it and then stopping). Checked on every write: seen.rev never above the cloud's rev, lrev never decreasing, no insured
 // attempt whose result equals the base. After settling: every device equals the cloud for every live note (updated included), every
 // confirmed purged entry matches a cloud tombstone, count/sum(rev) of the cloud equal seen on every device, no quarantine, no jobs,
 // (`updated` may be newer on a device that changed a note and changed it back: an edit equal to the base by content is not sent),
@@ -11,13 +11,14 @@
 // (from where only a device that had received it can replace it). Named versions (PR 4a, §4.9): random naming, renaming and deleting;
 // after settling every device holds exactly the cloud's live named versions with the cloud's names, no version deleted on any device
 // comes back anywhere, no live version of a purged note is left in the cloud, and the totals of `versions` equal seen on every device.
-// SEEDS=1,2,3 OPS=400 by default; a failing seed prints its op log.
+// Settling lasts until every device is «synced» (a commit visible only below every window waits for the full pass, at most once a day),
+// up to 80 rounds of 20 minutes. SEEDS=1..6 OPS=1200 by default; a failing seed prints its op log.
 import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os';
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
 const S=loadCore();
-const SEEDS=(process.env.SEEDS||'1,2,3').split(',').map(Number), OPS=+process.env.OPS||400;
+const SEEDS=(process.env.SEEDS||'1,2,3,4,5,6').split(',').map(Number), OPS=+process.env.OPS||1200;
 const OUT=path.join(os.tmpdir(),'sheet-tests'); fs.mkdirSync(OUT,{recursive:true});
 function rng(seed){ let a=(seed>>>0)||1; return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 const live=n=>!n.deleted;
@@ -45,12 +46,12 @@ async function run(seed){
       if(rec.k.startsWith('try:n:') && rec.result && !rec.result.purged){ const id=rec.k.slice(6), meta=d.db.get('sync','meta:n:'+id); if(meta && meta.base && S.sameDoc(rec.result, S.noteBody(meta.base))) fail('an empty op was insured', {dev:name, id}); } };
     d.db.onDel=(store,k)=>{ if(store==='sync' && String(k).startsWith('meta:n:')) d.lrev.delete(String(k).slice(7)); };   // a note purged locally may come back from another device's copy and start its lrev anew (decision 2)
     d.sync=makeEngine(d); await d.sync.setOwner(owner); await d.sync.start(); devs.push(d); }
-  const notesOf=d=>d.db.all('notes'), blockOf=(n)=>pick(n.blocks);
+  const notesOf=d=>d.db.all('notes'), blockOf=n=>n.blocks.length? pick(n.blocks) : {id:'b'+(++counter)};   // a merge may leave a note with no blocks (each side deleted the block the other kept)
   const recordEdit=(d, id, before, after)=>{ const bh=new Set((before? before.blocks : []).map(S.contentHash)), ah=new Set((after.blocks||[]).map(S.contentHash));
     for(const b of after.blocks||[]){ const h=S.contentHash(b); if(!written.has(id)) written.set(id,new Map()); if(!written.get(id).has(h)) written.get(id).set(h,{dev:d.name, text:b.text, op:ops.length}); }
     for(const h of bh) if(!ah.has(h)) mark(own, id, rootOf(before), h); };
   const write=async(d, id, fn)=>{ const before=d.db.get('notes',id); const r=await d.sync.writeLocal(id, (C,meta,t)=>fn(C,t)); if(r.ok && !r.same) recordEdit(d, id, before, r.note); return r; };
-  const step=async d=>{ if(d.old){ await Promise.all([d.old.step(), d.sync.step()]); d.old=null; } else await d.sync.step(); };
+  const step=async d=>{ if(d.old){ await Promise.all([d.old.step(), d.sync.step()]); d.old.stop(); d.old=null; } else await d.sync.step(); };   // the old leader stops after that step, as a tab that lost the lead does, and its listeners go with it
   const op=async(o)=>{ ops.push(o); const d=devs.find(x=>x.name===o.dev);
     switch(o.k){
       case 'new': await write(d, 'n'+o.n, (C,t)=>({title:'Note '+o.n, blocks:[{id:'b'+o.n, row:1, fx:0, text:'text '+o.n}], created:t, updated:t})); break;
@@ -89,9 +90,10 @@ async function run(seed){
     else if(r<0.93) await op({dev:d.name, k:'leader'});
     else await op({dev:d.name, k:'time', ms:100+Math.floor(rnd()*120000)}); }
   // settle: everyone online, no faults, time passes for retries and late commits
+  // a device whose totals still differ is not settled: a commit made visible below every window (`late`) is found by the full pass, at most once a day (§4.6), so settling may take a day
   cloud.faults.length=0; for(const d of devs){ if(!d.online){ d.online=true; d.sync.online(true); } }
   let quiet=0; for(let round=0; round<80 && quiet<3; round++){ cloud.advance(20*60000); cloud.pump(); for(const d of devs) await d.sync.idle(400);
-    const busy=devs.some(d=>d.sync.jobs().length || d.sync.tries().length || d.sync.vjobs().length || d.sync.vtries().length || d.sync._S.vrefetch.size || d.sync.inboxSize() || d.sync._S.refetch.size || (d.sync._S.catchup.notes && d.sync._S.catchup.notes.active)); quiet=busy? 0 : quiet+1; }
+    const busy=devs.some(d=>d.sync.jobs().length || d.sync.tries().length || d.sync.vjobs().length || d.sync.vtries().length || d.sync._S.vrefetch.size || d.sync.inboxSize() || d.sync._S.refetch.size || (d.sync._S.catchup.notes && d.sync._S.catchup.notes.active) || d.sync.status().code!=='synced'); quiet=busy? 0 : quiet+1; }
   // invariants after settling
   const cloudLive=cloud.dump('notes').filter(d=>!d.purged), tombs=cloud.dump('notes').filter(d=>d.purged);
   for(const d of devs){ const notes=notesOf(d), ids=new Set(notes.map(n=>n.id));

@@ -6,7 +6,9 @@
 // move decides over the stored record inside its own transaction. Section 5 (§4.10, two tabs of one device over one store): both engines write
 // as the device of the store's `device` record; a runner that read the cloud before another insured an attempt does not insure a second one
 // over it; two runners of one attempt leave one commit; a late delivery by a runner with an old memory never moves the cursor back; a tab
-// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab.
+// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab. Section 6 (§4.6):
+// a listener the server ends with an error is started again by the step after a growing pause, from the cursor; a refused one is not; an
+// error of a listener already replaced changes nothing.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
@@ -165,4 +167,27 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   H.sync.stop(); await G.sync.reload(); await G.sync.start(); await idle(G);
   cloud.advance(1000); cloud.write('notes',{id:'today1', title:'', blocks:[{id:'b',row:1,fx:0,text:'сьогодні'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); await idle(G);
   ok('5m the old tab leads again after reload(): not paused, it reads today\'s document ('+G.sync._S.quota.reads+' reads today)', !G.sync._S.paused && G.sync.status().code!=='limit' && !!db.get('notes','today1') && G.sync._S.quota.reads<40); }
+
+/* ── 6. a listener the server ends (§4.6): the step starts it again after a growing pause, from the cursor, so what was written meanwhile
+   arrives and the status comes back; a refused one is not restarted; an error of a listener already replaced changes nothing ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await idle(A);
+  const subs=col=>cloud.subs.filter(s=>s.dev==='A' && s.col===col).length, X=A.sync._S, logsOf=t=>A.logs.filter(e=>e.t===t), rl=col=>(X.relisten||{})[col];
+  const phone=id=>cloud.write('notes',{id, title:'', blocks:[{id:'b',row:1,fx:0,text:id}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  const st0=A.sync.status().code, ended=cloud.end('notes',{dev:'A'}); await idle(A); phone('lost1'); await idle(A);   // the virtual clock stands: the pause is not over
+  ok('6 the server ended the notes listener (status «'+st0+'» before): no listener, no snapshot, a restart planned; the note written meanwhile is not here yet', st0==='synced' && ended===1 && subs('notes')===0 && !X.snapshot.notes && !!rl('notes') && logsOf('listen-error').length===1 && !A.db.get('notes','lost1') && A.sync.status().code!=='synced');
+  cloud.advance(1000); await idle(A);
+  ok('6b the step started it again from the cursor: one listener, its snapshot came, the note written meanwhile arrived, status «'+A.sync.status().code+'»', subs('notes')===1 && X.snapshot.notes && !rl('notes') && logsOf('relisten').length===1 && !!A.db.get('notes','lost1') && A.sync.status().code==='synced');
+  cloud.fault('fail',{dev:'A', op:'listen', n:2}); cloud.end('notes',{dev:'A'}); await idle(A); const waits=[];
+  for(let i=0;i<10 && rl('notes');i++){ waits.push(rl('notes').at-cloud.now()); cloud.advance(rl('notes').at-cloud.now()); await idle(A); }
+  ok('6c the restarted listener failed twice more: each pause longer than the one before ('+waits.join(', ')+' ms), then it is back; nothing restarted early', waits.length===3 && waits[0]<waits[1] && waits[1]<waits[2] && subs('notes')===1 && X.snapshot.notes && logsOf('relisten').map(e=>e.tries).join()==='1,1,2,3');
+  cloud.end('notes',{dev:'A'}); await idle(A); for(let i=0;i<5 && rl('notes');i++){ cloud.advance(rl('notes').at-cloud.now()); await idle(A); }
+  ok('6d after a snapshot the count starts anew: the next end waits the first pause again', (logsOf('relisten').slice(-1)[0]||{}).tries===1 && X.snapshot.notes); }
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await idle(A);
+  const subs=col=>cloud.subs.filter(s=>s.dev==='A' && s.col===col).length, X=A.sync._S, logsOf=t=>A.logs.filter(e=>e.t===t), rl=col=>(X.relisten||{})[col];
+  const old=cloud.subs.find(s=>s.dev==='A' && s.col==='notes'); await A.off(false); await A.off(true); await idle(A); const errs=logsOf('listen-error').length;
+  old.onErr(Object.assign(new Error('late'),{code:'unavailable'})); await idle(A);
+  ok('6e an error of a listener already replaced by a reconnect changes nothing: the new one stays, with its snapshot, nothing planned', old!==cloud.subs.find(s=>s.dev==='A' && s.col==='notes') && subs('notes')===1 && !!X.listen.notes && X.snapshot.notes && !rl('notes') && logsOf('listen-error').length===errs && A.sync.status().code==='synced');
+  cloud.end('versions',{dev:'A', code:'permission-denied'}); await idle(A); cloud.advance(60000); await idle(A);
+  ok('6f a refused listener is not started again: denied, no versions listener, nothing planned', X.denied && subs('versions')===0 && !rl('versions') && A.sync.status().code==='denied'); }
+
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
