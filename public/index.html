@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102304">
+<meta name="baobook-build" content="2026102305">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -752,16 +752,21 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102304"></script>
-<script src="cloud.js?b=2026102304"></script>
+<script src="sync.js?b=2026102305" integrity="sha384-aq7JhR/pSXsJr0o+bdG8xr+B+U/BUed8qubuYHgxQS+jVAbEj6IhWKFbgkUQrmJn"></script>
+<script src="cloud.js?b=2026102305" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
    {name} marks a parameter. Static markup carries data-i18n (text), data-i18n-html (markup from our own files)
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
+/* The integrity hashes of this page's own files (Subresource Integrity): the browser refuses a file whose bytes are not the ones this page
+   was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
+   the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
+   sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
+const SRI={'locales/en.json':'sha384-SCwtTaBwwfPpSJbX9YPJIewJ/MzwZTdgpwyGnN0KWkd3BE8/fV9gg7lb0xKch089', 'locales/uk.json':'sha384-RYxiF0ouBl78vw9GMf18voQF6WTvXa8nPaRLHeU7aFvzopDSlEMPBKdR6e0tH+8W'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102304;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102305;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -770,8 +775,16 @@ function pickLang(){ let s={}; try{ s=JSON.parse(localStorage.getItem('sheet:set
   if(I18N.langs.includes(s.lang)) return s.lang;
   for(const l of navigator.languages||[navigator.language||'']){ const b=String(l).toLowerCase().split('-')[0]; if(I18N.langs.includes(b)) return b; }
   return I18N.fallback; }
-async function loadStrings(){ const lang=pickLang();
-  try{ const r=await fetch('locales/'+lang+'.json?b='+BUILD); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
+// the one recovery reload of this tab (torn() below) carries ?torn=1 in its address: it survives lost storage and a page of another build, so
+// the recovery never loops; the app's own start takes it out of the address again
+const TORN=new URLSearchParams(location.search).has('torn');
+async function loadStrings(){ let lang=pickLang();
+  // refused (TypeError): a file of another build, or no network; not the same as a missing file (HTTP 404), which leaves bare keys as before
+  const get=l=>fetch('locales/'+l+'.json?b='+BUILD, {integrity:SRI['locales/'+l+'.json']}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }, e=>{ I18N.refused=true; throw e; });
+  try{ I18N.dict=await get(lang); }catch(e){ console.error('i18n: cannot load '+lang, e);
+    // refused again after the recovery reload: the other language of this build, checked the same way; never a file that failed its check
+    if(I18N.refused && TORN){ const alt=lang!==I18N.fallback? I18N.fallback : I18N.langs.find(l=>l!==lang); try{ I18N.dict=await get(alt); lang=alt; }catch(e2){ console.error('i18n: cannot load '+alt, e2); } } }
+  if(!I18N.dict || typeof I18N.dict!=='object') I18N.dict={};
   I18N.lang=lang; I18N.locale=(navigator.languages||[]).find(l=>String(l).toLowerCase().split('-')[0]===lang)||lang;
   I18N.plural=new Intl.PluralRules(I18N.locale); document.documentElement.lang=lang; }
 function loc(key, p){ let v=I18N.dict[key]; if(v===undefined){ console.warn('i18n: missing key '+key); return key; }
@@ -3102,7 +3115,7 @@ async function start(){
   if(!notes.some(listed)) newNote();
   notes.sort((a,b)=>b.updated-a.updated);
   const how=((performance.getEntriesByType && performance.getEntriesByType('navigation')[0])||{}).type;   // a reload keeps this tab's note (its address names it anyway)
-  renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload'? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins
+  renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload' && !TORN? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins; also on a reload out of the recovery strip (TORN): the app never started on that address
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
   STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
@@ -3159,7 +3172,15 @@ installBtn.addEventListener('click',async()=>{ if(!deferredInstall) return; defe
 window.addEventListener('appinstalled',()=>{ installBtn.hidden=true; iosHint.hidden=true; });
 if(/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches) iosHint.hidden=false;
 }
-loadStrings().then(()=>{ localize(); try{ main(); } finally{ document.documentElement.dataset.ready=''; } });
+// A file of this build was refused (a deploy landed between the page and its files) or did not come: the page reloads once and gets one
+// whole build again. Without the core it never starts half-way: if the reload did not help, the update strip says so and offers a reload.
+function torn(){ const core=!!window.BaobookSync && !!window.BaobookCloud, u=new URL(location.href);
+  if((!core || I18N.refused) && !TORN){ u.searchParams.set('torn','1'); location.replace(u.href); return true; }   // the one reload, marked in its address
+  if(core){ if(TORN){ u.searchParams.delete('torn'); history.replaceState(history.state, '', u.href); } return false; }   // the app starts: the next refused file reloads again
+  const $=id=>document.getElementById(id); localize(); $('updMsg').textContent=loc('update.broken'); $('updX').hidden=true; $('updGo').addEventListener('click',()=>location.reload());   // a manual reload keeps ?torn=1: no automatic one after it
+  $('updStrip').style.visibility='visible'; $('updStrip').hidden=false;   // the rest of the page stays hidden: the app never started
+  return true; }
+loadStrings().then(()=>{ if(torn()) return; localize(); try{ main(); } finally{ document.documentElement.dataset.ready=''; } });
 </script>
 </body>
 </html>
