@@ -199,5 +199,10 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   ok('6e an error of a listener already replaced by a reconnect changes nothing: the new one stays, with its snapshot, nothing planned', old!==cloud.subs.find(s=>s.dev==='A' && s.col==='notes') && subs('notes')===1 && !!X.listen.notes && X.snapshot.notes && !rl('notes') && logsOf('listen-error').length===errs && A.sync.status().code==='synced');
   cloud.end('versions',{dev:'A', code:'permission-denied'}); await idle(A); cloud.advance(60000); await idle(A);
   ok('6f a refused listener is not started again: denied, no versions listener, nothing planned', X.denied && subs('versions')===0 && !rl('versions') && A.sync.status().code==='denied'); }
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=device(cloud,'A'), X=A.sync._S, rl=col=>(X.relisten||{})[col]; A.clock=3600000;   // the device clock an hour ahead; the cloud's clock only moves forward
+  await A.sync.setOwner(owner); await A.sync.start(); await idle(A); cloud.end('notes',{dev:'A'}); await idle(A); const planned=rl('notes') && rl('notes').at-(cloud.now()+A.clock);
+  A.clock=0; cloud.write('notes',{id:'back1', title:'', blocks:[{id:'b',row:1,fx:0,text:'back1'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  const wake=(await A.sync.step()).next-cloud.now(); cloud.advance(51); await idle(A);   // retryMax of the device is 50 ms
+  ok('6h the device clock went back an hour while a restart waited ('+planned+' ms planned): the step wakes within the longest pause ('+wake+' ms) and restarts it; the note written meanwhile arrived, status «'+A.sync.status().code+'»', planned===10 && wake<=50 && cloud.subs.filter(s=>s.dev==='A' && s.col==='notes').length===1 && !!A.db.get('notes','back1') && A.sync.status().code==='synced'); }
 
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
