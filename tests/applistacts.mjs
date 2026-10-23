@@ -10,8 +10,8 @@ const fs=await import('node:fs');
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const T0=Date.now();
-const NOTES=Array.from({length:12},(_,i)=>({id:'n'+(i+1), title:['Ключі','Покупки','Komax старий','Відпустка','Рецепти','Книги','Сервер','Ідеї','Спорт','Фільми','Подарунки','Ремонт'][i],
-  blocks:[{id:'b'+i,row:2,text:'текст нотатки '+(i+1),fx:0.2}, ...(i===0? [{id:'ar1',row:6,text:'',fx:0.2,kind:'area',cw:12,ch:4,title:'Область'}] : [])], created:1, updated:T0-i*60000}));   // n1 has an area (check 20)
+const NOTES=Array.from({length:12},(_,i)=>({id:'n'+(i+1), title:['Ключі','Покупки','Komax старий','Відпустка','Рецепти','Книги','Сервер','Ідеї','Спорт','Фільми, які я хочу подивитися цієї осені разом із друзями та родиною','Подарунки','Ремонт'][i],
+  blocks:[{id:'b'+i,row:2,text:i===9? 'komax-vps-de certbot DNS-01 vafelka.com.ua = cfut_8AYY7lQiR8EUZiEHkoULX5v08wu3eDkjVz6l10x899 довгий рядок без пробілів' : 'текст нотатки '+(i+1),fx:0.2}, ...(i===0? [{id:'ar1',row:6,text:'',fx:0.2,kind:'area',cw:12,ch:4,title:'Область'}] : [])], created:1, updated:T0-i*60000}));   // n1 has an area (check 20)
 const file=notes=>({name:'n.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({app:'baobook',format:1,notes}))});
 const fresh=async(pg)=>{ await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); sessionStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg);
   await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await pg.setInputFiles('#importFile',file(NOTES));
@@ -22,10 +22,14 @@ const stored=(pg,id)=>pg.evaluate(id=>new Promise(res=>{ const r=indexedDB.open(
 const cur=pg=>pg.evaluate(()=>window.sheetDebug.cur());
 const count=pg=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('notes','readonly').objectStore('notes').count(); g.onsuccess=()=>{ d.close(); res(g.result); }; }; }));
 const sideOpen=pg=>pg.evaluate(()=>document.getElementById('app').classList.contains('open'));
-const actsOn=pg=>pg.evaluate(()=>{ const a=document.querySelector('#list .item.acts'); return a? a.dataset.id : null; });
+const actsOn=pg=>pg.evaluate(()=>{ const a=document.querySelector('#list .item.amode'); return a? a.dataset.id : null; });
 const item=(pg,id)=>pg.locator('#list .item[data-id="'+id+'"]');
 // an item's box once it is drawn (a busy machine draws the list later) and, for an item near an edge of the list, scrolled to its middle (new notes push the others down, and the panel's footer lies over the bottom of the list)
 const boxOf=async loc=>{ await loc.waitFor({state:'visible', timeout:5000}).catch(()=>{}); if(await loc.evaluate(e=>{ if(!e.classList.contains('item')) return false; const r=e.getBoundingClientRect(), L=e.closest('.list').getBoundingClientRect(); if(r.top>=L.top+40 && r.bottom<=L.bottom-90) return false; e.scrollIntoView({block:'center'}); return true; }).catch(()=>false)) await loc.page().waitForTimeout(250); const b=await loc.boundingBox(); return b && {x:b.x, y:b.y, w:b.width, h:b.height, cx:b.x+b.width/2, cy:b.y+b.height/2}; };
+// an item's layout: its box, where its title starts and how much of it shows, and whether the date sits under the title (a row of its own)
+const layout=(pg,id)=>pg.evaluate(id=>{ const it=document.querySelector('#list .item[data-id="'+id+'"]'), r=it.getBoundingClientRect(), t=it.querySelector('.it-t').getBoundingClientRect(), h=it.querySelector('.it-h').getBoundingClientRect(), d=it.querySelector('.it-d').getBoundingClientRect(), L=document.getElementById('list').getBoundingClientRect();
+  return {left:Math.round(r.left), width:Math.round(r.width), inList:r.left>=L.left-1 && r.right<=L.right+1, titleAt:Math.round(t.left-r.left), titleW:Math.round(t.width), dateBelow:d.top>=h.bottom-1}; }, id);
+const sameBox=(a,b)=>Math.abs(a.left-b.left)<=1 && Math.abs(a.width-b.width)<=1;
 const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .item .it-p,#list .item .it-r,#list .item .it-x')].some(b=>{ const r=b.getBoundingClientRect(); return r.width>0 && r.height>0 && getComputedStyle(b).display!=='none'; }));
 
 /* ── touch: a phone ── */
@@ -46,24 +50,30 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   const r3=await boxOf(item(pg,'n3')); await tapAt(r3.x+r3.w-14, r3.y+14); await pg.waitForTimeout(300); const s3=await stored(pg,'n3');
   ok('2 a tap at the right edge of the open note\'s item opens it ('+await cur(pg)+') and archives or trashes nothing', await cur(pg)==='n3' && !s3.archived && !s3.deleted && !(await sideOpen(pg)));
 
-  // 3 a long press opens the action mode: three buttons, 48×48, 12 px apart, inside the item
-  await panel(); await hold(item(pg,'n3'));
+  // 3 a long press opens the action mode: three buttons, 48×48, 12 px apart, inside the item; the item keeps its box, its title starts at its left and
+  // shows, the date stays under the title (the class `acts` of the card bars once made it a row: a short title went under the buttons, a long one off the screen)
+  await panel(); const rest3=await layout(pg,'n3'); await hold(item(pg,'n3')); const mode3=await layout(pg,'n3');
   const geo=await pg.evaluate(()=>{ const it=document.querySelector('#list .item[data-id="n3"]'), ib=it.getBoundingClientRect(), bs=['.it-p','.it-r','.it-x'].map(c=>it.querySelector(c).getBoundingClientRect());
     return {bs:bs.map(b=>[Math.round(b.width),Math.round(b.height)]), gaps:[bs[1].left-bs[0].right, bs[2].left-bs[1].right], inside:bs.every(b=>b.left>=ib.left && b.right<=ib.right && b.top>=ib.top && b.bottom<=ib.bottom)}; });
   ok('3 a long press opens the action mode on the note ('+await actsOn(pg)+'): '+JSON.stringify(geo), await actsOn(pg)==='n3' && geo.bs.every(([w,h])=>w>=48 && h>=48) && geo.gaps.every(g=>g>=12) && geo.inside);
+  ok('3b in the mode a short title keeps the item\'s box '+JSON.stringify(rest3)+' → '+JSON.stringify(mode3), sameBox(rest3,mode3) && mode3.inList && mode3.titleAt<=20 && mode3.titleW>=60 && mode3.dateBelow);
+  await escape(); const rest10=await layout(pg,'n10'); await hold(item(pg,'n10')); const mode10=await layout(pg,'n10');
+  ok('3c a long title and a long unbroken text keep it too '+JSON.stringify(rest10)+' → '+JSON.stringify(mode10), await actsOn(pg)==='n10' && sameBox(rest10,mode10) && mode10.inList && mode10.titleAt<=20 && mode10.titleW>=60 && mode10.dateBelow);
   await escape();
 
   // 4 the release of a long press over where the bin appears presses nothing; a fresh tap on a button then acts
   const r2=await boxOf(item(pg,'n2')); await holdAt(r2.x+r2.w-8-24, r2.cy); const s2=await stored(pg,'n2');
   ok('4 a long press released over where the bin appears trashes nothing (deleted '+!!s2.deleted+'), the mode stays on n2', !s2.deleted && !s2.archived && !s2.pinned && await actsOn(pg)==='n2');
 
-  // 5 the pin pins, the mode follows the note to «Закріплені», the pin shows its state with one name; a second tap unpins
-  await tap(item(pg,'n2').locator('.it-p')); await until(async()=>((await stored(pg,'n2'))||{}).pinned>0);
+  // 5 the pin pins and closes the mode (the owner, 2026-10-23); the note is in «Закріплені» with its usual look; a new long press shows the pin pressed
+  // with its one name; a tap there unpins and closes the mode again
+  await tap(item(pg,'n2').locator('.it-p')); await until(async()=>((await stored(pg,'n2'))||{}).pinned>0); await pg.waitForTimeout(300);
+  const afterPin={mode:await actsOn(pg), box:await layout(pg,'n2')}; await hold(item(pg,'n2'));
   const pinA=await pg.evaluate(()=>{ const b=document.querySelector('#list .item[data-id="n2"] .it-p'), r=document.querySelector('#list .item[data-id="n2"] .it-r'); return {pressed:b.getAttribute('aria-pressed'), label:b.getAttribute('aria-label'), bg:getComputedStyle(b).backgroundColor, rbg:getComputedStyle(r).backgroundColor, first:document.querySelector('#list .item').dataset.id}; });
-  ok('5 a tap on the pin pins n2 ('+pinA.first+' first); the mode stays on it; the pin says pressed with its one name «'+pinA.label+'» and looks pressed', (await stored(pg,'n2')).pinned>0 && await actsOn(pg)==='n2' && pinA.first==='n2' && pinA.pressed==='true' && pinA.label==='Закріпити вгорі' && pinA.bg!==pinA.rbg);
-  await tap(item(pg,'n2').locator('.it-p')); await until(async()=>!((await stored(pg,'n2'))||{}).pinned);
-  ok('5b a second tap unpins, the mode stays', !(await stored(pg,'n2')).pinned && await actsOn(pg)==='n2' && await item(pg,'n2').locator('.it-p').getAttribute('aria-pressed')==='false');
-  await escape();
+  ok('5 a tap on the pin pins n2 ('+pinA.first+' first) and closes the mode ('+afterPin.mode+'), the item as usual '+JSON.stringify(afterPin.box)+'; a long press shows the pin pressed with its one name «'+pinA.label+'»',
+    (await stored(pg,'n2')).pinned>0 && afterPin.mode===null && afterPin.box.inList && afterPin.box.titleAt<=40 && afterPin.box.dateBelow && pinA.first==='n2' && pinA.pressed==='true' && pinA.label==='Закріпити вгорі' && pinA.bg!==pinA.rbg);
+  await tap(item(pg,'n2').locator('.it-p')); await until(async()=>!((await stored(pg,'n2'))||{}).pinned); await pg.waitForTimeout(300);
+  ok('5b a tap on the pressed pin unpins and closes the mode', !(await stored(pg,'n2')).pinned && await actsOn(pg)===null);
 
   // 6 a redraw during a long press (a pin, a sync) rebuilds the item under the finger: the gesture still ends, the release presses nothing
   const r1=await boxOf(item(pg,'n1')); await touch('touchStart',[{x:r1.x+r1.w-32, y:r1.cy}]); await pg.waitForTimeout(150); await pg.evaluate(()=>sheetDebug.relist());
