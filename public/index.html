@@ -175,7 +175,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .none{padding:18px 12px;font-size:var(--t-md);color:var(--ink-3);text-align:center}
 /* підвал лежить поверх низу списку, правіше лишає місце повзунку — смуга прокрутки доходить до низу панелі */
 #bootV{white-space:pre-line} .snapit{padding:9px 12px;border-radius:8px;opacity:.5;pointer-events:none;user-select:none} .snapit .it-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .snapcap{font-style:italic}
-@media (max-width:640px){ .app.open.wait #roStrip,.app.open.stlock #roStrip{position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:0;right:0;z-index:25} }   /* the start's strip and the storage lock above the full-width panel on a phone */
+@media (max-width:640px){ .app.open.wait #roStrip,.app.open.stlock #roStrip{position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:0;right:0;z-index:25} .app.open.menu #roStrip{display:none} }   /* the settings menu, open in the panel, is not covered by it */   /* the start's strip and the storage lock above the full-width panel on a phone */
 .side-f{position:absolute;left:0;right:8px;bottom:0;z-index:2;padding:14px 14px 8px;font-size:var(--t-xs);color:var(--ink-2);display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .side-f::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--paper) var(--page);-webkit-mask-image:linear-gradient(transparent,#000 12px);mask-image:linear-gradient(transparent,#000 12px)}
 .side-f>*{pointer-events:auto}
@@ -950,7 +950,7 @@ const IDB_VER=3, IDB_STORES=['notes','versions','blobs','sync'];
 // `storage` lock; RELOADS_MAX, the automatic reloads a tab allows itself in one lock → reload → lock loop (sessionStorage sheet:idb-reloads)
 const OPEN_WAIT=8000, OPEN_RETRY=[300,900], PROBE_WAIT=3000, RELOADS_MAX=3;
 let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
-function setLock(k){ if(LOCK) return; LOCK=k; boot('lock:'+k); leadOff(); if(STARTED) lockUI(); }   // a view-only tab never leads the sync (SYNC-PLAN 4.10): the lock goes with the first write it cannot make
+function setLock(k){ if(LOCK) return; LOCK=k; boot('lock:'+k); leadOff(); if(STARTED) lockUI(); else if(!roStrip.hidden) waitUI(); }   // the start's strip, if shown, says the lock at once   // a view-only tab never leads the sync (SYNC-PLAN 4.10): the lock goes with the first write it cannot make
 const idb={ db:null, opening:null, silent:false, want:false, back:false,   // silent: the start's open never answered (IDB-FALLBACK-PLAN §4.1); want: the storage answered again under the `storage` lock, a reload is requested; back: past the reload limit, the strip asks for the tap
   // one open at a time: concurrent callers (saves, the sync engine) share the promise instead of making two connections.
   // o.deadline (the start only): a silence timer per request, cleared by its first event; when it fires the attempt is dead and the promise
@@ -1354,7 +1354,7 @@ function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=nu
 // the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
 async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
   if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
-  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
+  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
 // the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
 // anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
 async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
@@ -1381,7 +1381,7 @@ async function showOwnerDialog(user, owner, ep0){ ACC.dialog=true; accStatus();
       if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
       const B={uid:user.uid, env:FB.env, email:user.email};
       if(c==='add'){ await bindOwner(B,{expectEpoch:ep0}); connectAccount(user); return; }
-      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
+      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
   catch(e){ if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
   finally{ ACC.dialog=false; accStatus(); } }
 // a choice dialog: askChoice({title, text, buttons:[{id, label, pri, danger}]}) → Promise<id | 'cancel'>; Esc, a click outside and Back cancel, like ask()
@@ -1440,12 +1440,12 @@ async function removeFromDevice(){ if(DYING || ACC.signingOut) return; setMenu(f
     if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
     const ep=SYNC.epoch; DYING=true; await signOutCore();
     try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && e.code==='epoch')) throw e; say(loc('account.raced')); }
-    try{ localStorage.removeItem(SNAP); }catch(_){} tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
+    snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
 // the engine must sign in again (its token is refused): the user is signed out here and told so
 async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ await signOutCore(); ACC.probe='reauth'; accUI(); accStatus(); } finally{ ACC.reauth=false; } }
 // another tab changed the owner (the «owner» message of bindOwner / the dialog): after an erase or a decision made there this tab reloads; after a
 // binding that kept the records (a first sign-in, «Додати до хмари») the engine is replaced by one that knows the new owner, and the tab goes on
-async function ownerMoved(m){ if(DYING) return;
+async function ownerMoved(m){ snapDrop(); if(DYING) return;
   if(db.backend!=='idb'){ STALE=true; setLock('epoch'); accUI(); return; }   // a tab without the store (the `storage` lock, the localStorage mode): the view is the old owner's and stays as it is until the reload (keptView drops every later message); no engine to reload, no SDK to load. The lock lands only on a writing tab of the localStorage mode: a lock already set stays
   if(m.erase || ACC.otherTab) return epochMoved(loc('lock.owner'));   // the records are gone, or the decision was taken in the other tab: this screen is the old owner's
   if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
@@ -1536,7 +1536,9 @@ function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; reque
 // the last list as names only (localStorage sheet:listsnap, at most 60, pinned first): shown greyed while the start waits and under the storage
 // lock, so the notes are seen to exist while they cannot be read; written only by a started tab with the store open, removed with the notes
 const SNAP='sheet:listsnap'; let snapT=0;
-function snapSave(){ if(!STARTED || LOCK || db.backend!=='idb') return; clearTimeout(snapT); snapT=setTimeout(()=>{ if(!STARTED || LOCK || db.backend!=='idb') return;
+const snapOk=()=>STARTED && !LOCK && !DYING && db.backend==='idb';
+function snapDrop(){ clearTimeout(snapT); snapT=0; try{ localStorage.removeItem(SNAP); }catch(_){} }   // every erase and every owner change, in this tab and in the tabs told of it: the names go with the notes
+function snapSave(){ if(!snapOk()) return; clearTimeout(snapT); snapT=setTimeout(()=>{ if(!snapOk()) return;
   try{ localStorage.setItem(SNAP, JSON.stringify(notes.filter(listed).sort(listOrder).slice(0,60).map(n=>({t:titleOf(n), p:n.pinned? 1 : 0})))); }catch(_){} }, 1000); }
 function snapShow(cap){ let s=[]; try{ s=JSON.parse(localStorage.getItem(SNAP)||'[]'); }catch(_){} if(!Array.isArray(s) || !s.length) return;
   el('div','grp snapcap',list).textContent=cap; for(const x of s){ const d=el('div','snapit'+(x && x.p? ' pinned' : ''),list); el('div','it-t',d).textContent=String(x && x.t || ''); } }
@@ -3108,7 +3110,10 @@ function textStepper(){ const d=document.createElement('div'); d.className='mi-s
 /* the start, seen: after 1 s the strip says what the app waits for (the storage opening, then the notes being read), after 5 s that the storage is
    slow to answer; on a phone the strip stays above the open panel (.wait); the last list shows greyed in the panel meanwhile (sheet:listsnap) */
 let waitSlow=false;
-function waitUI(){ if(STARTED || LOCK) return; roMsg.textContent=loc(waitSlow? 'boot.slow' : idb.db? 'boot.waiting' : 'lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; app.classList.add('wait'); }
+function waitUI(){ if(STARTED) return;
+  // a lock found before the start's end (newer data, blocked, the storage): its own message, only «Оновити» (nothing is loaded to export yet)
+  if(LOCK){ roSync(); roExport.hidden=true; roStrip.hidden=false; app.classList.add('wait'); return; }
+  roMsg.textContent=loc(waitSlow? 'boot.slow' : idb.db? 'boot.waiting' : 'lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; app.classList.add('wait'); }
 async function start(){
   const w1=setTimeout(waitUI, 1000), w2=setTimeout(()=>{ waitSlow=true; waitUI(); }, 5000), beat=setInterval(()=>{ BOOT.w=Math.round(performance.now()); bootSave(); }, 2000);
   if(!list.children.length) snapShow(loc('boot.snapWait'));
@@ -3133,7 +3138,7 @@ async function start(){
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
   clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start');
-  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
+  STARTED=true; roSync(); snapSave(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
@@ -3148,7 +3153,7 @@ langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</
 langSel.addEventListener('change',()=>{ saveS({lang:langSel.value}); location.reload(); });
 
 /* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
-function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open){ closeActs(); bootUI(); } setPop.hidden=!open;   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
+function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open){ closeActs(); bootUI(); } setPop.hidden=!open; app.classList.toggle('menu', open);   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
   setBtn.setAttribute('aria-expanded',open?'true':'false');
   if(open){ document.addEventListener('pointerdown',setOut,true); document.addEventListener('keydown',setKey,true); nav.open('settings', ()=>setMenu(false)); if(o.kb) setPop.querySelector('select').focus(); return; }
   document.removeEventListener('pointerdown',setOut,true); document.removeEventListener('keydown',setKey,true); nav.close('settings'); if(setPop.contains(document.activeElement)) setBtn.focus(); }

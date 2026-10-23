@@ -18,7 +18,11 @@ const WRAP=()=>{ const real=IDBFactory.prototype.open; const S=k=>{ try{ return 
     if(fail){ setTimeout(()=>{ r.error=new DOMException('Internal error opening backing store for indexedDB.open.','UnknownError'); r.onerror && r.onerror({target:r}); }, 50); return r; }
     setTimeout(()=>{ const q=real.apply(indexedDB,a); q.onupgradeneeded=e=>{ r.result=q.result; r.transaction=q.transaction; r.onupgradeneeded && r.onupgradeneeded(e); };
       q.onsuccess=()=>{ r.result=q.result; r.readyState='done'; r.onsuccess && r.onsuccess({target:r}); }; q.onerror=()=>{ r.error=q.error; r.onerror && r.onerror({target:r}); }; }, slow); return r; }; };
-const ctx=await br.newContext({...CTX, viewport:{width:390,height:844}, isMobile:true, hasTouch:true, serviceWorkers:'block'}); await ctx.addInitScript(WRAP);
+// the notes' read held (sessionStorage.__stallNotes ms): the transaction completes that much later
+const STALL=()=>{ const real=IDBDatabase.prototype.transaction; IDBDatabase.prototype.transaction=function(names, mode, ...r){ const t=real.call(this, names, mode, ...r), ms=+(sessionStorage.getItem('__stallNotes')||0);
+  if(!ms || names!=='notes' || (mode && mode!=='readonly')) return t;
+  return {objectStore:n=>t.objectStore(n), set oncomplete(f){ t.oncomplete=e=>setTimeout(()=>f(e), ms); }, set onerror(f){ t.onerror=f; }, set onabort(f){ t.onabort=f; }}; }; };
+const ctx=await br.newContext({...CTX, viewport:{width:390,height:844}, isMobile:true, hasTouch:true, serviceWorkers:'block'}); await ctx.addInitScript(WRAP); await ctx.addInitScript(STALL);
 const pg=await ctx.newPage(); pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
 const state=()=>pg.evaluate(()=>{ const s=document.querySelector('#roStrip .rostrip'), r=s.getBoundingClientRect(), hit=!document.getElementById('roStrip').hidden && document.elementFromPoint(r.left+r.width/2, r.top+r.height/2);
   return {strip:document.getElementById('roStrip').hidden? '' : document.getElementById('roMsg').textContent, above:!!(hit && hit.closest('#roStrip')), panel:document.querySelector('.app').classList.contains('open'),
@@ -32,6 +36,8 @@ await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Ключі �
 await pg.evaluate(()=>document.getElementById('newBtn').click()); await pg.waitForTimeout(200);
 await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Покупки'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); }); await pg.waitForTimeout(1600);
 const snap0=await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t));
+await pg.evaluate(()=>localStorage.removeItem('sheet:listsnap')); await pg.reload(); await pg.waitForSelector('#list .item'); await pg.waitForTimeout(1600);
+ok('1b a healthy start with nothing touched remembers its list too', (await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t))).includes('Покупки'));
 ok('1 the list is remembered by names only ('+snap0.join(', ')+')', snap0.includes('Ключі від дому') && snap0.includes('Покупки') && await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')).every(x=>Object.keys(x).every(k=>k==='t'||k==='p'))));
 
 // the storage answers after 7 s; the user opens the panel at once (as on the phone)
@@ -39,7 +45,10 @@ await pg.evaluate(()=>sessionStorage.setItem('__slow','7000')); await pg.reload(
 await pg.waitForTimeout(1300); const s1=await state();
 ok('2 after 1 s, the panel open: the strip says the storage is opening and is above the panel ('+JSON.stringify(s1 && {strip:s1.strip, above:s1.above, panel:s1.panel})+')', !!s1 && s1.panel && /Сховище браузера відкривається/.test(s1.strip) && s1.above);
 ok('2a the last list shows greyed meanwhile, under «Нотатки завантажуються…» ('+(s1 && s1.snap.join(', '))+')', !!s1 && /Нотатки завантажуються/.test(s1.cap) && s1.snap.includes('Покупки') && s1.items.length===0);
-await pg.waitForTimeout(4000); const s2=await state();
+{ await pg.click('#setBtn'); await pg.waitForTimeout(200);
+  const hit=await pg.evaluate(()=>{ const s=document.getElementById('langSel'), r=s.getBoundingClientRect(), h=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2); return !!h && (h===s || s.contains(h)); });
+  ok('2b the settings menu opened during the wait: the language switcher is not under the strip', hit); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); }
+await pg.waitForTimeout(3600); const s2=await state();
 ok('3 after 5 s the strip says the storage is slow ('+(s2 && s2.strip)+')', !!s2 && /відповідає повільно/.test(s2.strip) && s2.above);
 const s3=await until(async()=>{ const s=await state(); return s && s.items.length? s : null; }, 10000);
 ok('4 the storage answered: the real list, no greyed names, no strip ('+JSON.stringify(s3 && {items:s3.items, snap:s3.snap.length, strip:s3.strip})+')', !!s3 && s3.items.includes('Покупки') && !s3.snap.length && !s3.strip);
@@ -60,6 +69,22 @@ ok('7 the storage lock, the panel open: the strip is above the panel ('+JSON.str
 ok('7a the last list greyed under «Ці нотатки є на пристрої, але зараз недоступні:» ('+(s4 && s4.snap.join(', '))+')', !!s4 && /зараз недоступні/.test(s4.cap) && s4.snap.includes('Ключі від дому'));
 const keep=await pg.evaluate(()=>localStorage.getItem('sheet:listsnap')); await pg.evaluate(()=>sessionStorage.removeItem('__fail')); await pg.reload(); await pg.waitForSelector('#list .item'); await pg.waitForTimeout(1500);
 ok('7b the lock writes no list: the remembered names are the healthy start\'s', JSON.parse(keep).some(x=>x.t==='Покупки'));
+
+// review 3: a lock found before the start's end (data of a newer app) while the notes' read is held: the strip says the lock, not nothing
+await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet', 99); r.onsuccess=()=>{ r.result.close(); res(); }; r.onerror=()=>res(); }));
+await pg.evaluate(()=>sessionStorage.setItem('__stallNotes','60000')); await pg.reload();
+const s8=await until(async()=>{ const s=await state(); return s && /старша за ваші дані/.test(s.strip)? s : null; }, 6000);
+ok('8 a lock before the start ends (newer data, the notes\' read held): the strip says it ('+(s8 && s8.strip.slice(0,40))+'…)', !!s8);
+await pg.evaluate(()=>sessionStorage.removeItem('__stallNotes'));
+
+// review 1: a list write waiting in one tab is dropped by an owner change told by another tab (the names go with the notes)
+{ const c2=await br.newContext({...CTX, serviceWorkers:'block'}); const a=await c2.newPage(); await a.goto(site.url); await a.waitForSelector('#list .item');
+  const b=await c2.newPage(); await b.goto(site.url); await b.waitForSelector('#list .item'); await b.waitForTimeout(1600);
+  await b.evaluate(()=>sheetDebug.relist());   // b's list write is now 1 s away
+  await a.evaluate(()=>{ localStorage.removeItem('sheet:listsnap'); new BroadcastChannel('sheet:notes').postMessage({t:'owner', by:'account'}); });
+  await b.waitForTimeout(1600);
+  ok('9 an owner change from another tab drops the list and the write that was waiting', await a.evaluate(()=>localStorage.getItem('sheet:listsnap'))===null);
+  await c2.close(); }
 
 console.log(errs.length? errs.join('\n') : '✓ no page errors'); if(errs.length) fails++;
 await ctx.close(); await br.close(); await site.close(); process.exit(fails?1:0);
