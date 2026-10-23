@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102304">
+<meta name="baobook-build" content="2026102305">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -586,17 +586,17 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .list{touch-action:pan-y}
   .item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;padding-right:10px}
   .list .item .it-x,.list .item .it-r,.list .item .it-p{display:none}
-  .list .item .it-t,.list .item.pa:is(.cur,:focus-within,:hover):not(.acts) .it-t{padding-right:0}
+  .list .item .it-t,.list .item.pa:is(.cur,:focus-within,:hover):not(.amode) .it-t{padding-right:0}
   .list .item:is(:focus-visible,:has(:focus-visible)) :is(.it-x,.it-r,.it-p){display:inline-flex}
-  .list .item:is(:focus-visible,:has(:focus-visible)):not(.acts) .it-t{padding-right:28px} .list .item.pa:is(:focus-visible,:has(:focus-visible)):not(.acts) .it-t{padding-right:54px}
+  .list .item:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:28px} .list .item.pa:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:54px}
   .list .item:hover{background:transparent} .list .item.cur:hover{background:var(--hover-2)} .list .item.pinned:not(.cur):hover{background:var(--pin-bg)}   /* a finger leaves :hover behind */
   .list .item.press,.list .item.pinned.press:not(.cur){background:var(--hover-2)}
-  .list .item.acts{--acts-bg:var(--page);min-height:64px;background:var(--acts-bg);box-shadow:inset 0 0 0 1.5px var(--ink-3)} .list .item.acts.pinned{--acts-bg:var(--pin-bg)}
-  .item.acts::after{content:"";position:absolute;top:0;right:0;bottom:0;width:150px;border-radius:0 8px 8px 0;background:linear-gradient(90deg,transparent,var(--acts-bg) 32px);pointer-events:none} .item.acts.pa::after{width:210px}
-  .list .item.acts :is(.it-x,.it-r,.it-p){display:inline-flex;z-index:1;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:12px;background:var(--page);box-shadow:0 0 0 .5px var(--line-2),0 1px 3px rgba(0,0,0,.08);color:var(--ink-2)}
-  .list .item.acts :is(.it-x,.it-r,.it-p) .i{font-size:1.25rem}
-  .list .item.acts .it-x{right:8px;color:#c33} .list .item.acts .it-r{right:68px} .list .item.acts .it-p{right:128px}
-  .list .item.acts :is(.it-p.on,.it-r.back){background:var(--on-bg);color:var(--on-ink)}
+  .list .item.amode{--acts-bg:var(--page);min-height:64px;background:var(--acts-bg);box-shadow:inset 0 0 0 1.5px var(--ink-3)} .list .item.amode.pinned{--acts-bg:var(--pin-bg)}
+  .item.amode::after{content:"";position:absolute;top:0;right:0;bottom:0;width:150px;border-radius:0 8px 8px 0;background:linear-gradient(90deg,transparent,var(--acts-bg) 32px);pointer-events:none} .item.amode.pa::after{width:210px}
+  .list .item.amode :is(.it-x,.it-r,.it-p){display:inline-flex;z-index:1;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:12px;background:var(--page);box-shadow:0 0 0 .5px var(--line-2),0 1px 3px rgba(0,0,0,.08);color:var(--ink-2)}
+  .list .item.amode :is(.it-x,.it-r,.it-p) .i{font-size:1.25rem}
+  .list .item.amode .it-x{right:8px;color:#c33} .list .item.amode .it-r{right:68px} .list .item.amode .it-p{right:128px}
+  .list .item.amode :is(.it-p.on,.it-r.back){background:var(--on-bg);color:var(--on-ink)}
 }
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
@@ -752,8 +752,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102304" integrity="sha384-dlGBXupUouVkV6sYAulonN1RmGPxy+0sihEJw7pDnptw7/rkCKh393NngFRGjcNh"></script>
-<script src="cloud.js?b=2026102304" integrity="sha384-+teum21/Xi2elblpdMv47tYZE+0stPDtlv6cY/oWBs5bc2OlblXWRYuOSKmkI+Oc"></script>
+<script src="sync.js?b=2026102305" integrity="sha384-dlGBXupUouVkV6sYAulonN1RmGPxy+0sihEJw7pDnptw7/rkCKh393NngFRGjcNh"></script>
+<script src="cloud.js?b=2026102305" integrity="sha384-+teum21/Xi2elblpdMv47tYZE+0stPDtlv6cY/oWBs5bc2OlblXWRYuOSKmkI+Oc"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -766,7 +766,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
 const SRI={'locales/en.json':'sha384-SCwtTaBwwfPpSJbX9YPJIewJ/MzwZTdgpwyGnN0KWkd3BE8/fV9gg7lb0xKch089', 'locales/uk.json':'sha384-RYxiF0ouBl78vw9GMf18voQF6WTvXa8nPaRLHeU7aFvzopDSlEMPBKdR6e0tH+8W'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102304;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102305;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -1522,7 +1522,7 @@ const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return 
 const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
 const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
 function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; requestAnimationFrame(off); setTimeout(off,100); const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
-  drawList(); if(actsId!==null && !list.querySelector('.item.acts')){ actsId=null; nav.close('acts'); }   // the note left the list: its action mode goes
+  drawList(); if(actsId!==null && !list.querySelector('.item.amode')){ actsId=null; nav.close('acts'); }   // the note left the list: its action mode goes
   if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
@@ -1542,7 +1542,7 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
     if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
   return items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
 /* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
-function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar, pin=pa && !!n.pinned; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':'')+(pin?' pinned':'')+(actsId===n.id?' acts':'')+(pressId===n.id?' press':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
+function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar, pin=pa && !!n.pinned; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':'')+(pin?' pinned':'')+(actsId===n.id?' amode':'')+(pressId===n.id?' press':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
   const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box], xk=tr? 'trash.purge' : 'notes.delete';
   // the pin keeps one name with aria-pressed (#82); the other buttons are one-shot actions named by their title. In the archive the way back looks pressed
   d.innerHTML='<div class="it-h">'+(pin? '<i class="pmark" aria-hidden="true">'+ICO.pin+'</i>' : '')+'<div class="it-t"></div></div>'+(pin? '<span class="sr-only">'+locA('list.pinnedState')+'</span>' : '')+'<div class="it-s"></div><div class="it-d"></div>'
@@ -1554,11 +1554,11 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, p
     if(!b){ if(performance.now()-lastTouch.at<500) return; openNote(n); return; }   // a touch opens the note in the list gesture; the click the browser makes after it is not a second open (LIST-ACTIONS-PLAN 4.3)
     e.stopPropagation(); const cls=b.classList[0];
     if(e.detail!==0 && actsId===n.id && LISTTOUCH.matches && !(btnDown && btnDown.id===n.id && btnDown.cls===cls && btnDown.at>modeAt)) return;   // the release of the long press is not a tap on the button that appeared under the finger
-    btnDown=null; const act0=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del, act=cls==='it-p'? act0 : ()=>{ const r=act0(); Promise.resolve(r).then(()=>closeActs()); return r; };   // the pin keeps the action mode; the others take the note out of its section. It closes after the action: its history step back would close a dialog the action opened
+    btnDown=null; const act0=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del, act=()=>{ const r=act0(); Promise.resolve(r).then(()=>closeActs()); return r; };   // every action closes the mode once it is done (the pin too: the owner, 2026-10-23)
     if(e.detail===0) keyed(act, cls); else act(); });   // Enter or Space: a click with no pointer
   d.addEventListener('contextmenu',e=>{ e.preventDefault(); if(!LISTTOUCH.matches) itemMenu(n, d, {x:e.clientX, y:e.clientY}); });   // touch: the long press is ours (Android fires contextmenu on it); a mouse: our menu
   d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
-    if((e.key==='ContextMenu' || (e.shiftKey && e.key==='F10')) && e.target===d){ e.preventDefault(); if(LISTTOUCH.matches){ openActs(n.id); const b=list.querySelector('.item.acts button'); if(b) b.focus(); } else { const r=d.getBoundingClientRect(); itemMenu(n, d, {x:r.left+16, y:r.bottom-4}, true); } return; }
+    if((e.key==='ContextMenu' || (e.shiftKey && e.key==='F10')) && e.target===d){ e.preventDefault(); if(LISTTOUCH.matches){ openActs(n.id); const b=list.querySelector('.item.amode button'); if(b) b.focus(); } else { const r=d.getBoundingClientRect(); itemMenu(n, d, {x:r.left+16, y:r.bottom-4}, true); } return; }
     if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete') keyed(del, e.target===d? '' : e.target.classList[0]); }); }   // Enter and Space on a nested button are that button's
 // the context menu of an item on a computer (LIST-ACTIONS-PLAN 4.6): the same actions as its buttons, at the pointer or under the item
 function itemMenu(n, d, at, kb){ const tr=!!n.deleted, ar=!tr && !!n.archived, k=d.dataset.k, idx=[...list.querySelectorAll('.item')].indexOf(d), go=(f, cls)=>()=>{ const r=f(); if(kb) Promise.resolve(r).then(()=>keepFocus(n.id, cls||'', k, idx)); };
@@ -2763,7 +2763,7 @@ list.addEventListener('lostpointercapture',e=>{ const g=listGest.state; if(g && 
 document.addEventListener('touchend',e=>{ if(swallow){ e.preventDefault(); swallow=null; return; } if(listGest.state || listGest.last) e.preventDefault(); },{passive:false,capture:true});   // a cancelled touchend makes no click: the tap outside is fully swallowed here   // on the document: a redraw may have taken the touched item out of the list, and then its touchend does not reach it
 list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs(); },{passive:true});   // a scroll by the user; a redraw's own scroll is not one
 document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
-  if(e.target.closest('.item.acts button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
+  if(e.target.closest('.item.amode button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
   closedBy={id:e.pointerId, at:performance.now()};
   if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; closePop(); setMenu(false); e.stopPropagation(); e.preventDefault(); }   // the press goes no further than the document: the other «outside» listeners there still close their menus   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
   closeActs(); },true);
