@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102201">
+<meta name="baobook-build" content="2026102301">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -726,8 +726,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js"></script>
-<script src="cloud.js"></script>
+<script src="sync.js?b=2026102301"></script>
+<script src="cloud.js?b=2026102301"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -735,7 +735,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102201;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build"> and build.json (tests/appupdate checks they agree)
+const BUILD=2026102301;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -745,7 +745,7 @@ function pickLang(){ let s={}; try{ s=JSON.parse(localStorage.getItem('sheet:set
   for(const l of navigator.languages||[navigator.language||'']){ const b=String(l).toLowerCase().split('-')[0]; if(I18N.langs.includes(b)) return b; }
   return I18N.fallback; }
 async function loadStrings(){ const lang=pickLang();
-  try{ const r=await fetch('locales/'+lang+'.json'); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
+  try{ const r=await fetch('locales/'+lang+'.json?b='+BUILD); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
   I18N.lang=lang; I18N.locale=(navigator.languages||[]).find(l=>String(l).toLowerCase().split('-')[0]===lang)||lang;
   I18N.plural=new Intl.PluralRules(I18N.locale); document.documentElement.lang=lang; }
 function loc(key, p){ let v=I18N.dict[key]; if(v===undefined){ console.warn('i18n: missing key '+key); return key; }
@@ -2994,7 +2994,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator
    at start, when it is shown again, when the network comes back and every half hour. «Оновити» reloads once nothing is left to save. */
 const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false, updSeen=BUILD; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});   // updSeen: the newest build shown or hidden with ✕; only a newer one shows the strip again
 async function updCheck(force){ if(!/^https?:/.test(location.protocol) || document.hidden || !navigator.onLine || !updStrip.hidden) return; const t=Date.now(); if(!force && t-updAt<6e4) return; updAt=t; clearTimeout(updT);
-  let r; try{ r=await fetch('./build.json',{cache:'no-store'}); }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet: again in a while
+  let r; try{ r=await fetch('./build.json',{cache:'no-store', signal:AbortSignal.timeout? AbortSignal.timeout(1e4) : undefined}); }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet, or holds the request over 10 s: again in a while
   let b=0; try{ if(r.ok && /json/.test(r.headers.get('content-type')||'')) b=+(await r.json()).build||0; }catch(_){}   // not our JSON (a captive portal, a fallback page): nothing to compare
   if(b>updSeen && updStrip.hidden){ updSeen=b; updMsg.textContent=''; updStrip.hidden=false; requestAnimationFrame(()=>{ updMsg.textContent=loc('update.available'); }); } }   // the text goes in after the strip shows, so a screen reader announces it
 const updBusy=()=>dirty || unsaved.size>0 || inflight.size>0 || REVIVING.size>0;

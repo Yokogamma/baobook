@@ -1,7 +1,7 @@
-// The app shell after a deploy. The worker's fallback for a navigation is the page last loaded online, never an older copy precached at
-// install, whatever address the app was opened at. An open page older than the build on the server (a tab left open, the installed app
+// The app shell after a deploy. Every deploy installs the set of its build (sw.js carries BUILD); a start without the network gets the page
+// of the newest installed set, whatever address the app was opened at. An open page older than the build on the server (a tab left open, the installed app
 // kept in memory, a start from the cache while the network was down) shows «Доступна нова версія · Оновити» when it is shown again or the
-// network comes back; «Оновити» reloads only once nothing is left to save. BUILD is the same in the constant, the meta tag and build.json.
+// network comes back; «Оновити» reloads only once nothing is left to save. BUILD is the same in the constant, the meta tag, the ?b= of sync.js and cloud.js, sw.js and build.json.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
@@ -12,13 +12,15 @@ let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n);
 const PUB=new URL('../public/', import.meta.url), HTML=fs.readFileSync(new URL('index.html', PUB),'utf8');
 const BUILD=+((/const BUILD=(\d+)/.exec(HTML)||[])[1]||0), META=+((/<meta name="baobook-build" content="(\d+)">/.exec(HTML)||[])[1]||-1);
 const FILE=fs.existsSync(new URL('build.json', PUB))? +JSON.parse(fs.readFileSync(new URL('build.json', PUB),'utf8')).build : -2;
-ok('1 the build marker is one number in the constant, the meta tag and build.json ('+[BUILD,META,FILE].join(', ')+')', BUILD>2026010100 && BUILD===META && BUILD===FILE);
+const SW=fs.readFileSync(new URL('sw.js', PUB),'utf8'), SWB=+((/const BUILD=(\d+)/.exec(SW)||[])[1]||-3);
+const QB=[...HTML.matchAll(/<script src="(?:sync|cloud)\.js\?b=(\d+)">/g)].map(m=>+m[1]);
+ok('1 the build marker is one number in the constant, the meta tag, sync.js?b= and cloud.js?b=, sw.js and build.json ('+[BUILD,META,...QB,SWB,FILE].join(', ')+')', BUILD>2026010100 && BUILD===META && BUILD===FILE && BUILD===SWB && QB.length===2 && QB.every(b=>b===BUILD));
 const NAME=String(BUILD).replace(/^\d\d(\d\d)(\d\d)(\d\d)(\d\d)$/,(_,y,m,d,n)=>y+'.'+m+'.'+d+'.'+(+n));   // 2026102201 → 26.10.22.1
 
 // a version of the app: the marker t-ver tells the versions apart on screen, the build number goes everywhere BUILD is
 const site=await serve(); site.redirect.set('/index.html','/');   // as on Cloudflare: the app lives at /, /index.html answers 307
-const ver=(v,b)=>HTML.replace('<title>','<meta name="t-ver" content="'+v+'"><title>').replace(/const BUILD=\d+/,'const BUILD='+b).replace(/(<meta name="baobook-build" content=")\d+/,'$1'+b);
-const deploy=(v,b)=>{ site.override.set('/index.html', ver(v,b)); site.override.set('/build.json', JSON.stringify({build:b})); };
+const ver=(v,b)=>HTML.replaceAll(String(BUILD), String(b)).replace('<title>','<meta name="t-ver" content="'+v+'"><title>');
+const deploy=(v,b)=>{ site.override.set('/index.html', ver(v,b)); site.override.set('/sw.js', SW.replaceAll(String(BUILD), String(b))); site.override.set('/build.json', JSON.stringify({build:b})); };   // a deploy changes sw.js too: the worker installs the set of that build
 const tver=pg=>pg.evaluate(()=>(document.querySelector('meta[name="t-ver"]')||{}).content||null);
 const strip=pg=>pg.evaluate(()=>{ const s=document.getElementById('updStrip'); return s && !s.hidden? s.textContent.replace(/\s+/g,' ').trim() : ''; });
 const nudge=pg=>pg.evaluate(()=>window.dispatchEvent(new Event('online')));   // the network came back: the page asks the server for its build
@@ -37,7 +39,8 @@ await p1.close();
 // C is deployed and the app is opened at an address with a query; then the network is down at the next start
 deploy('C', BUILD);
 const p2=await open(site.url+'?src=home'); await p2.waitForTimeout(500);
-await until(()=>p2.evaluate(async()=>{ const k=(await caches.keys()).find(k=>/^baobook-shell-/.test(k)); const r=k && await (await caches.open(k)).match('/'); return r && /name="t-ver" content="C"/.test(await r.text()); }), 5000);   // the copy is written before the network goes
+const setC=await until(()=>p2.evaluate(async k=>{ if(!(await caches.keys()).includes(k)) return false; const r=await (await caches.open(k)).match('/'); return !!r && /name="t-ver" content="C"/.test(await r.text()); }, 'baobook-shell-'+BUILD), 10000);   // the worker of C installed its set before the network goes
+ok('4a the deploy of C installed the set baobook-shell-'+BUILD+' with the page C', !!setC);
 ok('4 opened online at /?src=home: C ('+await tver(p2)+')', await tver(p2)==='C');
 await p2.close();
 await ctx.setOffline(true);
