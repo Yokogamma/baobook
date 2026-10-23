@@ -1,6 +1,7 @@
 // The tap highlight: Android Chrome flashes a blue -webkit-tap-highlight-color over every tapped element unless it is turned off. It is off
 // for the whole page, and the controls give their own press feedback instead: :active backgrounds on the gear, the header buttons, «+» and «×»
-// of the panel and the menu items, and .press on a list item.
+// of the panel, the menu items, the text size steps and the format bars (a pressed format button stays darker), the round «+» darkens, and a list
+// item gets .press.
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
 const SITE=(await serve()).url;
@@ -50,6 +51,17 @@ for(const [name,sel] of [['the gear','#setBtn'],['the panel «+»','#newBtn'],['
   const mrest=await bg(mi), mact=await activeBg(sel);
   ok('8 a menu item pressed has a background ('+mrest+' → '+mact+')', (await mi.count())>=1 && mact!==TRANSPARENT && mact!==mrest);
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); }
+// the text size stepper of the header «⋯» menu, the round «+» and the format bars (the format bars are checked hidden: computed styles still apply)
+{ await more.tap(); await pg.waitForTimeout(300); const sel='.amenu.hm .mi-step button:not(:disabled)'; const n=await pg.locator(sel).count(), rest=n? await bg(pg.locator(sel).first()) : null, act=n? await activeBg(sel) : null;
+  ok('11 a step button of the text size pressed has a background ('+rest+' → '+act+')', n>=1 && rest===TRANSPARENT && act!==TRANSPARENT); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+  const fRest=await pg.locator('#fab').evaluate(e=>getComputedStyle(e).filter); await cdp.send('DOM.enable'); await cdp.send('CSS.enable'); const {root}=await cdp.send('DOM.getDocument'); const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId, selector:'#fab'});
+  await cdp.send('CSS.forcePseudoState',{nodeId, forcedPseudoClasses:['active']}); const fAct=await pg.locator('#fab').evaluate(e=>getComputedStyle(e).filter); await cdp.send('CSS.forcePseudoState',{nodeId, forcedPseudoClasses:[]});
+  ok('12 the round «+» pressed darkens ('+fRest+' → '+fAct+')', fRest==='none' && fAct!=='none');
+  await pg.evaluate(()=>{ const b=document.querySelectorAll('#bubble button'); b[0].id='tb0'; b[1].id='tb1'; b[1].setAttribute('aria-pressed','true'); });
+  const alpha=c=>{ const m=/rgba?\(([^)]+)\)/.exec(c); const v=m? m[1].split(',').map(Number) : []; return v.length===4? v[3] : v.length===3? 1 : 0; };
+  const r0=await bg(pg.locator('#tb0')), a0=await activeBg('#tb0'), r1=await bg(pg.locator('#tb1')), a1=await activeBg('#tb1');
+  ok('13 a format button pressed has a background ('+r0+' → '+a0+'); a pressed one («on») stays darker under the finger ('+r1+' → '+a1+')', r0===TRANSPARENT && a0!==TRANSPARENT && alpha(a1)>=alpha(r1) && alpha(r1)>alpha(a0));
+  await pg.evaluate(()=>{ const b=document.getElementById('tb1'); b.removeAttribute('aria-pressed'); b.removeAttribute('id'); document.getElementById('tb0').removeAttribute('id'); }); }
 // the keyboard focus ring stays
 { const css=await pg.evaluate(()=>[...document.styleSheets].flatMap(s=>{ try{ return [...s.cssRules]; }catch(_){ return []; } }).some(r=>r.selectorText==='button:focus-visible' && /outline/.test(r.cssText)));
   ok('9 button:focus-visible keeps its outline', css); }

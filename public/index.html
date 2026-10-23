@@ -600,6 +600,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .list .item.amode :is(.it-p.on,.it-r.back){background:var(--on-bg);color:var(--on-ink)}
   /* press feedback in place of the tap highlight: the main controls show a background while the finger is down (the :hover a tap leaves comes only after it); list items have .press */
   .gear:active,.tb:active,.new:active,.side-x:active,.setpop .mi:active,.amenu .mi:active{background:var(--hover-2)} .bbar button:not(:disabled):active{background:rgba(128,128,128,.35)}
+  .mi-step button:not(:disabled):active{background:var(--hover-2)} .fab:active{filter:brightness(.85)}
+  :is(.bubble,.bmore) button:not(:disabled,[aria-pressed="true"]):active{background:rgba(128,128,128,.35)} :is(.bubble,.bmore) button[aria-pressed="true"]:active{background:rgba(128,128,128,.7)}   /* a pressed format button stays darker than the others, and darkens under the finger */
 }
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
