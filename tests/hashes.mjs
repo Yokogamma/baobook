@@ -1,7 +1,7 @@
 // The integrity hashes of the page's own files (Subresource Integrity). public/index.html is the one place they live: the integrity
 // attribute of the sync.js and cloud.js tags and the SRI table of the language files; the service worker reads them from the page it
 // installs. Run as a scenario, this checks them against the files in public/ and prints the right values when one is stale;
-// `node tests/hashes.mjs --write` puts the right values into index.html. Other scenarios import sri() and withHashes() for their deploys.
+// `node tests/hashes.mjs --write` puts the right values into index.html; `node tests/hashes.mjs --live <site>` checks a deployed site. Other scenarios import sri() and withHashes() for their deploys.
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,13 @@ const at=f=>new RegExp('(["\']'+esc(f)+'(?:\\?b=\\d+" integrity="|\':\'))(sha384
 export const found=html=>Object.fromEntries(FILES.map(f=>[f, (at(f).exec(html)||[])[2]||null]));
 export const withHashes=(html, map)=>Object.entries(map).reduce((h,[f,v])=>h.replace(at(f),(_,a)=>a+v), html);
 
+if(process.argv[1]===fileURLToPath(import.meta.url) && process.argv.includes('--live')){
+  // after a deploy: the live page's hashes against the bytes the live site serves (a CDN that rewrites a script would make every browser refuse it)
+  const base=process.argv[process.argv.indexOf('--live')+1]||'https://baobook.matamata.dev/', html=await (await fetch(base,{cache:'no-store'})).text();
+  const b=(/<meta name="baobook-build" content="(\d+)">/.exec(html)||[])[1], have=found(html); let bad=0;
+  for(const f of FILES){ const got=sri(Buffer.from(await (await fetch(new URL(f+'?b='+b, base),{cache:'no-store'})).arrayBuffer())); if(got!==have[f]) bad++; console.log((got===have[f]? '✓ ':'✗ ')+b+' '+f+(got===have[f]? '' : ': the page says '+have[f]+', the site serves '+got)); }
+  process.exit(bad?1:0);
+}
 if(process.argv[1]===fileURLToPath(import.meta.url)){
   const file=new URL('index.html', PUB), html=fs.readFileSync(file,'utf8'), want=expected(), have=found(html);
   const stale=FILES.filter(f=>have[f]!==want[f]);

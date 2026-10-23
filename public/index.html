@@ -749,8 +749,12 @@ function pickLang(){ let s={}; try{ s=JSON.parse(localStorage.getItem('sheet:set
   if(I18N.langs.includes(s.lang)) return s.lang;
   for(const l of navigator.languages||[navigator.language||'']){ const b=String(l).toLowerCase().split('-')[0]; if(I18N.langs.includes(b)) return b; }
   return I18N.fallback; }
-async function loadStrings(){ const lang=pickLang();
-  try{ const r=await fetch('locales/'+lang+'.json?b='+BUILD, {integrity:SRI['locales/'+lang+'.json']}).catch(e=>{ I18N.refused=true; throw e; }); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }   // refused: a file of another build (or no network), not a missing file
+const tornMark=()=>{ try{ return sessionStorage.getItem('baobook:torn')===String(BUILD); }catch(_){ return true; } };   // this tab already reloaded once for a refused file of this build (no storage: as if it had, so it never reloads)
+async function loadStrings(){ const lang=pickLang(), u='locales/'+lang+'.json?b='+BUILD;
+  // refused: a file of another build (or no network), not a missing file; after the one reload a file still refused is taken as it is: its
+  // words may be a build off, which reads better than bare keys
+  try{ const r=await fetch(u, {integrity:SRI['locales/'+lang+'.json']}).catch(e=>{ I18N.refused=true; if(!tornMark()) throw e; console.warn('i18n: '+lang+' refused again, taken unchecked'); return fetch(u, {cache:'no-cache'}); });
+    if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
   I18N.lang=lang; I18N.locale=(navigator.languages||[]).find(l=>String(l).toLowerCase().split('-')[0]===lang)||lang;
   I18N.plural=new Intl.PluralRules(I18N.locale); document.documentElement.lang=lang; }
 function loc(key, p){ let v=I18N.dict[key]; if(v===undefined){ console.warn('i18n: missing key '+key); return key; }
@@ -3019,10 +3023,10 @@ if(/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone && !ma
 }
 // A file of this build was refused (a deploy landed between the page and its files) or did not come: the page reloads once and gets one
 // whole build again. Without the core it never starts half-way: if the reload did not help, the update strip says so and offers a reload.
-function torn(){ const core=!!window.BaobookSync && !!window.BaobookCloud; let again=false;
-  try{ again=!!sessionStorage.getItem('baobook:torn'); if(core && !I18N.refused){ if(again) sessionStorage.removeItem('baobook:torn'); return false; }
-    if(!again){ sessionStorage.setItem('baobook:torn', String(BUILD)); location.reload(); return true; } }catch(_){}
-  if(core) return false;
+function torn(){ const core=!!window.BaobookSync && !!window.BaobookCloud;
+  if((!core || I18N.refused) && !tornMark()) try{ sessionStorage.setItem('baobook:torn', String(BUILD));
+    if(tornMark()){ location.reload(); return true; } }catch(_){}   // read back: storage that does not keep the mark would reload forever
+  if(core){ try{ sessionStorage.removeItem('baobook:torn'); }catch(_){} return false; }   // the app starts: the next refused file reloads again
   const $=id=>document.getElementById(id); localize(); $('updMsg').textContent=loc('update.broken'); $('updX').hidden=true; $('updGo').addEventListener('click',()=>location.reload());
   $('updStrip').style.visibility='visible'; $('updStrip').hidden=false;   // the rest of the page stays hidden: the app never started
   return true; }
