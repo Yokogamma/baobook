@@ -23,7 +23,7 @@ const get=u=>fetch(new Request(u,{cache:'reload'})).then(r=>{ if(!r.ok || r.redi
 async function fill(){ const page=await get(PRECACHE[0]), html=await page.clone().text();
   if(+(/<meta name="baobook-build" content="(\d+)">/.exec(html)||[])[1]!==BUILD) throw new Error('the page is of another build');
   const rest=await Promise.all(PRECACHE.slice(1).map(u=>get(u).then(r=>[u,r])));
-  const now=await fetch(BUILD_URL,{cache:'no-store'}).then(r=>r.json()).then(j=>+j.build, ()=>0);
+  const now=await fetch(BUILD_URL,{cache:'no-store'}).then(r=>r.ok && !r.redirected? r.json() : null).then(j=>j? +j.build : 0, ()=>0);   // an error page is no confirmation
   if(now!==BUILD) throw new Error('a deploy during the install');
   const c=await caches.open(SHELL); await c.put(PRECACHE[0], page); for(const [u,r] of rest) await c.put(u, r); }
 self.addEventListener('install',e=>{ e.waitUntil(fill().then(()=>self.skipWaiting(), err=>caches.delete(SHELL).then(()=>{ throw err; }))); });

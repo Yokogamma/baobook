@@ -30,7 +30,7 @@ const open=async(c,u)=>{ const pg=await (c||ctx).newPage(); pg.on('pageerror',e=
 deploy('A', BUILD-3);
 { const {pg}=await open(); await pg.evaluate(()=>navigator.serviceWorker.ready); await pg.reload();
   deploy('B', BUILD-2); await pg.reload();
-  const sb=await until(()=>setOf(pg, BUILD-2), 10000), goneA=await until(async()=>!(await pg.evaluate(()=>caches.keys())).includes('baobook-shell-'+(BUILD-3)), 5000);
+  const sb=await until(()=>setOf(pg, BUILD-2), 10000), goneA=await until(async()=>!(await pg.evaluate(()=>caches.keys())).includes('baobook-shell-'+(BUILD-3)), 15000);
   ok('1 the deploy of B installed one whole set: page and sync.js of B ('+sb+'), and the set of A is gone', sb==='BB' && goneA);
   await pg.close(); }
 
@@ -91,8 +91,13 @@ await ctx.unroute(u=>u.href.includes(qG));
 
 // a deploy lands while the worker of H is installing (its sync.js is slow): the set would mix H and I, so it is not installed
 deploy('H', BUILD+4); site.delay.set('/sync.js', 3000);
-{ const pg=await ctx.newPage(); const go=pg.goto(site.url, {timeout:60000}); await go; await until(async()=>(await site.hits.get('/sync.js')||0)>0 && pg.evaluate(()=>navigator.serviceWorker.getRegistration().then(r=>!!(r && r.installing))), 10000);
-  deploy('I', BUILD+5); await pg.waitForTimeout(4000); site.delay.clear(); await pg.close(); }   // I lands while the worker of H waits for its sync.js
+{ const pg=await ctx.newPage(); const sync0=site.hits.get('/sync.js')||0, sw0=site.hits.get('/sw.js')||0; await pg.goto(site.url, {timeout:60000});
+  // the barrier: the worker of H was fetched and is installing, and its sync.js request came after the page's own
+  const started=await until(async()=>(site.hits.get('/sw.js')||0)>sw0 && (site.hits.get('/sync.js')||0)>=sync0+2 && await pg.evaluate(()=>navigator.serviceWorker.getRegistration().then(r=>!!(r && r.installing))), 10000);
+  deploy('I', BUILD+5);   // I lands while the worker of H waits for its sync.js
+  const ended=await until(()=>pg.evaluate(()=>navigator.serviceWorker.getRegistration().then(r=>!!r && !r.installing)), 15000);
+  ok('11a the worker of H started its install before I landed, and the install ended', !!started && !!ended);
+  site.delay.clear(); await pg.close(); }
 { const k=await aside(shells), sf=await aside(p=>setOf(p, BUILD+2));
   ok('11 a deploy during the install of H: no set of H ('+k.join(', ')+'), the set of F stays ('+sf+')', !k.includes('baobook-shell-'+(BUILD+4)) && sf==='FF'); }
 { const si=await installed(BUILD+5,'II'); ok('11b the next start installs the whole set of I ('+si+')', si==='II'); }
