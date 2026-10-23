@@ -7,7 +7,8 @@
 // the totals of `versions` match; a delivery before the first send joins an equal snapshot and keeps a different one under a new id; a deletion
 // right after setOwner reads the cloud and leaves nothing to come back; a version of an empty note queues the note; a revival takes an unsent
 // version along (and gives it back when its document turns up), and holds one whose create is in flight; legacy records and jobs from before
-// 4a are migrated; names count in UTF-16 units as the rules do; a rename of a snapshot the normalizer changed passes the test cloud's rename check.
+// 4a are migrated; names count in UTF-16 units as the rules do; a rename of a snapshot the normalizer changed passes the test cloud's rename check; no space
+// for a version, met on receiving or in the send path's prepare step, gives one sweep and one more read, then «no space».
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
@@ -269,5 +270,15 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   ok('23 the damaged version is quarantined and the status is error', !!A.db.get('sync','quarantine:v:vD') && A.sync.status().code==='error');
   cloud.write('versions',{id:'vD', note:'n1', deleted:true},{dev:'phone'}); await idle(A);
   ok('23a the tombstone from another device lifts the quarantine and the error, also after a restart', !A.db.get('sync','quarantine:v:vD') && !(A.db.get('sync','meta:v:vD')||{}).err && A.sync.status().code!=='error' && (await (async()=>{ await A.sync.reload(); return A.sync.status().code!=='error'; })())); }
+
+/* ── 24. no space met on the send path: a collision in the prepare step whose listener delivery is held back; one sweep, one more read, then «no space», the job kept ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(), orig=db.tx.bind(db); let full=false;
+  db.tx=(stores,mode,fn)=>orig(stores,mode,async T=>{ if(full){ const put=T.put; T.put=(st,v)=>{ if(st==='versions') throw Object.assign(new Error('quota'),{name:'QuotaExceededError'}); return put(st,v); }; } return fn(T); });
+  const A=await mk(cloud,'A',{db}); let gets=0; const g=A.proxy.get; A.proxy.get=(c,i)=>{ if(c==='versions' && i==='vC') gets++; return g(c,i); };
+  await note(A,'n1','текст'); await idle(A); await A.off(false); await nameNow(A,'n1','vC','Моя');
+  cloud.write('versions',{id:'vC', note:'n1', t:cloud.now(), name:'Чужа', title:'', blocks:[]},{dev:'phone', commitAt:cloud.now()+3600000});   // a get sees it, the listener does not yet
+  full=true; await A.off(true); await idle(A);
+  for(let i=0;i<6;i++){ cloud.advance(60000); await A.sync.idle(100); }
+  ok('24 the collision met in the prepare step cannot be stored: at most two reads of vC, then «no space»; the job and the local version stay ('+gets+')', gets<=2 && A.sync.status().code==='nospace' && A.logs.some(e=>e.t==='nospace') && !!A.db.get('sync','out:v:vC') && A.db.get('versions','vC').name==='Моя'); }
 
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);

@@ -411,7 +411,8 @@ function makeSync(deps){
       return r; }
     catch(e){ if(e.code==='epoch') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
   // the first document without space: thin the history once and read the document again later, the page goes on; the second: no space, receiving stops (§4.6)
-  async function quotaTrouble(id, c='n'){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', col:c, id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ if(c==='v') setVRefetch(t,id,after); else setRefetch(t,id,after); }); }catch(_){} return false; }
+  // o.send: met on the send path (a merge or a collision in the prepare step): the job retries by itself, so no refetch mark is set
+  async function quotaTrouble(id, c='n', o={}){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', col:c, id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } if(!o.send){ try{ await tx(['sync'], async(t,after)=>{ if(c==='v') setVRefetch(t,id,after); else setRefetch(t,id,after); }); }catch(_){} } return false; }
     S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); setStatus('nospace'); return true; }
   /* ── sending (§4.5) ── */
   // every cloud call: `read` marks the reads, whose refusal means no access (§4.11 step 2: the rules refuse by uid, so a refused read is the
@@ -428,8 +429,10 @@ function makeSync(deps){
   async function backoff(id, error){ const job=S.jobs.get(id); if(!job) return; const j={...job, tries:(job.tries||0)+1, err:error.code}; j.next=now()+backoffMs(j.tries); log({t:'retry', id, code:error.code, next:j.next}); S.jobs.set(id,j);
     try{ await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.out('n',id)); if(cur) setJob(t,id,{...cur, tries:j.tries, next:j.next, err:j.err},after); }); }catch(_){} }   // only the retry fields: another runner may have changed the rest
   // a storage or program error inside one send or attempt: logged, the job backs off, the step goes on (§4.5: nothing unsecured reaches the cloud)
-  async function vguarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && e.code==='epoch') return; log({t:'step-error', kind, col:'v', id, code:e && e.code, error:String(e && e.message || e)}); await vbackoff(id, {code:'storage'}); } }
-  async function guarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && e.code==='epoch') return; log({t:'step-error', kind, id, code:e && e.code, error:String(e && e.message || e)}); await backoff(id, {code:'storage'}); } }
+  // no space on the send path goes the way receiving does (§4.6): one sweep and one more try, then «no space» for an hour; the job stays
+  const isQuota=e=>!!e && (/Quota/i.test(e.name||'') || e.code==='quota');
+  async function vguarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && e.code==='epoch') return; log({t:'step-error', kind, col:'v', id, code:e && e.code, error:String(e && e.message || e)}); if(isQuota(e) && await quotaTrouble(id,'v',{send:true})) return; await vbackoff(id, {code:'storage'}); } }
+  async function guarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && e.code==='epoch') return; log({t:'step-error', kind, id, code:e && e.code, error:String(e && e.message || e)}); if(isQuota(e) && await quotaTrouble(id,'n',{send:true})) return; await backoff(id, {code:'storage'}); } }
   function pickJob(nowT){ if(S.netBusy || S.paused || !S.online || blocked()) return null;
     for(const [id,job] of S.jobs){ if(S.tries.has(id)) continue; if((job.next||0)>nowT+pace.retryMax){ job.next=nowT; } if((job.wait||0)>nowT+pace.purgeWait+pace.retryMax){ job.wait=0; }   // a retry or a wait past its longest span is a clock set back
       if((job.next||0)>nowT || (job.wait||0)>nowT) continue; const err=S.err.get(id); if(err && (!job.tomb || err==='invalid' || err==='receipts')) continue; if(sendDelay(id,nowT)>nowT) continue; return id; } return null; }   // a tombstone still goes over a note too large or looping, not over one the rules or the receipt limit refused
