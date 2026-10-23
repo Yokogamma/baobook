@@ -422,5 +422,22 @@
   "update.waiting": "Will reload once everything is saved",
   "update.dismiss": "Hide",
   "update.lockedUnsaved": "The last edit is not saved: export it first. Tap «{button}» again to reload anyway.",
-  "settings.build": "Version {build}"
+  "settings.build": "Version {build}",
+  "boot.title": "Recent starts:",
+  "boot.now": "{when}: now",
+  "boot.line": "{when}: {total}",
+  "boot.slowLine": "{when}: {total}; longest: {phase}, {dur}",
+  "boot.slowTries": "{when}: {total}; longest: {phase}, {dur}; attempts to open the storage: {n}",
+  "boot.stuck": "{when}: did not finish within at least {total}, waiting for {phase}",
+  "boot.ph.load": "loading the page",
+  "boot.ph.db": "opening the storage",
+  "boot.ph.retry": "the pause between attempts",
+  "boot.ph.sync": "the sync state",
+  "boot.ph.move": "moving the backup copies",
+  "boot.ph.notes": "reading the notes",
+  "boot.ph.ui": "showing the notes",
+  "boot.waiting": "Loading your notes…",
+  "boot.slow": "The browser storage is slow to answer. Your notes appear as soon as it does; no need to close the app.",
+  "boot.snapWait": "Loading your notes…",
+  "boot.snapLocked": "These notes are on this device but cannot be read right now:"
 }

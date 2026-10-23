@@ -11,7 +11,7 @@
    cached. Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
    The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used; a version lives in its path, so a
    cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
-const BUILD=2026102305, PREFIX='baobook-', WAIT=5000;
+const BUILD=2026102307, PREFIX='baobook-', WAIT=5000;
 const SHELL=PREFIX+'shell-'+BUILD, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
 const KEEP=[SHELL, FONTS, SDK];
 const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;
