@@ -14,21 +14,28 @@ const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=
 export const CTX={locale:'uk-UA', permissions:['clipboard-read','clipboard-write']};
 
 // override: path → string (serve this body instead of the file) or null (answer 404); redirect: path as requested (before '/' becomes
-// '/index.html') → location, answered with 307 as Cloudflare answers /index.html; hits: path → request count
+// '/index.html') → location, answered with 307 as Cloudflare answers /index.html; delay: path → ms before the answer starts (a network that
+// neither answers nor fails); stall: path → ms between the headers and the body; hits: path → request count
 export async function serve({host='127.0.0.1', port=0}={}){
-  const override=new Map(), redirect=new Map(), hits=new Map();
+  const override=new Map(), redirect=new Map(), delay=new Map(), stall=new Map(), hits=new Map();
   const srv=http.createServer((req,res)=>{
     let p=decodeURIComponent(new URL(req.url,'http://x').pathname);
     if(redirect.has(p)){ hits.set(p,(hits.get(p)||0)+1); res.writeHead(307,{Location:redirect.get(p)}); res.end(); return; }
     if(p.endsWith('/')) p+='index.html';
     hits.set(p,(hits.get(p)||0)+1);
+    if(delay.has(p)){ const ms=delay.get(p); setTimeout(()=>answer(p,res), ms); return; }
+    answer(p,res);
+  });
+  const answer=(p,res)=>{
     const head={'Content-Type':TYPES[path.extname(p)]||'application/octet-stream','Cache-Control':'no-cache'};
+    if(stall.has(p) && (override.get(p)!==null)){ const f=path.join(ROOT,p), body=override.has(p)? override.get(p) : fs.existsSync(f)? fs.readFileSync(f) : null;
+      if(body!==null){ res.writeHead(200,head); res.flushHeaders(); setTimeout(()=>res.end(body), stall.get(p)); return; } }
     if(override.has(p)){ const body=override.get(p); if(body===null){ res.writeHead(404); res.end(); } else { res.writeHead(200,head); res.end(body); } return; }
     const f=path.join(ROOT,p);
     if(!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()){ res.writeHead(404); res.end(); return; }
     res.writeHead(200,head); fs.createReadStream(f).pipe(res);
-  });
+  };
   await new Promise(r=>srv.listen(port,host,r));
-  return { url:`http://${host}:${srv.address().port}/`, override, redirect, hits,
+  return { url:`http://${host}:${srv.address().port}/`, override, redirect, delay, stall, hits,
     close:()=>new Promise(r=>{ srv.closeAllConnections(); srv.close(()=>r()); }) };
 }

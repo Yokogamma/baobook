@@ -1,22 +1,32 @@
 /* Baobook service worker.
-   App shell: network first, cache as the fallback, so updates arrive at once and the app still opens offline.
-   Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
-   The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used, not precached; a version
-   lives in its path, so a cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone.
-   The page has one entry, APP ('./'): every navigation to it that loads online replaces it, whatever its query, and every navigation that
-   fails is answered from it, so the page shown offline is never older than the last one loaded online (there is no separate copy of
-   ./index.html, which answers 307 and would never be refreshed). Lookups go to the shell cache only. build.json (the build on the server,
-   which an open page compares with its own BUILD) is never cached: offline it simply fails.
-   Cache names carry the app prefix; activate deletes only this app's old caches, because other apps may share the origin. */
-const VERSION='v9', PREFIX='baobook-';
-const SHELL=PREFIX+'shell-'+VERSION, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
+   The app shell is kept as one set per build: BUILD here equals BUILD in index.html (tests/appupdate checks it), so every deploy changes
+   this file, the browser installs the new worker, and install downloads the whole set of that build (the page, sync.js?b=, cloud.js?b=,
+   the language files, the manifest, the icons) into baobook-shell-<BUILD>. Nothing is ever written into a set afterwards, so a set never
+   mixes two builds; activate deletes the older sets, and only this app's caches (the 'baobook-' prefix), because other apps may share the origin.
+   The page: network first, whole body, at most WAIT; a network that fails, or neither answers nor fails within WAIT (a phone waking up, Wi-Fi
+   reconnecting), gets the page of the set instead; the update strip in the page tells about a newer build. A first visit has no set and waits.
+   The page's own files carry its build in their address (?b=BUILD): an exact match in the set answers at once; a page of another build
+   misses and gets them from the network. So a page and its files are always of one build. build.json (the build on the server) is never
+   cached. Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
+   The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used; a version lives in its path, so a
+   cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
+const BUILD=2026102301, PREFIX='baobook-', WAIT=5000;
+const SHELL=PREFIX+'shell-'+BUILD, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
 const KEEP=[SHELL, FONTS, SDK];
-const APP=new URL('./', self.registration.scope).href, ROOT=new URL(APP).pathname, BUILD_URL=new URL('./build.json', APP).pathname;
-const PRECACHE=['./','./sync.js','./cloud.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./locales/uk.json','./locales/en.json'];
+const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;
+const PRECACHE=['./','./sync.js'+B,'./cloud.js'+B,'./locales/uk.json'+B,'./locales/en.json'+B,'./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
-// cache:'reload': the copies come from the server, not from the browser's HTTP cache
-self.addEventListener('install',e=>{ e.waitUntil(caches.open(SHELL).then(c=>c.addAll(PRECACHE.map(u=>new Request(u,{cache:'reload'})))).then(()=>self.skipWaiting())); });
+// cache:'reload': the set comes from the server, not from the browser's HTTP cache; a set that cannot be completed is not installed
+self.addEventListener('install',e=>{ e.waitUntil(caches.open(SHELL).then(c=>c.addAll(PRECACHE.map(u=>new Request(u,{cache:'reload'})))).then(()=>self.skipWaiting(), err=>caches.delete(SHELL).then(()=>{ throw err; }))); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&!KEEP.includes(k)).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
+
+const inSet=(key,o)=>caches.match(key,{...o, cacheName:SHELL}).catch(()=>undefined);   // caches.match, not caches.open: an older worker still running must not recreate its deleted set
+// the whole body, not only the headers: a body that stalls after the headers still loses to the set
+const whole=r=>r.ok && r.type!=='opaqueredirect'? r.arrayBuffer().then(b=>new Response(b,{status:r.status, statusText:r.statusText, headers:r.headers})) : r;
+function page(req){ const net=fetch(req,{cache:'no-cache'}).then(whole);
+  return new Promise(res=>{ let done=false; const end=r=>{ if(done) return false; done=true; clearTimeout(t); res(r); return true; };
+    const t=setTimeout(()=>inSet(APP).then(r=>{ if(r) end(r); }), WAIT);   // no set yet (the first visit): the network is all there is
+    net.then(end, ()=>inSet(APP).then(r=>end(r||Response.error()))); }); }
 
 self.addEventListener('fetch',e=>{
   const req=e.request, url=new URL(req.url);
@@ -24,11 +34,9 @@ self.addEventListener('fetch',e=>{
   if(req.method!=='GET') return;
   if(url.origin===location.origin){
     if(url.pathname===BUILD_URL) return;
-    const nav=req.mode==='navigate', key=nav? APP : req;
-    // cache:'no-cache': always revalidate with the server (ETag); otherwise a host's HTTP cache can serve the old shell for minutes after a deploy.
-    // A navigation is stored only when it is the app itself (not a redirect, not another path); the write finishes before the worker may stop.
-    e.respondWith(fetch(req,{cache:'no-cache'}).then(r=>{ if(r.ok && !r.redirected && (!nav || url.pathname===ROOT)){ const c=r.clone(); e.waitUntil(caches.open(SHELL).then(cache=>cache.put(key,c)).catch(()=>{})); } return r; })
-      .catch(()=>caches.open(SHELL).then(c=>c.match(key,{ignoreSearch:true})).then(r=>r||Response.error())));
+    if(req.mode==='navigate'){ e.respondWith(page(req)); return; }
+    if(url.search===B){ e.respondWith(inSet(req).then(r=>r||fetch(req))); return; }   // a file of this build: from the set; another build's: from the network
+    e.respondWith(fetch(req,{cache:'no-cache'}).catch(()=>inSet(req,{ignoreSearch:true}).then(r=>r||Response.error())));   // the rest (the manifest, the icons, an older page's files): network first
     return;
   }
   if(url.hostname==='fonts.googleapis.com'||url.hostname==='fonts.gstatic.com'){
