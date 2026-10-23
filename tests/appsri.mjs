@@ -1,0 +1,88 @@
+// Subresource Integrity: the page carries the hashes of its own files (tests/hashes.mjs), so a file of another build is refused. The server
+// keeps only the current files, so a deploy that lands between a fresh page and its scripts answers `sync.js?b=B` with the bytes of C: the
+// browser refuses them, the page reloads once and comes back as one whole build; when the reload does not help, the update strip says the
+// app did not load completely, and the page never runs a script of another build. A language file of another build is refused the same way.
+// The service worker checks its set against the hashes of the page it installs: page B, scripts C and a stale build.json B are not installed.
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+import { serve, CTX } from './lib/server.mjs';
+import { until } from './lib/wait.mjs';
+import { sri, withHashes } from './hashes.mjs';
+const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
+let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+
+const PUB=new URL('../public/', import.meta.url), rd=f=>fs.readFileSync(new URL(f, PUB),'utf8');
+const HTML=rd('index.html'), SW=rd('sw.js'), SYNC=rd('sync.js'), UK=rd('locales/uk.json'), BUILD=+/const BUILD=(\d+)/.exec(HTML)[1];
+// the sync.js of deploy v notes in the tab's sessionStorage which page ran it: "BC" would be the page B running the sync.js of C
+const sync=v=>SYNC+'\n;try{ sessionStorage.setItem("t-ran", (sessionStorage.getItem("t-ran")||"")+((document.querySelector(\'meta[name="t-ver"]\')||{}).content||"?")+'+JSON.stringify(v)+'+" "); }catch(_){}';
+const page=(v,b)=>withHashes(HTML.replaceAll(String(BUILD), String(b)), {'sync.js':sri(sync(v))}).replace('<title>','<meta name="t-ver" content="'+v+'"><title>');
+const site=await serve(); site.redirect.set('/index.html','/');
+const deploy=(v,b)=>{ site.override.set('/index.html', page(v,b)); site.override.set('/sync.js', sync(v)); site.override.set('/sw.js', SW.replaceAll(String(BUILD), String(b))); site.override.set('/build.json', JSON.stringify({build:b})); };
+const hits=p=>site.hits.get(p)||0;
+const tver=pg=>pg.evaluate(()=>(document.querySelector('meta[name="t-ver"]')||{}).content||null);
+const ran=pg=>pg.evaluate(()=>sessionStorage.getItem('t-ran')||'');
+const strip=pg=>pg.evaluate(()=>{ const s=document.getElementById('updStrip'); return s && !s.hidden? document.getElementById('updMsg').textContent : ''; });
+const setOf=(pg,b)=>pg.evaluate(async k=>{ if(!(await caches.keys()).includes(k)) return null; const c=await caches.open(k), p=await c.match('/'), s=(await c.keys()).find(q=>/\/sync\.js\?b=/.test(q.url));
+  const pv=p && (/name="t-ver" content="(\w)"/.exec(await p.text())||[])[1], sv=s && (/\+"(\w)"\+" "\); \}catch/.exec(await (await c.match(s)).text())||[])[1]; return pv && sv? pv+sv : null; }, 'baobook-shell-'+b);
+const errs=[]; const watch=pg=>{ pg.loads=0; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('request',r=>{ if(r.isNavigationRequest() && r.frame()===pg.mainFrame()) pg.loads++; }); return pg; };   // loads: the page's own navigations (the worker fetches the page too)
+
+// 1. installed with A; B is deployed, and C lands while the fresh page B waits for its scripts: B never runs the sync.js of C
+const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}});
+const aside=async f=>{ const p=await ctx.newPage(); await p.goto(site.url+'manifest.webmanifest'); try{ return await f(p); } finally{ await p.close(); } };   // a page of the origin that is not the app
+deploy('A', BUILD-3);
+{ const pg=watch(await ctx.newPage()); await pg.goto(site.url); await pg.waitForSelector('#sheet'); await pg.evaluate(()=>navigator.serviceWorker.ready);
+  ok('1a the set of A is installed ('+await until(()=>setOf(pg, BUILD-3), 10000)+')', await setOf(pg, BUILD-3)==='AA'); await pg.close(); }
+deploy('B', BUILD-2); site.delay.set('/sync.js', 1500);
+{ const pg=watch(await ctx.newPage()); const h0=hits('/index.html');
+  const nav=pg.goto(site.url, {waitUntil:'commit'});
+  await until(()=>hits('/index.html')>h0, 10000); deploy('C', BUILD-1);   // the page B is on its way; its sync.js is still held, and C lands
+  await nav; await pg.waitForSelector('#sheet', {timeout:30000}); await pg.waitForTimeout(300); site.delay.clear();
+  const r=await ran(pg);
+  ok('1b the page B refused the sync.js of C and reloaded once ('+pg.loads+' loads): the app runs as C ('+await tver(pg)+'), pages and scripts that ran: «'+r.trim()+'»', await tver(pg)==='C' && r.trim()==='CC' && pg.loads===2);
+  ok('1c no strip, and the guard is cleared after the good start', await strip(pg)==='' && await pg.evaluate(()=>sessionStorage.getItem('baobook:torn'))===null);
+  await pg.close(); }
+
+// 2. a first visit where the server keeps answering the page B with the sync.js of C (a CDN out of step): one reload, then the strip
+const site2=await serve();
+{ const c2=await br.newContext({...CTX}); const pg=watch(await c2.newPage());
+  site2.override.set('/index.html', page('B', BUILD)); site2.override.set('/sync.js', sync('C'));
+  await pg.goto(site2.url); const s=await until(async()=>{ const s=await strip(pg); return s || null; }, 10000); await pg.waitForTimeout(1500);
+  const n=pg.loads;
+  ok('2a the page B never runs the sync.js of C ('+JSON.stringify(await ran(pg))+'); after one reload ('+n+' loads) the strip says «'+s+'»', await ran(pg)==='' && n===2 && s==='Застосунок завантажився не повністю');
+  ok('2b the app does not start half-way: no ready mark, the sheet is hidden', await pg.evaluate(()=>!document.documentElement.hasAttribute('data-ready')) && !(await pg.locator('#sheet').isVisible()));
+  await Promise.all([pg.waitForEvent('load'), pg.click('#updGo')]); await pg.waitForTimeout(800);
+  ok('2c «Оновити» reloads; still the same mismatch: the strip again, no loop ('+pg.loads+' loads)', pg.loads===3 && /не повністю/.test(await strip(pg)));
+  site2.override.set('/sync.js', sync('B'));   // the server is whole again
+  await Promise.all([pg.waitForEvent('load'), pg.click('#updGo')]); await pg.waitForSelector('#sheet');
+  ok('2d the next «Оновити» starts the app as B with its own sync.js ('+(await ran(pg)).trim()+'); the guard is cleared', (await ran(pg)).trim()==='BB' && await pg.evaluate(()=>sessionStorage.getItem('baobook:torn'))===null);
+  await c2.close(); }
+
+// 3. a language file of another build: refused like a script, never shown
+{ const c3=await br.newContext({...CTX}); const pg=watch(await c3.newPage());
+  site2.override.set('/index.html', page('B', BUILD)); site2.override.set('/sync.js', sync('B'));
+  site2.override.set('/locales/uk.json', UK.replace(/"notes\.new": "[^"]*"/, '"notes.new": "Чужа збірка"'));
+  await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(500);
+  const t=(await pg.locator('#newBtn').textContent()).trim();
+  ok('3 the uk.json of another build is refused: one reload ('+pg.loads+' loads), its text never shows («'+t+'»)', t!=='Чужа збірка' && pg.loads===2);
+  site2.override.delete('/locales/uk.json'); await pg.reload(); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(300);
+  ok('3b with the right file the text is back («'+(await pg.locator('#newBtn').textContent()).trim()+'»)', (await pg.locator('#newBtn').textContent()).trim()==='Нова');
+  await c3.close(); }
+await site2.close();
+
+// 4. an install that receives files out of step: the page D and build.json D, but the sync.js of E. The worker of D refuses the set,
+//    the set of C stays, and the next start installs the whole set of D
+{ await until(()=>aside(p=>setOf(p, BUILD-1)), 15000); const sc=await aside(p=>setOf(p, BUILD-1));
+  ok('4a before: the set of C is installed ('+sc+')', sc==='CC'); }
+deploy('D', BUILD); site.override.set('/sync.js', sync('E'));
+{ const pg=watch(await ctx.newPage()); await pg.goto(site.url); await pg.waitForTimeout(500);
+  const ended=await until(()=>pg.evaluate(()=>navigator.serviceWorker.getRegistration().then(r=>!!r && !r.installing && !r.waiting && (r.active||{}).scriptURL)), 15000);
+  await pg.waitForTimeout(2500); await pg.close(); }
+{ const k=await aside(p=>p.evaluate(async()=>(await caches.keys()).filter(k=>/^baobook-shell-/.test(k)))), sc=await aside(p=>setOf(p, BUILD-1));
+  ok('4b no set of D with the sync.js of E ('+k.join(', ')+'); the set of C stays ('+sc+')', !k.includes('baobook-shell-'+BUILD) && sc==='CC'); }
+site.override.set('/sync.js', sync('D'));
+{ const pg=watch(await ctx.newPage()); await pg.goto(site.url); await pg.waitForSelector('#sheet');
+  const sd=await until(()=>setOf(pg, BUILD), 30000);
+  ok('4c the next start installs the whole set of D ('+sd+')', sd==='DD'); await pg.close(); }
+
+console.log(errs.length? errs.join('\n') : '✓ no page errors'); if(errs.length) fails++;
+await ctx.close(); await site.close(); await br.close(); process.exit(fails?1:0);

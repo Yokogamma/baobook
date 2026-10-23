@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102301">
+<meta name="baobook-build" content="2026102303">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -726,16 +726,21 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102301"></script>
-<script src="cloud.js?b=2026102301"></script>
+<script src="sync.js?b=2026102303" integrity="sha384-dlGBXupUouVkV6sYAulonN1RmGPxy+0sihEJw7pDnptw7/rkCKh393NngFRGjcNh"></script>
+<script src="cloud.js?b=2026102303" integrity="sha384-+teum21/Xi2elblpdMv47tYZE+0stPDtlv6cY/oWBs5bc2OlblXWRYuOSKmkI+Oc"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
    {name} marks a parameter. Static markup carries data-i18n (text), data-i18n-html (markup from our own files)
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
+/* The integrity hashes of this page's own files (Subresource Integrity): the browser refuses a file whose bytes are not the ones this page
+   was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
+   the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
+   sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
+const SRI={'locales/en.json':'sha384-Pe+3wGxs5zpTv97Z0CRv+aOduNHGV8Wek7y3TBYj9CBc65EGFE29hT52sa8Ltzo2', 'locales/uk.json':'sha384-I33SiOpgC62PLqWe4jb85mEQP2eVQIOm85LFdpuWX5ZLj6ts7pFC5vGowZiRCijU'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102301;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102303;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -745,7 +750,7 @@ function pickLang(){ let s={}; try{ s=JSON.parse(localStorage.getItem('sheet:set
   for(const l of navigator.languages||[navigator.language||'']){ const b=String(l).toLowerCase().split('-')[0]; if(I18N.langs.includes(b)) return b; }
   return I18N.fallback; }
 async function loadStrings(){ const lang=pickLang();
-  try{ const r=await fetch('locales/'+lang+'.json?b='+BUILD); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
+  try{ const r=await fetch('locales/'+lang+'.json?b='+BUILD, {integrity:SRI['locales/'+lang+'.json']}).catch(e=>{ I18N.refused=true; throw e; }); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }   // refused: a file of another build (or no network), not a missing file
   I18N.lang=lang; I18N.locale=(navigator.languages||[]).find(l=>String(l).toLowerCase().split('-')[0]===lang)||lang;
   I18N.plural=new Intl.PluralRules(I18N.locale); document.documentElement.lang=lang; }
 function loc(key, p){ let v=I18N.dict[key]; if(v===undefined){ console.warn('i18n: missing key '+key); return key; }
@@ -3012,7 +3017,16 @@ installBtn.addEventListener('click',async()=>{ if(!deferredInstall) return; defe
 window.addEventListener('appinstalled',()=>{ installBtn.hidden=true; iosHint.hidden=true; });
 if(/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches) iosHint.hidden=false;
 }
-loadStrings().then(()=>{ localize(); try{ main(); } finally{ document.documentElement.dataset.ready=''; } });
+// A file of this build was refused (a deploy landed between the page and its files) or did not come: the page reloads once and gets one
+// whole build again. Without the core it never starts half-way: if the reload did not help, the update strip says so and offers a reload.
+function torn(){ const core=!!window.BaobookSync && !!window.BaobookCloud; let again=false;
+  try{ again=!!sessionStorage.getItem('baobook:torn'); if(core && !I18N.refused){ if(again) sessionStorage.removeItem('baobook:torn'); return false; }
+    if(!again){ sessionStorage.setItem('baobook:torn', String(BUILD)); location.reload(); return true; } }catch(_){}
+  if(core) return false;
+  const $=id=>document.getElementById(id); localize(); $('updMsg').textContent=loc('update.broken'); $('updX').hidden=true; $('updGo').addEventListener('click',()=>location.reload());
+  $('updStrip').style.visibility='visible'; $('updStrip').hidden=false;   // the rest of the page stays hidden: the app never started
+  return true; }
+loadStrings().then(()=>{ if(torn()) return; localize(); try{ main(); } finally{ document.documentElement.dataset.ready=''; } });
 </script>
 </body>
 </html>

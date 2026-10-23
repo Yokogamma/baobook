@@ -13,6 +13,7 @@ A notes app "on a blank sheet", formerly «Чистий аркуш» in `Yokogam
 - User data lives in IndexedDB `sheet` (stores `notes`, `versions`, `blobs`) and localStorage `sheet:settings`. Don't rename stores, and don't rename or drop fields, without a migration. New fields are optional and get defaults on read. Export files from older versions must keep importing.
 - The service worker may delete only caches with its own prefix: other apps can share the origin.
 - Every PR that changes `public/` raises the build marker `BUILD` (`YYYYMMDDnn`, shown in the settings menu as «Версія 26.10.22.1»: the date and the build of that day): the constant, `<meta name="baobook-build">` and the `?b=` of `sync.js` and `cloud.js` in `public/index.html`, the constant in `public/sw.js` (so every deploy installs a new worker with one whole cache set of that build), and `public/build.json`. An open page older than the server shows «Доступна нова версія · Оновити»; CI (`build-marker`) fails a PR that changes `public/` without raising it, and `tests/appupdate.mjs` checks they all agree. After a merge, `curl -s https://baobook.matamata.dev/build.json` shows the build that is live.
+- `public/index.html` carries the integrity hashes (Subresource Integrity) of the page's own files: the `integrity` of the `sync.js` and `cloud.js` tags and the `SRI` table of the language files; the browser refuses a file of another build, and the service worker checks its set against the same values, read from the page it installs. Every PR that changes `sync.js`, `cloud.js` or a language file (a new language included) runs `node tests/hashes.mjs --write`; `tests/hashes.mjs` fails with the right values printed while one is stale.
 - `public/index.html` writes the zero-width space as an escape sequence in the chip code. Editing tools may turn such escapes into the real character, so check the bytes after editing those lines.
 
 ## Current stage
@@ -42,7 +43,7 @@ Moving out of `mockups`, with no new features. Steps:
 - A plural value is an object keyed by `Intl.PluralRules` categories (`one`, `few`, `many`, `other`) and is chosen by `params.n`. `{name}` marks a parameter. Write whole sentences with parameters, never glue fragments.
 - Dates use `Intl` with `I18N.locale`.
 - The language comes from the saved setting (the «Мова / Language» switcher in the settings menu behind the gear), then the browser language, then English.
-- A new language takes a `public/locales/<code>.json` with every key, its code in `I18N.langs`, a `lang.<code>` name in every file, and a `PRECACHE` entry.
+- A new language takes a `public/locales/<code>.json` with every key, its code in `I18N.langs`, a `lang.<code>` name in every file, a `PRECACHE` entry, and its hash in the `SRI` table of `index.html` (`node tests/hashes.mjs --write`).
 - `tests/appi18n.mjs` fails on Cyrillic string literals outside the language files, on missing or unused keys, and on broken plurals.
 - Tests pin `uk-UA` through `CTX` in `tests/lib/server.mjs`.
 

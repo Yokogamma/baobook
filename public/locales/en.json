@@ -409,6 +409,7 @@
   "text.smaller": "Smaller text",
   "text.larger": "Larger text",
   "update.available": "A new version is available",
+  "update.broken": "The app did not load completely",
   "update.reload": "Reload",
   "update.waiting": "Will reload once everything is saved",
   "update.dismiss": "Hide",
