@@ -2014,7 +2014,7 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
 /* the soft fields of a note (LIST-ACTIONS-PLAN 5.4): the pin and the colour. Neither is content: copies that differ only by them make no conflict copy.
    A pinned note stays at the top of the notes; the pin is the time it was pinned. A colour is a name. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
 const SOFT={pinned:{ok:x=>!x.deleted && !x.archived}, color:{ok:x=>!x.deleted}};   // where the field applies: a pin in the notes, a colour in the notes and the archive
-const SOFTREV=new Map();   // id → {rev, whole, vals} of the last soft write started: a field-only write in flight is replaced by the next one, which sets its own field and the fields of the one it replaces outright
+const SOFTREV=new Map();   // id → {rev, whole, vals} of the last soft write started: a soft write in flight is replaced by the next one, which sets its own field and the fields of the one it replaces outright
 const softEq=(x, k, w)=>k==='pinned'? !!x.pinned===!!w : (x.color||'')===(w||'');
 function softSet(n, f, v){ const F=SOFT[f];
   if(held() || !notes.includes(n) || !F.ok(n) || softEq(n, f, v)) return;
@@ -2027,10 +2027,10 @@ function softSet(n, f, v){ const F=SOFT[f];
   const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole (the open note always has its snapshot)
   if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
   // a newer write began, so the result of the one it replaces is no longer reported (writeNote): if that one fails, this one must still store its field
-  const vals={...(pw && !pw.whole && pw.rev===inflight.get(n.id)? pw.vals : {}), [f]:f==='pinned'? (v? now() : 0) : (v||'')}, put=(x,k)=>{ if(vals[k]) x[k]=vals[k]; else delete x[k]; return x; };
+  const vals={...(pw && pw.rev===inflight.get(n.id)? pw.vals : {}), [f]:f==='pinned'? (v? now() : 0) : (v||'')}, put=(x,k)=>{ if(vals[k]) x[k]=vals[k]; else delete x[k]; return x; };
   put(n, f); n.updated=now();
   const set=C=>{ let x=null; for(const k in vals) if(SOFT[k].ok(C) && !softEq(C, k, vals[k])) x=put(x||{...C}, k); return x; };   // each field set outright, whatever a merge made of it
-  const merged=(C,m)=>{ const x=set(m)||{...m}; for(const k in vals) if(!SOFT[k].ok(m)){ if(C && C[k]) x[k]=C[k]; else delete x[k]; } return x; };   // a note the merge put where a field does not apply keeps its stored value
+  const merged=(C,m)=>{ const x=set(m)||{...m}; for(const k in SOFT) if(!SOFT[k].ok(m)){ if(C && C[k]) x[k]=C[k]; else delete x[k]; } return x; };   // a note the merge put where a field does not apply keeps its stored value there: every soft field, since the whole note carries the ones set before too
   const ed=whole && editorDelta(n);   // the note as it is now, the same snapshot writeNote compares the result with: an edit made while the write waits is not part of it
   const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=merged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(set)), rev=REV.get(n.id);
   SOFTREV.set(n.id, {rev, whole, vals}); p.then(()=>{ if((SOFTREV.get(n.id)||{}).rev===rev) SOFTREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way

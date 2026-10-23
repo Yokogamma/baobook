@@ -79,7 +79,7 @@ const toastText=pg=>pg.evaluate(()=>document.getElementById('toast').textContent
 
   // 7 an item near the bottom: the palette opens above its button and stays on the screen
   await panel(); await pg.evaluate(()=>{ const L=document.getElementById('list'), it=L.querySelector('.item[data-id="n12"]'); L.scrollTop=it.offsetTop+it.offsetHeight-L.clientHeight+110; }); await pg.waitForTimeout(300);
-  const b12=await item(pg,'n12').boundingBox(); await holdAt(b12.x+40, b12.y+b12.height/2); await tap(item(pg,'n12').locator('.it-c')); const p7=await pal(pg);
+  let b12=null; await until(async()=>!!(b12=await item(pg,'n12').boundingBox())); await holdAt(b12.x+40, b12.y+b12.height/2); await tap(item(pg,'n12').locator('.it-c')); const p7=await pal(pg);   // a redraw may replace the item just as it is measured
   ok('7 near the bottom (button at '+(p7 && Math.round(p7.btn.top))+') the palette opens above it ('+(p7 && Math.round(p7.top))+'–'+(p7 && Math.round(p7.bottom))+') inside the screen', p7 && p7.inside && p7.bottom<=p7.btn.top+1);
   await pg.goBack(); await pg.waitForTimeout(300); await pg.goBack(); await pg.waitForTimeout(300);
 
@@ -173,6 +173,22 @@ const toastText=pg=>pg.evaluate(()=>document.getElementById('toast').textContent
     await pg.reload(); await ready(pg); await pg.waitForTimeout(400); const sb=await stored(pg,id);
     ok(label+', the first write failed: stored '+JSON.stringify({color:sa.color, pinned:!!sa.pinned})+' (warning '+warn+'), after a reload '+JSON.stringify({color:sb.color, pinned:!!sb.pinned, drawn:await item(pg,id).getAttribute('data-color')}),
       sa.color==='pink' && sa.pinned>0 && sb.color==='pink' && sb.pinned>0 && await item(pg,id).getAttribute('data-color')==='pink'); }
+
+  // 17d, 17e two soft writes of the open note held back while another tab moves it where a field does not apply: each field is checked after the merge.
+  // A pin, then a colour, the note archived in tab B: the archived note gets the colour but not the pin. A colour, then a pin, the note trashed in B:
+  // in the trash the stored colour stays and there is no pin
+  const B=await ctx.newPage(); await B.goto(pg.url()); await ready(B); await B.waitForTimeout(400);
+  for(const [id, order, move, label] of [['old1', ['pin','color'], '.it-r', '17d a pin, then a colour, of the open note while tab B archives it'], ['nt', ['color','pin'], '.it-x', '17e a colour, then a pin, of the open note while tab B moves it to the trash']]){
+    if(id==='nt'){ await ctxMenu(id,'Рожевий'); await until(async()=>((await stored(pg,id))||{}).color==='pink'); }
+    await pg.evaluate(id=>document.querySelector('#list .item[data-id="'+id+'"]').click(), id); await until(()=>pg.evaluate(id=>sheetDebug.cur()===id, id)); await pg.waitForTimeout(300);
+    await pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=st=>st.includes('notes')? window.__gate : Promise.resolve(); });
+    for(const step of order){ if(step==='pin'){ await item(pg,id).hover(); await item(pg,id).locator('.it-p').click(); } else await ctxMenu(id,'Блакитний'); await pg.waitForTimeout(150); }
+    await B.bringToFront(); await B.reload(); await ready(B); await B.waitForTimeout(400); await B.locator('#list .item[data-id="'+id+'"]').hover(); await B.locator('#list .item[data-id="'+id+'"] '+move).click();
+    await until(async()=>{ const r=await stored(B,id); return r && (move==='.it-r'? r.archived>0 : r.deleted>0); }); await pg.bringToFront();
+    await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await pg.waitForTimeout(1200); const r=await stored(pg,id);
+    ok(label+': stored '+JSON.stringify({archived:!!r.archived, deleted:!!r.deleted, pinned:!!r.pinned, color:r.color}),
+      move==='.it-r'? (r.archived>0 && !r.pinned && r.color==='blue') : (r.deleted>0 && !r.pinned && r.color==='pink')); }
+  await B.close();
 
   // 18 restoring a version leaves the colour as it is
   await pg.evaluate(()=>document.querySelector('#list .item[data-id="n8"]').click()); await until(()=>pg.evaluate(()=>sheetDebug.cur()==='n8'));
