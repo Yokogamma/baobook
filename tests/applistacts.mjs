@@ -153,6 +153,21 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   console.log(errs.length? errs.join('\n') : '✓ hint: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
+/* ── 18 a wide touch screen with a mouse: a click on the sheet that closes the action mode only closes it (no block) ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1024,height:800}, hasTouch:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+  const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
+  const touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
+  await fresh(pg); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n1"]').click()); await pg.waitForTimeout(400);
+  if(!(await sideOpen(pg))){ await pg.click('#sideBtn'); await pg.waitForTimeout(400); }
+  const blocks=()=>pg.evaluate(()=>document.querySelectorAll('#sheet .blk').length);
+  const b=await boxOf(item(pg,'n2')); await touch('touchStart',[{x:b.cx,y:b.cy}]); await pg.waitForTimeout(650); await touch('touchEnd',[]); await pg.waitForTimeout(250);
+  const mode=await actsOn(pg), s=await boxOf(pg.locator('#sheet')), k0=await blocks(), x=s.x+s.w*0.6, y=s.y+Math.min(s.h-40, 420);
+  await pg.mouse.click(x, y); await pg.waitForTimeout(500); const k1=await blocks(), after=await actsOn(pg);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); await pg.mouse.click(x, y); await pg.waitForTimeout(500); const k2=await blocks();
+  ok('18 at 1024px on touch a mouse click on the sheet closes the mode of '+mode+' ('+after+') and makes no block ('+k0+' → '+k1+'); the next click there works as before ('+k2+')', mode==='n2' && after===null && k1===k0 && k2>k1);
+  console.log(errs.length? errs.join('\n') : '✓ wide touch: no errors'); if(errs.length) fails++;
+  await ctx.close(); }
+
 /* ── a computer: the hover buttons with state, the right-click menu ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:800}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   await fresh(pg); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n1"]').click()); await pg.waitForTimeout(400);

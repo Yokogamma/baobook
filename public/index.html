@@ -2685,7 +2685,9 @@ document.addEventListener('touchend',e=>{ if(swallow){ e.preventDefault(); swall
 list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs(); },{passive:true});   // a scroll by the user; a redraw's own scroll is not one
 document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
   if(e.target.closest('.item.acts button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
-  closedBy={id:e.pointerId, at:performance.now()}; if(!list.contains(e.target)) swallow={id:e.pointerId, up:0}; closeActs(); },true);
+  closedBy={id:e.pointerId, at:performance.now()};
+  if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; e.stopImmediatePropagation(); e.preventDefault(); }   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
+  closeActs(); },true);
 // the closing press may be held long: its click is counted from its own release, not from the press
 document.addEventListener('pointerup',e=>{ if(swallow && swallow.id===e.pointerId) swallow.up=performance.now(); },true);
 document.addEventListener('pointercancel',e=>{ if(swallow && swallow.id===e.pointerId) swallow=null; },true);
