@@ -28,6 +28,7 @@
   --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --shadow:0 4px 18px rgba(15,15,15,.14), 0 0 0 .5px rgba(15,15,15,.08);
   --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --on-bg:var(--sel); --on-ink:var(--accent); --pin-bg:#f3f1ec;   /* a list button that shows a state (a pinned note's pin), and a pinned item */
   /* ритм аркуша: крок сітки = висота рядка = 1.5 × кегль (16 → 24). Один токен --g тримає і точки, і рядки, і відступи */
   --fs:16px; --g:24px; --pad:var(--g); --handle:22px;
   /* interface text: six sizes in rem, so the «Інтерфейс» setting (--k on the root font size) and the browser's own font size scale them all.
@@ -44,6 +45,7 @@ html{font-size:calc(100% * var(--k,1))}
   --dot:rgba(255,255,255,.32);
   --code-bg:#232323; --code-line:rgba(255,255,255,.14); --accent:#59a4f0; --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0;
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
+  --pin-bg:#24221e;
 } }
 :root[data-theme="dark"]{
   --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
@@ -53,6 +55,7 @@ html{font-size:calc(100% * var(--k,1))}
   --dot:rgba(255,255,255,.32);
   --code-bg:#232323; --code-line:rgba(255,255,255,.14); --accent:#59a4f0; --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0;
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
+  --pin-bg:#24221e;
 }
 /* пісок / папірус: теплий бежевий аркуш із ледь помітним зерном і волокнами, чорнило — темно-коричневе, акцент — вохра */
 :root[data-theme="sand"]{
@@ -64,6 +67,7 @@ html{font-size:calc(100% * var(--k,1))}
   --dot:rgba(80,58,25,.30);
   --code-bg:#ebdfc4; --code-line:rgba(80,58,25,.16); --accent:#9a6a1e; --k:#8a3f7a; --s:#3f6f2a; --n:#a1541a; --c:#a08f70; --t:#2d5f9e;
   --shadow:0 4px 18px rgba(60,40,10,.18), 0 0 0 .5px rgba(60,40,10,.10);
+  --pin-bg:#f1e2c6;
   --paper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .40 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='l' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .92 0 0 0 .07 0'/%3E%3C/filter%3E%3Cfilter id='h' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .035 0'/%3E%3C/filter%3E%3Cfilter id='v' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5 .008' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E");
 }
 @media (max-width:640px){ :root{ --pad:16px; --handle:20px; --fs:16px; } }
@@ -151,6 +155,14 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 /* the pin, left of the archive button: shown with the other buttons; it makes room in the title only while it shows */
 .it-p{right:58px} .it-p.on .i{fill:currentColor}
 .item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t{padding-right:54px}
+/* LIST-ACTIONS-PLAN 4.2, 4.5: a pinned note has its own background and a pin before its title; the open note keeps its background and gets a ring.
+   A button that shows a state looks pressed: the pin of a pinned note, and in the archive the way back to the notes */
+.it-h{display:flex;align-items:center;gap:5px;min-width:0} .it-h .it-t{flex:1 1 auto;min-width:0}
+.pmark{display:inline-flex;flex:none;font-size:.75rem;color:var(--ink-2)} .pmark .i{fill:currentColor}
+.item.pinned:not(.cur){background:var(--pin-bg)} .item.pinned:not(.cur):hover{background:var(--hover-2)}
+.item.cur{box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.it-p.on,.it-r.back{background:var(--on-bg);color:var(--on-ink)} .it-p.on:hover,.it-r.back:hover{background:var(--on-bg);color:var(--on-ink)}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .grp{padding:12px 10px 4px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}   /* «Закріплені» and «Інші» in the notes; «В архіві»: archived notes found by a search, below the notes */
 .sect{display:flex;flex-direction:column;gap:2px;margin:0 10px 4px;padding:0 0 6px;border-bottom:.5px solid var(--line)} .sect[hidden]{display:none}
 .sect-r{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -412,6 +424,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .bact::before{content:"";position:absolute;inset:-11px} .bact::after{content:"⋯"} .blk.drag>.tcard>.bact{display:none !important}
 
 .amenu.bm{right:-8px;top:14px;min-width:200px} .amenu.hm{right:6px;top:46px}
+.amenu.ctx{position:fixed;right:auto;top:auto;z-index:60} .amenu .msep{border:0;border-top:.5px solid var(--line-2);margin:4px 2px} .amenu .mi .mck{margin-left:auto;display:inline-flex;color:var(--accent)}
 .amenu .mi .ml{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .amenu.hm{max-width:calc(100vw - 16px)}
 .amenu .mi .i{font-size:.9375rem} .amenu .mi small{flex:1 1 0;min-width:30%;padding-left:10px;color:var(--ink-2);font-size:var(--t-xs);line-height:1.3;text-align:right}   /* a long hint wraps on the right, the label keeps its words */
 .amenu .mi:hover,.amenu .mi:focus-visible{background:var(--hover);color:var(--ink);outline:0} .amenu .mi.danger:hover,.amenu .mi.danger:focus-visible{color:#c33}
@@ -561,17 +574,29 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .amenu .mi{padding:11px 12px;min-height:44px}
   .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none}
 }
-/* a phone (narrow and touch): the panel covers the screen and has its own close button; an item's buttons are 44 px targets 8 px apart, and the title
-   and the snippet make room for them while they show */
+/* a phone (narrow and touch): the panel covers the screen and has its own close button */
 .side-x{display:none}
 @media (hover:none) and (max-width:600px){
   .side{width:100vw} .side-h{justify-content:flex-start} .side-h .new{margin-left:auto}
   .side-x{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:44px;height:44px;margin:-4px -4px -4px 0;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink-2);cursor:pointer} .side-x .i{font-size:1.25rem}
-  .it-x,.it-r,.it-p{top:4px;width:44px;height:44px;border-radius:8px} .it-x .i,.it-r .i,.it-p .i{font-size:1.125rem}
-  .it-x{right:4px} .it-r,.it-p{right:56px} .it-p{right:108px}
-  .item:hover .it-t,.item.cur .it-t,.item:focus-within .it-t,.item:hover .it-s,.item.cur .it-s,.item:focus-within .it-s{padding-right:76px}
-  .item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t,.item.pa:hover .it-s,.item.pa.cur .it-s,.item.pa:focus-within .it-s{padding-right:128px}
-  .item:hover,.item.cur,.item:focus-within{min-height:52px}
+}
+/* touch (LIST-ACTIONS-PLAN 4.2–4.4): a tap opens the note, a long press shows the actions. At rest the item buttons stay hidden whatever :hover or
+   :focus-within say (a finger sets both, and the buttons appeared under it); they show in the action mode and for a keyboard focus */
+@media (hover:none){
+  .list{touch-action:pan-y}
+  .item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;padding-right:10px}
+  .list .item .it-x,.list .item .it-r,.list .item .it-p{display:none}
+  .list .item .it-t,.list .item.pa:is(.cur,:focus-within,:hover):not(.acts) .it-t{padding-right:0}
+  .list .item:is(:focus-visible,:has(:focus-visible)) :is(.it-x,.it-r,.it-p){display:inline-flex}
+  .list .item:is(:focus-visible,:has(:focus-visible)):not(.acts) .it-t{padding-right:28px} .list .item.pa:is(:focus-visible,:has(:focus-visible)):not(.acts) .it-t{padding-right:54px}
+  .list .item:hover{background:transparent} .list .item.cur:hover{background:var(--hover-2)} .list .item.pinned:not(.cur):hover{background:var(--pin-bg)}   /* a finger leaves :hover behind */
+  .list .item.press,.list .item.pinned.press:not(.cur){background:var(--hover-2)}
+  .list .item.acts{--acts-bg:var(--page);min-height:64px;background:var(--acts-bg);box-shadow:inset 0 0 0 1.5px var(--ink-3)} .list .item.acts.pinned{--acts-bg:var(--pin-bg)}
+  .item.acts::after{content:"";position:absolute;top:0;right:0;bottom:0;width:150px;border-radius:0 8px 8px 0;background:linear-gradient(90deg,transparent,var(--acts-bg) 32px);pointer-events:none} .item.acts.pa::after{width:210px}
+  .list .item.acts :is(.it-x,.it-r,.it-p){display:inline-flex;z-index:1;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:12px;background:var(--page);box-shadow:0 0 0 .5px var(--line-2),0 1px 3px rgba(0,0,0,.08);color:var(--ink-2)}
+  .list .item.acts :is(.it-x,.it-r,.it-p) .i{font-size:1.25rem}
+  .list .item.acts .it-x{right:8px;color:#c33} .list .item.acts .it-r{right:68px} .list .item.acts .it-p{right:128px}
+  .list .item.acts :is(.it-p.on,.it-r.back){background:var(--on-bg);color:var(--on-ink)}
 }
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
@@ -765,7 +790,7 @@ const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('s
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
 const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), areaBtn=$('areaBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
 const SC=window.BaobookSync, {hashOf, bodyOf, entryOf, manifestOf, sumOf, V_BODY_MAX}=SC;   // the sync core (sync.js): the canonical form, the normalizer, merging and the history manifests it shares with the versions code
-const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
+const DEBUG={failSave:false, relist:()=>renderList()}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
@@ -1485,13 +1510,17 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
 /* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
 /* the panel lists one section: the notes, the archive or the trash. A search in the notes also finds archived notes, in a group «В архіві» below them.
    Pinned notes come first in the notes, in a group «Закріплені» (the last pinned on top; by rank in a search), the rest under «Інші» */
+// the list on touch (LIST-ACTIONS-PLAN 4.1–4.4): a tap opens, a long press opens the action mode of one note (actsId). LISTTOUCH: by input, not width
+const LISTTOUCH=matchMedia('(hover:none)');
+let actsId=null, modeAt=0, pressId=null, btnDown=null, closedBy=null, swallow=null, lastTouch={id:null, at:-Infinity}, redrawing=false;
 const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
 const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
 const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
 const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
-function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
-  drawList(); if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
+function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; requestAnimationFrame(off); setTimeout(off,100); const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
+  drawList(); if(actsId!==null && !list.querySelector('.item.acts')){ actsId=null; nav.close('acts'); }   // the note left the list: its action mode goes
+  if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
   sect.hidden=sec==='notes'; trashEmpty.hidden=sec!=='trash' || !pool.length; trashRow.hidden=sec!=='notes' || !bin; trashN.textContent=bin; archRow.hidden=sec!=='notes' || !box; archN.textContent=box;
@@ -1510,15 +1539,31 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
     if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
   return items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
 /* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
-function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
-  const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box];
-  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'">'+ICO.trash+'</button>';
+function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar, pin=pa && !!n.pinned; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':'')+(pin?' pinned':'')+(actsId===n.id?' acts':'')+(pressId===n.id?' press':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
+  const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box], xk=tr? 'trash.purge' : 'notes.delete';
+  // the pin keeps one name with aria-pressed (#82); the other buttons are one-shot actions named by their title. In the archive the way back looks pressed
+  d.innerHTML='<div class="it-h">'+(pin? '<i class="pmark" aria-hidden="true">'+ICO.pin+'</i>' : '')+'<div class="it-t"></div></div>'+(pin? '<span class="sr-only">'+locA('list.pinnedState')+'</span>' : '')+'<div class="it-s"></div><div class="it-d"></div>'
+    +'<span class="it-b" role="group" aria-label="'+locA('list.actions')+'">'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')
+    +'<button class="it-r'+(ar? ' back' : '')+'" title="'+locA(rk)+'" aria-label="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(xk)+'" aria-label="'+locA(xk)+'">'+ICO.trash+'</button></span>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
   const keyed=(act, cls)=>{ const at=[...list.querySelectorAll('.item')].indexOf(d), k=d.dataset.k; Promise.resolve(act()).then(()=>keepFocus(n.id, cls, k, at)); };   // a key action: the focus moves once it is done (a delete waits for the history)
-  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], act=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del;
+  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x');
+    if(!b){ if(performance.now()-lastTouch.at<500) return; openNote(n); return; }   // a touch opens the note in the list gesture; the click the browser makes after it is not a second open (LIST-ACTIONS-PLAN 4.3)
+    e.stopPropagation(); const cls=b.classList[0];
+    if(e.detail!==0 && actsId===n.id && LISTTOUCH.matches && !(btnDown && btnDown.id===n.id && btnDown.cls===cls && btnDown.at>modeAt)) return;   // the release of the long press is not a tap on the button that appeared under the finger
+    btnDown=null; const act0=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del, act=cls==='it-p'? act0 : ()=>{ const r=act0(); Promise.resolve(r).then(()=>closeActs()); return r; };   // the pin keeps the action mode; the others take the note out of its section. It closes after the action: its history step back would close a dialog the action opened
     if(e.detail===0) keyed(act, cls); else act(); });   // Enter or Space: a click with no pointer
+  d.addEventListener('contextmenu',e=>{ e.preventDefault(); if(!LISTTOUCH.matches) itemMenu(n, d, {x:e.clientX, y:e.clientY}); });   // touch: the long press is ours (Android fires contextmenu on it); a mouse: our menu
   d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
+    if((e.key==='ContextMenu' || (e.shiftKey && e.key==='F10')) && e.target===d){ e.preventDefault(); if(LISTTOUCH.matches){ openActs(n.id); const b=list.querySelector('.item.acts button'); if(b) b.focus(); } else { const r=d.getBoundingClientRect(); itemMenu(n, d, {x:r.left+16, y:r.bottom-4}, true); } return; }
     if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete') keyed(del, e.target===d? '' : e.target.classList[0]); }); }   // Enter and Space on a nested button are that button's
+// the context menu of an item on a computer (LIST-ACTIONS-PLAN 4.6): the same actions as its buttons, at the pointer or under the item
+function itemMenu(n, d, at, kb){ const tr=!!n.deleted, ar=!tr && !!n.archived, k=d.dataset.k, idx=[...list.querySelectorAll('.item')].indexOf(d), go=(f, cls)=>()=>{ const r=f(); if(kb) Promise.resolve(r).then(()=>keepFocus(n.id, cls||'', k, idx)); };
+  const items=[{ico:ICO.note, label:loc('list.open'), act:()=>openNote(n)}];
+  if(!tr && !ar) items.push({ico:ICO.pin, label:loc('pin.pin'), checked:!!n.pinned, act:go(()=>pinNote(n, !n.pinned), 'it-p')});
+  items.push(tr? {ico:ICO.back, label:loc('trash.restore'), act:go(()=>restoreNote(n))} : ar? {ico:ICO.back, label:loc('archive.unarchive'), act:go(()=>unarchive(n))} : {ico:ICO.box, label:loc('archive.move'), act:go(()=>archiveNote(n))});
+  items.push({node:Object.assign(document.createElement('hr'),{className:'msep'})}, tr? {ico:ICO.trash, label:loc('trash.purge'), danger:true, act:go(()=>purgeAsk(n))} : {ico:ICO.trash, label:loc('notes.delete'), danger:true, act:go(()=>delNote(n))});
+  popMenu(d, document.body, 'ctx', items, {at}); }
 // the item first: it shows its buttons. A button keeps the focus while it means the same: the pin always, the others while the note stays in its section
 // (k: notes, archive or trash, as the item was drawn); otherwise the item takes it, so a second Enter does not archive a note just restored
 function focusItem(id, cls, k){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && (cls==='it-p' || it.dataset.k===k) && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }
@@ -1870,7 +1915,7 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ if(DYING) return; flushSave(); if(inflight.size||unsaved.size||REVIVING.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; if(!(LOCK && MEM.has(n.id))){ tabCur.set(n.id); if(!o.restore) saveS({current:n.id}); }   // restoring a tab at start is not a new choice: a new tab still gets the note opened last. A note that lives only in memory under a lock is gone after the reload: it takes the place neither of this tab's note nor of the note opened last
+function openNote(n, o={}){ closeActs(); closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; if(!(LOCK && MEM.has(n.id))){ tabCur.set(n.id); if(!o.restore) saveS({current:n.id}); }   // restoring a tab at start is not a new choice: a new tab still gets the note opened last. A note that lives only in memory under a lock is gone after the reload: it takes the place neither of this tab's note nor of the note opened last
   if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!ESNAP.has(n.id) || !busy(n)) setSnap(n.id, n, LREV.get(n.id)??0); if(db.backend==='idb') vload(n.id);   // the snapshot is taken synchronously from memory (equal to storage unless the note is busy, whose snapshot stays)
@@ -1904,7 +1949,7 @@ function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage
 async function purgeAsk(n){ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } let copies=0; try{ copies=SYNC? await SYNC.countCopies(n.id) : 0; }catch(_){}   // conflict copies go only with an explicit «forever», and the dialog names how many
   if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:copies? loc('trash.purgeTextCopies',{n:copies}) : loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
 function purgeOld(){ if(LOCK || db.backend!=='idb' || (SYNC && SYNC.hasOwner())) return; /* with an owner the automatic purge is a cloud transaction (SYNC-PLAN 4.8, PR 3) */ const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
-function setSection(s){ if(section===s) return; section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
+function setSection(s){ if(section===s) return; closeActs(); section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
 function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archived) return; if(n===cur) flushSave(); const was=cur===n; n.archived=now(); n.updated=now(); writeNote(n, fieldDelta((C,t)=>C.archived || C.deleted? null : {...C, archived:t}));
@@ -2033,7 +2078,7 @@ ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.re
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
 ttl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
 ttl.addEventListener('blur',()=>{ if(cur&&ttl.textContent!==cur.title) ttl.textContent=cur.title; flushSave(); });
-let qT; q.addEventListener('input',()=>{ clearTimeout(qT); qT=setTimeout(renderList,120); });
+let qT; q.addEventListener('input',()=>{ clearTimeout(qT); closeActs(); qT=setTimeout(renderList,120); });
 q.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; renderList(); q.blur(); } });
 qClear.addEventListener('click',()=>{ q.value=''; renderList(); q.focus(); });
 document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&hotkey(e)==='k'){ e.preventDefault(); setSide(true); q.focus(); q.select(); }
@@ -2055,7 +2100,8 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('on
    Відкриття нотатки з панелі на телефоні ховає панель, але лишає запис «панель із результатами» (+ запис «нотатка»): Back з нотатки знову показує панель із тим самим запитом і прокруткою,
    другий Back ховає панель, третій іде браузеру. На компʼютері панель — не накладення, тож записів не робить. */
 const nav={ stack:[], skip:0, busy:false, queue:[], skipT:null,
-  open(tag, close){ const top=this.stack[this.stack.length-1]; if(top && top.tag===tag){ top.close=close; return; } const e={tag, close, pushed:false}; this.stack.push(e); if(this.skip>0) this.queue.push(e); else this.push(e); },   // поки свій popstate не прийшов, pushState відкладаємо: go(-1) браузер виконує пізніше й відносно поточного запису
+  open(tag, close){ if(tag!=='acts' && actsId!==null && !this.busy) closeActs();   // a list item's action mode never lies under another layer: closing it would take that layer's entry (LIST-ACTIONS-PLAN 4.4)
+    const top=this.stack[this.stack.length-1]; if(top && top.tag===tag){ top.close=close; return; } const e={tag, close, pushed:false}; this.stack.push(e); if(this.skip>0) this.queue.push(e); else this.push(e); },   // поки свій popstate не прийшов, pushState відкладаємо: go(-1) браузер виконує пізніше й відносно поточного запису
   push(e){ try{ history.pushState({nav:e.tag, d:this.stack.indexOf(e)+1}, ''); e.pushed=true; }catch(_){} },
   close(tag){ const i=this.stack.map(e=>e.tag).lastIndexOf(tag); if(i<0) return; const gone=this.stack.splice(i); this.queue=this.queue.filter(e=>!gone.includes(e)); if(this.busy) return;   // закриваємо з popstate — історія вже відмотана
     const n=gone.filter(e=>e.pushed).length; if(n>0){ this.skip++; history.go(-n); clearTimeout(this.skipT); this.skipT=setTimeout(()=>{ if(this.skip){ this.skip=0; this.flush(); } },600); } },   // закрито з інтерфейсу: знімаємо запис(и), свій popstate глушимо; якщо він не прийшов — не чекаємо вічно
@@ -2065,7 +2111,7 @@ try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточни�
 window.addEventListener('popstate',e=>{ nav.onPop(e); if(e.state && 'd' in e.state && hashNow) setHash(hashNow); });   // our own entry (an overlay, a link step): the address stays the open note's, before hashchange reads it
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
-function setSide(open, o={}){ if(!open){ setMenu(false); if(side.contains(document.activeElement)) document.activeElement.blur(); } if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: the panel hides or shows on the route «note → Back», with no history entry of its own; a closed panel keeps no focus
+function setSide(open, o={}){ if(!open){ closeActs(); setMenu(false); if(side.contains(document.activeElement)) document.activeElement.blur(); } if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: the panel hides or shows on the route «note → Back», with no history entry of its own; a closed panel keeps no focus
   app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()) saveS({side:open});
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
@@ -2540,16 +2586,22 @@ document.addEventListener('focusin',e=>{ if(selBlk && !blockbar.contains(e.targe
 /* спливне меню (дотик): «⋯» у текстового блока і «⋯» у шапці; одне відкрите водночас, закривається дотиком поза ним, Esc або вибором пункту */
 const ICO_SEL='<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 2"/></svg>';
 let popOpen=null;
-function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); p.anchor.setAttribute('aria-expanded','false'); nav.close('menu'); }
-function popMenu(anchor, host, cls, items){ if(popOpen && popOpen.anchor===anchor){ closePop(); return; } closePop();
+function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); if(!p.at) p.anchor.setAttribute('aria-expanded','false'); nav.close('menu'); }
+// o.at {x,y}: a context menu at a point (a list item's), fixed in the window; its anchor is not a popup button, so aria-expanded is left alone.
+// An item with `checked` is a checkbox item. The arrow keys move between the items (not into a row of its own, which keeps its keys)
+function popMenu(anchor, host, cls, items, o={}){ if(popOpen && popOpen.anchor===anchor && !o.at){ closePop(); return; } closePop(); closeActs();
   const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
   items.forEach(it=>{ if(it.node){ menu.appendChild(it.node); return; }   // a row of its own (the text size stepper): it keeps the menu open
-    const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role','menuitem'); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
-  menu.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); }); host.appendChild(menu);   // дотик по пункту не переносить фокус: не знімає виділення блока і не ховає клавіатуру anchor.setAttribute('aria-expanded','true');
-  const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; }
-  const onDoc=e=>{ if(!menu.contains(e.target) && !anchor.contains(e.target)) closePop(); }; document.addEventListener('pointerdown',onDoc,true);
+    const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role', it.checked===undefined? 'menuitem' : 'menuitemcheckbox'); if(it.checked!==undefined) bt.setAttribute('aria-checked', String(!!it.checked)); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : '')+(it.checked? '<span class="mck">'+ICO.check+'</span>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
+  menu.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); }); host.appendChild(menu);   // дотик по пункту не переносить фокус: не знімає виділення блока і не ховає клавіатуру
+  if(!o.at && anchor.matches('button')) anchor.setAttribute('aria-expanded','true');
+  if(o.at){ const w=menu.offsetWidth, h=menu.offsetHeight; menu.style.left=Math.max(8, Math.min(o.at.x, innerWidth-w-8))+'px'; menu.style.top=Math.max(8, Math.min(o.at.y, innerHeight-h-8))+'px'; }
+  else { const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; } }
+  menu.addEventListener('keydown',e=>{ if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key) || !e.target.classList.contains('mi')) return; const L=[...menu.querySelectorAll('.mi')], i=L.indexOf(e.target); if(i<0) return; e.preventDefault();
+    const j=e.key==='Home'? 0 : e.key==='End'? L.length-1 : (i+(e.key==='ArrowDown'? 1 : -1)+L.length)%L.length; L[j].focus(); });
+  const onDoc=e=>{ if(!menu.contains(e.target) && (o.at || !anchor.contains(e.target))) closePop(); }; document.addEventListener('pointerdown',onDoc,true);   // a context menu also closes on its item: a click there opens the note
   const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
-  popOpen={menu,anchor,onDoc,onKey}; nav.open('menu', closePop); if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
+  popOpen={menu,anchor,onDoc,onKey,at:!!o.at}; nav.open('menu', closePop); if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
 // the block's menu: «⋯» of a text block on touch, the right button on ⋮⋮ of any block. A code card and an area keep their other actions in their header
 function blockMenu(b){ const copy={ico:ICO.copy, label:loc('block.copy'), act:()=>copyBlock(b)}, link={ico:ICO.link, label:loc('link.copy'), act:()=>copyLink(cur.id+'/'+b.id)};
   if(b.kind) return [copy, link];
@@ -2689,6 +2741,36 @@ function holdGesture(host, makeAt, draw){ return gesture(host, {manual:true, hol
   onCancel:(e,g)=>{ const d=g.data; if(d.marq){ d.marq.remove(); return; } if(d.made){ d.made.el.classList.remove('held'); if(g.moved){ if(!(d.made.text||'').trim()) remove(d.made); } else focusBlock(d.made); } } }); }   // браузер скасував жест (гортання) — блок із текстом не втрачаємо
 const sheetGest=holdGesture(sheet, ev=>createAt(ev,false), true);
 function tapHint(){ if((S.tapHint||0)>=3) return; saveS({tapHint:(S.tapHint||0)+1}); say(loc('touch.hint')); }
+/* ══ the notes list on touch (docs/LIST-ACTIONS-PLAN.md 4.3–4.4): a tap opens the note, a long press opens the action mode of that note ═════
+   A tap on a visible item button starts no gesture (its own click acts). The list holds the pointer, because a redraw (a pin, a sync) rebuilds
+   every item under the finger. After a hold its touchend is cancelled, so the browser makes no click on a button that appeared under the finger */
+function openActs(id){ closePop(); actsId=id; modeAt=performance.now(); btnDown=null; nav.open('acts', closeActs); renderList(); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(_){} }
+function closeActs(){ if(actsId===null) return; actsId=null; nav.close('acts'); renderList(); }
+const unpress=()=>{ if(pressId===null) return; pressId=null; list.querySelectorAll('.item.press').forEach(d=>d.classList.remove('press')); };
+function holdHint(){ if((S.holdHint||0)>=3) return; saveS({holdHint:(S.holdHint||0)+1}); say(loc('list.holdHint')); }
+const listGest=gesture(list,{ holdMs:HOLD_MS, filter:e=>e.pointerType!=='mouse' && LISTTOUCH.matches && e.isPrimary && !e.target.closest('.item button'),
+  onDown:(e,g)=>{ g.data.closed=!!(closedBy && closedBy.id===e.pointerId && performance.now()-closedBy.at<100); closedBy=null; const it=e.target.closest('.item'); if(!it) return; g.data.id=it.dataset.id;
+    pressId=it.dataset.id; const live=list.querySelector('.item[data-id="'+CSS.escape(pressId)+'"]'); if(live) live.classList.add('press'); try{ list.setPointerCapture(e.pointerId); }catch(_){} },
+  onMove:(e,g)=>{ if(g.moved) unpress(); },
+  onHold:(e,g)=>{ unpress(); if(!g.data.id) return; lastTouch={id:g.data.id, at:performance.now()}; openActs(g.data.id); },
+  onEnd:(e,g)=>{ unpress(); if(g.moved || g.held || !g.data.id) return; lastTouch={id:g.data.id, at:performance.now()}; if(g.data.closed) return;   // a tap that closed an action mode does only that (and the browser's click after it is not an open)
+    const n=notes.find(x=>x.id===g.data.id); if(n){ openNote(n); holdHint(); } },
+  onCancel:()=>unpress() });
+list.addEventListener('pointerdown',e=>{ if(!e.isPrimary && listGest.state){ listGest.cancel(); unpress(); } const b=e.target.closest && e.target.closest('.item button'); if(b) btnDown={id:b.closest('.item').dataset.id, cls:b.classList[0], at:performance.now()}; },true);   // a second finger ends the press; a fresh press on a button is what lets it act in the action mode
+list.addEventListener('lostpointercapture',e=>{ const g=listGest.state; if(g && g.id===e.pointerId){ listGest.cancel(); unpress(); } });
+document.addEventListener('touchend',e=>{ if(swallow){ e.preventDefault(); swallow=null; return; } if(listGest.state || listGest.last) e.preventDefault(); },{passive:false,capture:true});   // a cancelled touchend makes no click: the tap outside is fully swallowed here   // on the document: a redraw may have taken the touched item out of the list, and then its touchend does not reach it
+list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs(); },{passive:true});   // a scroll by the user; a redraw's own scroll is not one
+document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
+  if(e.target.closest('.item.acts button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
+  closedBy={id:e.pointerId, at:performance.now()};
+  if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; closePop(); setMenu(false); e.stopPropagation(); e.preventDefault(); }   // the press goes no further than the document: the other «outside» listeners there still close their menus   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
+  closeActs(); },true);
+// the closing press may be held long: its click is counted from its own release, not from the press
+document.addEventListener('pointerup',e=>{ if(swallow && swallow.id===e.pointerId) swallow.up=performance.now(); },true);
+document.addEventListener('pointercancel',e=>{ if(swallow && swallow.id===e.pointerId) swallow=null; },true);
+addEventListener('click',e=>{ if(e.detail===0 || !swallow || !swallow.up || performance.now()-swallow.up>=1000) return; swallow=null; e.preventDefault(); e.stopPropagation(); },true);   // a tap outside the list that closed the mode does only that («+», the panel's «×», a section row); a mouse or pen click here, a key's click (detail 0) never   // runs before the list gesture, which reads closedBy
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape' || actsId===null || popOpen) return; const a=document.activeElement, it=a && list.contains(a) && a.closest('.item'), id=it && it.dataset.id; closeActs(); if(id) focusItem(id, ''); });   // Escape from a button of the mode leaves the focus on its item
+LISTTOUCH.addEventListener('change',()=>closeActs());
 sheet.addEventListener('touchmove',e=>{ const g=sheetGest.state; if(g && (g.data.made||g.data.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання
 sheet.addEventListener('contextmenu',e=>{ if(sheetGest.state || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню
 function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw,ch:rows},false); markDirty(); if(focus) b.ttlEl.focus(); return b; }
@@ -3038,7 +3120,8 @@ langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</
 langSel.addEventListener('change',()=>{ saveS({lang:langSel.value}); location.reload(); });
 
 /* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
-function setMenu(open, o={}){ if(open===!setPop.hidden) return; setPop.hidden=!open; setBtn.setAttribute('aria-expanded',open?'true':'false');
+function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open) closeActs(); setPop.hidden=!open;   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
+  setBtn.setAttribute('aria-expanded',open?'true':'false');
   if(open){ document.addEventListener('pointerdown',setOut,true); document.addEventListener('keydown',setKey,true); nav.open('settings', ()=>setMenu(false)); if(o.kb) setPop.querySelector('select').focus(); return; }
   document.removeEventListener('pointerdown',setOut,true); document.removeEventListener('keydown',setKey,true); nav.close('settings'); if(setPop.contains(document.activeElement)) setBtn.focus(); }
 function setOut(e){ if(!setPop.contains(e.target) && !setBtn.contains(e.target)) setMenu(false); }
