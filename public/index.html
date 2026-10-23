@@ -1354,7 +1354,7 @@ function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=nu
 // the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
 async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
   if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
-  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
+  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); if(!o.erase){ snapOff=false; snapSave(); } }
 // the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
 // anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
 async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
@@ -1450,7 +1450,7 @@ async function ownerMoved(m){ snapDrop(); if(DYING) return;
   if(m.erase || ACC.otherTab) return epochMoved(loc('lock.owner'));   // the records are gone, or the decision was taken in the other tab: this screen is the old owner's
   if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
   LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear();
-  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
+  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); snapOff=false; snapSave(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
 // the «auth» message of another tab: a sign-in there loads the SDK here (Firebase then brings the user); a sign-out there takes this tab's cloud at once
 function authMsg(m){ if(!accOn() || DYING) return; if(m.uid){ if(!ACC.sdk) sdkLoad(); return; } if(ACC.user || CLOUD){ ACC.user=null; dropCloud(); accUI(); } }
 const authGate=()=>!(CLOUD && CLOUD.uid) || (db.settings().fbUser||{}).uid===CLOUD.uid;   // the cloud this tab would lead with belongs to the user still signed in (the mirror is the synchronous truth)
@@ -1535,9 +1535,9 @@ function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; reque
   if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
 // the last list as names only (localStorage sheet:listsnap, at most 60, pinned first): shown greyed while the start waits and under the storage
 // lock, so the notes are seen to exist while they cannot be read; written only by a started tab with the store open, removed with the notes
-const SNAP='sheet:listsnap'; let snapT=0;
-const snapOk=()=>STARTED && !LOCK && !DYING && db.backend==='idb';
-function snapDrop(){ clearTimeout(snapT); snapT=0; try{ localStorage.removeItem(SNAP); }catch(_){} }   // every erase and every owner change, in this tab and in the tabs told of it: the names go with the notes
+const SNAP='sheet:listsnap'; let snapT=0, snapOff=false;   // snapOff: an owner change is under way in this tab; no list is written until it has the new data (or reloads)
+const snapOk=()=>STARTED && !LOCK && !DYING && !snapOff && db.backend==='idb';
+function snapDrop(){ snapOff=true; clearTimeout(snapT); snapT=0; try{ localStorage.removeItem(SNAP); }catch(_){} }   // every erase and every owner change, in this tab and in the tabs told of it: the names go with the notes, and none is written again meanwhile
 function snapSave(){ if(!snapOk()) return; clearTimeout(snapT); snapT=setTimeout(()=>{ if(!snapOk()) return;
   try{ localStorage.setItem(SNAP, JSON.stringify(notes.filter(listed).sort(listOrder).slice(0,60).map(n=>({t:titleOf(n), p:n.pinned? 1 : 0})))); }catch(_){} }, 1000); }
 function snapShow(cap){ let s=[]; try{ s=JSON.parse(localStorage.getItem(SNAP)||'[]'); }catch(_){} if(!Array.isArray(s) || !s.length) return;

@@ -9,7 +9,7 @@ import { serve, CTX } from './lib/server.mjs';
 import { until } from './lib/wait.mjs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
-const site=await serve(); const errs=[];
+const site=await serve(); const errs=[]; site.override.set('/blank.html','<!doctype html><meta charset="utf-8"><title>blank</title>');   // the origin without the app: it tells the tabs, and writes no list of its own
 
 // IndexedDB that answers late (sessionStorage.__slow ms: the real open runs that much later) or fails (__fail: the request's error event)
 const WRAP=()=>{ const real=IDBFactory.prototype.open; const S=k=>{ try{ return sessionStorage.getItem(k); }catch(_){ return null; } };
@@ -77,13 +77,19 @@ const s8=await until(async()=>{ const s=await state(); return s && /старша
 ok('8 a lock before the start ends (newer data, the notes\' read held): the strip says it ('+(s8 && s8.strip.slice(0,40))+'…)', !!s8);
 await pg.evaluate(()=>sessionStorage.removeItem('__stallNotes'));
 
-// review 1: a list write waiting in one tab is dropped by an owner change told by another tab (the names go with the notes)
-{ const c2=await br.newContext({...CTX, serviceWorkers:'block'}); const a=await c2.newPage(); await a.goto(site.url); await a.waitForSelector('#list .item');
+// review 1: an erase told by another tab while this tab still has a write in flight (it waits for it before it locks, epochMoved): the list
+// write that was waiting is dropped (9), and a list redrawn meanwhile by a search writes no name back (9b); the names go with the notes
+{ const c2=await br.newContext({...CTX, serviceWorkers:'block'}); const a=await c2.newPage(); await a.goto(site.url+'blank.html');
   const b=await c2.newPage(); await b.goto(site.url); await b.waitForSelector('#list .item'); await b.waitForTimeout(1600);
+  ok('9a the tab has written its list', await a.evaluate(()=>localStorage.getItem('sheet:listsnap'))!==null);
+  await b.evaluate(()=>{ sheetDebug.saveHold=()=>new Promise(()=>{}); const t=document.getElementById('ttl'); t.textContent='Покупки на завтра'; t.dispatchEvent(new Event('input',{bubbles:true})); });
+  await b.waitForTimeout(800);   // the write landed and is held: in flight
   await b.evaluate(()=>sheetDebug.relist());   // b's list write is now 1 s away
-  await a.evaluate(()=>{ localStorage.removeItem('sheet:listsnap'); new BroadcastChannel('sheet:notes').postMessage({t:'owner', by:'account'}); });
-  await b.waitForTimeout(1600);
-  ok('9 an owner change from another tab drops the list and the write that was waiting', await a.evaluate(()=>localStorage.getItem('sheet:listsnap'))===null);
+  await a.evaluate(()=>{ localStorage.removeItem('sheet:listsnap'); new BroadcastChannel('sheet:notes').postMessage({t:'owner', by:'account', erase:true}); });
+  await b.waitForTimeout(1500);
+  ok('9 an erase from another tab drops the list and the list write that was waiting', await a.evaluate(()=>localStorage.getItem('sheet:listsnap'))===null);
+  await b.evaluate(()=>{ const q=document.getElementById('q'); q.value='Пок'; q.dispatchEvent(new Event('input',{bubbles:true})); }); await b.waitForTimeout(1500);
+  ok('9b while the tab still waits for its write, a list redrawn by a search writes no name back', await a.evaluate(()=>localStorage.getItem('sheet:listsnap'))===null);
   await c2.close(); }
 
 console.log(errs.length? errs.join('\n') : '✓ no page errors'); if(errs.length) fails++;
