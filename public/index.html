@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102302">
+<meta name="baobook-build" content="2026102303">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -727,8 +727,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102302"></script>
-<script src="cloud.js?b=2026102302"></script>
+<script src="sync.js?b=2026102303"></script>
+<script src="cloud.js?b=2026102303"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -736,7 +736,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102302;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102303;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -896,7 +896,9 @@ const IDB_NAME='sheet';
    'nolock' (no IndexedDB, and the browser cannot confirm that this tab is the only one that writes);
    'storage' (IndexedDB exists and has worked on this device, but did not open at this start: view-only, no note written anywhere, the
    page reloads by itself when the storage is back; docs/IDB-FALLBACK-PLAN.md) ══ */
-const IDB_VER=3, IDB_STORES=['notes','versions','blobs','sync'];
+// 4 (SYNC-PLAN 4.9, PR 4a): no new store; the upgrade from 3 fires versionchange in every tab of the code before it, which then turns view-only (idbLost),
+// so no old tab writes versions past the core's queue once the version sender runs
+const IDB_VER=4, IDB_STORES=['notes','versions','blobs','sync'];
 // opening the database at start (IDB-FALLBACK-PLAN §4.1): OPEN_WAIT, the silence deadline of one request (no event at all); OPEN_RETRY, the waits
 // before the attempts that follow a failure that finished (`error`, a throw); PROBE_WAIT, the deadline of a background probe under the
 // `storage` lock; RELOADS_MAX, the automatic reloads a tab allows itself in one lock → reload → lock loop (sessionStorage sheet:idb-reloads)
@@ -922,7 +924,7 @@ const idb={ db:null, opening:null, silent:false, want:false, back:false,   // si
         if(dead){ try{ d.close(); }catch(_){} if(LOCK==='storage') idbBack(); return; }   // the hung request answered at last: the storage is back
         const done=()=>{ idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
         if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
-        if(!LOCK && d.version<IDB_VER && IDB_STORES.some(s=>!d.objectStoreNames.contains(s))){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: the upgrade creates what is missing. A database at IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
+        if(!LOCK && d.version<IDB_VER){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: the upgrade creates what is missing, and from 3 it is the barrier against old tabs (no store missing). A database at IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
         // the second half of the format check: a `format` record above this code's version marks data of a newer app in a database of the same version
         if(!d.objectStoreNames.contains('sync')) return done();
         try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>IDB_VER) setLock('newer'); done(); }; g.onerror=()=>done(); }catch(_){ done(); } };
@@ -1075,11 +1077,20 @@ function vload(note){ return vqueue(note, async()=>{ if(VLAST.has(note)) return;
 function vqueue(note, fn){ const p=(VQ.get(note)||Promise.resolve()).then(fn).catch(e=>{ DEBUG.vers.errors++; if(/[?&]debug=1/.test(location.search)) console.warn('versions:',e); if(/Quota/i.test((e&&e.name)||'')) vsweep(); }); VQ.set(note,p); return p; }
 /* a named version is written with keep:1 and inline:1 (SYNC-PLAN 4.3): full bodies inside the record (`s`, `r` for rich text), no thinning, no budget,
    no plain «Очистити історію». Every record's t is at most vnow(), so a note with an `updated` far ahead cannot make vthin drop the rest as too old */
-function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); const inline=!!meta.name; let size=0, rec=null;
+// a named version goes through the sync core (SYNC-PLAN 4.9): the record with every body inline, a block over the history's body limit included, written
+// with its job and lrev in one transaction; the core judges it local-only (too large, incomplete) itself
+async function vwriteNamed(note, m, blocks, meta){ const src=new Map(blocks.map(d=>[d.id,d])), L=VLAST.get(note);
+  const prev=L? await idb.tx(['versions'],'readonly',t=>t.objectStore('versions').get(L.id)) : null;
+  m.blocks.forEach(e=>{ const d=src.get(e.id), body=bodyOf(d); e.s=body; if(!d.kind && d.html) e.r=1; });
+  const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
+  const rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev||null), name:meta.name, keep:1, inline:1};
+  const r=await SYNC.versionLocal({op:'create', rec}); if(!r || !r.ok) throw (r && r.error) || new Error('version: '+((r && r.code)||'failed'));
+  const out=r.rec||rec; VLAST.set(note,{id:out.id,t:out.t,w:out.w,sig:out.sig,reason:out.reason}); DEBUG.vers.size+=out.size||0; storageUI(); return out; }
+function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); if(meta.name && SYNC) return vwriteNamed(note, m, blocks, meta); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); const inline=!!meta.name; let size=0, rec=null;
   return idb.tx(['versions','blobs','sync'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
     const finish=()=>{ if(--pending) return; const prev=prevQ&&prevQ.result? prevQ.result : null; const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
       rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:size+new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev)}; if(meta.name){ rec.name=meta.name; rec.keep=1; rec.inline=1; } if(meta.from) rec.from=meta.from; V.put(rec);
-      if(meta.name && SYNC && SYNC.hasOwner()) t.objectStore('sync').put({k:'out:v:'+rec.id, tries:0, next:0}); };   // a named version is queued for the cloud (SYNC-PLAN 4.9); the sender for versions comes with PR 4
+      };
     if(prevQ){ pending++; prevQ.onsuccess=prevQ.onerror=()=>finish(); }   // the previous record is read before the record is built: with bodies inline there may be no other request to wait for
     m.blocks.forEach(e=>{ if(!e.h) return; const d=src.get(e.id), body=bodyOf(d); if(inline){ e.s=body; if(!d.kind && d.html) e.r=1; return; } pending++;
       const tryKey=(h,k)=>{ const g=B.get([note,h]); g.onsuccess=()=>{ const ex=g.result; if(!ex){ const z=new Blob([body]).size; B.put({note,h,s:body,r:(!d.kind&&d.html)?1:0,z}); e.h=h; size+=z; finish(); } else if(ex.s!==body) tryKey(e.h+'~'+(k+1),k+1); else { e.h=h; finish(); } }; };   // колізія хешу — сусідній ключ
@@ -1159,7 +1170,7 @@ function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : 
 function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()}); const ref={};
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
   // the tab (a replaced one may still finish a step), and after the transaction that reported it, since the status comes from inside its callback
-  ref.eng=SC.makeSync({db:SDB, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
+  ref.eng=SC.makeSync({db:SDB, format:IDB_VER, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
     onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status={code,n}; if(LEAD.on) tellTabs(stMsg()); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
   return ref.eng; }
 function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=SYNC; driving=true; clearTimeout(driveT);   // not before the start is done: documents applied then would not reach the list (syncChanged drops them)
@@ -1447,7 +1458,7 @@ Object.assign(DEBUG.sync,{ account:()=>({user:ACC.user, owner:SYNC? SYNC.owner :
   fbFault:(k,v)=>{ if(ACC.cloud && ACC.cloud.fault) ACC.cloud.fault(k,v); }, quota:()=>SYNC? SYNC._S.quota : null, unsynced:()=>unsyncedCount(), copyNote:()=>cur? copyNoteOf(cur) : null,
   bind:o=>bindOwner(o).then(()=>({ok:true}), e=>({ok:false, code:(e && e.code)||'error'})), locked:()=>LOCK, unsavedCount:()=>unsaved.size });   // bind: bindOwner from outside, for the epoch check (appaccount)
 // the test hook of PR 1: a cloud and an owner from outside (the account code above is the real one). The device record is the test's hand too: «this device is A»
-Object.assign(DEBUG.sync,{ core:SC,
+Object.assign(DEBUG.sync,{ core:SC, version:op=>SYNC.versionLocal(op), vstates:note=>SYNC.versionStates(note),   // named versions through the core (SYNC-PLAN 4.9), for the scenarios
   connect:async o=>{ SYNC.stop(); if(o.devId) saveS({devId:o.devId}); if(o.devName) saveS({devName:o.devName});
     if(o.devId || o.devName){ try{ await SDB.tx(['sync'],'readwrite', async t=>{ const d=(await t.get('sync','device'))||{}; t.put('sync',{k:'device', id:o.devId||d.id||S.devId, name:o.devName||d.name||S.devName}); }); }catch(_){} }
     SYNC=makeEngine(o); CLOUD=o.cloud||null; await SYNC.setOwner(o.owner||null); if(o.user!==undefined){ ACC.user=o.user; saveS({fbUser:o.user? {uid:o.user.uid, email:o.user.email} : null}); if(o.user) ACC.cloud=CLOUD; }   // user: a signed-in account without Firebase, for the status button and the menu (appaccount)
@@ -2916,8 +2927,7 @@ function restoreBlock(id){ const v=H.view; if(!v || !cur) return; const d=verBlo
   offerUndo(loc('hist.blockRestored',{time:at}), ()=>{ if(cur!==n) return; flushSave(); putState(n, {title:n.title, blocks: old? n.blocks.map(x=>x.id===id? old : x) : n.blocks.filter(x=>x.id!==id)}); }, {big:true}); }   // undo puts back only this block
 function nameHist(){ histNameRow.hidden=false; histName.value=(H.view&&H.view.name)||''; histName.focus(); histName.select(); }
 async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if(!name || !n) return; histNameRow.hidden=true;
-  if(v) await vqueue(n.id, ()=>idb.tx(['versions'],'readwrite',t=>{ const s=t.objectStore('versions'), g=s.get(v.id); g.onsuccess=()=>{ const r=g.result; if(!r) return; r.name=name; r.keep=1; r.inline=1;   // the shown version gets the name and becomes keep/inline: the bodies the history still has go inside it (a missing one makes it «неповна», PR 4)
-    r.blocks.forEach(e=>{ if(e.s!==undefined) return; const b=e.h && H.bodies && H.bodies.get(e.h); if(b){ e.s=b.s; if(b.r) e.r=1; } }); s.put(r); }; }));
+  if(v) await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:v.name? 'rename' : 'name', id:v.id, name}); if(!r || !r.ok) throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); });   // through the core (SYNC-PLAN 4.9): the name, keep/inline and the bodies the history still has (a missing one makes it «неповна»), with its job and lrev
   else { flushSave(); await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name); }   // «Зараз» becomes a named version (R4)
   say(loc('hist.named',{name})); await loadHist(); }
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
@@ -2944,12 +2954,10 @@ Object.assign(DEBUG.vers,{ openHist:()=>openHist(), closeHist:()=>closeHist() })
 
 /* ══ history in the export file (VERSIONS-PLAN 3.8): only with «з історією версій»; an import adds versions and bodies it does not have yet ══ */
 async function historyOf(){ try{ const [versions,blobs]=await Promise.all([idb.tx(['versions'],'readonly',t=>t.objectStore('versions').getAll()), idb.tx(['blobs'],'readonly',t=>t.objectStore('blobs').getAll())]); return {versions, blobs}; }catch(_){ return null; } }
-async function importHistory(h){ if(db.backend!=='idb' || !h || !Array.isArray(h.versions) || !Array.isArray(h.blobs)) return 0; const ids=new Set(notes.map(n=>n.id)); let added=0, size=0;
-  const vs=h.versions.filter(v=>v && typeof v.id==='string' && ids.has(v.note) && Array.isArray(v.blocks) && typeof v.sig==='string'), bs=h.blobs.filter(b=>b && ids.has(b.note) && typeof b.h==='string' && typeof b.s==='string');
-  try{ await idb.tx(['versions','blobs'],'readwrite',t=>{ const V=t.objectStore('versions'), B=t.objectStore('blobs');
-    for(const b of bs){ const g=B.get([b.note,b.h]); g.onsuccess=()=>{ if(!g.result) B.put({note:b.note, h:b.h, s:b.s, r:b.r? 1 : 0, z:+b.z||new Blob([b.s]).size}); }; }
-    for(const v of vs){ const g=V.get(v.id); g.onsuccess=()=>{ if(!g.result){ V.put(v); added++; size+=v.size||0; } }; } }); }catch(_){ return 0; }
-  for(const id of new Set(vs.map(v=>v.note))) VLAST.delete(id); DEBUG.vers.size+=size; storageUI(); return added; }
+// through the core (SYNC-PLAN 4.9 «Import»): one transaction with the queue, and a named version deleted here never comes back from an old file
+async function importHistory(h){ if(db.backend!=='idb' || !h || !Array.isArray(h.versions) || !Array.isArray(h.blobs) || !SYNC) return 0; const ids=notes.map(n=>n.id);
+  const r=await SYNC.importHistory(h, ids); if(!r || !r.ok) return 0;
+  for(const v of h.versions) if(v && ids.includes(v.note)) VLAST.delete(v.note); DEBUG.vers.size+=r.size||0; storageUI(); return r.added; }
 
 /* ══ text size: «Як у системі» by default, otherwise the sheet text in px and a factor for the interface. Kept per device, never exported ══
    The sheet is laid out in grid cells, so --fs and --g change together (a row is 1.5 × the text) and blocks keep their places, only larger.

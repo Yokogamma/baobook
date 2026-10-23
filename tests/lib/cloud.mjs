@@ -46,6 +46,11 @@ export class TestCloud{
     if(col==='notes' && tomb){ if(typeof w.purged!=='number') throw err('permission-denied','tomb shape'); if(has('auto') && (w.auto!==true || !D || !('deleted' in D))) throw err('permission-denied','auto');
       if(has('auto') && (!D.tsrv || this.t<=D.tsrv.s*1000+Math.floor(D.tsrv.ns/1e6)+TRASH_MS)) throw err('permission-denied','auto: the server clock says the 30 days are not over'); }   // the rules check the age by request.time (§4.8); here by the virtual clock
     if(col==='versions' && !tomb && w.note!==undefined){ const note=this.docs.notes.get(w.note); if(!note || note.purged) throw err('permission-denied','noteAlive'); }
+    if(col==='versions'){   // the rules of the versions match: the shape of a live version (lengths in UTF-16 units, as the rules' size() counts a string), a tombstone only over a document, a rename that changes only the name
+      if(!tomb && (typeof w.note!=='string' || !w.note.length || w.note.length>64 || typeof w.t!=='number' || typeof w.name!=='string' || !w.name.length || w.name.length>80 || typeof w.title!=='string' || w.title.length>2000 || !Array.isArray(w.blocks) || w.blocks.length>5000)) throw err('permission-denied','vlive shape');
+      if(tomb && !D) throw err('permission-denied','a version tombstone needs a document');
+      if(D && w.note!==D.note) throw err('permission-denied','a version keeps its note');
+      if(D && !tomb){ for(const k of new Set([...Object.keys(w), ...Object.keys(D)])){ if(['name','rev','op','srv','dev','dn','rcpt','id','commitAt','seq'].includes(k)) continue; if(JSON.stringify(w[k])!==JSON.stringify(D[k])) throw err('permission-denied','a rename changes only the name: '+k); } } }
     if(D && w.rev===D.rev+1 && bodyJson(w)===bodyJson(D) && !(tomb) && !(D.purged)) throw err('invalid','an empty write'); }
   // the server transaction: fn(D) → the document to write or null; it may run again on contention and with the `tworunners` fault
   async txn(col,id,fn,o={}){ { const f=this.take('fail',o.dev,'txn'); if(f){ if(f.wait) await f.wait; if(typeof f.then==='function') f.then(this); throw err(f.code||'unavailable','injected'); } }   // `wait`: the failure answers only when the test lets it (the device does things meanwhile)
