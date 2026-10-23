@@ -31,6 +31,15 @@ The sign-in works, the data does not move yet: the first read is refused by the 
 
 18. **Three devices for an hour** with the first load and a few reconnects: the console's usage (Firestore → Usage) against the device's estimate (`sheetDebug.sync.quota()` in the console of the leader tab: `reads`, `writes` for the Pacific day). Criterion: the extrapolated owner's day stays within 25 % of the project limit's share; a refused request (item 10) must not count as a document read in the console.
 
+## The browser storage (docs/IDB-FALLBACK-PLAN.md §10, PR #96)
+
+When IndexedDB does not open, the app no longer switches silently to localStorage: it retries, shows «Сховище браузера відкривається…», then a view-only strip «Сховище браузера не відкрилося…» with «Експорт» and «Оновити», and reloads by itself when the storage comes back. The full list of checks is in the plan's §10; these are the ones on the owner's devices.
+
+19. **Android, the installed app on `.dev`:** uninstall and reinstall it, open it; then force-stop Chrome and open the app from the home screen at once. Expected: the real notes (and the sign-in in the menu), or the strip that goes away by itself within seconds; never «Без назви» alone with an editable sheet, never «(резервне сховище)» on a device that has notes. If a strip shows, note its text and how long it stayed.
+20. **Android, offline and with an older build:** the same with Wi-Fi off (a start from the service worker's set) and with «Доступна нова версія» showing: both strips show, «Оновити» on either reloads.
+21. **A database that never opens again.** First the steps that lose nothing: «Оновити»; close the app completely (Android: force-stop Chrome or the installed app; iOS: swipe it away) and open it again; restart the device; on a signed-in device, check on another device or in the Firebase console that the notes are in the cloud.
+22. **Clearing the site data is the destructive last resort.** It deletes the unreadable database with every note that exists nowhere else (notes written offline or before signing in, and the local history of versions), and an empty export from the strip proves nothing about what the database holds. Do it only with a verified copy (an export made while the database still opened, or every note seen on another signed-in device) or with the decision to lose the inaccessible local data. Where: Android Chrome «Налаштування сайту → Сховище → Очистити» (or the installed app's storage info); iOS Settings → Safari → Advanced → Website Data. Afterwards reopen the app and sign in: what the cloud has comes back. Tried once on a test profile, never first on the owner's device.
+
 ## Where the results go
 
 The PR that asks for the checks lists the items done, with the device and the browser; what fails becomes an issue. The plan's §5 row of PR 3 and CLAUDE.md are updated when 3c is published.
