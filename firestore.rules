@@ -11,6 +11,7 @@ service cloud.firestore {
     function owner(env, uid) { return env in ['dev', 'app'] && allowed() && request.auth.uid == uid; }
     function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
     function optNum(d, k) { return !(k in d) || d[k] is number; }
+    function optColor(d) { return !('color' in d) || (d.color is string && d.color.matches('^[a-z0-9-]{1,24}$')); }   // a note colour; an unknown name of this format is accepted for later versions
     function optPos(d, k) { return !(k in d) || (d[k] is number && d[k] > 0); }   // deleted, archived, pinned: a time, absent when not; 0 would read as «not» on a device
     function receipts(d, o) {                 // own receipt == this op; other devices' receipts untouched
       return d.rcpt is map && d.rcpt.size() <= 200 && d.rcpt[d.dev] == d.op
@@ -25,9 +26,9 @@ service cloud.firestore {
     match /env/{env}/users/{uid}/notes/{id} {
       function live(d) {
         return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','title','blocks','created','updated'])
-          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','title','blocks','created','updated','deleted','archived','pinned','revived','tsrv'])
+          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','title','blocks','created','updated','deleted','archived','pinned','color','revived','tsrv'])
           && d.title is string && d.title.size() <= 2000 && d.blocks is list && d.blocks.size() <= 5000
-          && d.created is number && d.updated is number && optPos(d, 'deleted') && optPos(d, 'archived') && optPos(d, 'pinned')
+          && d.created is number && d.updated is number && optPos(d, 'deleted') && optPos(d, 'archived') && optPos(d, 'pinned') && optColor(d)
           && (!('revived' in d) || d.revived is map) && (!('tsrv' in d) || (d.tsrv is timestamp && 'deleted' in d));
       }
       function tomb(d, o) {

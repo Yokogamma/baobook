@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102307">
+<meta name="baobook-build" content="2026102308">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -29,6 +29,8 @@
   --shadow:0 4px 18px rgba(15,15,15,.14), 0 0 0 .5px rgba(15,15,15,.08);
   --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   --on-bg:var(--sel); --on-ink:var(--accent); --pin-bg:#f3f1ec;   /* a list button that shows a state (a pinned note's pin), and a pinned item */
+  --c-yellow:#fbf1c7; --c-green:#e1f2e3; --c-blue:#dfecfb; --c-pink:#fbe3ea; --c-purple:#ebe4fb;   /* the five colours of an area and of a note in the list (LIST-ACTIONS-PLAN 5.4) */
+  --sw-yellow:#f2d36b; --sw-green:#8fd19e; --sw-blue:#8ab9ef; --sw-pink:#f1a3b8; --sw-purple:#b9a3ef;   /* the same colours stronger: the swatches of the palette */
   /* ритм аркуша: крок сітки = висота рядка = 1.5 × кегль (16 → 24). Один токен --g тримає і точки, і рядки, і відступи */
   --fs:16px; --g:24px; --pad:var(--g); --handle:22px;
   /* interface text: six sizes in rem, so the «Інтерфейс» setting (--k on the root font size) and the browser's own font size scale them all.
@@ -46,6 +48,8 @@ html{font-size:calc(100% * var(--k,1))}
   --code-bg:#232323; --code-line:rgba(255,255,255,.14); --accent:#59a4f0; --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0;
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
   --pin-bg:#24221e;
+  --c-yellow:#3a3520; --c-green:#1f3628; --c-blue:#1e2d42; --c-pink:#3c2430; --c-purple:#2e2744;
+  --sw-yellow:#a8902f; --sw-green:#3f8a55; --sw-blue:#3f6fa8; --sw-pink:#a8506a; --sw-purple:#6f58a8;
 } }
 :root[data-theme="dark"]{
   --page:#191919; --ink:#e6e6e4; --ink-2:#9b9b98; --ink-3:#5f5f5c;
@@ -56,6 +60,8 @@ html{font-size:calc(100% * var(--k,1))}
   --code-bg:#232323; --code-line:rgba(255,255,255,.14); --accent:#59a4f0; --k:#c792ea; --s:#8fd3a5; --n:#f0b66a; --c:#7a7a76; --t:#82b4f0;
   --shadow:0 4px 18px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.08);
   --pin-bg:#24221e;
+  --c-yellow:#3a3520; --c-green:#1f3628; --c-blue:#1e2d42; --c-pink:#3c2430; --c-purple:#2e2744;
+  --sw-yellow:#a8902f; --sw-green:#3f8a55; --sw-blue:#3f6fa8; --sw-pink:#a8506a; --sw-purple:#6f58a8;
 }
 /* пісок / папірус: теплий бежевий аркуш із ледь помітним зерном і волокнами, чорнило — темно-коричневе, акцент — вохра */
 :root[data-theme="sand"]{
@@ -68,6 +74,7 @@ html{font-size:calc(100% * var(--k,1))}
   --code-bg:#ebdfc4; --code-line:rgba(80,58,25,.16); --accent:#9a6a1e; --k:#8a3f7a; --s:#3f6f2a; --n:#a1541a; --c:#a08f70; --t:#2d5f9e;
   --shadow:0 4px 18px rgba(60,40,10,.18), 0 0 0 .5px rgba(60,40,10,.10);
   --pin-bg:#f1e2c6;
+  --c-yellow:#f3e3b0; --c-green:#dfe6c2; --c-blue:#d8e3e0; --c-pink:#f1d6cc; --c-purple:#e4d8d8;
   --paper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .40 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='l' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .92 0 0 0 .07 0'/%3E%3C/filter%3E%3Cfilter id='h' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .035 0'/%3E%3C/filter%3E%3Cfilter id='v' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5 .008' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E");
 }
 @media (max-width:640px){ :root{ --pad:16px; --handle:20px; --fs:16px; } }
@@ -150,17 +157,25 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
 .it-x:hover{background:var(--hover-2);color:#c33}
 /* trash (TRASH-PLAN): the panel shows it in place of the list; a footer row leads there while it is not empty */
-.it-r,.it-p{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i,.it-p .i{font-size:.875rem}
-.item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r,.item:hover .it-p,.item.cur .it-p,.item:focus-within .it-p{display:inline-flex} .it-r:hover,.it-p:hover{background:var(--hover-2);color:var(--ink)}
+.it-r,.it-p,.it-c{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i,.it-p .i,.it-c .i{font-size:.875rem}
+.item:hover :is(.it-r,.it-p,.it-c),.item.cur :is(.it-r,.it-p,.it-c),.item:focus-within :is(.it-r,.it-p,.it-c){display:inline-flex} .it-r:hover,.it-p:hover,.it-c:hover{background:var(--hover-2);color:var(--ink)}
 .it-t{padding-right:28px}   /* room for the second button of an item (archive, restore) next to the bin */
 /* the pin, left of the archive button: shown with the other buttons; it makes room in the title only while it shows */
 .it-p{right:58px} .it-p.on .i{fill:currentColor}
-.item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t{padding-right:54px}
+.item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t{padding-right:80px}
+/* the palette (5.4), first of the buttons: left of the pin in the notes, left of «Повернути» in the archive. It wears the note's colour with a dot of its swatch */
+.it-c{right:84px} .item.ar .it-c{right:58px} .item.ar:is(:hover,.cur,:focus-within) .it-t{padding-right:54px}
+.item:has(.it-c[aria-expanded="true"]) :is(.it-x,.it-r,.it-p,.it-c){display:inline-flex} .item.pa:has(.it-c[aria-expanded="true"]) .it-t{padding-right:80px} .item.ar:has(.it-c[aria-expanded="true"]) .it-t{padding-right:54px}   /* the buttons stay while the palette is open, a pointer gone from the item or not */
+.it-c[data-color]{background:var(--nc);color:var(--ink);box-shadow:inset 0 0 0 .5px var(--line-2)} .it-c[data-color]:hover{background:var(--nc);color:var(--ink)}
+.it-c[data-color]::after{content:"";position:absolute;right:2px;bottom:2px;width:7px;height:7px;border-radius:50%;background:var(--sw);box-shadow:0 0 0 1.5px var(--page)}
+[data-color="yellow"]{--nc:var(--c-yellow);--sw:var(--sw-yellow)} [data-color="green"]{--nc:var(--c-green);--sw:var(--sw-green)} [data-color="blue"]{--nc:var(--c-blue);--sw:var(--sw-blue)} [data-color="pink"]{--nc:var(--c-pink);--sw:var(--sw-pink)} [data-color="purple"]{--nc:var(--c-purple);--sw:var(--sw-purple)}
 /* LIST-ACTIONS-PLAN 4.2, 4.5: a pinned note has its own background and a pin before its title; the open note keeps its background and gets a ring.
    A button that shows a state looks pressed: the pin of a pinned note, and in the archive the way back to the notes */
 .it-h{display:flex;align-items:center;gap:5px;min-width:0} .it-h .it-t{flex:1 1 auto;min-width:0}
 .pmark{display:inline-flex;flex:none;font-size:.75rem;color:var(--ink-2)} .pmark .i{fill:currentColor}
-.item.pinned:not(.cur){background:var(--pin-bg)} .item.pinned:not(.cur):hover{background:var(--hover-2)}
+.item.pinned:not(.cur,[data-color]){background:var(--pin-bg)} .item.pinned:not(.cur,[data-color]):hover{background:var(--hover-2)}
+/* a note with a colour (5.4) keeps it pinned or open; the open one keeps its ring, a hover darkens the colour a little */
+.item[data-color]{background:var(--nc)} .item[data-color]:is(:hover,.cur){background:color-mix(in srgb,var(--nc),var(--ink) 8%)}
 .item.cur{box-shadow:inset 0 0 0 1.5px var(--line-2)}
 .it-p.on,.it-r.back{background:var(--on-bg);color:var(--on-ink)} .it-p.on:hover,.it-r.back:hover{background:var(--on-bg);color:var(--on-ink)}
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -432,13 +447,28 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .ablk .cb.more[aria-expanded="true"]{opacity:1;background:var(--hover-2);color:var(--ink)}
 
 .ablk.resizing{border-color:var(--sel-line)} .ablk.settle{transition:width .16s ease}
-.ablk[data-color="yellow"]{--area-bg:#fbf1c7} .ablk[data-color="green"]{--area-bg:#e1f2e3} .ablk[data-color="blue"]{--area-bg:#dfecfb} .ablk[data-color="pink"]{--area-bg:#fbe3ea} .ablk[data-color="purple"]{--area-bg:#ebe4fb}
-:root[data-theme="dark"] .ablk[data-color="yellow"]{--area-bg:#3a3520} :root[data-theme="dark"] .ablk[data-color="green"]{--area-bg:#1f3628} :root[data-theme="dark"] .ablk[data-color="blue"]{--area-bg:#1e2d42} :root[data-theme="dark"] .ablk[data-color="pink"]{--area-bg:#3c2430} :root[data-theme="dark"] .ablk[data-color="purple"]{--area-bg:#2e2744}
-@media (prefers-color-scheme:dark){ :root:not([data-theme]) .ablk[data-color="yellow"]{--area-bg:#3a3520} :root:not([data-theme]) .ablk[data-color="green"]{--area-bg:#1f3628} :root:not([data-theme]) .ablk[data-color="blue"]{--area-bg:#1e2d42} :root:not([data-theme]) .ablk[data-color="pink"]{--area-bg:#3c2430} :root:not([data-theme]) .ablk[data-color="purple"]{--area-bg:#2e2744} }
-:root[data-theme="sand"] .ablk[data-color="yellow"]{--area-bg:#f3e3b0} :root[data-theme="sand"] .ablk[data-color="green"]{--area-bg:#dfe6c2} :root[data-theme="sand"] .ablk[data-color="blue"]{--area-bg:#d8e3e0} :root[data-theme="sand"] .ablk[data-color="pink"]{--area-bg:#f1d6cc} :root[data-theme="sand"] .ablk[data-color="purple"]{--area-bg:#e4d8d8}
+.ablk[data-color="yellow"]{--area-bg:var(--c-yellow)} .ablk[data-color="green"]{--area-bg:var(--c-green)} .ablk[data-color="blue"]{--area-bg:var(--c-blue)} .ablk[data-color="pink"]{--area-bg:var(--c-pink)} .ablk[data-color="purple"]{--area-bg:var(--c-purple)}
 .cpick{position:absolute;right:8px;top:30px;z-index:8;display:flex;gap:6px;padding:6px;background:var(--page);border:.5px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow)}
 .cpick button{width:22px;height:22px;border-radius:50%;border:.5px solid var(--line-2);cursor:pointer;background:var(--sw);padding:0}
 .cpick button.cur{outline:2px solid var(--accent);outline-offset:1px}
+/* the colour of a note (LIST-ACTIONS-PLAN 5.4): a drop-down next to the palette button, fixed in the window. A computer gets one row of circles named by
+   their title; touch a 3×2 grid with the names under the circles. A circle never gives way to its label (flex:none, aspect-ratio) */
+.pal{position:fixed;z-index:60;padding:10px;background:var(--page);border:.5px solid var(--line-2);border-radius:12px;box-shadow:var(--shadow);font-family:var(--sans);user-select:none;-webkit-user-select:none}
+.pal-h{display:flex;justify-content:space-between;gap:12px;padding:2px 4px 8px;font-size:var(--t-sm);font-weight:600;color:var(--ink-2)} .pal-h span{font-weight:400;color:var(--ink-3)}
+.pal-g{display:grid;grid-template-columns:repeat(6,34px);gap:2px}
+.pal-g button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:var(--t-xs);cursor:pointer}
+.pal-g button:hover{background:var(--hover)} .pal-g button span{display:none}
+.swc{position:relative;display:block;flex:none;width:22px;height:22px;aspect-ratio:1;border-radius:50%;background:var(--sw,var(--page));box-shadow:inset 0 0 0 1px var(--line-2)}
+.swc.swc0{background:var(--page);box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.pal-g button[aria-checked="true"]{color:var(--ink);font-weight:600} .pal-g button[aria-checked="true"] .swc{box-shadow:0 0 0 2px var(--page),0 0 0 4px var(--ink-2)}
+.pal-g button[aria-checked="true"] .swc::after,.amenu .mi.sw1[aria-checked="true"] .swc::after{content:"";position:absolute;left:7px;top:4px;width:5px;height:10px;border:solid var(--ink);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.amenu .mrow{display:flex;gap:2px;padding:2px 4px} .amenu .mi.sw1{width:auto;flex:none;padding:5px;justify-content:center}
+.amenu .mi.sw1[aria-checked="true"] .swc{box-shadow:0 0 0 2px var(--page),0 0 0 3.5px var(--ink-2)}
+@media (hover:none){
+  .pal-g{grid-template-columns:repeat(3,minmax(88px,max-content));gap:4px} .pal{max-width:calc(100vw - 16px)}   /* «Стандартний» keeps its word on one line */ .pal-g button{min-height:64px;padding:6px 2px;border-radius:10px} .pal-g button span{display:block;max-width:100%;text-align:center;overflow-wrap:anywhere}
+  .pal-g .swc{width:30px;height:30px} .pal-g button[aria-checked="true"] .swc::after{left:10px;top:6px;width:7px;height:12px}
+  .amenu .mi.sw1{min-height:44px;min-width:44px}
+}
 /* рамка, яку тягнуть мишею по порожньому аркушу — майбутня область */
 .marq{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:10px;pointer-events:none;z-index:4}
 /* чіп після вставки: «Вставлено як код · Зробити текстом» */
@@ -586,22 +616,20 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 @media (hover:none){
   .list{touch-action:pan-y}
   .item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;padding-right:10px}
-  .list .item .it-x,.list .item .it-r,.list .item .it-p{display:none}
+  .list .item :is(.it-x,.it-r,.it-p,.it-c){display:none}
   .list .item .it-t,.list .item.pa:is(.cur,:focus-within,:hover):not(.amode) .it-t{padding-right:0}
-  .list .item:is(:focus-visible,:has(:focus-visible)) :is(.it-x,.it-r,.it-p){display:inline-flex}
-  .list .item:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:28px} .list .item.pa:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:54px}
-  .list .item:hover{background:transparent} .list .item.cur:hover{background:var(--hover-2)} .list .item.pinned:not(.cur):hover{background:var(--pin-bg)}   /* a finger leaves :hover behind */
-  .list .item.press,.list .item.pinned.press:not(.cur){background:var(--hover-2)}
-  .list .item.amode{--acts-bg:var(--page);min-height:64px;background:var(--acts-bg);box-shadow:inset 0 0 0 1.5px var(--ink-3)} .list .item.amode.pinned{--acts-bg:var(--pin-bg)}
-  .item.amode::after{content:"";position:absolute;top:0;right:0;bottom:0;width:150px;border-radius:0 8px 8px 0;background:linear-gradient(90deg,transparent,var(--acts-bg) 32px);pointer-events:none} .item.amode.pa::after{width:210px}
-  .list .item.amode :is(.it-x,.it-r,.it-p){display:inline-flex;z-index:1;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:12px;background:var(--page);box-shadow:0 0 0 .5px var(--line-2),0 1px 3px rgba(0,0,0,.08);color:var(--ink-2)}
-  .list .item.amode :is(.it-x,.it-r,.it-p) .i{font-size:1.25rem}
-  .list .item.amode .it-x{right:8px;color:#c33} .list .item.amode .it-r{right:68px} .list .item.amode .it-p{right:128px}
+  .list .item:is(:focus-visible,:has(:focus-visible)) :is(.it-x,.it-r,.it-p,.it-c){display:inline-flex}
+  .list .item:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:28px} .list .item.pa:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:80px} .list .item.ar:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:54px}
+  .list .item:hover{background:transparent} .list .item.cur:hover{background:var(--hover-2)} .list .item.pinned:not(.cur,[data-color]):hover{background:var(--pin-bg)}   /* a finger leaves :hover behind */
+  .list .item[data-color]:hover{background:var(--nc)} .list .item.cur[data-color]:hover{background:color-mix(in srgb,var(--nc),var(--ink) 8%)}
+  .list .item.press,.list .item.pinned.press:not(.cur,[data-color]){background:var(--hover-2)} .list .item[data-color].press{background:color-mix(in srgb,var(--nc),var(--ink) 12%)}
+  .list .item.amode{--acts-bg:var(--page);min-height:64px;background:var(--acts-bg);box-shadow:inset 0 0 0 1.5px var(--ink-3)} .list .item.amode.pinned{--acts-bg:var(--pin-bg)} .list .item.amode[data-color]{--acts-bg:var(--nc)}
+  .item.amode::after{content:"";position:absolute;top:0;right:0;bottom:0;width:150px;border-radius:0 8px 8px 0;background:linear-gradient(90deg,transparent,var(--acts-bg) 32px);pointer-events:none} .item.amode.ar::after{width:210px} .item.amode.pa::after{width:270px}
+  .list .item.amode :is(.it-x,.it-r,.it-p,.it-c){display:inline-flex;z-index:1;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:12px;background:var(--page);box-shadow:0 0 0 .5px var(--line-2),0 1px 3px rgba(0,0,0,.08);color:var(--ink-2)}
+  .list .item.amode :is(.it-x,.it-r,.it-p,.it-c) .i{font-size:1.25rem}
+  .list .item.amode .it-x{right:8px;color:#c33} .list .item.amode .it-r{right:68px} .list .item.amode .it-p{right:128px} .list .item.amode .it-c{right:188px} .list .item.amode.ar .it-c{right:128px}
   .list .item.amode :is(.it-p.on,.it-r.back){background:var(--on-bg);color:var(--on-ink)}
-  /* press feedback in place of the tap highlight: the main controls show a background while the finger is down (the :hover a tap leaves comes only after it); list items have .press */
-  .gear:active,.tb:active,.new:active,.side-x:active,.setpop .mi:active,.amenu .mi:active{background:var(--hover-2)} .bbar button:not(:disabled):active{background:rgba(128,128,128,.35)}
-  .mi-step button:not(:disabled):active{background:var(--hover-2)} .fab:active{filter:brightness(.85)}
-  :is(.bubble,.bmore) button:not(:disabled,[aria-pressed="true"]):active{background:rgba(128,128,128,.35)} :is(.bubble,.bmore) button[aria-pressed="true"]:active{background:rgba(128,128,128,.7)}   /* a pressed format button stays darker than the others, and darkens under the finger */
+  .list .item.amode .it-c[data-color]{background:var(--nc);color:var(--ink)} .list .item.amode .it-c[data-color]::after{right:6px;bottom:6px;width:10px;height:10px}
 }
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
@@ -757,8 +785,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102307" integrity="sha384-b9G5IPn1oUATd8UwL5Vx6rhnmCHVeriXJN+MjBHDgkbpn7j2ohEWVMe8OzPJgw4L"></script>
-<script src="cloud.js?b=2026102307" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102308" integrity="sha384-VgcrsgPLmgHm49W2niDZIvyFsdv4Zpfg03TMCvCQZNzkNN8lVfCmfwsnYcqza860"></script>
+<script src="cloud.js?b=2026102308" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -769,9 +797,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'locales/en.json':'sha384-SCwtTaBwwfPpSJbX9YPJIewJ/MzwZTdgpwyGnN0KWkd3BE8/fV9gg7lb0xKch089', 'locales/uk.json':'sha384-RYxiF0ouBl78vw9GMf18voQF6WTvXa8nPaRLHeU7aFvzopDSlEMPBKdR6e0tH+8W'};
+const SRI={'locales/en.json':'sha384-Nj4SGTMpliSUZTyA41murM/UgS74dKM2L6B6r3ayyt/Ie6xEetaH4VBywf8CeL13', 'locales/uk.json':'sha384-P6Pnt9yFqxXaxgJn58l0gLtcpRBdp+nDhjGWxGXrwD0bDsjYE8XYikB/fkVyVn+2'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102307;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102308;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -1002,9 +1030,9 @@ const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.cod
    older save finishing late nor another tab can remove a copy that may be the only one. Plain sheet:note:<id> keys belong to the first
    version and to the mode without IndexedDB (§4.14 of docs/SYNC-PLAN.md) */
 const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);   // a pin is not content: copies that differ only by it are not kept twice, the newer one's pin stands (fbPut)
-const backupOf=({pinned, ...n})=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});   // a backup copy starts unpinned
+const backupOf=({pinned, ...n})=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});   // a backup copy starts unpinned and keeps its colour
 function fbPut(ex, n){ if(!ex) return [n]; const newer=(n.updated||0)>(ex.updated||0);
-  if(noteSig(ex)===noteSig(n)) return newer && (n.pinned||0)!==(ex.pinned||0)? [n] : [];   // the same content: only a newer pin moves in, with no backup
+  if(noteSig(ex)===noteSig(n)) return newer && ((n.pinned||0)!==(ex.pinned||0) || (n.color||'')!==(ex.color||''))? [n] : [];   // the same content: only a newer pin or colour moves in, with no backup
   return newer? [n, backupOf(ex)] : [backupOf(n)]; }   // other content: the newer copy is the note, the older one a backup
 const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
 const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
@@ -1201,7 +1229,7 @@ let DYING=false;   // the page is about to reload after a change of owner: nothi
 const LREV=new Map(), ESNAP=new Map(), PENDING=new Map(), ARRIVED=new Map();
 DEBUG.sync={clock:0, status:{code:'none', n:0}};
 let SYNC=null, driveT=null, driving=false;
-const TIME_FIELDS=['deleted','archived','pinned'], OPT_FIELDS=[...TIME_FIELDS,'revived'];   // the optional fields of a note, absent when not set; the first three are times
+const TIME_FIELDS=['deleted','archived','pinned'], OPT_FIELDS=[...TIME_FIELDS,'revived','color'];   // the optional fields of a note, absent when not set; the first three are times
 const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; for(const k of OPT_FIELDS) if(n[k]) o[k]=n[k]; return o; };
 // a stored record taken into the note in memory: the optional fields the record lacks go too
 const takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
@@ -1533,6 +1561,9 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
    Pinned notes come first in the notes, in a group «Закріплені» (the last pinned on top; by rank in a search), the rest under «Інші» */
 // the list on touch (LIST-ACTIONS-PLAN 4.1–4.4): a tap opens, a long press opens the action mode of one note (actsId). LISTTOUCH: by input, not width
 const LISTTOUCH=matchMedia('(hover:none)');
+const NOTE_COLORS=['yellow','green','blue','pink','purple'], colorOf=n=>NOTE_COLORS.includes(n.color)? n.color : '';   // an unknown name (a later version's) is drawn as «Стандартний» and kept
+const colorName=c=>loc({yellow:'color.yellow', green:'color.green', blue:'color.blue', pink:'color.pink', purple:'color.purple'}[c]||'color.none'), swatch=c=>'<i class="swc'+(c? '' : ' swc0')+'"'+(c? ' data-color="'+c+'"' : '')+'></i>';
+let palOpen=null;
 let actsId=null, modeAt=0, pressId=null, btnDown=null, closedBy=null, swallow=null, lastTouch={id:null, at:-Infinity}, redrawing=false;
 const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
 // the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
@@ -1540,7 +1571,7 @@ const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return 
 const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
 const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
 function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; requestAnimationFrame(off); setTimeout(off,100); const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
-  drawList(); if(actsId!==null && !list.querySelector('.item.amode')){ actsId=null; nav.close('acts'); }   // the note left the list: its action mode goes
+  drawList(); if(actsId!==null && !list.querySelector('.item.amode')){ actsId=null; nav.close('acts'); } if(palOpen) placePal();   // the note left the list: its action mode goes, and its palette (placePal closes it)
   if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
@@ -1560,19 +1591,20 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
     if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
   return items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
 /* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
-function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar, pin=pa && !!n.pinned; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':'')+(pin?' pinned':'')+(actsId===n.id?' amode':'')+(pressId===n.id?' press':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
+function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar, pin=pa && !!n.pinned, c=!tr && colorOf(n); const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':'')+(ar?' ar':'')+(pin?' pinned':'')+(actsId===n.id?' amode':'')+(pressId===n.id?' press':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; if(c) d.dataset.color=c; d.setAttribute('role','button'); d.tabIndex=0;
   const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box], xk=tr? 'trash.purge' : 'notes.delete';
   // the pin keeps one name with aria-pressed (#82); the other buttons are one-shot actions named by their title. In the archive the way back looks pressed
   d.innerHTML='<div class="it-h">'+(pin? '<i class="pmark" aria-hidden="true">'+ICO.pin+'</i>' : '')+'<div class="it-t"></div></div>'+(pin? '<span class="sr-only">'+locA('list.pinnedState')+'</span>' : '')+'<div class="it-s"></div><div class="it-d"></div>'
-    +'<span class="it-b" role="group" aria-label="'+locA('list.actions')+'">'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')
+    +'<span class="it-b" role="group" aria-label="'+locA('list.actions')+'">'+(tr? '' : '<button class="it-c"'+(c? ' data-color="'+c+'"' : '')+' title="'+locA('color.title')+'" aria-label="'+locA('color.button',{name:colorName(c)})+'" aria-haspopup="dialog" aria-expanded="'+!!(palOpen && palOpen.id===n.id)+'">'+ICO.palette+'</button>')+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')
     +'<button class="it-r'+(ar? ' back' : '')+'" title="'+locA(rk)+'" aria-label="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(xk)+'" aria-label="'+locA(xk)+'">'+ICO.trash+'</button></span>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
   const keyed=(act, cls)=>{ const at=[...list.querySelectorAll('.item')].indexOf(d), k=d.dataset.k; Promise.resolve(act()).then(()=>keepFocus(n.id, cls, k, at)); };   // a key action: the focus moves once it is done (a delete waits for the history)
-  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x');
+  d.addEventListener('click',e=>{ const b=e.target.closest('.it-c,.it-p,.it-r,.it-x');
     if(!b){ if(performance.now()-lastTouch.at<500) return; openNote(n); return; }   // a touch opens the note in the list gesture; the click the browser makes after it is not a second open (LIST-ACTIONS-PLAN 4.3)
     e.stopPropagation(); const cls=b.classList[0];
     if(e.detail!==0 && actsId===n.id && LISTTOUCH.matches && !(btnDown && btnDown.id===n.id && btnDown.cls===cls && btnDown.at>modeAt)) return;   // the release of the long press is not a tap on the button that appeared under the finger
-    btnDown=null; const act0=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del, act=()=>{ const r=act0(); Promise.resolve(r).then(()=>closeActs()); return r; };   // every action closes the mode once it is done (the pin too: the owner, 2026-10-23)
+    btnDown=null; if(cls==='it-c'){ openPal(n, b, e.detail===0); return; }   // the palette keeps the mode: its button shows the colour chosen (LIST-ACTIONS-PLAN 5.4)
+    const act0=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del, act=()=>{ const r=act0(); Promise.resolve(r).then(()=>closeActs()); return r; };   // every action closes the mode once it is done (the pin too: the owner, 2026-10-23)
     if(e.detail===0) keyed(act, cls); else act(); });   // Enter or Space: a click with no pointer
   d.addEventListener('contextmenu',e=>{ e.preventDefault(); if(!LISTTOUCH.matches) itemMenu(n, d, {x:e.clientX, y:e.clientY}); });   // touch: the long press is ours (Android fires contextmenu on it); a mouse: our menu
   d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
@@ -1581,6 +1613,7 @@ function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, p
 // the context menu of an item on a computer (LIST-ACTIONS-PLAN 4.6): the same actions as its buttons, at the pointer or under the item
 function itemMenu(n, d, at, kb){ const tr=!!n.deleted, ar=!tr && !!n.archived, k=d.dataset.k, idx=[...list.querySelectorAll('.item')].indexOf(d), go=(f, cls)=>()=>{ const r=f(); if(kb) Promise.resolve(r).then(()=>keepFocus(n.id, cls||'', k, idx)); };
   const items=[{ico:ICO.note, label:loc('list.open'), act:()=>openNote(n)}];
+  if(!tr) items.push({label:loc('color.title'), row:['',...NOTE_COLORS].map(c=>({html:swatch(c), label:colorName(c), checked:c===colorOf(n), act:go(()=>setColor(n, c), 'it-c')}))});   // the colours in one row, a radio group the arrow keys walk through
   if(!tr && !ar) items.push({ico:ICO.pin, label:loc('pin.pin'), checked:!!n.pinned, act:go(()=>pinNote(n, !n.pinned), 'it-p')});
   items.push(tr? {ico:ICO.back, label:loc('trash.restore'), act:go(()=>restoreNote(n))} : ar? {ico:ICO.back, label:loc('archive.unarchive'), act:go(()=>unarchive(n))} : {ico:ICO.box, label:loc('archive.move'), act:go(()=>archiveNote(n))});
   items.push({node:Object.assign(document.createElement('hr'),{className:'msep'})}, tr? {ico:ICO.trash, label:loc('trash.purge'), danger:true, act:go(()=>purgeAsk(n))} : {ico:ICO.trash, label:loc('notes.delete'), danger:true, act:go(()=>delNote(n))});
@@ -1978,22 +2011,28 @@ function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archi
 function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.archived) return null; delete C.archived; return C; }));
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
-/* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
-const PINREV=new Map();   // id → {rev, whole} of the last pin write started: a field-only pin in flight is replaced by the next pin, which sets the state outright
-function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
-  // a change of this note the store may lack must not lose its place to the pin, so the pin waits: after a failed write for «Повторити»; with a localStorage
+/* the soft fields of a note (LIST-ACTIONS-PLAN 5.4): the pin and the colour. Neither is content: copies that differ only by them make no conflict copy.
+   A pinned note stays at the top of the notes; the pin is the time it was pinned. A colour is a name. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
+const SOFT={pinned:{ok:x=>!x.deleted && !x.archived}, color:{ok:x=>!x.deleted}};   // where the field applies: a pin in the notes, a colour in the notes and the archive
+const SOFTREV=new Map();   // id → {rev, whole} of the last soft write started: a field-only write in flight is replaced by the next one, which sets its own field outright
+function softSet(n, f, v){ const F=SOFT[f], same=x=>f==='pinned'? !!x.pinned===!!v : (x.color||'')===(v||'');
+  if(held() || !notes.includes(n) || !F.ok(n) || same(n)) return;
+  // a change of this note the store may lack must not lose its place to the field, so the write waits: after a failed write for «Повторити»; with a localStorage
   // leftover for the next start, which moves it in; while the note is being revived, or another write is on its way with no editor snapshot to merge with
-  const pw=PINREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
-  if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc('pin.wait')); return; }
-  if(REVIVING.has(n.id) || (other && !snapE)){ say(loc('pin.busy')); return; }
+  const pw=SOFTREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
+  const pin=f==='pinned';
+  if(unsaved.has(n.id)){ say(loc(pin? 'pin.unsaved' : 'color.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc(pin? 'pin.wait' : 'color.wait')); return; }
+  if(REVIVING.has(n.id) || (other && !snapE)){ say(loc(pin? 'pin.busy' : 'color.busy')); return; }
   const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole (the open note always has its snapshot)
   if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
-  const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
-  const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
-  const pinMerged=(C,m)=>{ if(!m.deleted && !m.archived) return pin(m)||m; const x={...m}; if(C && C.pinned) x.pinned=C.pinned; else delete x.pinned; return x; };   // a note the merge put in the archive or the trash keeps its stored pin
+  const val=f==='pinned'? (v? now() : 0) : (v||''), put=x=>{ if(val) x[f]=val; else delete x[f]; return x; };
+  put(n); n.updated=now();
+  const set=C=>(!F.ok(C) || same(C))? null : put({...C});   // the field set outright, whatever a merge made of it
+  const merged=(C,m)=>{ if(F.ok(m)) return set(m)||m; const x={...m}; if(C && C[f]) x[f]=C[f]; else delete x[f]; return x; };   // a note the merge put where the field does not apply keeps its stored value
   const ed=whole && editorDelta(n);   // the note as it is now, the same snapshot writeNote compares the result with: an edit made while the write waits is not part of it
-  const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=pinMerged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(pin)), rev=REV.get(n.id);
-  PINREV.set(n.id, {rev, whole}); p.then(()=>{ if((PINREV.get(n.id)||{}).rev===rev) PINREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
+  const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=merged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(set)), rev=REV.get(n.id);
+  SOFTREV.set(n.id, {rev, whole}); p.then(()=>{ if((SOFTREV.get(n.id)||{}).rev===rev) SOFTREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
+function pinNote(n, on){ softSet(n, 'pinned', on); } function setColor(n, c){ softSet(n, 'color', c); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
@@ -2063,7 +2102,7 @@ async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
-  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; for(const k of TIME_FIELDS) if(+raw[k]>0) n[k]=+raw[k]; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed, archived or pinned note carries the field
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; for(const k of TIME_FIELDS) if(+raw[k]>0) n[k]=+raw[k]; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived; if(SC.isColor(raw.color)) n.color=raw.color;   // only a trashed, archived or pinned note carries the field; a colour of the right format comes in (LIST-ACTIONS-PLAN 5.4)
     const ex=notes.find(x=>x.id===n.id);
     if(db.backend==='idb' && !LOCK){   // the import contract (SYNC-PLAN 4.14): a local write through the core, keeping the file's `updated`; an id purged here goes into the revived note
       if(ex && n.updated>ex.updated) await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import');   // R2: стан до перезапису — у версію
@@ -2121,7 +2160,7 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('on
    Відкриття нотатки з панелі на телефоні ховає панель, але лишає запис «панель із результатами» (+ запис «нотатка»): Back з нотатки знову показує панель із тим самим запитом і прокруткою,
    другий Back ховає панель, третій іде браузеру. На компʼютері панель — не накладення, тож записів не робить. */
 const nav={ stack:[], skip:0, busy:false, queue:[], skipT:null,
-  open(tag, close){ if(tag!=='acts' && actsId!==null && !this.busy) closeActs();   // a list item's action mode never lies under another layer: closing it would take that layer's entry (LIST-ACTIONS-PLAN 4.4)
+  open(tag, close){ if(tag!=='acts' && tag!=='palette' && actsId!==null && !this.busy) closeActs();   // a list item's action mode never lies under another layer: closing it would take that layer's entry (LIST-ACTIONS-PLAN 4.4). Its own palette is the one layer above it (5.4)
     const top=this.stack[this.stack.length-1]; if(top && top.tag===tag){ top.close=close; return; } const e={tag, close, pushed:false}; this.stack.push(e); if(this.skip>0) this.queue.push(e); else this.push(e); },   // поки свій popstate не прийшов, pushState відкладаємо: go(-1) браузер виконує пізніше й відносно поточного запису
   push(e){ try{ history.pushState({nav:e.tag, d:this.stack.indexOf(e)+1}, ''); e.pushed=true; }catch(_){} },
   close(tag){ const i=this.stack.map(e=>e.tag).lastIndexOf(tag); if(i<0) return; const gone=this.stack.splice(i); this.queue=this.queue.filter(e=>!gone.includes(e)); if(this.busy) return;   // закриваємо з popstate — історія вже відмотана
@@ -2612,14 +2651,17 @@ function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; documen
 // An item with `checked` is a checkbox item. The arrow keys move between the items (not into a row of its own, which keeps its keys)
 function popMenu(anchor, host, cls, items, o={}){ if(popOpen && popOpen.anchor===anchor && !o.at){ closePop(); return; } closePop(); closeActs();
   const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
+  const mk=(it, to, radio)=>{ const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : '')+(radio? ' sw1' : ''); bt.setAttribute('role', radio? 'menuitemradio' : it.checked===undefined? 'menuitem' : 'menuitemcheckbox'); if(it.checked!==undefined) bt.setAttribute('aria-checked', String(!!it.checked));
+    if(radio){ bt.title=it.label; bt.setAttribute('aria-label', it.label); bt.innerHTML=it.html; } else bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : '')+(it.checked? '<span class="mck">'+ICO.check+'</span>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); to.appendChild(bt); };
   items.forEach(it=>{ if(it.node){ menu.appendChild(it.node); return; }   // a row of its own (the text size stepper): it keeps the menu open
-    const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role', it.checked===undefined? 'menuitem' : 'menuitemcheckbox'); if(it.checked!==undefined) bt.setAttribute('aria-checked', String(!!it.checked)); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : '')+(it.checked? '<span class="mck">'+ICO.check+'</span>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
+    if(it.row){ const r=document.createElement('div'); r.className='mrow'; r.setAttribute('role','group'); r.setAttribute('aria-label', it.label); it.row.forEach(x=>mk(x, r, true)); menu.appendChild(r); return; }   // radio items side by side (a note's colours)
+    mk(it, menu); });
   menu.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); }); host.appendChild(menu);   // дотик по пункту не переносить фокус: не знімає виділення блока і не ховає клавіатуру
   if(!o.at && anchor.matches('button')) anchor.setAttribute('aria-expanded','true');
   if(o.at){ const w=menu.offsetWidth, h=menu.offsetHeight; menu.style.left=Math.max(8, Math.min(o.at.x, innerWidth-w-8))+'px'; menu.style.top=Math.max(8, Math.min(o.at.y, innerHeight-h-8))+'px'; }
   else { const r=menu.getBoundingClientRect(); if(r.left<8){ menu.style.left='0'; menu.style.right='auto'; } }
-  menu.addEventListener('keydown',e=>{ if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key) || !e.target.classList.contains('mi')) return; const L=[...menu.querySelectorAll('.mi')], i=L.indexOf(e.target); if(i<0) return; e.preventDefault();
-    const j=e.key==='Home'? 0 : e.key==='End'? L.length-1 : (i+(e.key==='ArrowDown'? 1 : -1)+L.length)%L.length; L[j].focus(); });
+  menu.addEventListener('keydown',e=>{ const side=e.target.classList.contains('sw1') && (e.key==='ArrowRight' || e.key==='ArrowLeft'); if(!side && !['ArrowDown','ArrowUp','Home','End'].includes(e.key) || !e.target.classList.contains('mi')) return; const L=[...menu.querySelectorAll('.mi')], i=L.indexOf(e.target); if(i<0) return; e.preventDefault();
+    const j=e.key==='Home'? 0 : e.key==='End'? L.length-1 : (i+(e.key==='ArrowDown' || e.key==='ArrowRight'? 1 : -1)+L.length)%L.length; L[j].focus(); });   // in a row of colours Left and Right step too
   const onDoc=e=>{ if(!menu.contains(e.target) && (o.at || !anchor.contains(e.target))) closePop(); }; document.addEventListener('pointerdown',onDoc,true);   // a context menu also closes on its item: a click there opens the note
   const onKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closePop(); anchor.focus(); } }; document.addEventListener('keydown',onKey,true);
   popOpen={menu,anchor,onDoc,onKey,at:!!o.at}; nav.open('menu', closePop); if(!TOUCH) setTimeout(()=>{ const f=menu.querySelector('.mi'); if(f) f.focus(); },0); }
@@ -2765,8 +2807,31 @@ function tapHint(){ if((S.tapHint||0)>=3) return; saveS({tapHint:(S.tapHint||0)+
 /* ══ the notes list on touch (docs/LIST-ACTIONS-PLAN.md 4.3–4.4): a tap opens the note, a long press opens the action mode of that note ═════
    A tap on a visible item button starts no gesture (its own click acts). The list holds the pointer, because a redraw (a pin, a sync) rebuilds
    every item under the finger. After a hold its touchend is cancelled, so the browser makes no click on a button that appeared under the finger */
-function openActs(id){ closePop(); actsId=id; modeAt=performance.now(); btnDown=null; nav.open('acts', closeActs); renderList(); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(_){} }
-function closeActs(){ if(actsId===null) return; actsId=null; nav.close('acts'); renderList(); }
+function openActs(id){ closePop(); closePal(); actsId=id; modeAt=performance.now(); btnDown=null; nav.open('acts', closeActs); renderList(); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(_){} }
+function closeActs(){ closePal(); if(actsId===null) return; actsId=null; nav.close('acts'); renderList(); }
+/* the colour of a note (LIST-ACTIONS-PLAN 5.4): a drop-down from the palette button of an item, in the body, fixed next to the button (below it, above when
+   there is no room). A radio group of «Стандартний» and five colours; a choice writes the colour and closes it. Escape, a press outside, a scroll by the user
+   and Back (its own history entry, above the action mode) close it; the focus goes back to the palette button when it was inside */
+const palBtn=id=>list.querySelector('.item[data-id="'+CSS.escape(id)+'"] .it-c');
+function closePal(){ if(!palOpen) return; const p=palOpen, back=p.el.contains(document.activeElement); palOpen=null; p.el.remove(); document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); removeEventListener('scroll',p.onScroll,true);
+  const b=palBtn(p.id); if(b){ if(back) b.focus({preventScroll:true}); b.setAttribute('aria-expanded','false'); } nav.close('palette'); }   // the focus first: the open palette is what keeps a hover button shown
+function placePal(){ if(!palOpen) return; const b=palBtn(palOpen.id), el=palOpen.el; if(!b){ closePal(); return; } const r=b.getBoundingClientRect(), w=el.offsetWidth, h=el.offsetHeight;
+  let top=r.bottom+6; if(top+h>innerHeight-8) top=r.top-h-6;
+  el.style.left=Math.max(8, Math.min(r.right-w, innerWidth-w-8))+'px'; el.style.top=Math.max(8, Math.min(top, innerHeight-h-8))+'px'; }
+function openPal(n, btn, kb){ if(palOpen && palOpen.id===n.id){ closePal(); return; } closePal(); closePop();
+  const c=colorOf(n), el=document.createElement('div'); el.className='pal'; el.setAttribute('role','dialog'); el.setAttribute('aria-label', loc('color.title'));
+  el.innerHTML='<div class="pal-h">'+locA('color.title')+'<span>'+escHtml(colorName(c))+'</span></div><div class="pal-g" role="radiogroup" aria-label="'+locA('color.title')+'">'
+    +['',...NOTE_COLORS].map(x=>'<button type="button" role="radio" data-c="'+x+'" aria-checked="'+(x===c)+'" tabindex="'+(x===c? 0 : -1)+'" title="'+escHtml(colorName(x))+'">'+swatch(x)+'<span>'+escHtml(colorName(x))+'</span></button>').join('')+'</div>';
+  document.body.appendChild(el);
+  el.addEventListener('click',e=>{ const b=e.target.closest('button[data-c]'); if(!b) return; const back=el.contains(document.activeElement) || kb; setColor(n, b.dataset.c); closePal(); const nb=palBtn(n.id); if(back && nb) nb.focus({preventScroll:true}); });   // the mode stays: the button shows the new colour
+  el.addEventListener('keydown',e=>{ const L=[...el.querySelectorAll('button[data-c]')], i=L.indexOf(e.target); if(i<0) return; const d={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[e.key];
+    const j=d? (i+d+L.length)%L.length : e.key==='Home'? 0 : e.key==='End'? L.length-1 : -1; if(j<0) return; e.preventDefault(); L.forEach((b,k)=>b.tabIndex=k===j? 0 : -1); L[j].focus(); });   // the arrows move, Enter or Space choose (the button's own click)
+  const onDoc=e=>{ if(el.contains(e.target)) return; const b=palBtn(n.id); if(b && b.contains(e.target)) return; closePal(); };   // the palette button toggles it by its own click
+  const onKey=e=>{ if(e.key!=='Escape') return; e.stopPropagation(); e.preventDefault(); const b=palBtn(n.id), back=el.contains(document.activeElement) || kb; closePal(); if(b && back) b.focus({preventScroll:true}); };
+  const onScroll=e=>{ if(redrawing || el.contains(e.target)) return; closePal(); };   // a scroll by the user; a redraw's own scroll is not one
+  document.addEventListener('pointerdown',onDoc,true); document.addEventListener('keydown',onKey,true); addEventListener('scroll',onScroll,true);
+  palOpen={id:n.id, el, onDoc, onKey, onScroll}; btn.setAttribute('aria-expanded','true'); placePal(); nav.open('palette', closePal);
+  if(kb || !LISTTOUCH.matches) setTimeout(()=>{ const f=el.querySelector('button[tabindex="0"]'); if(f && palOpen && palOpen.el===el) f.focus(); },0); }
 const unpress=()=>{ if(pressId===null) return; pressId=null; list.querySelectorAll('.item.press').forEach(d=>d.classList.remove('press')); };
 function holdHint(){ if((S.holdHint||0)>=3) return; saveS({holdHint:(S.holdHint||0)+1}); say(loc('list.holdHint')); }
 const listGest=gesture(list,{ holdMs:HOLD_MS, filter:e=>e.pointerType!=='mouse' && LISTTOUCH.matches && e.isPrimary && !e.target.closest('.item button'),
@@ -2782,7 +2847,7 @@ list.addEventListener('lostpointercapture',e=>{ const g=listGest.state; if(g && 
 document.addEventListener('touchend',e=>{ if(swallow){ e.preventDefault(); swallow=null; return; } if(listGest.state || listGest.last) e.preventDefault(); },{passive:false,capture:true});   // a cancelled touchend makes no click: the tap outside is fully swallowed here   // on the document: a redraw may have taken the touched item out of the list, and then its touchend does not reach it
 list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs(); },{passive:true});   // a scroll by the user; a redraw's own scroll is not one
 document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
-  if(e.target.closest('.item.amode button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
+  if(e.target.closest('.item.amode button') || e.target.closest('dialog[open]') || e.target.closest('.pal')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
   closedBy={id:e.pointerId, at:performance.now()};
   if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; closePop(); setMenu(false); e.stopPropagation(); e.preventDefault(); }   // the press goes no further than the document: the other «outside» listeners there still close their menus   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
   closeActs(); },true);
@@ -2790,7 +2855,7 @@ document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(act
 document.addEventListener('pointerup',e=>{ if(swallow && swallow.id===e.pointerId) swallow.up=performance.now(); },true);
 document.addEventListener('pointercancel',e=>{ if(swallow && swallow.id===e.pointerId) swallow=null; },true);
 addEventListener('click',e=>{ if(e.detail===0 || !swallow || !swallow.up || performance.now()-swallow.up>=1000) return; swallow=null; e.preventDefault(); e.stopPropagation(); },true);   // a tap outside the list that closed the mode does only that («+», the panel's «×», a section row); a mouse or pen click here, a key's click (detail 0) never   // runs before the list gesture, which reads closedBy
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape' || actsId===null || popOpen) return; const a=document.activeElement, it=a && list.contains(a) && a.closest('.item'), id=it && it.dataset.id; closeActs(); if(id) focusItem(id, ''); });   // Escape from a button of the mode leaves the focus on its item
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape' || actsId===null || popOpen || palOpen) return; const a=document.activeElement, it=a && list.contains(a) && a.closest('.item'), id=it && it.dataset.id; closeActs(); if(id) focusItem(id, ''); });   // Escape from a button of the mode leaves the focus on its item
 LISTTOUCH.addEventListener('change',()=>closeActs());
 sheet.addEventListener('touchmove',e=>{ const g=sheetGest.state; if(g && (g.data.made||g.data.marq)) e.preventDefault(); },{passive:false});   // після спрацювання утримання палець малює область, а не гортає сторінку; до нього — звичайне гортання
 sheet.addEventListener('contextmenu',e=>{ if(sheetGest.state || e.target===sheet || e.target.classList.contains('abody')) e.preventDefault(); });   // довге натискання на порожньому місці — не контекстне меню

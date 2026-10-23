@@ -1,6 +1,6 @@
 # List actions and note colours
 
-Status: approved plan, 2026-10-22, revised after four review rounds. PR A is implemented by the branch `list-actions`; PR B follows it. The owner approved the interactive mockup
+Status: approved plan, 2026-10-22, revised after four review rounds. PR A is merged (#94, the layout fix #102); PR B is implemented by the branch `note-color`. The owner approved the interactive mockup
 (https://claude.ai/artifact/KSeXeJf1uuCQBiGmYHsTWA, version 3) and asked for this plan.
 
 ## 1. The problem and the decisions

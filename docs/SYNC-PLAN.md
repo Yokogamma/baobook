@@ -59,7 +59,7 @@ env/{dev|app}/users/{uid}/notes/{noteId}
   v: 1, rev: int, op: string, srv: timestamp, dev: string   service fields of every write
   dn?: string                 the writing device's name, for marks (on every document, tombstones included)
   rcpt: { "{devId}": op }     receipts: the last accepted operation of each device on this document
-  title, blocks[], created, updated, deleted?, archived?, pinned?, revived?: {from, dev, at}
+  title, blocks[], created, updated, deleted?, archived?, pinned?, color?, revived?: {from, dev, at}
   tsrv?: timestamp            server time when the note entered the trash or its period was extended
   tombstone: v, rev, op, srv, dev, rcpt, purged: number, auto?: true
 env/{dev|app}/users/{uid}/versions/{versionId}
@@ -201,6 +201,7 @@ Deleting forever with an owner removes the note, its history and blobs locally a
 
 - Note fields (`title`, `deleted`, `archived`, `revived`) are compared with the base one by one. `created` = the smaller.
 - `pinned` (the time a note was pinned to the top of the list) is compared the same way, but it is a soft field: changed differently on both sides, it goes by the key and makes no conflict copy. Pinning is a local write like any other and moves `updated` (§4.4).
+- `color` (the note's colour in the list: `yellow`, `green`, `blue`, `pink` or `purple`, absent for «Стандартний»; any name of `[a-z0-9-]{1,24}` is kept for later versions) is a soft field like `pinned`. A revived note made from a late copy keeps the copy's colour but not its pin ([LIST-ACTIONS-PLAN.md](LIST-ACTIONS-PLAN.md) §5).
 - Blocks are matched by id and have two groups of fields:
   - «place»: `row`, `fx`, `parent`, `col`, `cw`, `ch`, `collapsed`;
   - «content»: `kind`, `text`, `html`, `lang`, `wrap`, `num`, `open`, `title`, `color`.
@@ -457,6 +458,7 @@ service cloud.firestore {
     function owner(env, uid) { return env in ['dev', 'app'] && allowed() && request.auth.uid == uid; }
     function str(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
     function optNum(d, k) { return !(k in d) || d[k] is number; }
+    function optColor(d) { return !('color' in d) || (d.color is string && d.color.matches('^[a-z0-9-]{1,24}$')); }   // a note colour; an unknown name of this format is accepted for later versions
     function optPos(d, k) { return !(k in d) || (d[k] is number && d[k] > 0); }   // deleted, archived, pinned: a time, absent when not
     function receipts(d, o) {                 // own receipt == this op; other devices' receipts untouched
       return d.rcpt is map && d.rcpt.size() <= 200 && d.rcpt[d.dev] == d.op
@@ -471,9 +473,9 @@ service cloud.firestore {
     match /env/{env}/users/{uid}/notes/{id} {
       function live(d) {
         return d.keys().hasAll(['v','rev','op','srv','dev','rcpt','title','blocks','created','updated'])
-          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','title','blocks','created','updated','deleted','archived','pinned','revived','tsrv'])
+          && d.keys().hasOnly(['v','rev','op','srv','dev','dn','rcpt','title','blocks','created','updated','deleted','archived','pinned','color','revived','tsrv'])
           && d.title is string && d.title.size() <= 2000 && d.blocks is list && d.blocks.size() <= 5000
-          && d.created is number && d.updated is number && optPos(d, 'deleted') && optPos(d, 'archived') && optPos(d, 'pinned')
+          && d.created is number && d.updated is number && optPos(d, 'deleted') && optPos(d, 'archived') && optPos(d, 'pinned') && optColor(d)
           && (!('revived' in d) || d.revived is map) && (!('tsrv' in d) || (d.tsrv is timestamp && 'deleted' in d));
       }
       function tomb(d, o) {
@@ -750,6 +752,7 @@ Done on 2026-10-16: the project `baobook-3fe7f` (Spark, Google Analytics off), t
 1. **Done on 2026-10-19:** the first sign-in on .dev (3b), Authentication → Users → the owner's User UID, into `firestore.rules` (3c).
 2. **Done on 2026-10-20:** Firestore → Rules: the text of `firestore.rules` from `main` → Publish (the owner). Before that the status after a sign-in said «Синхронізація за запрошеннями» and the device was not bound to the account. PR 4 needs no change of the rules (§4.9).
 3. **Done on 2026-10-21, pinned notes ([#82](https://github.com/Yokogamma/baobook/pull/82)):** the rules allow the note field `pinned`. A merge to `main` deploys to .dev at once and rules without `pinned` refuse a pinned note, so the rules went first (§4.16): the owner published them again from the PR's branch, which refuses nothing the earlier rules allowed, and the PR was merged after. The single-field exemption for `pinned` in `notes` is added, like the other fields (§4.2).
+4. **To do before PR B of [LIST-ACTIONS-PLAN.md](LIST-ACTIONS-PLAN.md) is merged, the note colour:** the rules allow the note field `color`. As with item 3: Firestore → Rules, the text of `firestore.rules` from the PR's branch → Publish (it refuses nothing the current rules allow, so .app keeps working), and the single-field exemption for `color` in `notes`. Then the PR is merged.
 
 The `access/{email}` document made on 2026-10-16 is not used any more; it can stay or be deleted. The quota is one per project, shared by .dev and .app; the budgets in §4.17 account for that.
 
