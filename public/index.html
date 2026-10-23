@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102306">
+<meta name="baobook-build" content="2026102307">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -74,6 +74,7 @@ html{font-size:calc(100% * var(--k,1))}
 
 *{box-sizing:border-box}
 html,body{height:100%}
+html{-webkit-tap-highlight-color:transparent}   /* no blue flash on a tap in Android Chrome; controls show their own :hover/:active (and .press on list items) */
 body{margin:0;background:var(--paper) var(--page);color:var(--ink);font-family:var(--sans);-webkit-text-size-adjust:100%;overscroll-behavior:none}
 button,input{font-family:inherit}
 .i{width:1em;height:1em;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
@@ -597,6 +598,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .list .item.amode :is(.it-x,.it-r,.it-p) .i{font-size:1.25rem}
   .list .item.amode .it-x{right:8px;color:#c33} .list .item.amode .it-r{right:68px} .list .item.amode .it-p{right:128px}
   .list .item.amode :is(.it-p.on,.it-r.back){background:var(--on-bg);color:var(--on-ink)}
+  /* press feedback in place of the tap highlight: the main controls show a background while the finger is down (the :hover a tap leaves comes only after it); list items have .press */
+  .gear:active,.tb:active,.new:active,.side-x:active,.setpop .mi:active,.amenu .mi:active{background:var(--hover-2)} .bbar button:not(:disabled):active{background:rgba(128,128,128,.35)}
 }
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
@@ -752,8 +755,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102306" integrity="sha384-b9G5IPn1oUATd8UwL5Vx6rhnmCHVeriXJN+MjBHDgkbpn7j2ohEWVMe8OzPJgw4L"></script>
-<script src="cloud.js?b=2026102306" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102307" integrity="sha384-b9G5IPn1oUATd8UwL5Vx6rhnmCHVeriXJN+MjBHDgkbpn7j2ohEWVMe8OzPJgw4L"></script>
+<script src="cloud.js?b=2026102307" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -766,7 +769,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
 const SRI={'locales/en.json':'sha384-SCwtTaBwwfPpSJbX9YPJIewJ/MzwZTdgpwyGnN0KWkd3BE8/fV9gg7lb0xKch089', 'locales/uk.json':'sha384-RYxiF0ouBl78vw9GMf18voQF6WTvXa8nPaRLHeU7aFvzopDSlEMPBKdR6e0tH+8W'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102306;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102307;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
