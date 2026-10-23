@@ -63,6 +63,21 @@ const site2=await serve();
   await Promise.all([pg.waitForEvent('load'), pg.click('#updGo')]); await pg.waitForSelector('#sheet');
   ok('2d the next «Оновити» starts the app as B with its own sync.js ('+(await ran(pg)).trim()+'); the mark is out of the address', (await ran(pg)).trim()==='BB' && !torn(pg));
   await c2.close(); }
+// a link to a block (#nb/bb1) that lands on the strip: once the server is whole, «Оновити» opens that block, not the note the tab had open
+// (no worker here: its set would answer the page's own sync.js, and nothing would break)
+{ const c2=await br.newContext({...CTX, serviceWorkers:'block'}); const pg=watch(await c2.newPage());
+  const NOTES=[{id:'na',title:'Перша',blocks:[{id:'ba1',row:2,fx:0.2,text:'перша нотатка'}],created:1,updated:2},{id:'nb',title:'Друга',blocks:[{id:'bb1',row:6,fx:0.2,text:'ціль посилання'}],created:1,updated:1}];
+  await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(400);
+  await pg.setInputFiles('#importFile',{name:'n.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({app:'baobook',format:1,notes:NOTES}))});
+  await pg.waitForFunction(()=>/Імпортовано/.test(document.getElementById('toast').textContent),null,{timeout:15000});
+  await pg.evaluate(()=>document.querySelector('#list .item[data-id="na"]').click()); await pg.waitForTimeout(500);   // the tab remembers the note na
+  site2.override.set('/sync.js', sync('C'));
+  await pg.goto(site2.url+'?from=link#nb/bb1'); const broke=await until(async()=>/не повністю/.test(await strip(pg)), 10000);
+  site2.override.set('/sync.js', sync('B'));
+  await Promise.all([pg.waitForEvent('load'), pg.click('#updGo')]); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(500);
+  const st=await ev(pg,()=>({cur:window.sheetDebug.cur(), hash:location.hash, q:location.search}));
+  ok('2f a link that landed on the strip: «Оновити» opens it ('+JSON.stringify(st)+'), other query kept, the mark gone', !!broke && st.cur==='nb' && st.hash==='#nb/bb1' && st.q==='?from=link');
+  await c2.close(); }
 // pages of two builds in turn (B, C, B, …), the sync.js of neither, and storage wiped on every load: still one reload, then the strip
 { const c2=await br.newContext({...CTX}); await c2.addInitScript(()=>{ try{ sessionStorage.clear(); }catch(_){} }); const pg=watch(await c2.newPage()); let n=0;
   await pg.route(u=>u.pathname==='/', r=>r.fulfill({status:200, contentType:'text/html; charset=utf-8', body:page(n++%2? 'C' : 'B', BUILD+(n%2))}));
@@ -87,12 +102,17 @@ site2.override.set('/index.html', page('B', BUILD)); site2.override.set('/sync.j
   const t=(await pg.locator('#newBtn').textContent()).trim(), lang=await ev(pg,()=>document.documentElement.lang);
   ok('3b refused again after the reload ('+pg.loads+' loads): English of the same build stands in («'+t+'», '+lang+'), the app starts, no strip', t===EN_NEW && lang==='en' && pg.loads===2 && await strip(pg)==='' && !torn(pg));
   await c3.close(); }
-{ const c3=await br.newContext({...CTX}); const pg=watch(await c3.newPage()); site2.override.set('/locales/uk.json', 'null');
-  site2.override.set('/locales/en.json', EN.replace(/"notes\.new": "[^"]*"/, '"notes.new": "<img src=x onerror=window.__ran=1>"'));
+// the markup of data-i18n-html (toast.help) is where a file could run code: first the control, a page whose hash matches such a file runs it
+const EN_X=EN.replace(/"toast\.help": "[^"]*"/, '"toast.help": "<img src=x onerror=\\"window.__ran=1\\">"');
+for(const [name, html] of [['control', withHashes(page('B', BUILD), {'locales/en.json':sri(EN_X)})], ['refused', page('B', BUILD)]]){
+  const c3=await br.newContext({...CTX}); const pg=watch(await c3.newPage());
+  site2.override.set('/index.html', html); site2.override.set('/locales/uk.json', 'null'); site2.override.set('/locales/en.json', EN_X);
   await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(500);
   const t=(await pg.locator('#newBtn').textContent()).trim(), st=await ev(pg,()=>({ready:document.documentElement.hasAttribute('data-ready'), ran:!!window.__ran}));
-  ok('3c both languages refused ('+pg.loads+' loads): bare keys («'+t+'»), the app starts ('+JSON.stringify(st)+'), nothing of the refused files runs', t==='notes.new' && pg.loads===2 && st.ready && !st.ran);
-  site2.override.delete('/locales/uk.json'); site2.override.delete('/locales/en.json'); await c3.close(); }
+  if(name==='control') ok('3c control: an en.json whose hash the page carries is used, and its toast.help markup runs ('+JSON.stringify(st)+')', st.ready && st.ran && t===JSON.parse(EN)['notes.new']);
+  else ok('3d both languages refused ('+pg.loads+' loads; uk is «null», en carries markup that would run): bare keys («'+t+'»), the app starts ('+JSON.stringify(st)+'), nothing of the refused files runs', t==='notes.new' && pg.loads===2 && st.ready && !st.ran);
+  await c3.close(); }
+site2.override.set('/index.html', page('B', BUILD)); site2.override.delete('/locales/uk.json'); site2.override.delete('/locales/en.json');
 await site2.close();
 
 // 4. an install that receives files out of step: the page D and build.json D, but the sync.js of E. The worker of D refuses the set,
