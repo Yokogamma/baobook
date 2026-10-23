@@ -37,7 +37,7 @@ async function run(seed){
   for(const name of ['A','B','C']){ const d={name, db:new MemStore(), online:true, lrev:new Map(), old:null};
     d.proxy={ get:(c,i)=>cloud.get(c,i), page:(c,q,n)=>cloud.page(c,q,n), totals:c=>cloud.totals(c), scan:(c,q,n)=>cloud.scan(c,q,n),
       txn:async(c,i,f)=>{ const r=await cloud.txn(c,i,f); if(r.wrote){ const doc=cloud.doc(c,i); if(doc && !doc.purged) for(const b of doc.blocks||[]) mark(inCloud, i, rootOf(doc), S.contentHash(b)); } return r; },
-      listen:(c,from,onDocs,onErr)=>cloud.listen(c,from,(docs,info)=>{ if(d.online) onDocs(docs,info); },onErr) };
+      listen:(c,from,onDocs,onErr)=>cloud.listen(c,from,(docs,info)=>{ if(d.online) onDocs(docs,info); },onErr,{dev:name}) };
     d.db.onPut=(store,rec)=>{ if(store!=='sync') return;
       if(rec.k.startsWith('seen:n:')){ const id=rec.k.slice(7), cd=cloud.docs.notes.get(id); if(!cd || rec.rev>cd.rev) fail('seen above the cloud', {dev:name, id, seen:rec.rev, cloud:cd? cd.rev : null}); }
       if(rec.k.startsWith('purged:n:')) d.lrev.delete(rec.k.slice(9));   // a purged note's meta is gone; a later meta for the id starts anew
@@ -66,7 +66,7 @@ async function run(seed){
       case 'vrename': await d.sync.versionLocal({op:'rename', id:o.v, name:o.name}); break;
       case 'vdelete': { const r=await d.sync.versionLocal({op:'delete', id:o.v}); if(r && r.ok) vdeleted.add(o.v); break; }
       case 'toggle': d.online=!d.online; d.sync.online(d.online); break;
-      case 'fault': cloud.fault(o.fault, o.opts||{}); break;
+      case 'fault': if(o.fault==='end') cloud.end(o.opts.col, {dev:o.opts.dev, code:o.opts.code}); else cloud.fault(o.fault, o.opts||{}); break;   // end: the server closes a live listener with an error
       case 'leader': d.old=d.sync; d.sync=makeEngine(d); await d.sync.start(); d.sync.online(d.online); break;   // a new leader knows navigator.onLine
       case 'time': cloud.advance(o.ms); break; }
     cloud.advance(Math.floor(rnd()*1500)); const k=1+Math.floor(rnd()*4); for(let i=0;i<k;i++) await step(pick(devs)); };
@@ -86,7 +86,7 @@ async function run(seed){
     else if(r<0.69 && trashed.length) await op({dev:d.name, k:'forever', id:pick(trashed).id});
     else if(r<0.74){ const e=pick(devs.filter(x=>x!==d)), en=notesOf(e); if(en.length) await op({dev:d.name, k:'import', from:e.name, id:pick(en).id}); }
     else if(r<0.82){ if(d.online && devs.filter(x=>!x.online).length>=2) continue; await op({dev:d.name, k:'toggle'}); }
-    else if(r<0.90){ const f=pick(['lost','fail','dup','reorder','late','delay','tworunners']); await op({dev:d.name, k:'fault', fault:f, opts: f==='fail'? {n:1+Math.floor(rnd()*3), code:pick(['unavailable','deadline-exceeded'])} : f==='late'? {ms:600000+Math.floor(rnd()*600000)} : f==='delay'? {ms:Math.floor(rnd()*5000)} : {}}); }
+    else if(r<0.90){ const f=pick(['lost','fail','dup','reorder','late','delay','tworunners','end']); await op({dev:d.name, k:'fault', fault:f, opts: f==='fail'? {n:1+Math.floor(rnd()*3), code:pick(['unavailable','deadline-exceeded'])} : f==='late'? {ms:600000+Math.floor(rnd()*600000)} : f==='delay'? {ms:Math.floor(rnd()*5000)} : f==='end'? {col:pick(['notes','versions']), dev:d.name, code:pick(['unavailable','deadline-exceeded','internal'])} : {}}); }
     else if(r<0.93) await op({dev:d.name, k:'leader'});
     else await op({dev:d.name, k:'time', ms:100+Math.floor(rnd()*120000)}); }
   // settle: everyone online, no faults, time passes for retries and late commits

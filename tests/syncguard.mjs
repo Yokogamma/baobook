@@ -7,8 +7,8 @@
 // as the device of the store's `device` record; a runner that read the cloud before another insured an attempt does not insure a second one
 // over it; two runners of one attempt leave one commit; a late delivery by a runner with an old memory never moves the cursor back; a tab
 // that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab. Section 6 (§4.6):
-// a listener the server ends with an error is started again by the step after a growing pause, from the cursor; a refused one is not; an
-// error of a listener already replaced changes nothing.
+// a listener the server ends with an error is started again by the step after a growing pause, from the cursor (one that keeps ending right after
+// its snapshot keeps the pause growing); a refused one is not; an error of a listener already replaced, or reported inside listen(), leaks nothing.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
@@ -177,11 +177,21 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   ok('6 the server ended the notes listener (status «'+st0+'» before): no listener, no snapshot, a restart planned; the note written meanwhile is not here yet', st0==='synced' && ended===1 && subs('notes')===0 && !X.snapshot.notes && !!rl('notes') && logsOf('listen-error').length===1 && !A.db.get('notes','lost1') && A.sync.status().code!=='synced');
   cloud.advance(1000); await idle(A);
   ok('6b the step started it again from the cursor: one listener, its snapshot came, the note written meanwhile arrived, status «'+A.sync.status().code+'»', subs('notes')===1 && X.snapshot.notes && !rl('notes') && logsOf('relisten').length===1 && !!A.db.get('notes','lost1') && A.sync.status().code==='synced');
-  cloud.fault('fail',{dev:'A', op:'listen', n:2}); cloud.end('notes',{dev:'A'}); await idle(A); const waits=[];
+  cloud.advance(100); cloud.fault('fail',{dev:'A', op:'listen', n:2}); cloud.end('notes',{dev:'A'}); await idle(A); const waits=[];   // the listener lived past the longest pause: the count starts at 1
   for(let i=0;i<10 && rl('notes');i++){ waits.push(rl('notes').at-cloud.now()); cloud.advance(rl('notes').at-cloud.now()); await idle(A); }
   ok('6c the restarted listener failed twice more: each pause longer than the one before ('+waits.join(', ')+' ms), then it is back; nothing restarted early', waits.length===3 && waits[0]<waits[1] && waits[1]<waits[2] && subs('notes')===1 && X.snapshot.notes && logsOf('relisten').map(e=>e.tries).join()==='1,1,2,3');
-  cloud.end('notes',{dev:'A'}); await idle(A); for(let i=0;i<5 && rl('notes');i++){ cloud.advance(rl('notes').at-cloud.now()); await idle(A); }
-  ok('6d after a snapshot the count starts anew: the next end waits the first pause again', (logsOf('relisten').slice(-1)[0]||{}).tries===1 && X.snapshot.notes); }
+  // the device's retryMax is 50 ms: a listener that ends at once keeps the count going, one that lived longer starts it anew
+  const lastTries=()=>(logsOf('relisten').slice(-1)[0]||{}).tries, flap=[];
+  for(let k=0;k<3;k++){ cloud.end('notes',{dev:'A'}); await idle(A); for(let i=0;i<5 && rl('notes');i++){ cloud.advance(rl('notes').at-cloud.now()); await idle(A); } flap.push(lastTries()); }
+  ok('6d a listener that ends right after its snapshot, again and again: the pause keeps growing ('+flap.join(', ')+' tries), it does not restart every retryMin', flap.join()==='4,5,6' && X.snapshot.notes);
+  cloud.advance(100); cloud.end('notes',{dev:'A'}); await idle(A); for(let i=0;i<5 && rl('notes');i++){ cloud.advance(rl('notes').at-cloud.now()); await idle(A); }
+  ok('6d2 after a listener that lived longer than the longest pause the count starts anew: the next end waits the first pause again', lastTries()===1 && X.snapshot.notes); }
+{ const cloud=new TestCloud({start:1_700_000_000_000}); let sync=1, offs=0; const A=device(cloud,'A'), X=A.sync._S, rl=col=>(X.relisten||{})[col];
+  const listen=A.proxy.listen; A.proxy.listen=(c,from,onDocs,onErr)=>{ if(c==='notes' && sync){ sync--; onErr(Object.assign(new Error('refused at once'),{code:'unavailable'})); return ()=>{ offs++; }; } return listen(c,from,onDocs,onErr); };   // an adapter that reports the error before listen() returns
+  await A.sync.setOwner(owner); await A.sync.start(); await A.sync.idle(300);
+  ok('6g an error reported inside listen(), before it returned: no listener kept, its handle closed once, a restart planned', !A.sync._S.listen.notes && offs===1 && !!rl('notes') && !cloud.subs.some(s=>s.dev==='A' && s.col==='notes'));
+  cloud.advance(1000); await idle(A);
+  ok('6g2 the restart brings the listener back: one listener, its snapshot, status «'+A.sync.status().code+'»', cloud.subs.filter(s=>s.dev==='A' && s.col==='notes').length===1 && X.snapshot.notes && !rl('notes') && A.sync.status().code==='synced'); }
 { const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await idle(A);
   const subs=col=>cloud.subs.filter(s=>s.dev==='A' && s.col===col).length, X=A.sync._S, logsOf=t=>A.logs.filter(e=>e.t===t), rl=col=>(X.relisten||{})[col];
   const old=cloud.subs.find(s=>s.dev==='A' && s.col==='notes'); await A.off(false); await A.off(true); await idle(A); const errs=logsOf('listen-error').length;
