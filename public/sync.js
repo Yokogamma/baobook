@@ -411,7 +411,7 @@ function makeSync(deps){
       return r; }
     catch(e){ if(e.code==='epoch') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
   // the first document without space: thin the history once and read the document again later, the page goes on; the second: no space, receiving stops (§4.6)
-  async function quotaTrouble(id){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,id,after); }); }catch(_){} return false; }
+  async function quotaTrouble(id, c='n'){ if(!S.sweptOnce){ S.sweptOnce=true; log({t:'quota', col:c, id}); if(deps.sweep){ try{ await deps.sweep(); }catch(_){} } try{ await tx(['sync'], async(t,after)=>{ if(c==='v') setVRefetch(t,id,after); else setRefetch(t,id,after); }); }catch(_){} return false; }
     S.nospace=true; S.nospaceAt=now(); log({t:'nospace', id}); setStatus('nospace'); return true; }
   /* ── sending (§4.5) ── */
   // every cloud call: `read` marks the reads, whose refusal means no access (§4.11 step 2: the rules refuse by uid, so a refused read is the
@@ -615,7 +615,7 @@ function makeSync(deps){
   const vsnap=rec=>cjson({note:rec.note, title:rec.title||'', blocks:(rec.blocks||[]).map(e=>{ const x={...e}; delete x.h; delete x.s; delete x.r; return x; })});
   // the same snapshot: note, title, the entries and every body the local record has (a partial one is compared by the bodies it has); not t, not the name
   function vsameSnap(a, b){ if(vsnap(a)!==vsnap(b)) return false; const B=new Map(b.blocks.map(e=>[e.id,e]));
-    for(const e of a.blocks||[]){ if(typeof e.s!=='string') continue; const o=B.get(e.id); if(!o || o.s!==e.s) return false; } return true; }
+    for(const e of a.blocks||[]){ if(typeof e.s!=='string') continue; const o=B.get(e.id); if(!o || o.s!==e.s || !!e.r!==!!o.r) return false; } return true; }   // a body is its string and its kind: the same text as rich text and as plain text are two snapshots
   async function applyVersionCore(t, doc, source, after){ const id=doc.id;
     if(source==='wait'){ const w=(await getMeta(t,'v',id)).wait; if(!w) return 'skipped'; doc=w; }   // the note came: the version is applied from its stored latest state, which is what seen holds, so the replay is not a stale server read
     if(!id || !Number.isInteger(doc.rev) || doc.rev<1 || !validSrv(doc.srv) || typeof doc.note!=='string'){ log({t:'malformed', col:'v', id}); return 'skipped'; }
@@ -629,7 +629,9 @@ function makeSync(deps){
     if(tr){ if(doc.rcpt && doc.rcpt[devId]===tr.op && doc.rev===tr.expect+1){ await finishV(t, id, tr, {kind:'accepted', rev:doc.rev, srv:doc.srv, echo:doc}, after); return 'done'; } setVRefetch(t,id,after); return 'done'; }
     if(meta.base && doc.rev===meta.base.rev && place!=='recreated'){ if(!meta.base.srv && doc.srv){ meta.base.srv=doc.srv; putMeta(t,meta,after); } return 'done'; }
     const job=await t.get('sync',K.out('v',id)), rec=await t.get('versions',id), changed=()=>{ after(()=>emit(deps.onChange,{id, kind:'version', note:doc.note})); };
-    if(doc.deleted){ if(rec){ t.del('versions',id); changed(); } if(job) dropVJob(t,id,after); meta.base=storeBase(doc); meta.baseLrev=meta.lrev; for(const k of ['wait','local','held','movedFrom']) delete meta[k]; putMeta(t,meta,after); return 'done'; }   // deletion beats renaming
+    if(doc.deleted){ if(rec){ t.del('versions',id); changed(); } if(job) dropVJob(t,id,after); meta.base=storeBase(doc); meta.baseLrev=meta.lrev; for(const k of ['wait','local','held','movedFrom']) delete meta[k];
+      if(meta.err==='damaged'){ delete meta.err; t.del('sync',K.quarantine('v',id)); }   // a damaged copy that is deleted now leaves nothing to repair
+      putMeta(t,meta,after); return 'done'; }   // deletion beats renaming
     // a live version of a purged note, or of an id deleted here before it reached the cloud: no record, and a tombstone job over it (the moved
     // version of a revived note whose document turns up lands here too: its document names the original, which is purged)
     if(await t.get('sync',K.purged(doc.note)) || meta.gone){ if(rec){ t.del('versions',id); changed(); } for(const k of ['wait','movedFrom']) delete meta[k]; meta.base=storeBase(doc); putMeta(t,meta,after); if(S.owner) setVJob(t,id,vjob(id,{tomb:true}),after); log({t:'vtomb-due', id}); return 'done'; }
@@ -650,7 +652,8 @@ function makeSync(deps){
     t.put('versions',built); meta.base=storeBase(doc); meta.baseLrev=meta.lrev; for(const k of ['wait','local']) delete meta[k]; putMeta(t,meta,after); changed(); return 'done'; }
   async function applyVersionDoc(doc, source){ try{ const r=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyVersionCore(t, doc, source, after); if(source==='delivery' && res!=='skipped') await bumpCursor(t,'versions',{srv:doc.srv, id:doc.id},after); return res; });
       if(source==='delivery') S.vlastDelivered.set(doc.id, doc.rev); return r; }
-    catch(e){ if(e.code==='epoch') return 'epoch'; log({t:'apply-error', col:'v', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>setVRefetch(t,doc.id,after)); }catch(_){} return 'error'; } }
+    catch(e){ if(e.code==='epoch') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id,'v'))? 'nospace' : 'error';   // no space: one sweep and one more try, then receiving stops for an hour (§4.6), as for notes
+      log({t:'apply-error', col:'v', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>setVRefetch(t,doc.id,after)); }catch(_){} return 'error'; } }
 
   /* ── sending a version (§4.9, the steps of §4.5) ── */
   async function vbackoff(id, error){ const job=S.vjobs.get(id); if(!job) return; const j={...job, tries:(job.tries||0)+1, err:error.code}; j.next=now()+backoffMs(j.tries); S.vjobs.set(id,j);
@@ -736,7 +739,7 @@ function makeSync(deps){
     return applyVersionCore(t, {...D, id}, 'server', after); }
   async function doVRefetch(id){ S.netBusy=true; try{ const got=await net(()=>S.cloud.get('versions',id), {read:true, kind:'refetch'}); if(got.error){ S.refetchRetry=now()+backoffMs(1); return; } countRead(1);
       try{ await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropVRefetch(t,id,after); if(got.value) await applyVersionCore(t, {...got.value, id}, 'server', after); }); }
-      catch(e){ if(e.code==='epoch') return; log({t:'apply-error', col:'v', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }
+      catch(e){ if(e.code==='epoch') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id,'v'); return; } log({t:'apply-error', col:'v', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }
     finally{ S.netBusy=false; } }
 
   /* ── receiving: catch-up, listener, refetch (§4.6) ── */

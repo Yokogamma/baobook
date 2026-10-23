@@ -752,7 +752,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102305" integrity="sha384-aq7JhR/pSXsJr0o+bdG8xr+B+U/BUed8qubuYHgxQS+jVAbEj6IhWKFbgkUQrmJn"></script>
+<script src="sync.js?b=2026102305" integrity="sha384-cB95AOnQQcTqX2hYPxpaBqlJc5qDnTrnu5OmMB45JgYErA8UOlxELuRZh+h5erj3"></script>
 <script src="cloud.js?b=2026102305" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -962,10 +962,13 @@ const idb={ db:null, opening:null, silent:false, want:false, back:false,   // si
         if(dead){ try{ d.close(); }catch(_){} if(LOCK==='storage') idbBack(); return; }   // the hung request answered at last: the storage is back
         const done=()=>{ idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
         if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
-        if(!LOCK && d.version<IDB_VER){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: the upgrade creates what is missing, and from 3 it is the barrier against old tabs (no store missing). A database at IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
-        // the second half of the format check: a `format` record above this code's version marks data of a newer app in a database of the same version
-        if(!d.objectStoreNames.contains('sync')) return done();
-        try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>IDB_VER) setLock('newer'); done(); }; g.onerror=()=>done(); }catch(_){ done(); } };
+        // the second half of the format check, before any upgrade: a `format` record above this code's version marks data of a newer app, which opens
+        // view-only as it is (an upgrade would write this code's format over it). Then a new device (an empty v1 from the open without a version) or an
+        // old one is upgraded: the upgrade creates what is missing, and from 3 it is the barrier against old tabs (no store missing). A database at
+        // IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
+        const next=()=>{ if(!LOCK && d.version<IDB_VER){ d.close(); return go(IDB_VER); } done(); };
+        if(!d.objectStoreNames.contains('sync')) return next();
+        try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>IDB_VER){ setLock('newer'); return done(); } next(); }; g.onerror=()=>next(); }catch(_){ next(); } };
       r.onerror=()=>{ clearTimeout(dt); clearTimeout(bt); if(dead){ if(LOCK==='storage' && idb.silent){ idb.silent=false; idbWatch(); } return; }   // the hung request failed at last: the queue is clear, the probing may start
         if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
       r.onblocked=()=>{ clearTimeout(dt); clearTimeout(bt); if(dead) return; bt=setTimeout(()=>{ setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block stops the writes

@@ -124,6 +124,17 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   ok('2k still nothing written after the export (only the export time in settings)', JSON.stringify(await dump(pg))===JSON.stringify(before));
   ok('2l no page errors', !pg.errs.length); await ctx.close(); }
 
+/* ── 2p. a v3 database with every store and a format of a newer app: the format check comes before the upgrade to v4, nothing is written ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await fresh(ctx);
+  await go(pg,SITE+'blank.html');
+  await pg.evaluate(T=>new Promise(res=>{ const r=indexedDB.open('sheet',3); r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore('notes',{keyPath:'id'}); const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); d.createObjectStore('blobs',{keyPath:['note','h']}); d.createObjectStore('sync',{keyPath:'k'}); };
+    r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','sync'],'readwrite'); t.objectStore('notes').put({id:'nF',title:'Формат новіший',blocks:[{id:'f1',fx:0.1,row:2,text:'з новішого формату'}],created:T,updated:T}); t.objectStore('sync').put({k:'format',v:5}); t.oncomplete=()=>{ d.close(); res(); }; }; }), Date.now());
+  const before=await dump(pg);
+  await go(pg,SITE); await ready(pg);
+  const msg=await strip(pg); await tryType(pg,500,400,'спроба писати'); await pg.waitForTimeout(800); const after=await dump(pg);
+  ok('2p a v3 with format 5 opens view-only ('+msg+'), stays v'+after.version+' with format 5, nothing written', /старша за ваші дані/.test(msg) && after.version===3 && after.stores.sync.some(r=>r.k==='format' && r.v===5) && JSON.stringify(after)===JSON.stringify(before));
+  ok('2q no page errors', !pg.errs.length); await ctx.close(); }
+
 /* ── 2m. the connection went away (the database was deleted) and a newer app made v5 meanwhile: the next save reopens, finds v5 and writes nothing ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const a=await fresh(ctx);
   await go(a,SITE); await ready(a); await typeAt(a,500,300,'до підміни'); await a.keyboard.press('Escape'); await a.waitForTimeout(600);

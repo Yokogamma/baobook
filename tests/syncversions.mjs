@@ -246,4 +246,28 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   cloud.strict=false; cloud.write('versions',{id:'vQ', note:'n1', t:cloud.now(), name:'Зіпсована', title:'', blocks:'not a list'},{dev:'phone'}); cloud.strict=true; await idle(A);
   ok('20 a version of the wrong shape is quarantined and the status says error', !!A.db.get('sync','quarantine:v:vQ') && A.sync.status().code==='error'); }
 
+/* ── 21. the same body string as rich text and as plain text are two snapshots: a collision, not a join ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','x'); await idle(A);
+  const r=vrec(A.db.get('notes','n1'),'vR','Локальна'); r.blocks=[{...r.blocks[0], s:'<b>x</b>'}]; delete r.blocks[0].r;
+  cloud.write('versions',{id:'vR', note:'n1', t:r.t, name:'Хмарна', title:r.title, blocks:[{...r.blocks.map(e=>{ const x={...e}; delete x.h; return x; })[0], r:1}]},{dev:'phone'});
+  await A.off(false); await A.sync.versionLocal({op:'create', rec:r}); await A.off(true); await idle(A);
+  const mine=A.db.all('versions').find(v=>v.name==='Локальна');
+  ok('21 the plain local copy is kept under a new id and sent; the cloud\'s rich one is applied under vR', !!mine && mine.id!=='vR' && !mine.blocks[0].r && !!vdoc(cloud,mine.id) && A.db.get('versions','vR').blocks[0].r===1); }
+
+/* ── 22. no space for a version: one sweep and one more read, then receiving stops for an hour (no paid read loop) ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(), orig=db.tx.bind(db); let full=false;
+  db.tx=(stores,mode,fn)=>orig(stores,mode,async T=>{ if(full){ const put=T.put; T.put=(st,v)=>{ if(st==='versions') throw Object.assign(new Error('quota'),{name:'QuotaExceededError'}); return put(st,v); }; } return fn(T); });
+  const A=await mk(cloud,'A',{db}); let gets=0; const g=A.proxy.get; A.proxy.get=(c,i)=>{ if(c==='versions' && i==='vF') gets++; return g(c,i); };
+  await note(A,'n1','текст'); await idle(A); full=true;
+  cloud.write('versions',{id:'vF', note:'n1', t:cloud.now(), name:'Не влазить', title:'', blocks:[]},{dev:'phone'}); await idle(A);
+  for(let i=0;i<6;i++){ cloud.advance(60000); await A.sync.idle(100); }
+  ok('22 a version that cannot be stored: at most one more read, then «no space»; no loop of reads ('+gets+')', gets<=1 && A.sync.status().code==='nospace' && A.logs.some(e=>e.t==='nospace')); }
+
+/* ── 23. a tombstone over a quarantined version clears the error ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A);
+  cloud.strict=false; cloud.write('versions',{id:'vD', note:'n1', t:cloud.now(), name:'Зламана', title:'', blocks:[{id:'b1', row:'не число', fx:0, s:'x'}]},{dev:'phone'}); cloud.strict=true; await idle(A);
+  ok('23 the damaged version is quarantined and the status is error', !!A.db.get('sync','quarantine:v:vD') && A.sync.status().code==='error');
+  cloud.write('versions',{id:'vD', note:'n1', deleted:true},{dev:'phone'}); await idle(A);
+  ok('23a the tombstone from another device lifts the quarantine and the error, also after a restart', !A.db.get('sync','quarantine:v:vD') && !(A.db.get('sync','meta:v:vD')||{}).err && A.sync.status().code!=='error' && (await (async()=>{ await A.sync.reload(); return A.sync.status().code!=='error'; })())); }
+
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);
