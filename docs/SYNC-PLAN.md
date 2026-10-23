@@ -76,7 +76,7 @@ IndexedDB `sheet` v3 adds the store `sync` (key path `k`). The stores `notes`, `
 
 | Key in `sync` | What |
 |---|---|
-| `format` | data format number (3); older code reads it to see that the data is newer (§4.14) |
+| `format` | data format number (3; 4 from PR 4a, with the IndexedDB version 4, §4.9 «Old tabs stop writing»); older code reads it to see that the data is newer (§4.14) |
 | `owner` | {env, uid, email}; survives sign-out |
 | `epoch` | random id of the local set; changes on clearing and on **any** change of owner |
 | `meta:n:{id}`, `meta:v:{id}` | `lrev`, the base (the full confirmed cloud state with `rev`, `srv`, `tsrv`), `baseLrev`, loop-guard counters; a version's also `wait` (a document waiting for its note), `local` (`big`, `partial` or `shape`: this named version stays on the device, §4.9), `gone` (deleted here before it ever reached the cloud), `held` (the record of a version whose attempt is in flight when its note is removed), `movedFrom` (moved into a revived note, not yet proven absent from the cloud) and `err` |
