@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
+<meta name="baobook-build" content="2026102301">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -144,10 +145,13 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .item:hover .it-x,.item.cur .it-x,.item:focus-within .it-x{display:inline-flex}
 .it-x:hover{background:var(--hover-2);color:#c33}
 /* trash (TRASH-PLAN): the panel shows it in place of the list; a footer row leads there while it is not empty */
-.it-r{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i{font-size:.875rem}
-.item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r{display:inline-flex} .it-r:hover{background:var(--hover-2);color:var(--ink)}
+.it-r,.it-p{position:absolute;right:32px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--ink-3);cursor:pointer;display:none;align-items:center;justify-content:center} .it-r .i,.it-p .i{font-size:.875rem}
+.item:hover .it-r,.item.cur .it-r,.item:focus-within .it-r,.item:hover .it-p,.item.cur .it-p,.item:focus-within .it-p{display:inline-flex} .it-r:hover,.it-p:hover{background:var(--hover-2);color:var(--ink)}
 .it-t{padding-right:28px}   /* room for the second button of an item (archive, restore) next to the bin */
-.grp{padding:12px 10px 4px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}   /* «В архіві»: archived notes found by a search, below the notes */
+/* the pin, left of the archive button: shown with the other buttons; it makes room in the title only while it shows */
+.it-p{right:58px} .it-p.on .i{fill:currentColor}
+.item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t{padding-right:54px}
+.grp{padding:12px 10px 4px;font-size:var(--t-xs);font-weight:600;color:var(--ink-3)}   /* «Закріплені» and «Інші» in the notes; «В архіві»: archived notes found by a search, below the notes */
 .sect{display:flex;flex-direction:column;gap:2px;margin:0 10px 4px;padding:0 0 6px;border-bottom:.5px solid var(--line)} .sect[hidden]{display:none}
 .sect-r{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sect-b{display:inline-flex;align-items:center;gap:4px;height:28px;margin-left:-4px;padding:0 8px 0 4px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:var(--t-md);font-weight:600;cursor:pointer} .sect-b .i{font-size:1rem;color:var(--ink-2)} .sect-b:hover{background:var(--hover)}
@@ -451,6 +455,10 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast b{font-weight:500;color:var(--ink)}
 @media (max-width:640px){ .toast{white-space:normal;max-width:calc(100vw - 32px);text-align:center} }
+/* «Доступна нова версія · Оновити ✕»: a newer build is on the server. Above the undo bar and the phone's round button, and above a toast while one shows (--toastH);
+   it does not follow the keyboard, which covers it while typing */
+.updstrip{position:fixed;left:50%;bottom:calc(max(80px, 26px + var(--toastH,0px)) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%);width:max-content;box-sizing:border-box;z-index:29;display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:6px 10px;max-width:calc(100vw - 32px);padding:6px 6px 6px 14px;border:.5px solid var(--line-2);border-radius:10px;background:var(--page);box-shadow:var(--shadow);font-size:var(--t-md);color:var(--ink-2)}
+.updstrip[hidden]{display:none} #updMsg{flex:0 1 auto;min-width:0} .updstrip .fbtn{flex:0 0 auto;height:30px;padding:0 12px} .updstrip .uclose{flex:0 0 auto;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font-size:1.125rem;cursor:pointer} @media (hover:none){ .updstrip .fbtn,.updstrip .uclose{height:40px} .updstrip .uclose{width:40px} }
 /* плашка «Скасувати»: дія вже виконана, кілька секунд її можна повернути */
 .undo{position:fixed;left:50%;bottom:calc(18px + var(--kb,0px) + var(--bar,0px) + var(--sa,0px));transform:translateX(-50%) translateY(8px);z-index:31;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;background:var(--ink);color:var(--page);font-family:var(--sans);font-size:var(--t-md);box-shadow:var(--shadow);opacity:0;transition:opacity .2s,transform .2s}
 .undo.show{opacity:1;transform:translateX(-50%)}
@@ -552,6 +560,18 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .amenu .mi{padding:11px 12px;min-height:44px}
   .undo .ubtn{padding:10px 14px} .undo .uclose{padding:10px 10px} .undo kbd{display:none}
 }
+/* a phone (narrow and touch): the panel covers the screen and has its own close button; an item's buttons are 44 px targets 8 px apart, and the title
+   and the snippet make room for them while they show */
+.side-x{display:none}
+@media (hover:none) and (max-width:600px){
+  .side{width:100vw} .side-h{justify-content:flex-start} .side-h .new{margin-left:auto}
+  .side-x{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:44px;height:44px;margin:-4px -4px -4px 0;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink-2);cursor:pointer} .side-x .i{font-size:1.25rem}
+  .it-x,.it-r,.it-p{top:4px;width:44px;height:44px;border-radius:8px} .it-x .i,.it-r .i,.it-p .i{font-size:1.125rem}
+  .it-x{right:4px} .it-r,.it-p{right:56px} .it-p{right:108px}
+  .item:hover .it-t,.item.cur .it-t,.item:focus-within .it-t,.item:hover .it-s,.item.cur .it-s,.item:focus-within .it-s{padding-right:76px}
+  .item.pa:hover .it-t,.item.pa.cur .it-t,.item.pa:focus-within .it-t,.item.pa:hover .it-s,.item.pa.cur .it-s,.item.pa:focus-within .it-s{padding-right:128px}
+  .item:hover,.item.cur,.item:focus-within{min-height:52px}
+}
 html:not([data-ready]) body{visibility:hidden}   /* until the language file is applied */
 
 /* ── version history (VERSIONS-PLAN 3.5): a column right of the sheet; on a phone a bottom sheet with a slider. A shown version is read-only (the sheet is inert) ── */
@@ -601,7 +621,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <aside class="side" id="side" data-i18n-attr="aria-label:panel.label">
     <div class="side-h">
       <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<span class="devtag" id="devTag" data-i18n="dev.badge" data-i18n-attr="title:dev.title"></span><button class="gear" id="setBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" data-i18n-attr="title:settings.title;aria-label:settings.title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><small data-i18n="brand.tagline"></small></span></b>
-      <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button class="side-x" id="sideX" type="button" data-i18n-attr="title:panel.close;aria-label:panel.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
         <div class="acc" id="accRow" hidden><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
         <button class="mi" id="signInBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7.1z"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5a9.5 9.5 0 0 0 8.5 5.2z"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6l3.2-2.5z"/><path d="M12 6.3c1.4 0 2.7.5 3.7 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5c.7-2.2 2.8-3.9 5.3-3.9z"/></svg><span id="signInLbl" data-i18n="account.signIn"></span></button>
@@ -616,6 +636,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="mi" id="importBtn" type="button" data-i18n="import.button" data-i18n-attr="title:import.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg></button><input type="file" id="importFile" accept=".json,application/json" hidden>
         <button class="mi" id="installBtn" type="button" hidden data-i18n="install.button"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
         <div class="hint" id="iosHint" hidden data-i18n="install.iosHint"></div>
+        <div class="hint" id="buildV"></div>
       </div>
     </div>
     <label class="search" id="searchBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -686,6 +707,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 <div class="dbgtop" id="dbgTop" hidden></div>
 <div class="bbar" id="blockbar" hidden role="toolbar" data-i18n-attr="aria-label:pos.toolbar"><button type="button" data-mv="left" data-i18n-attr="title:pos.left;aria-label:pos.left">←</button><button type="button" data-mv="up" data-i18n-attr="title:pos.up;aria-label:pos.up">↑</button><button type="button" data-mv="down" data-i18n-attr="title:pos.down;aria-label:pos.down">↓</button><button type="button" data-mv="right" data-i18n-attr="title:pos.right;aria-label:pos.right">→</button><button type="button" class="act" data-mv="done" data-i18n="common.done" data-i18n-attr="title:pos.done.title"></button></div>
 <div class="toast" id="toast" data-i18n-html="toast.help"></div>
+<div class="updstrip" id="updStrip" hidden role="status"><span id="updMsg"></span><button class="fbtn pri" id="updGo" type="button" data-i18n="update.reload"></button><button class="uclose" id="updX" type="button" data-i18n-attr="title:update.dismiss;aria-label:update.dismiss">✕</button></div>
 <dialog class="ask choice" id="choice" role="dialog" aria-labelledby="choiceTitle" aria-describedby="choiceText"><div class="ask-t" id="choiceTitle"></div><div class="ask-x" id="choiceText"></div><div class="ask-b" id="choiceBtns"></div></dialog>
 <dialog class="ask" id="ask" role="alertdialog" aria-labelledby="askTitle" aria-describedby="askText"><div class="ask-t" id="askTitle"></div><div class="ask-x" id="askText"></div><div class="ask-b"><button class="fbtn" id="askNo" type="button" data-i18n="common.cancel"></button><button class="fbtn danger" id="askYes" type="button" data-i18n="common.delete"></button></div></dialog>
 <dialog class="ask tsz" id="tsz" aria-labelledby="tszTitle">
@@ -704,8 +726,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js"></script>
-<script src="cloud.js"></script>
+<script src="sync.js?b=2026102301"></script>
+<script src="cloud.js?b=2026102301"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -713,6 +735,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
+const BUILD=2026102301;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
 addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); EARLY.install=e; });
@@ -721,7 +745,7 @@ function pickLang(){ let s={}; try{ s=JSON.parse(localStorage.getItem('sheet:set
   for(const l of navigator.languages||[navigator.language||'']){ const b=String(l).toLowerCase().split('-')[0]; if(I18N.langs.includes(b)) return b; }
   return I18N.fallback; }
 async function loadStrings(){ const lang=pickLang();
-  try{ const r=await fetch('locales/'+lang+'.json'); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
+  try{ const r=await fetch('locales/'+lang+'.json?b='+BUILD); if(!r.ok) throw new Error('HTTP '+r.status); I18N.dict=await r.json(); }catch(e){ console.error('i18n: cannot load '+lang, e); }
   I18N.lang=lang; I18N.locale=(navigator.languages||[]).find(l=>String(l).toLowerCase().split('-')[0]===lang)||lang;
   I18N.plural=new Intl.PluralRules(I18N.locale); document.documentElement.lang=lang; }
 function loc(key, p){ let v=I18N.dict[key]; if(v===undefined){ console.warn('i18n: missing key '+key); return key; }
@@ -815,6 +839,7 @@ const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11"
   palette:'<svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.2 0 2-.8 2-1.8 0-.6-.3-1-.6-1.4-.3-.4-.4-.7-.4-1.1 0-.9.7-1.5 1.6-1.5H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10" cy="7.5" r="1.1"/><circle cx="14" cy="7.5" r="1.1"/></svg>',
   ungroup:'<svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 3"/><path d="M9 12h6"/></svg>',
   trash:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  pin:'<svg class="i" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2v.8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9a2 2 0 0 1-1.1-1.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>',
   box:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>',
   back:'<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   broom:'<svg class="i" viewBox="0 0 24 24"><path d="M21 3l-7.5 7.5"/><path d="M11.4 8.4l4.2 4.2"/><path d="M11.4 8.4 3.6 12.6 11.4 20.4 15.6 12.6"/><path d="M12.8 9.8 6.2 15.2M14.2 11.2 8.8 17.8"/></svg>',   // clearing the sheet: the note stays, its blocks go
@@ -912,9 +937,11 @@ const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.cod
    wait. A tab removes only its own keys of older generations (a later save of the same tab holds everything they had), so neither an
    older save finishing late nor another tab can remove a copy that may be the only one. Plain sheet:note:<id> keys belong to the first
    version and to the mode without IndexedDB (§4.14 of docs/SYNC-PLAN.md) */
-const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);
-const backupOf=n=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});
-const fbPut=(ex,n)=>!ex? [n] : noteSig(ex)===noteSig(n)? [] : (n.updated||0)>(ex.updated||0)? [n, backupOf(ex)] : [backupOf(n)];
+const noteSig=n=>JSON.stringify([n.title||'', n.blocks, n.deleted||0, n.archived||0]);   // a pin is not content: copies that differ only by it are not kept twice, the newer one's pin stands (fbPut)
+const backupOf=({pinned, ...n})=>({...n, id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6), title:loc('storage.backupTitle',{title:n.title||loc('note.untitled')})});   // a backup copy starts unpinned
+function fbPut(ex, n){ if(!ex) return [n]; const newer=(n.updated||0)>(ex.updated||0);
+  if(noteSig(ex)===noteSig(n)) return newer && (n.pinned||0)!==(ex.pinned||0)? [n] : [];   // the same content: only a newer pin moves in, with no backup
+  return newer? [n, backupOf(ex)] : [backupOf(n)]; }   // other content: the newer copy is the note, the older one a backup
 const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
 const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
 const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=store.get(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
@@ -1065,7 +1092,10 @@ let DYING=false;   // the page is about to reload after a change of owner: nothi
 const LREV=new Map(), ESNAP=new Map(), PENDING=new Map(), ARRIVED=new Map();
 DEBUG.sync={clock:0, status:{code:'none', n:0}};
 let SYNC=null, driveT=null, driving=false;
-const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; if(n.deleted) o.deleted=n.deleted; if(n.archived) o.archived=n.archived; if(n.revived) o.revived=n.revived; return o; };
+const TIME_FIELDS=['deleted','archived','pinned'], OPT_FIELDS=[...TIME_FIELDS,'revived'];   // the optional fields of a note, absent when not set; the first three are times
+const noteSnap=n=>{ const o={title:n.title||'', blocks:n.blocks||[], created:n.created, updated:n.updated}; for(const k of OPT_FIELDS) if(n[k]) o[k]=n[k]; return o; };
+// a stored record taken into the note in memory: the optional fields the record lacks go too
+const takeRec=(n,r)=>{ Object.assign(n, r); for(const k of OPT_FIELDS) if(!r[k]) delete n[k]; return n; };
 const snapFor=id=>{ const e=ESNAP.get(id); return e? {...e.note, at:e.at} : null; };   // for vcapture: the state before the edit
 function setSnap(id, note, lrev){ ESNAP.set(id,{note:noteSnap(note), lrev, at:vnow()}); if(lrev!=null) LREV.set(id,lrev); }
 // the editor's delta: the screen D over the record C; the shortcut when the record is still the one the screen was drawn from (lrev proves it), else merge3
@@ -1089,8 +1119,8 @@ async function takeStored(id, src){ if(keptView() || DYING) return; const st=awa
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
-  Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; if(!r.revived) delete n.revived; LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id);
-  if(n===cur){ setSnap(id, n, lrev); redrawCur(n); } else { liveLinks(sheet); renderBacklinks(); }
+  takeRec(n, r); LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id); setSnap(id, n, lrev);   // the snapshot follows the record, as in takeNote: a whole write of a note not open (a pin) merges over it
+  if(n===cur) redrawCur(n); else { liveLinks(sheet); renderBacklinks(); }
   relist(); storageUI(); chgUI(); }
 // the source of a change found in storage without a message: the record equals the cloud base written by another device, else another tab of this one
 const srcOf=st=>(st.meta && st.meta.base && st.meta.base.dev && st.meta.lrev===st.meta.baseLrev && SYNC && st.meta.base.dev!==SYNC.devId)? {dn:st.meta.base.dn, dev:st.meta.base.dev} : {tab:true};
@@ -1388,8 +1418,16 @@ function fmtDate(t){ const d=new Date(t), n=new Date(); const same=d.toDateStrin
   return same? d.toLocaleTimeString(I18N.locale,{hour:'2-digit',minute:'2-digit'}) : d.toLocaleDateString(I18N.locale,{day:'numeric',month:'short',year:d.getFullYear()!==n.getFullYear()? 'numeric' : undefined}); }   // «28 вер.», з іншого року — «28 вер. 2025 р.»
 
 /* пошук: усі слова запиту мають зустрітись; збіги в назві — вище, далі — в тексті з фрагментом */
-/* the panel lists one section: the notes, the archive or the trash. A search in the notes also finds archived notes, in a group «В архіві» below them */
-function renderList(){
+/* the panel lists one section: the notes, the archive or the trash. A search in the notes also finds archived notes, in a group «В архіві» below them.
+   Pinned notes come first in the notes, in a group «Закріплені» (the last pinned on top; by rank in a search), the rest under «Інші» */
+const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   // the notes without a search: the last pinned first, then the latest
+// the list is drawn anew on every change: a keyboard focus inside it stays on the same note's item (and the same button), wherever the item lands, without scrolling
+const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
+const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
+const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
+function renderList(){ const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
+  drawList(); if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
+function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
   sect.hidden=sec==='notes'; trashEmpty.hidden=sec!=='trash' || !pool.length; trashRow.hidden=sec!=='notes' || !bin; trashN.textContent=bin; archRow.hidden=sec!=='notes' || !box; archN.textContent=box;
   if(sec!=='notes'){ const t=sec==='trash'; sectName.textContent=loc(t? 'trash.title' : 'archive.title'); sectHint.textContent=loc(t? 'trash.hint' : 'archive.hint'); }
@@ -1397,20 +1435,32 @@ function renderList(){
   if(!T.length && sec==='trash') items.sort((a,b)=>b.n.deleted-a.n.deleted);
   list.innerHTML='';
   if(!items.length && !more.length){ el('div','none',list).textContent=loc(T.length? 'search.none' : sec==='trash'? 'trash.none' : sec==='archive'? 'archive.none' : 'notes.none'); return; }
-  items.forEach(it=>listItem(it,T));
+  const pins=sec==='notes'? items.filter(it=>it.n.pinned) : [], rest=pins.length? items.filter(it=>!it.n.pinned) : items;
+  if(pins.length){ if(!T.length) pins.sort((a,b)=>listOrder(a.n,b.n)); el('div','grp',list).textContent=loc('pin.group'); pins.forEach(it=>listItem(it,T)); if(rest.length) el('div','grp',list).textContent=loc('pin.others'); }
+  rest.forEach(it=>listItem(it,T));
   if(more.length){ el('div','grp',list).textContent=loc('archive.group'); more.forEach(it=>listItem(it,T)); }
 }
 function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [...pool].sort((a,b)=>b.updated-a.updated).map(n=>({n}));
   const items=[]; for(const n of pool){ const t=norm(titleOf(n)), x=norm(noteText(n));
     if(T.every(w=>t.includes(w))) items.push({n,rank:t.includes(query)?0:1}); else if(T.every(w=>t.includes(w)||x.includes(w))) items.push({n,rank:2,snip:true}); }
   return items.sort((a,b)=>(a.rank-b.rank)||(b.n.updated-a.n.updated)); }
-/* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore */
-function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived; const d=el('div','item'+(cur&&n.id===cur.id?' cur':''),list); d.dataset.id=n.id; d.setAttribute('role','button'); d.tabIndex=0;
-  const [rk,ri]=tr? ['trash.restore','<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'] : ar? ['archive.unarchive','<svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'] : ['archive.move','<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>'];
-  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div><button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
+/* an item has two buttons: the bin (to the trash, or for good from the trash) and, left of it, archive / back to the notes / restore; a note in the list also has the pin */
+function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar; const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; d.setAttribute('role','button'); d.tabIndex=0;
+  const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box];
+  d.innerHTML='<div class="it-t"></div><div class="it-s"></div><div class="it-d"></div>'+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')+'<button class="it-r" title="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(tr? 'trash.purge' : 'notes.delete')+'">'+ICO.trash+'</button>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
-  d.addEventListener('click',e=>{ if(e.target.closest('.it-r')){ e.stopPropagation(); side(); } else if(e.target.closest('.it-x')){ e.stopPropagation(); del(); } else openNote(n); });
-  d.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openNote(n); } if(e.key==='Delete'){ del(); } }); }
+  const keyed=(act, cls)=>{ const at=[...list.querySelectorAll('.item')].indexOf(d), k=d.dataset.k; Promise.resolve(act()).then(()=>keepFocus(n.id, cls, k, at)); };   // a key action: the focus moves once it is done (a delete waits for the history)
+  d.addEventListener('click',e=>{ const b=e.target.closest('.it-p,.it-r,.it-x'); if(!b){ openNote(n); return; } e.stopPropagation(); const cls=b.classList[0], act=cls==='it-p'? ()=>pinNote(n, !n.pinned) : cls==='it-r'? side : del;
+    if(e.detail===0) keyed(act, cls); else act(); });   // Enter or Space: a click with no pointer
+  d.addEventListener('keydown',e=>{ if(e.repeat && (e.key==='Enter'||e.key===' '||e.key==='Delete')){ e.preventDefault(); return; }   // a held key acts once: the focus stays in the list, so a repeat would act on the next note
+    if((e.key==='Enter'||e.key===' ') && e.target===d){ e.preventDefault(); openNote(n); } if(e.key==='Delete') keyed(del, e.target===d? '' : e.target.classList[0]); }); }   // Enter and Space on a nested button are that button's
+// the item first: it shows its buttons. A button keeps the focus while it means the same: the pin always, the others while the note stays in its section
+// (k: notes, archive or trash, as the item was drawn); otherwise the item takes it, so a second Enter does not archive a note just restored
+function focusItem(id, cls, k){ const it=list.querySelector('.item[data-id="'+CSS.escape(id)+'"]'); if(!it) return false; it.focus({preventScroll:true}); const b=cls && (cls==='it-p' || it.dataset.k===k) && it.querySelector('.'+cls); if(b) b.focus({preventScroll:true}); return true; }
+// after a key on an item or its button the focus goes to the same button in the note's new place, or, when the note left the list, to the item now in
+// its place. An action that took the focus itself (a dialog, the next note's field) keeps it
+function keepFocus(id, cls, k, at){ const a=document.activeElement; if(!listShown()){ if(a && list.contains(a)) a.blur(); return; } if(a && a!==document.body && !list.contains(a)) return; if(!list.contains(a) && !focusItem(id, cls, k)) focusSlot(at);   // renderList keeps a focus that stays; this finds one for a note that left. A panel the action closed keeps none
+  const f=document.activeElement; if(f && list.contains(f)) f.scrollIntoView({block:'nearest'}); }   // a pinned note went up to «Закріплені»: its button comes into view
 function fillItem(d,n,T,useSnip){ d.querySelector('.it-t').innerHTML=hl(titleOf(n),T);
   const p=useSnip? snip(noteText(n),T) : hl(previewOf(n),T); d.querySelector('.it-s').innerHTML=p||(lines(n).length?'':'<i>'+locA('notes.empty')+'</i>'); d.querySelector('.it-d').textContent=n.deleted? loc('trash.left',{n:daysLeft(n)}) : fmtDate(shownTime(n)); }
 function updateItem(n){ const d=list.querySelector('.item[data-id="'+n.id+'"]'); if(d) fillItem(d,n,terms(),terms().length>0); }
@@ -1736,13 +1786,14 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map();   //
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands */
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const snap={...n}, D=noteSnap(n), p=db.save(n, delta); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs
   p.then(r=>{ if(REV.get(n.id)!==rev) return; inflight.delete(n.id);
-    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ Object.assign(n, r.note); if(!r.note.deleted) delete n.deleted; if(!r.note.archived) delete n.archived; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point
-        setSnap(n.id, same? D : D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) updateItem(n); }
-      tellTabs({t:'put',n:{...snap, ...(r.note||{})}, lrev:r.lrev}); }
+    if(r.ok){ unsaved.delete(n.id); if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ const typed=n===cur && n.title!==D.title? n.title : null; takeRec(n, r.note); if(typed!==null) n.title=typed; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point. A title typed after this write
+        // began is newer than its result: it stays, and the next write merges it over the result (the snapshot below is this write's)
+        setSnap(n.id, D, same? r.lrev : null); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) relist(); }   // what the merge brought may move the note between the groups or sections, or empty the section shown
+      tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
     else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta}); }   // the same delta is retried later; another owner in the store: view-only, the text stays under the unsaved warning
     if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(r.ok?'ok':'err', r.ok? loc('save.ok') : loc('save.failedReason',{reason:r.reason}), r.ok?'✓':''); clearTimeout(savedEl._t); if(r.ok){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
-    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: версія не частіше ніж раз на V_GAP; її помилка статусу не чіпає. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
+    saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
 // a change met by a write, whose source nobody told this tab: the record's base says whether it came from another device
 async function srcLater(id){ try{ const st=await SYNC.state(id); if(PENDING.has(id) && st.note) PENDING.set(id, srcOf(st)); chgUI(); }catch(_){} }
 function flushSave(){ clearTimeout(saveT); if(!dirty||!cur||H.view) return; dirty=false; cur.blocks=serialize(); cur.updated=now(); updateItem(cur); writeNote(cur); }   // the editor snapshot moves with the write's result (ESNAP), not here
@@ -1770,7 +1821,7 @@ const TRASH_DAYS=30, listed=n=>!n.deleted && !n.archived, trashed=n=>!!n.deleted
 const daysLeft=n=>Math.max(1, Math.ceil((n.deleted+TRASH_DAYS*864e5-now())/864e5));
 let section='notes';   // what the panel lists: 'notes', 'archive' or 'trash'
 const relist=()=>{ if(section!=='notes' && !notes.some(section==='trash'? trashed : archived)) setSection('notes'); else renderList(); renderBacklinks(); };   // an emptied section gives way to the notes; a note that links here may have gone or come back
-const firstNote=()=>notes.filter(listed).sort((a,b)=>b.updated-a.updated)[0]||newNote();
+const firstNote=()=>notes.filter(listed).sort(listOrder)[0]||newNote();   // the top of the list
 /* the bin of the list: a note with no title, no text and no history goes at once (nothing to lose), any other one to the trash without asking.
    The toast takes it back for a few seconds (Ctrl+Z until a reload), the trash for TRASH_DAYS; a toast without a timer would cover the trash row on a phone */
 async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bare=!n.title.trim() && !lines(n).length && !(db.backend==='idb' && await vload(n.id).then(()=>VLAST.get(n.id)));
@@ -1796,6 +1847,22 @@ function archiveNote(n){ if(held() || !notes.includes(n) || n.deleted || n.archi
 function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.archived) return; if(n===cur) flushSave(); delete n.archived; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.archived) return null; delete C.archived; return C; }));
   if(open) openNote(n); else if(cur===n) roSync(); else say(loc('archive.returned',{title:titleOf(n)}));
   relist(); storageUI(); }
+/* a pinned note stays at the top of the notes. The pin is a note field (synced and exported): the time it was pinned. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
+const PINREV=new Map();   // id → {rev, whole} of the last pin write started: a field-only pin in flight is replaced by the next pin, which sets the state outright
+function pinNote(n, on){ if(held() || !notes.includes(n) || n.deleted || n.archived || !!n.pinned===on) return;
+  // a change of this note the store may lack must not lose its place to the pin, so the pin waits: after a failed write for «Повторити»; with a localStorage
+  // leftover for the next start, which moves it in; while the note is being revived, or another write is on its way with no editor snapshot to merge with
+  const pw=PINREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
+  if(unsaved.has(n.id)){ say(loc('pin.unsaved',{button:loc('save.retry')})); return; } if(FELL.has(n.id)){ say(loc('pin.wait')); return; }
+  if(REVIVING.has(n.id) || (other && !snapE)){ say(loc('pin.busy')); return; }
+  const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole (the open note always has its snapshot)
+  if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
+  const at=now(); if(on) n.pinned=at; else delete n.pinned; n.updated=now();
+  const pin=C=>{ if(C.deleted || C.archived || !!C.pinned===on) return null; const x={...C}; if(on) x.pinned=at; else delete x.pinned; return x; };   // the pin set outright, whatever a merge made of it
+  const pinMerged=(C,m)=>{ if(!m.deleted && !m.archived) return pin(m)||m; const x={...m}; if(C && C.pinned) x.pinned=C.pinned; else delete x.pinned; return x; };   // a note the merge put in the archive or the trash keeps its stored pin
+  const ed=whole && editorDelta(n);   // the note as it is now, the same snapshot writeNote compares the result with: an edit made while the write waits is not part of it
+  const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=pinMerged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(pin)), rev=REV.get(n.id);
+  PINREV.set(n.id, {rev, whole}); p.then(()=>{ if((PINREV.get(n.id)||{}).rev===rev) PINREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
@@ -1830,7 +1897,7 @@ function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; con
   VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
   if(db.backend==='idb' && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(n.id, PENDING.get(n.id)||{tab:true}); chgUI(); return; }   // the pending write merges over the stored record; the redraw waits for the safe point
   if(busy(n)) return;   // without IndexedDB only one tab writes, so this does not happen
-  Object.assign(n, r); if(!r.deleted) delete n.deleted; if(!r.archived) delete n.archived; if(!r.revived) delete n.revived; setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); undoStacks.delete(n.id);   // undo steps were made on the old copy; with the lrev the snapshot equals the record, so the next write takes the short path
+  takeRec(n, r); setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); undoStacks.delete(n.id);   // undo steps were made on the old copy; with the lrev the snapshot equals the record, so the next write takes the short path
   if(n===cur) redrawCur(n); else { liveLinks(sheet); renderBacklinks(); }   // another note may be renamed, or link here now
   renderList(); }
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM.has(id) || LOCK) return;   // edits here keep the note (its next save writes it back); view-only, memory may hold the last copy left
@@ -1863,7 +1930,7 @@ async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
-  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; if(+raw.deleted>0) n.deleted=+raw.deleted; if(+raw.archived>0) n.archived=+raw.archived; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed or archived note carries the field
+  for(const raw of list){ if(!validNote(raw)){ skipped++; continue; } const n={id:String(raw.id),title:String(raw.title||''),blocks:raw.blocks.filter(b=>b&&b.id),created:+raw.created||now(),updated:+raw.updated||now()}; for(const k of TIME_FIELDS) if(+raw[k]>0) n[k]=+raw[k]; if(raw.revived && typeof raw.revived==='object') n.revived=raw.revived;   // only a trashed, archived or pinned note carries the field
     const ex=notes.find(x=>x.id===n.id);
     if(db.backend==='idb' && !LOCK){   // the import contract (SYNC-PLAN 4.14): a local write through the core, keeping the file's `updated`; an id purged here goes into the revived note
       if(ex && n.updated>ex.updated) await vcapture(ex.id,{title:ex.title,blocks:ex.blocks,updated:ex.updated},'import');   // R2: стан до перезапису — у версію
@@ -1871,11 +1938,11 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
       const r=DEBUG.failSave? {ok:false, code:'test', reason:loc('save.reason.test')} : await SYNC.importNote(n);
       if(!r.ok){ failed++; if(!ex) notes.push(n); unsaved.set(n.id,{reason:r.reason||loc('save.reason.error',{name:r.code}), since:now(), delta:importDelta}); continue; }   // kept in memory as unsaved: the warning, «Повторити» with the same delta, export
       if(r.kind==='skipped' || r.kind==='same'){ skipped++; continue; }
-      if(r.kind==='revived'){ const st=await SYNC.state(r.id); if(st.note){ const rv=notes.find(x=>x.id===r.id); if(rv) Object.assign(rv, st.note); else notes.push(st.note); LREV.set(r.id, st.meta? st.meta.lrev : 0); updated++; wrote.push([st.note,'updated']); } continue; }
+      if(r.kind==='revived'){ const st=await SYNC.state(r.id); if(st.note){ const rv=notes.find(x=>x.id===r.id); if(rv) takeRec(rv, st.note); else notes.push(st.note); LREV.set(r.id, st.meta? st.meta.lrev : 0); updated++; wrote.push([st.note,'updated']); } continue; }
       if(r.kind==='added'){ notes.push(r.note); LREV.set(n.id, r.lrev); added++; wrote.push([r.note,'added']); }
-      else { Object.assign(ex, r.note); if(!r.note.deleted) delete ex.deleted; if(!r.note.archived) delete ex.archived; LREV.set(n.id, r.lrev); setSnap(ex.id, ex, r.lrev); updated++; wrote.push([ex,'updated']); if(cur===ex){ dirty=false; openNote(ex); } }
+      else { takeRec(ex, r.note); LREV.set(n.id, r.lrev); setSnap(ex.id, ex, r.lrev); updated++; wrote.push([ex,'updated']); if(cur===ex){ dirty=false; openNote(ex); } }
       if(SYNC) syncWake(); continue; }
-    if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ Object.assign(ex,n); if(!n.deleted) delete ex.deleted; if(!n.archived) delete ex.archived; if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // without IndexedDB: the plain write
+    if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ takeRec(ex, n); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // without IndexedDB: the plain write
   // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
   const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now()}); }
   if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
@@ -1931,11 +1998,12 @@ try{ history.replaceState({nav:null, d:0}, ''); }catch(_){}   // поточни�
 window.addEventListener('popstate',e=>{ nav.onPop(e); if(e.state && 'd' in e.state && hashNow) setHash(hashNow); });   // our own entry (an overlay, a link step): the address stays the open note's, before hashchange reads it
 const isMobile=()=>matchMedia('(max-width:900px)').matches;
 const sideState={scroll:0};
-function setSide(open, o={}){ if(!open) setMenu(false); if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: панель ховається/показується на маршруті «нотатка → Back», запис в історії не чіпаємо
+function setSide(open, o={}){ if(!open){ setMenu(false); if(side.contains(document.activeElement)) document.activeElement.blur(); } if(!open && !o.keep && section!=='notes'){ section='notes'; q.value=''; renderList(); } if(open && !o.keep && isMobile()) nav.open('side', ()=>setSide(false)); if(!open && !o.keep) nav.close('side'); if(!open && o.keep) sideState.scroll=list.scrollTop;   // keep: the panel hides or shows on the route «note → Back», with no history entry of its own; a closed panel keeps no focus
   app.classList.toggle('open',open); sideBtn.setAttribute('aria-expanded',open?'true':'false'); fabSync(); if(!isMobile()) saveS({side:open});
   if(open && o.keep) requestAnimationFrame(()=>{ list.scrollTop=sideState.scroll; }); }
 sideBtn.addEventListener('click',()=>setSide(!app.classList.contains('open')));
 backdrop.addEventListener('click',()=>setSide(false));
+document.getElementById('sideX').addEventListener('click',()=>setSide(false));
 matchMedia('(max-width:900px)').addEventListener('change',e=>{ app.classList.toggle('open', e.matches? false : S.side!==false); });
 
 /* ══ аркуш ════════════════════════════════════════════════════════════════
@@ -2450,6 +2518,7 @@ moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), '
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
   {node:textStepper()},
   ...(cur? [{ico:ICO.link, label:loc('link.copyNote'), act:()=>copyLink(cur.id)}] : []),
+  ...(ro() || !cur || cur.archived? [] : [{ico:ICO.pin, label:loc(cur.pinned? 'pin.unpin' : 'pin.pin'), act:(n=>{ const on=!n.pinned; return ()=>{ pinNote(n, on); if(!!n.pinned===on) say(loc(on? 'pin.pinned' : 'pin.unpinned',{title:titleOf(n)})); }; })(cur)}]),
   ...(ro()? [] : [cur && cur.archived? {ico:ICO.back, label:loc('archive.unarchive'), act:()=>unarchive(cur)} : {ico:ICO.box, label:loc('archive.move'), act:()=>archiveNote(cur)}]),
   ...(ro()? [] : [{ico:ICO.broom, label:loc('sheet.clear'), danger:true, act:()=>clearBtn.click()}]) ]));
 // «Блок» у панелі на дотику: новий текстовий блок одразу під поточним (у стрічці — наступний слот, на полотні — ряд нижче, у тій самій області)
@@ -2920,6 +2989,23 @@ new ResizeObserver(()=>side.style.setProperty('--foot', sideFoot.offsetHeight+'p
 
 /* ══ PWA: офлайн-оболонка і встановлення ══════════════════════════════════ */
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+/* a newer build on the server: «Доступна нова версія · Оновити». An open page keeps its code until it is reloaded (a tab left open, the
+   installed app kept in memory, a start from the cache while the network was down), so it asks for build.json (never cached by the worker)
+   at start, when it is shown again, when the network comes back and every half hour. «Оновити» reloads once nothing is left to save. */
+const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false, updSeen=BUILD; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});   // updSeen: the newest build shown or hidden with ✕; only a newer one shows the strip again
+async function updCheck(force){ if(!/^https?:/.test(location.protocol) || document.hidden || !navigator.onLine || !updStrip.hidden) return; const t=Date.now(); if(!force && t-updAt<6e4) return; updAt=t; clearTimeout(updT);
+  let r; try{ r=await fetch('./build.json',{cache:'no-store', signal:AbortSignal.timeout? AbortSignal.timeout(1e4) : undefined}); }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet, or holds the request over 10 s: again in a while
+  let b=0; try{ if(r.ok && /json/.test(r.headers.get('content-type')||'')) b=+(await r.json()).build||0; }catch(_){}   // not our JSON (a captive portal, a fallback page): nothing to compare
+  if(b>updSeen && updStrip.hidden){ updSeen=b; updMsg.textContent=''; updStrip.hidden=false; requestAnimationFrame(()=>{ updMsg.textContent=loc('update.available'); }); } }   // the text goes in after the strip shows, so a screen reader announces it
+const updBusy=()=>dirty || unsaved.size>0 || inflight.size>0 || REVIVING.size>0;
+function updTry(){ if(!updWant) return; if(updBusy()){ if(LOCK){ updMsg.textContent=loc('update.lockedUnsaved',{button:loc('update.reload')}); return; } updMsg.textContent=loc('update.waiting'); setTimeout(updTry,500); return; } location.reload(); }   // a view-only tab can never save: with nothing unsaved it reloads at once; with an unsaved edit it asks for the export first (its lock strip has it), and the second tap reloads
+updGo.addEventListener('click',()=>{ if(updWant){ location.reload(); return; } updWant=true; flushSave(); updTry(); });   // a second tap while waiting reloads anyway; the browser still asks first if something is unsaved
+$('updX').addEventListener('click',()=>{ updWant=false; updStrip.hidden=true; });
+{ const toastH=()=>updStrip.style.setProperty('--toastH', toast.classList.contains('show')? toast.offsetHeight+'px' : '0px');   // a toast (a long one wraps on a phone) pushes the strip up while it shows
+  new MutationObserver(toastH).observe(toast,{attributes:true, attributeFilter:['class']}); if(window.ResizeObserver) new ResizeObserver(toastH).observe(toast); }   // its height changes too when the phone turns
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) updCheck(); }); window.addEventListener('online',()=>updCheck(true));
+if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange',()=>updCheck(true));   // a new worker took over: a deploy happened
+setTimeout(()=>updCheck(true),3000); setInterval(()=>updCheck(true),18e5);
 let deferredInstall=EARLY.install||null; installBtn.hidden=!deferredInstall;
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferredInstall=e; installBtn.hidden=false; });
 installBtn.addEventListener('click',async()=>{ if(!deferredInstall) return; deferredInstall.prompt(); try{ await deferredInstall.userChoice; }catch(_){} deferredInstall=null; installBtn.hidden=true; });

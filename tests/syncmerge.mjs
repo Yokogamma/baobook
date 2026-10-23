@@ -64,6 +64,18 @@ const text=(n,id)=>(n.blocks.find(b=>b.id===id)||{}).text;
 { const m=S.merge3(base,{...base,updated:2000,archived:1900},cloud({...base,created:50,updated:1500,blocks:[blk('a',1,'A'),blk('b',2,'B'),blk('c',3,'C'),{id:'k',row:1,parent:'ar',col:0,text:'kid'}]}),ctx);
   ok('7 archived from L, created = min, a child whose area does not exist goes to the sheet', m.note.archived===1900 && m.note.created===50 && m.note.blocks.find(b=>b.id==='k').parent===undefined && m.note.blocks.find(b=>b.id==='k').fx===0); }
 
+// 7b pinned is a soft field: one side's pin or unpin comes through; pinned differently on both sides, the key decides and nothing is copied
+{ const pinB={...base,pinned:800};
+  const m=S.merge3(base,{...base,updated:2000,pinned:1900},cloud({...base,updated:1500,blocks:[blk('a',1,'A-r'),blk('b',2,'B'),blk('c',3,'C')]}),ctx);
+  ok('7b pinned here, edited there: the pin and the edit both come through, no copies', m.note.pinned===1900 && text(m.note,'a')==='A-r' && m.copies.length===0);
+  const m2=S.merge3(pinB,{...pinB,updated:2000,blocks:[blk('a',1,'A-l'),blk('b',2,'B'),blk('c',3,'C')]},cloud({...base,updated:1500}),ctx);
+  ok('7c unpinned there, edited here: the note comes out unpinned with the edit', m2.note.pinned===undefined && text(m2.note,'a')==='A-l' && m2.copies.length===0);
+  const m3=S.merge3(base,{...base,updated:2000,pinned:1900},cloud({...base,updated:2500,pinned:2400}),ctx), m4=S.merge3(pinB,{...pinB,updated:2600,pinned:2550},cloud({...base,updated:2500}),ctx), m4b=S.merge3(pinB,{...pinB,updated:2400,pinned:2350},cloud({...base,updated:2500}),ctx);
+  ok('7d pinned at different times on both sides: the later key wins (R, 2400), no conflict copy', m3.note.pinned===2400 && m3.copies.length===0 && !m3.lost.local && !m3.lost.remote);
+  ok('7e pinned anew here while unpinned there: the key decides (L later → pinned, R later → not), no copy', m4.note.pinned===2550 && m4b.note.pinned===undefined && m4.copies.length===0 && m4b.copies.length===0);
+  const m5=S.merge3({...base,title:'T0'},{...base,title:'Моя',updated:2000,pinned:1900},cloud({...base,title:'Їхня',updated:2500}),ctx);
+  ok('7f a title conflict still makes its copy, and the pin from L stays', m5.note.title==='Їхня' && m5.note.pinned===1900 && m5.copies.length===1 && m5.copies[0].side==='L'); }
+
 // 8 merge0: no base
 { const L={...base,updated:2000,blocks:[blk('a',1,'A-local'),blk('x',4,'X')]}, R=cloud({...base,updated:1500,blocks:[blk('a',1,'A-remote'),blk('y',5,'Y')]});
   const m=S.merge0(L,R,ctx);
@@ -71,7 +83,11 @@ const text=(n,id)=>(n.blocks.find(b=>b.id===id)||{}).text;
   const d=S.merge0({...L,deleted:3000},R,ctx), d2=S.merge0(L,cloud({...R,deleted:1200,updated:3000}),ctx), d3=S.merge0({...base,deleted:3000},cloud({...base,updated:900}),ctx);
   ok('8b deleted wins whichever side has it; with differing text the trash period restarts at the merge, with equal text the date stays', d.note.deleted===5000 && d2.note.deleted===5000 && d3.note.deleted===3000 && text(d2.note,'x')==='X');
   const same=S.merge0({...base},cloud({...base}),ctx);
-  ok('8c equal copies: base = remote, no copies', same.same && same.copies.length===0); }
+  ok('8c equal copies: base = remote, no copies', same.same && same.copies.length===0);
+  const p=S.merge0({...L,pinned:1800},R,ctx);
+  const po=S.merge0({...base,updated:2000,pinned:1900},cloud({...base,updated:1500}),ctx), po2=S.merge0({...base,updated:1000},cloud({...base,updated:1500,pinned:1400}),ctx);
+  ok('8e merge0 of copies that differ only by the pin: no conflict copies, the key decides (L later → pinned 1900; R later → pinned 1400)', po.copies.length===0 && !po.lost.local && !po.lost.remote && po.note.pinned===1900 && po2.copies.length===0 && po2.note.pinned===1400 && po2.same);
+  ok('8d merge0 takes pinned from the side with the larger key', p.note.pinned===1800 && S.merge0(L,cloud({...R,pinned:1700,updated:3000}),ctx).note.pinned===1700); }
 
 // 9 moveInto: {A, B} plus a late {A′} that never saw B → {A′ or A by key, B}, both sources as copies, B stays
 { const revived={title:'Відновлена',created:1,updated:4000,deleted:3900,blocks:[blk('a',1,'A'),blk('b',2,'B')]}, late={title:'Стара',created:1,updated:4500,blocks:[blk('a',1,'A′')]};
