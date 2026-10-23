@@ -95,7 +95,10 @@ const chromeCyr=pg=>pg.evaluate(()=>{ const bad=[], CY=/[\u0400-\u04FF]/; /* the
   await ctx.close(); }
 { const site2=await serve(); site2.override.set('/locales/uk.json', null);
   const ctx=await br.newContext(CTX); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto(site2.url); await pg.waitForTimeout(600);
-  ok('5 without a language file the app still starts and shows keys, not a blank page', await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')) && (await pg.locator('#newBtn').textContent()).trim()==='notes.new' && !errs.length);
+  await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(300);   // the 404 fails its integrity check: one reload, then the other language of the build
+  const t=(await pg.locator('#newBtn').textContent()).trim();
+  ok('5 without the Ukrainian file the app still starts, in English of the same build («'+t+'»), not a blank page', await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')) && t===dict.en['notes.new'] && !errs.length);
+  site2.override.set('/locales/en.json', null); await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(300);
+  ok('5b with neither file it shows keys, not a blank page', await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')) && (await pg.locator('#newBtn').textContent()).trim()==='notes.new' && !errs.length);
   await ctx.close(); await site2.close(); }
 await br.close(); process.exit(fails?1:0);

@@ -417,6 +417,7 @@
   "text.smaller": "Менший текст",
   "text.larger": "Більший текст",
   "update.available": "Доступна нова версія",
+  "update.broken": "Застосунок завантажився не повністю",
   "update.reload": "Оновити",
   "update.waiting": "Оновлю, щойно все збережеться",
   "update.dismiss": "Сховати",

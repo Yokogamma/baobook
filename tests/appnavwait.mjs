@@ -7,6 +7,7 @@ process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS='1';   // before the l
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { until } from './lib/wait.mjs';
+import { sri, withHashes } from './hashes.mjs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 
@@ -14,8 +15,9 @@ const PUB=new URL('../public/', import.meta.url), rd=f=>fs.readFileSync(new URL(
 const HTML=rd('index.html'), SW=rd('sw.js'), SYNC=rd('sync.js'), BUILD=+/const BUILD=(\d+)/.exec(HTML)[1];
 const site=await serve(); site.redirect.set('/index.html','/');
 // a deploy: the page (marked t-ver), sw.js and build.json with build b, and a sync.js that says which deploy it belongs to
-const deploy=(v,b)=>{ site.override.set('/index.html', HTML.replaceAll(String(BUILD), String(b)).replace('<title>','<meta name="t-ver" content="'+v+'"><title>'));
-  site.override.set('/sw.js', SW.replaceAll(String(BUILD), String(b))); site.override.set('/build.json', JSON.stringify({build:b})); site.override.set('/sync.js', SYNC+'\n;window.__syncVer='+JSON.stringify(v)+';'); };
+const deploy=(v,b)=>{ const sync=SYNC+'\n;window.__syncVer='+JSON.stringify(v)+';';   // the page carries the integrity hash of its own sync.js
+  site.override.set('/index.html', withHashes(HTML.replaceAll(String(BUILD), String(b)), {'sync.js':sri(sync)}).replace('<title>','<meta name="t-ver" content="'+v+'"><title>'));
+  site.override.set('/sw.js', SW.replaceAll(String(BUILD), String(b))); site.override.set('/build.json', JSON.stringify({build:b})); site.override.set('/sync.js', sync); };
 const tver=pg=>pg.evaluate(()=>(document.querySelector('meta[name="t-ver"]')||{}).content||null);
 const sver=pg=>pg.evaluate(()=>window.__syncVer||null);
 const strip=pg=>pg.evaluate(()=>{ const s=document.getElementById('updStrip'); return s && !s.hidden? s.textContent.replace(/\s+/g,' ').trim() : ''; });
@@ -82,9 +84,10 @@ deploy('E', BUILD+1); site.delay.set('/sync.js', 8000);
 deploy('F', BUILD+2);
 { const sf=await installed(BUILD+2,'FF'); ok('10a the set of F is installed ('+sf+')', sf==='FF'); }
 deploy('G', BUILD+3); const qG='sync.js?b='+(BUILD+3); await ctx.route(u=>u.href.includes(qG), r=>r.abort('connectionreset'));
-{ const n=errs.length; const {pg}=await open(); await pg.waitForTimeout(4000);   // long enough for the worker of G to try its set
-  ok('10b the page G from the network with its sync.js cut off: no sync.js of F stands in ('+await sver(pg)+')', await tver(pg)==='G' && await sver(pg)===null);
-  errs.splice(n); await pg.close(); }   // the page without its core throws: expected here
+{ const pg=await ctx.newPage(); pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await pg.goto(site.url); await pg.waitForTimeout(4000);   // long enough for the worker of G to try its set
+  const s=await strip(pg);   // without its core the page does not start: it reloads once, then says so (tests/appsri.mjs)
+  ok('10b the page G from the network with its sync.js cut off: no sync.js of F stands in ('+await sver(pg)+'), the strip says «'+s+'»', await tver(pg)==='G' && await sver(pg)===null && /не повністю/.test(s));
+  await pg.close(); }
 await ctx.unroute(u=>u.href.includes(qG));
 { const k=await aside(shells), sf=await aside(p=>setOf(p, BUILD+2));
   ok('10c the worker of G could not complete its set: none is installed, the set of F stays ('+k.join(', ')+')', !k.includes('baobook-shell-'+(BUILD+3)) && sf==='FF'); }
