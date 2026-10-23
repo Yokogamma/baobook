@@ -86,6 +86,13 @@ const toastText=pg=>pg.evaluate(()=>document.getElementById('toast').textContent
   // 8 «Стандартний» takes the field away
   await panel(); await hold(item(pg,'n3')); await tap(item(pg,'n3').locator('.it-c')); await tap(swatchBtn('Стандартний')); await until(async()=>!('color' in (await stored(pg,'n3'))));
   ok('8 «Стандартний» removes «color» from storage; the item has no colour ('+await item(pg,'n3').getAttribute('data-color')+')', !('color' in (await stored(pg,'n3'))) && await item(pg,'n3').getAttribute('data-color')===null);
+  // 8b the open note with a colour shows a press over the :hover a finger leaves behind (the same darker colour as without the hover)
+  await hold(item(pg,'n1')); await tap(item(pg,'n1').locator('.it-c')); await tap(swatchBtn('Зелений')); await until(async()=>((await stored(pg,'n1'))||{}).color==='green'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(250);
+  await pg.evaluate(()=>document.querySelector('#list .item[data-id="n1"]').classList.add('press')); const pNo=await bgOf(pg,'n1');
+  await cdp.send('DOM.enable'); await cdp.send('CSS.enable'); const {root}=await cdp.send('DOM.getDocument'); const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId, selector:'#list .item[data-id="n1"]'});
+  await cdp.send('CSS.forcePseudoState',{nodeId, forcedPseudoClasses:['hover']}); const pHov=await bgOf(pg,'n1'); await cdp.send('CSS.forcePseudoState',{nodeId, forcedPseudoClasses:[]});
+  await pg.evaluate(()=>document.querySelector('#list .item[data-id="n1"]').classList.remove('press')); const rest=await bgOf(pg,'n1');
+  ok('8b the open green note pressed: '+pNo+', with :hover too '+pHov+' (at rest '+rest+')', await item(pg,'n1').evaluate(e=>e.classList.contains('cur')) && pNo===pHov && pHov!==rest);
   console.log(errs.length? errs.join('\n') : '✓ phone: no errors'); if(errs.length) fails++; await ctx.close(); }
 
 /* ── a computer: the hover button, the keyboard, the context menu; the archive and the trash; storage, export, import, history, a pin after a colour ── */
@@ -156,6 +163,16 @@ const toastText=pg=>pg.evaluate(()=>document.getElementById('toast').textContent
   await ctxMenu('n7','Зелений'); await item(pg,'n7').hover(); await item(pg,'n7').locator('.it-p').click(); await pg.waitForTimeout(200); const t17=await toastText(pg);
   await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await until(async()=>{ const s=await stored(pg,'n7'); return s && s.color==='green' && s.pinned>0; }).catch(()=>{}); const s17=await stored(pg,'n7');
   ok('17 a pin right after a colour: no «busy» («'+t17+'»), stored green ('+s17.color+') and pinned ('+!!s17.pinned+')', !/зберігається/.test(t17) && s17.color==='green' && s17.pinned>0);
+
+  // 17b, 17c a soft write replaced by the next one and then failed: the next write stores both fields (colour → pin, pin → colour); nothing is lost after a reload
+  for(const [id, first, label] of [['n10','color','17b a colour, then a pin'], ['n11','pin','17c a pin, then a colour']]){
+    await pg.evaluate(()=>{ let k=0; sheetDebug.saveGate=st=>!st.includes('notes')? Promise.resolve() : ++k===1? new Promise((_,no)=>setTimeout(()=>no(new DOMException('aborted','AbortError')),1500)) : Promise.resolve(); });   // the first write fails after the second action began
+    const pin=async()=>{ await item(pg,id).hover(); await item(pg,id).locator('.it-p').click(); };
+    if(first==='color'){ await ctxMenu(id,'Рожевий'); await pin(); } else { await pin(); await ctxMenu(id,'Рожевий'); }
+    await pg.waitForTimeout(1900); await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await pg.waitForTimeout(300); const sa=await stored(pg,id), warn=await pg.evaluate(()=>!document.getElementById('saveWarn').hidden);
+    await pg.reload(); await ready(pg); await pg.waitForTimeout(400); const sb=await stored(pg,id);
+    ok(label+', the first write failed: stored '+JSON.stringify({color:sa.color, pinned:!!sa.pinned})+' (warning '+warn+'), after a reload '+JSON.stringify({color:sb.color, pinned:!!sb.pinned, drawn:await item(pg,id).getAttribute('data-color')}),
+      sa.color==='pink' && sa.pinned>0 && sb.color==='pink' && sb.pinned>0 && await item(pg,id).getAttribute('data-color')==='pink'); }
 
   // 18 restoring a version leaves the colour as it is
   await pg.evaluate(()=>document.querySelector('#list .item[data-id="n8"]').click()); await until(()=>pg.evaluate(()=>sheetDebug.cur()==='n8'));

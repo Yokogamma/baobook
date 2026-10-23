@@ -622,7 +622,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
   .list .item:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:28px} .list .item.pa:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:80px} .list .item.ar:is(:focus-visible,:has(:focus-visible)):not(.amode) .it-t{padding-right:54px}
   .list .item:hover{background:transparent} .list .item.cur:hover{background:var(--hover-2)} .list .item.pinned:not(.cur,[data-color]):hover{background:var(--pin-bg)}   /* a finger leaves :hover behind */
   .list .item[data-color]:hover{background:var(--nc)} .list .item.cur[data-color]:hover{background:color-mix(in srgb,var(--nc),var(--ink) 8%)}
-  .list .item.press,.list .item.pinned.press:not(.cur,[data-color]){background:var(--hover-2)} .list .item[data-color].press{background:color-mix(in srgb,var(--nc),var(--ink) 12%)}
+  .list .item.press,.list .item.pinned.press:not(.cur,[data-color]){background:var(--hover-2)} .list .item[data-color].press,.list .item.cur[data-color].press:hover{background:color-mix(in srgb,var(--nc),var(--ink) 12%)}   /* the press wins over the :hover a finger leaves, the open note's too */
   .list .item.amode{--acts-bg:var(--page);min-height:64px;background:var(--acts-bg);box-shadow:inset 0 0 0 1.5px var(--ink-3)} .list .item.amode.pinned{--acts-bg:var(--pin-bg)} .list .item.amode[data-color]{--acts-bg:var(--nc)}
   .item.amode::after{content:"";position:absolute;top:0;right:0;bottom:0;width:150px;border-radius:0 8px 8px 0;background:linear-gradient(90deg,transparent,var(--acts-bg) 32px);pointer-events:none} .item.amode.ar::after{width:210px} .item.amode.pa::after{width:270px}
   .list .item.amode :is(.it-x,.it-r,.it-p,.it-c){display:inline-flex;z-index:1;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:12px;background:var(--page);box-shadow:0 0 0 .5px var(--line-2),0 1px 3px rgba(0,0,0,.08);color:var(--ink-2)}
@@ -2014,9 +2014,10 @@ function unarchive(n, open){ if(held() || !notes.includes(n) || n.deleted || !n.
 /* the soft fields of a note (LIST-ACTIONS-PLAN 5.4): the pin and the colour. Neither is content: copies that differ only by them make no conflict copy.
    A pinned note stays at the top of the notes; the pin is the time it was pinned. A colour is a name. A write like any other, so it moves `updated` (SYNC-PLAN 4.4) */
 const SOFT={pinned:{ok:x=>!x.deleted && !x.archived}, color:{ok:x=>!x.deleted}};   // where the field applies: a pin in the notes, a colour in the notes and the archive
-const SOFTREV=new Map();   // id → {rev, whole} of the last soft write started: a field-only write in flight is replaced by the next one, which sets its own field outright
-function softSet(n, f, v){ const F=SOFT[f], same=x=>f==='pinned'? !!x.pinned===!!v : (x.color||'')===(v||'');
-  if(held() || !notes.includes(n) || !F.ok(n) || same(n)) return;
+const SOFTREV=new Map();   // id → {rev, whole, vals} of the last soft write started: a field-only write in flight is replaced by the next one, which sets its own field and the fields of the one it replaces outright
+const softEq=(x, k, w)=>k==='pinned'? !!x.pinned===!!w : (x.color||'')===(w||'');
+function softSet(n, f, v){ const F=SOFT[f];
+  if(held() || !notes.includes(n) || !F.ok(n) || softEq(n, f, v)) return;
   // a change of this note the store may lack must not lose its place to the field, so the write waits: after a failed write for «Повторити»; with a localStorage
   // leftover for the next start, which moves it in; while the note is being revived, or another write is on its way with no editor snapshot to merge with
   const pw=SOFTREV.get(n.id), snapE=ESNAP.has(n.id), other=inflight.has(n.id) && !(pw && pw.rev===inflight.get(n.id) && !pw.whole);
@@ -2025,13 +2026,14 @@ function softSet(n, f, v){ const F=SOFT[f], same=x=>f==='pinned'? !!x.pinned===!
   if(REVIVING.has(n.id) || (other && !snapE)){ say(loc(pin? 'pin.busy' : 'color.busy')); return; }
   const whole=n===cur || other;   // the note in memory may be ahead of the store: it goes whole (the open note always has its snapshot)
   if(n===cur && dirty && !H.view){ clearTimeout(saveT); dirty=false; cur.blocks=serialize(); }
-  const val=f==='pinned'? (v? now() : 0) : (v||''), put=x=>{ if(val) x[f]=val; else delete x[f]; return x; };
-  put(n); n.updated=now();
-  const set=C=>(!F.ok(C) || same(C))? null : put({...C});   // the field set outright, whatever a merge made of it
-  const merged=(C,m)=>{ if(F.ok(m)) return set(m)||m; const x={...m}; if(C && C[f]) x[f]=C[f]; else delete x[f]; return x; };   // a note the merge put where the field does not apply keeps its stored value
+  // a newer write began, so the result of the one it replaces is no longer reported (writeNote): if that one fails, this one must still store its field
+  const vals={...(pw && !pw.whole && pw.rev===inflight.get(n.id)? pw.vals : {}), [f]:f==='pinned'? (v? now() : 0) : (v||'')}, put=(x,k)=>{ if(vals[k]) x[k]=vals[k]; else delete x[k]; return x; };
+  put(n, f); n.updated=now();
+  const set=C=>{ let x=null; for(const k in vals) if(SOFT[k].ok(C) && !softEq(C, k, vals[k])) x=put(x||{...C}, k); return x; };   // each field set outright, whatever a merge made of it
+  const merged=(C,m)=>{ const x=set(m)||{...m}; for(const k in vals) if(!SOFT[k].ok(m)){ if(C && C[k]) x[k]=C[k]; else delete x[k]; } return x; };   // a note the merge put where a field does not apply keeps its stored value
   const ed=whole && editorDelta(n);   // the note as it is now, the same snapshot writeNote compares the result with: an edit made while the write waits is not part of it
   const p=writeNote(n, whole? (C,meta,t)=>{ const r=ed(C,meta,t), x=merged(C, r.note||r); return r.note? {...r, note:x} : x; } : fieldDelta(set)), rev=REV.get(n.id);
-  SOFTREV.set(n.id, {rev, whole}); p.then(()=>{ if((SOFTREV.get(n.id)||{}).rev===rev) SOFTREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
+  SOFTREV.set(n.id, {rev, whole, vals}); p.then(()=>{ if((SOFTREV.get(n.id)||{}).rev===rev) SOFTREV.delete(n.id); }); renderList(); }   // the record means something only while that write is on its way
 function pinNote(n, on){ softSet(n, 'pinned', on); } function setColor(n, c){ softSet(n, 'color', c); }
 trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } const k=notes.filter(trashed).length; if(!k || !await ask({title:loc('trash.emptyTitle'), text:loc('trash.emptyText',{n:k}), ok:loc('trash.emptyOk')})) return; notes.filter(trashed).forEach(purgeNote); });
 /* a note from the trash opens read-only: the sheet is inert, the title is not editable, the strip offers «Відновити» and «Видалити назавжди» */
