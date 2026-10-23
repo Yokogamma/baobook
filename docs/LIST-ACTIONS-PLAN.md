@@ -57,7 +57,7 @@ The long press starts only from `pointerType` `touch` or `pen`; on a touch lapto
 ### 4.2 Touch: the item at rest
 
 - Inside `@media (hover:none)`, the item buttons are hidden at rest whatever `:hover`, `.cur` or `:focus-within` say. They show only in action
-  mode (`.item.acts`) or for a keyboard focus (`.item:focus-visible`, `.item:has(:focus-visible)`; a tap focuses the item without
+  mode (`.item.amode`) or for a keyboard focus (`.item:focus-visible`, `.item:has(:focus-visible)`; a tap focuses the item without
   `:focus-visible`, so a tap shows nothing).
 - The title and the snippet take the full width at rest (no padding reserved for buttons).
 - A pinned note shows a small filled pin before its title. The mark is a sibling placed before `.it-t` in a flex row (so the title's ellipsis
@@ -75,7 +75,7 @@ mode's, or one shown for a keyboard focus) starts no gesture at all (so step 5 n
    `list.setPointerCapture(e.pointerId)`. `drawList` rebuilds every item with `list.innerHTML=''` (≈ line 1427) on each pin, sync arrival or
    merged write (`relist`, `renderList`), so the pressed element may be replaced in the middle of a gesture. With the capture on `list`, which
    survives, `pointerup`/`pointercancel` keep arriving; the gesture keeps the note id, not the element. `lostpointercapture` ends the gesture as a
-   cancel. `listItem` reapplies `.press` from the gesture's note id, as it does `.acts` from `actsId`, so the pressed look survives a rebuild.
+   cancel. `listItem` reapplies `.press` from the gesture's note id, as it does `.amode` from `actsId`, so the pressed look survives a rebuild.
 2. Movement beyond the slop (`g.moved`), `pointercancel` (the browser took the gesture for a scroll) or a second finger end the press without
    action (a capture-phase `pointerdown` listener on `list` calls `z.cancel()` and clears `.press` when `!e.isPrimary`): `onEnd` acts only when `!g.moved && !g.held`, as
    `holdGesture` does, because the helper does not cancel on movement and a sideways move under `pan-y` ends in `pointerup`.
@@ -99,14 +99,16 @@ mode's, or one shown for a keyboard focus) starts no gesture at all (so step 5 n
 
 ### 4.4 Touch: action mode
 
-- One note at a time has the mode; its id is kept in `actsId`, and `listItem` draws `.item.acts` and the buttons for it, so any redraw keeps the
+- One note at a time has the mode; its id is kept in `actsId`, and `listItem` draws `.item.amode` and the buttons for it, so any redraw keeps the
   mode on the same note.
 - The buttons sit in a row over the right part of the item, vertically centred, **48×48 px with 12 px between them**, over a fade of the item's
   own background so the start of the title stays readable. In the notes: pin, archive, bin (PR B adds the palette first). In the archive:
   «Повернути до нотаток» (`archive.unarchive`, the pressed look), bin. In the trash: «Відновити», «Видалити назавжди».
-- The mode stays open after **pin** (the note moves to «Закріплені» or back and the mode follows it; the pin shows its new state) and, in PR B,
-  after a colour is chosen. It closes after **archive**, **unarchive**, **bin**, **restore** and **delete forever**, because the note leaves the
-  section (the existing toasts and undo stay as they are).
+- The mode closes after every action: **pin** (the owner, 2026-10-23, after trying it on the phone: the note moves to «Закріплені» and shows
+  its pin mark; a new long press shows the pin pressed), **archive**, **unarchive**, **bin**, **restore** and **delete forever** (the existing
+  toasts and undo stay as they are). In PR B the mode stays open after a colour is chosen, so the palette button shows the new colour.
+- The item in the mode keeps its own block layout: the class is `amode`, because `.acts` is the card bars' flex row (it once made the item a
+  row, the title slid under the buttons or off the screen).
 - It closes on: any pointer down (touch, pen or mouse) outside the mode's own buttons and outside the palette drop-down of PR B, inside the
   list or not (one document listener in the capture phase; a tap that closes the mode does nothing else, §4.3 step 3), a user scroll of the list, Escape, Back (the mode
   registers with `nav` as `'acts'`, as the panel does with `'side'`, so Back closes the mode first and the panel on the next Back), closing the
@@ -165,9 +167,9 @@ to mention the colour. No new UI element.
 
 ### 4.8 Code changes (index.html)
 
-- CSS: tokens; `.sr-only`; the pinned background and mark; in `@media (hover:none)` the item at rest, `.press`, `.item.acts` with its 48 px
+- CSS: tokens; `.sr-only`; the pinned background and mark; in `@media (hover:none)` the item at rest, `.press`, `.item.amode` with its 48 px
   buttons, `touch-action:pan-y` on `.list`; remove the #92 rules for `.it-x/.it-r/.it-p` at 44 px and their title padding.
-- `listItem`: the pin mark and the hidden state text; titles and labels of §4.5; the archive section's button with the pressed look; `.acts` when
+- `listItem`: the pin mark and the hidden state text; titles and labels of §4.5; the archive section's button with the pressed look; `.amode` when
   `actsId` matches; the `click` handler per §4.3 step 6.
 - The list gesture: one `gesture(list, …)` with the `filter` of §4.3 (`isPrimary`, the mode's buttons excluded), the pointer capture, the
   second-finger cancel, `actsId`, `modeAt`, `lastTouch`, `openActs(id)`, `closeActs()` (also called first by `openNote` and by `setSide(false)`),
