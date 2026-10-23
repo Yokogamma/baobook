@@ -165,6 +165,17 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   await pg.mouse.click(x, y); await pg.waitForTimeout(500); const k1=await blocks(), after=await actsOn(pg);
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); await pg.mouse.click(x, y); await pg.waitForTimeout(500); const k2=await blocks();
   ok('18 at 1024px on touch a mouse click on the sheet closes the mode of '+mode+' ('+after+') and makes no block ('+k0+' → '+k1+'); the next click there works as before ('+k2+')', mode==='n2' && after===null && k1===k0 && k2>k1);
+  // 19 the settings or the header «⋯» opened from the keyboard while the mode is open: the mode goes first, so the settings keep their own history
+  // entry (Back closes them and stays in the app) and a click on the sheet closes them
+  const holdN2=async()=>{ const b=await boxOf(item(pg,'n2')); await touch('touchStart',[{x:b.cx,y:b.cy}]); await pg.waitForTimeout(650); await touch('touchEnd',[]); await pg.waitForTimeout(250); };
+  const setOpen=()=>pg.evaluate(()=>!document.getElementById('setPop').hidden), inApp=()=>pg.evaluate(()=>!!document.getElementById('app'));
+  await holdN2(); await pg.focus('#setBtn'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300);
+  const st1={mode:await actsOn(pg), set:await setOpen()}; await pg.goBack(); await pg.waitForTimeout(400); const st2={set:await setOpen(), app:await inApp()};
+  await holdN2(); await pg.focus('#setBtn'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); await pg.mouse.click(x, y); await pg.waitForTimeout(400); const st3={set:await setOpen()};
+  await holdN2(); await pg.focus('#moreBtn'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); const st4={mode:await actsOn(pg), menu:await pg.locator('.amenu.hm').count()};
+  await pg.mouse.click(x, y); await pg.waitForTimeout(400); const st5={menu:await pg.locator('.amenu.hm').count()};
+  ok('19 the settings opened from the keyboard close the mode '+JSON.stringify(st1)+'; Back closes them in the app '+JSON.stringify(st2)+'; a click on the sheet closes them '+JSON.stringify(st3)+'; the header «⋯» the same '+JSON.stringify(st4)+' → '+JSON.stringify(st5),
+    st1.mode===null && st1.set && !st2.set && st2.app && !st3.set && st4.mode===null && st4.menu===1 && st5.menu===0);
   console.log(errs.length? errs.join('\n') : '✓ wide touch: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 

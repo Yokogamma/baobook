@@ -2521,7 +2521,7 @@ let popOpen=null;
 function closePop(){ if(!popOpen) return; const p=popOpen; popOpen=null; document.removeEventListener('pointerdown',p.onDoc,true); document.removeEventListener('keydown',p.onKey,true); p.menu.remove(); if(!p.at) p.anchor.setAttribute('aria-expanded','false'); nav.close('menu'); }
 // o.at {x,y}: a context menu at a point (a list item's), fixed in the window; its anchor is not a popup button, so aria-expanded is left alone.
 // An item with `checked` is a checkbox item. The arrow keys move between the items (not into a row of its own, which keeps its keys)
-function popMenu(anchor, host, cls, items, o={}){ if(popOpen && popOpen.anchor===anchor && !o.at){ closePop(); return; } closePop();
+function popMenu(anchor, host, cls, items, o={}){ if(popOpen && popOpen.anchor===anchor && !o.at){ closePop(); return; } closePop(); closeActs();
   const menu=document.createElement('div'); menu.className='amenu '+cls; menu.setAttribute('role','menu');
   items.forEach(it=>{ if(it.node){ menu.appendChild(it.node); return; }   // a row of its own (the text size stepper): it keeps the menu open
     const bt=document.createElement('button'); bt.type='button'; bt.className='mi'+(it.danger? ' danger' : ''); bt.setAttribute('role', it.checked===undefined? 'menuitem' : 'menuitemcheckbox'); if(it.checked!==undefined) bt.setAttribute('aria-checked', String(!!it.checked)); bt.innerHTML=(it.ico||'')+'<span class="ml">'+escHtml(it.label)+'</span>'+(it.small? '<small>'+escHtml(it.small)+'</small>' : '')+(it.checked? '<span class="mck">'+ICO.check+'</span>' : ''); bt.addEventListener('click',()=>{ closePop(); it.act(); }); menu.appendChild(bt); });
@@ -2695,7 +2695,7 @@ list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs()
 document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
   if(e.target.closest('.item.acts button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
   closedBy={id:e.pointerId, at:performance.now()};
-  if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; e.stopImmediatePropagation(); e.preventDefault(); }   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
+  if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; closePop(); setMenu(false); e.stopImmediatePropagation(); e.preventDefault(); }   // what this press would have closed on its way closes here   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
   closeActs(); },true);
 // the closing press may be held long: its click is counted from its own release, not from the press
 document.addEventListener('pointerup',e=>{ if(swallow && swallow.id===e.pointerId) swallow.up=performance.now(); },true);
@@ -3055,7 +3055,8 @@ langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</
 langSel.addEventListener('change',()=>{ saveS({lang:langSel.value}); location.reload(); });
 
 /* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
-function setMenu(open, o={}){ if(open===!setPop.hidden) return; setPop.hidden=!open; setBtn.setAttribute('aria-expanded',open?'true':'false');
+function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open) closeActs(); setPop.hidden=!open;   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
+  setBtn.setAttribute('aria-expanded',open?'true':'false');
   if(open){ document.addEventListener('pointerdown',setOut,true); document.addEventListener('keydown',setKey,true); nav.open('settings', ()=>setMenu(false)); if(o.kb) setPop.querySelector('select').focus(); return; }
   document.removeEventListener('pointerdown',setOut,true); document.removeEventListener('keydown',setKey,true); nav.close('settings'); if(setPop.contains(document.activeElement)) setBtn.focus(); }
 function setOut(e){ if(!setPop.contains(e.target) && !setBtn.contains(e.target)) setMenu(false); }
