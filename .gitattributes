@@ -1,0 +1,4 @@
+# Every text file is checked out with LF, on Windows too: public/index.html holds the integrity hashes of sync.js, cloud.js and the language
+# files, and a CRLF checkout (core.autocrlf=true) changes their bytes, so the browser blocks them and the app does not start in the local tests.
+* text=auto eol=lf
+*.png binary

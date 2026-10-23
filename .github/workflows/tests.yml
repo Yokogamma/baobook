@@ -22,15 +22,15 @@ jobs:
   # measured time). Chromium comes from a cache keyed by the Playwright version; `playwright install --with-deps` is not used:
   # ubuntu-latest already has the libraries Chromium needs, and the step spent up to 14 minutes on apt fetching CJK fonts.
   playwright:
-    name: scenarios ${{ matrix.shard }}/5
+    name: scenarios ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     env:
-      SHARDS: 5
+      SHARDS: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
