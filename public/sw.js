@@ -5,8 +5,8 @@
    mixes two builds; activate deletes the older sets, and only this app's caches (the 'baobook-' prefix), because other apps may share the origin.
    The page: network first, whole body, at most WAIT; a network that fails, or neither answers nor fails within WAIT (a phone waking up, Wi-Fi
    reconnecting), gets the page of the set instead; the update strip in the page tells about a newer build. A first visit has no set and waits.
-   The page's own files carry its build in their address (?b=BUILD): an exact match in the set answers at once; a page of another build
-   misses and gets them from the network. So a page and its files are always of one build. build.json (the build on the server) is never
+   The page's own files carry its build in their address (?b=BUILD): only that exact address answers, from a set or from the network, and
+   when neither has it the request fails rather than take a file of another build. So a page and its files are always of one build. build.json (the build on the server) is never
    cached. Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
    The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used; a version lives in its path, so a
    cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
@@ -16,8 +16,17 @@ const KEEP=[SHELL, FONTS, SDK];
 const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;
 const PRECACHE=['./','./sync.js'+B,'./cloud.js'+B,'./locales/uk.json'+B,'./locales/en.json'+B,'./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
-// cache:'reload': the set comes from the server, not from the browser's HTTP cache; a set that cannot be completed is not installed
-self.addEventListener('install',e=>{ e.waitUntil(caches.open(SHELL).then(c=>c.addAll(PRECACHE.map(u=>new Request(u,{cache:'reload'})))).then(()=>self.skipWaiting(), err=>caches.delete(SHELL).then(()=>{ throw err; }))); });
+// The set is checked before anything is stored: the page must be of this build, and build.json, asked after every file came, must still
+// say this build (a deploy in between would mix two builds: the server keeps no older files). cache:'reload' skips the browser's HTTP
+// cache. A set that fails any check is not installed, and the previous set stays.
+const get=u=>fetch(new Request(u,{cache:'reload'})).then(r=>{ if(!r.ok || r.redirected) throw new Error(u+': '+r.status); return r; });
+async function fill(){ const page=await get(PRECACHE[0]), html=await page.clone().text();
+  if(+(/<meta name="baobook-build" content="(\d+)">/.exec(html)||[])[1]!==BUILD) throw new Error('the page is of another build');
+  const rest=await Promise.all(PRECACHE.slice(1).map(u=>get(u).then(r=>[u,r])));
+  const now=await fetch(BUILD_URL,{cache:'no-store'}).then(r=>r.json()).then(j=>+j.build, ()=>0);
+  if(now!==BUILD) throw new Error('a deploy during the install');
+  const c=await caches.open(SHELL); await c.put(PRECACHE[0], page); for(const [u,r] of rest) await c.put(u, r); }
+self.addEventListener('install',e=>{ e.waitUntil(fill().then(()=>self.skipWaiting(), err=>caches.delete(SHELL).then(()=>{ throw err; }))); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&!KEEP.includes(k)).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 
 const inSet=(key,o)=>caches.match(key,{...o, cacheName:SHELL}).catch(()=>undefined);   // caches.match, not caches.open: an older worker still running must not recreate its deleted set
@@ -35,7 +44,7 @@ self.addEventListener('fetch',e=>{
   if(url.origin===location.origin){
     if(url.pathname===BUILD_URL) return;
     if(req.mode==='navigate'){ e.respondWith(page(req)); return; }
-    if(url.search===B){ e.respondWith(inSet(req).then(r=>r||fetch(req))); return; }   // a file of this build: from the set; another build's: from the network
+    if(/^\?b=\d+$/.test(url.search)){ e.respondWith(caches.match(req).then(r=>r||fetch(req)).catch(()=>Response.error())); return; }   // a file of one build: that exact address from a set, else the network; never a file of another build
     e.respondWith(fetch(req,{cache:'no-cache'}).catch(()=>inSet(req,{ignoreSearch:true}).then(r=>r||Response.error())));   // the rest (the manifest, the icons, an older page's files): network first
     return;
   }

@@ -52,7 +52,8 @@ await ctx.route('https://www.gstatic.com/firebasejs/**', r=>{ sdkHits++; r.fulfi
   ok('7b after a reload the module comes from the cache: still '+sdkHits+' network fetch', v2==='stub' && sdkHits===1); }
 
 // an update of the worker (the next version of sw.js on the server): the old shell goes, the SDK and font caches stay
-{ const sw=fs.readFileSync(new URL('../public/sw.js', import.meta.url),'utf8'); const OLD='baobook-shell-'+/const BUILD=(\d+)/.exec(sw)[1]; site.override.set('/sw.js', sw.replace(/const BUILD=\d+/,'const BUILD=99'));
+{ const sw=fs.readFileSync(new URL('../public/sw.js', import.meta.url),'utf8'); const OLD='baobook-shell-'+/const BUILD=(\d+)/.exec(sw)[1]; const B0=/const BUILD=(\d+)/.exec(sw)[1]; site.override.set('/sw.js', sw.replace(/const BUILD=\d+/,'const BUILD=99'));
+  site.override.set('/index.html', fs.readFileSync(new URL('../public/index.html', import.meta.url),'utf8').replaceAll(B0,'99')); site.override.set('/build.json', '{"build":99}');   // a deploy: the page and build.json of the same build, or the worker refuses the set
   await pg.evaluate(async()=>{ const reg=await navigator.serviceWorker.getRegistration(); await reg.update(); });
   const k2=await until(async()=>{ const k=await keys(pg); return k.includes('baobook-shell-99') && !k.includes(OLD)? k : null; }, 10000) || await keys(pg);
   ok('8 after the update the shell is 99, the old shell is gone and baobook-sdk is kept ('+k2.join(', ')+')', k2.includes('baobook-shell-99') && !k2.includes(OLD) && k2.includes('baobook-sdk') && k2.includes('other-app-cache'));
