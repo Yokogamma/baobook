@@ -268,7 +268,7 @@ await ownerRun({t:'owner', by:'account', erase:true}, 'erase'); await ownerRun({
 /* ── 18. the real connection queue: a versionless open behind a blocked upgrade is silent; released, the browser answers it and the tab reloads ── */
 { const d=await device(); const a=await fresh(d), b=await fresh(d), c=await fresh(d);
   await go(b,SITE+'blank.html'); await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // kept open, deaf to versionchange
-  await go(c,SITE+'blank.html'); await c.evaluate(()=>{ window.__c={}; const r=indexedDB.open('sheet',4); r.onblocked=()=>{ window.__c.blocked=true; }; r.onupgradeneeded=()=>{ window.__c.upgraded=true; r.transaction.abort(); }; r.onerror=()=>{ window.__c.error=(r.error||{}).name; }; r.onsuccess=()=>{ window.__c.success=true; r.result.close(); }; });
+  await go(c,SITE+'blank.html'); await c.evaluate(()=>{ window.__c={}; const r=indexedDB.open('sheet',5); r.onblocked=()=>{ window.__c.blocked=true; }; r.onupgradeneeded=()=>{ window.__c.upgraded=true; r.transaction.abort(); }; r.onerror=()=>{ window.__c.error=(r.error||{}).name; }; r.onsuccess=()=>{ window.__c.success=true; r.result.close(); }; });
   const blocked=await until(()=>c.evaluate(()=>!!window.__c.blocked), 3000);
   await go(a); const m1=await lockMsg(a, OPENING, 3000);
   ok('18 a versionless open queued behind a blocked upgrade: the waiting strip after 1 s', blocked && OPENING.test(m1||''));
@@ -277,7 +277,7 @@ await ownerRun({t:'owner', by:'account', erase:true}, 'erase'); await ownerRun({
   const nav=navWait(a,6000); await b.evaluate(()=>window.__hold.close());
   const cst=await until(()=>c.evaluate(()=>window.__c.error? window.__c : null), 5000);
   ok('18b released: the upgrade ran and aborted ('+JSON.stringify(cst)+'), the queued request answered and the tab reloaded by itself', !!(cst && cst.upgraded && cst.error==='AbortError') && await nav); await ready(a);
-  ok('18c a healthy start with the note', !(await roMsg(a)) && (await items(a)).some(t=>/перша нотатка/.test(t)) && (await a.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const v=r.result.version; r.result.close(); res(v); }; })))===3);
+  ok('18c a healthy start with the note', !(await roMsg(a)) && (await items(a)).some(t=>/перша нотатка/.test(t)) && (await a.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const v=r.result.version; r.result.close(); res(v); }; })))===4);
   await d.close(); }
 
 /* ── 19. a reload count that cannot be kept (sessionStorage refuses the write) counts as spent: the strip asks, no reload without a limit ── */

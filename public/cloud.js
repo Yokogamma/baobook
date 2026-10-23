@@ -31,8 +31,9 @@ function make(o){ const {fs, db, root}=o; const faults={};
   function read(snap){ if(!snap || !snap.exists()) return null; const d=snap.data(); const out={...d, id:snap.id}; out.srv=toSrv(d.srv);
     if('tsrv' in d){ const t=toSrv(d.tsrv); if(t) out.tsrv=t; else delete out.tsrv; } return out; }
   // what goes to Firestore: no id, srv = the server time, tsrv as §4.8 says, over the stored document D (the core's view of it)
-  function wire(w, D){ const out={...w}; delete out.id; delete out.tsrv; out.srv=fs.serverTimestamp();
-    if(!('purged' in out) && 'deleted' in out){ out.tsrv=(D && D.deleted===out.deleted && D.tsrv)? ts(D.tsrv) : fs.serverTimestamp(); } return out; }
+  // the trash date is a note's: a version tombstone's `deleted: true` takes none (the rules refuse any other key there)
+  function wire(c, w, D){ const out={...w}; delete out.id; delete out.tsrv; out.srv=fs.serverTimestamp();
+    if(c==='notes' && !('purged' in out) && 'deleted' in out){ out.tsrv=(D && D.deleted===out.deleted && D.tsrv)? ts(D.tsrv) : fs.serverTimestamp(); } return out; }
   async function guard(fn){ try{ return await fn(); }catch(e){ throw mapErr(e); } }
   function pageQuery(c, q, n){ const parts=[col(c)]; if(q && q.after){ parts.push(fs.orderBy('srv'), fs.orderBy(fs.documentId()), fs.startAfter(ts(q.after.srv), String(q.after.id))); }
     else { if(q && q.from) parts.push(fs.where('srv','>=',ts(q.from))); parts.push(fs.orderBy('srv'), fs.orderBy(fs.documentId())); }
@@ -42,7 +43,7 @@ function make(o){ const {fs, db, root}=o; const faults={};
     get:(c,id)=>guard(async()=>read(await fs.getDocFromServer(ref(c,id)))),
     // the cloud transaction (§4.5 step 4): fn(D) → the document to write or null; the SDK runs fn again on contention, so fn has no side effects
     txn:(c,id,fn)=>guard(async()=>{ const r=ref(c,id); let out;
-      await fs.runTransaction(db, async tx=>{ const D=read(await tx.get(r)); const w=fn(D); if(faults.hold){ await faults.hold; faults.hold=null; } if(!w){ out={read:D, wrote:false}; return; } tx.set(r, wire(w, D)); out={read:D, wrote:true}; });
+      await fs.runTransaction(db, async tx=>{ const D=read(await tx.get(r)); const w=fn(D); if(faults.hold){ await faults.hold; faults.hold=null; } if(!w){ out={read:D, wrote:false}; return; } tx.set(r, wire(c, w, D)); out={read:D, wrote:true}; });
       if(faults.lost){ faults.lost=false; const e=new Error('the response was lost (test fault)'); e.code='unavailable'; throw e; } return out; }),
     page:(c,q,n)=>guard(async()=>(await fs.getDocsFromServer(pageQuery(c,q,n))).docs.map(read)),
     listen(c, from, onDocs, onErr){ const parts=[col(c)]; if(from) parts.push(fs.where('srv','>=',ts(from))); parts.push(fs.orderBy('srv'));

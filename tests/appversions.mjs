@@ -26,7 +26,7 @@ await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.eva
 // 0 база версії 2, нова нотатка з блоком: версій ще немає (порожній стан не версія, інтервал не минув)
 await pg.mouse.click(500,300); await caret(); await pg.keyboard.type('пароль: Qw3rty!'); await pg.keyboard.press('Escape'); await settle();
 const id=await curId(); const dbv=await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const names=[...d.objectStoreNames]; const v=d.version; d.close(); res({v,names}); }; }));
-ok('0 база версії '+dbv.v+' зі сховищами '+dbv.names.join(',')+'; після першого блока версій '+(await vers(id)).length, dbv.v===3 && dbv.names.includes('versions') && dbv.names.includes('blobs') && (await vers(id)).length===0);
+ok('0 база версії '+dbv.v+' зі сховищами '+dbv.names.join(',')+'; після першого блока версій '+(await vers(id)).length, dbv.v===4 && dbv.names.includes('versions') && dbv.names.includes('blobs') && (await vers(id)).length===0);
 // 1 нова сесія, перша правка: версія «base» зі станом до правки і часом минулого збереження; тіло — старий текст
 await pg.reload(); await ready(pg); const before=await note(id);
 const txt=pg.locator('#sheet .blk .txt').first(); await txt.click(); await pg.keyboard.press('End'); await pg.keyboard.type(' змінено'); await pg.keyboard.press('Escape'); await settle();
