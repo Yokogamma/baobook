@@ -83,6 +83,7 @@
   "storage.exportNever": "never",
   "storage.purgeLocal": "Without the browser database (fallback storage) notes are not deleted for good: they stay in the trash.",
   "storage.backupTitle": "{title} (backup copy)",
+  "storage.closed": "The browser storage did not open, the device's notes were not read",
   "lock.newer": "This version of Baobook is older than your data. You can view and export; reload the page to edit.",
   "lock.other": "Baobook is open in another tab, and without the browser database only one tab can edit. Here you can view and export; to edit, close that tab and reload this one.",
   "lock.nolock": "Without the browser database only one tab can edit, and this browser cannot confirm that this tab is the only one. Here you can view and export.",
@@ -98,6 +99,9 @@
   "lock.exportUnsaved": "Export unsaved",
   "lock.reload": "Reload",
   "lock.say": "View only for now — reload the page to edit",
+  "lock.storage": "The browser storage did not open, so the notes on this device cannot be read right now. Reload the page; if that does not help, close the app and open it again.",
+  "lock.storageBack": "The browser storage is available again. Reload the page to continue.",
+  "lock.opening": "Opening the browser storage…",
 
   "time.justNow": "just now",
   "time.minutesAgo": { "one": "{n} min ago", "other": "{n} min ago" },

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102301">
+<meta name="baobook-build" content="2026102302">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -518,7 +518,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .app.ro .sheet,.app.arch .sheet,.app.chg .sheet{margin-top:48px} .app.ro .empty,.app.arch .empty{display:none} .rostrip .fbtn[hidden]{display:none} .app.ro .sheet .grip,.app.ro .sheet .rz,.app.ro .sheet .bact{visibility:hidden}
 /* «Є зміни з … · Оновити» (SYNC-PLAN 4.10): the same strip, below the archive strip when both show, the sheet lower by both */
 .app.arch #chgStrip{top:98px} .app.arch.chg .sheet{margin-top:96px}
-@media (max-width:640px){ .app.ro .rostrip,.app.chg .chgstrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:96px} .app.chg .sheet{margin-top:96px} .app.arch.chg .sheet{margin-top:144px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower; the change strip may wrap onto two rows too */
+.app.ro .sheet{margin-top:max(48px, calc(var(--roH,0px) + 4px))}   /* a strip taller than its usual rows (the storage lock's text) pushes the sheet down by its own height (--roH), so it covers no block */
+@media (max-width:640px){ .app.ro .rostrip,.app.chg .chgstrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:max(96px, calc(var(--roH,0px) + 4px))} .app.chg .sheet{margin-top:96px} .app.arch.chg .sheet{margin-top:144px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower; the change strip may wrap onto two rows too */
 @media (hover:none){ .rostrip .fbtn,.chgstrip .fbtn{height:40px} }
 .app.ro #clearBtn,.app.ro #areaBtn,.app.ro #histBtn{display:none}
 .app.local #roPurge,.app.local #trashEmpty{display:none}   /* without IndexedDB nothing is deleted for good */
@@ -726,8 +727,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102301"></script>
-<script src="cloud.js?b=2026102301"></script>
+<script src="sync.js?b=2026102302"></script>
+<script src="cloud.js?b=2026102302"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -735,7 +736,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
    and data-i18n-attr="attribute:key;…". The app starts only after the language file is in. */
 const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, plural:null};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102301;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102302;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -768,6 +769,7 @@ const DEBUG={failSave:false}; window.sheetDebug=DEBUG;   // ?debug=1 — пер�
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
+if(window.ResizeObserver) new ResizeObserver(()=>app.style.setProperty('--roH', roStrip.firstElementChild.offsetHeight+'px')).observe(roStrip.firstElementChild);   // the read-only strip's real height (0 while hidden): the sheet keeps below it
 const undoEl=$('undo'), undoMsg=undoEl.querySelector('.umsg'), undoBtn=undoEl.querySelector('.ubtn');
 const MINW=140, MINW_CODE=288;                      // мінімальна ширина текстового блока / блока коду
 const TEXT_CW=26;                                   // a text block without a set width wraps at 26 cells (624px): about 75 characters, the text column of an A4 page
@@ -891,28 +893,42 @@ const IDB_NAME='sheet';
    v2 (PR 0) gets the `sync` store. A v3 database without a `format` record reads as the current format.
    LOCK: null; 'newer' (the data is newer than this code); 'updated' (another tab upgraded the database while this one was open);
    'blocked' (another tab keeps this one from creating the stores); 'other' (no IndexedDB, and another tab is the one that writes);
-   'nolock' (no IndexedDB, and the browser cannot confirm that this tab is the only one that writes) ══ */
+   'nolock' (no IndexedDB, and the browser cannot confirm that this tab is the only one that writes);
+   'storage' (IndexedDB exists and has worked on this device, but did not open at this start: view-only, no note written anywhere, the
+   page reloads by itself when the storage is back; docs/IDB-FALLBACK-PLAN.md) ══ */
 const IDB_VER=3, IDB_STORES=['notes','versions','blobs','sync'];
+// opening the database at start (IDB-FALLBACK-PLAN §4.1): OPEN_WAIT, the silence deadline of one request (no event at all); OPEN_RETRY, the waits
+// before the attempts that follow a failure that finished (`error`, a throw); PROBE_WAIT, the deadline of a background probe under the
+// `storage` lock; RELOADS_MAX, the automatic reloads a tab allows itself in one lock → reload → lock loop (sessionStorage sheet:idb-reloads)
+const OPEN_WAIT=8000, OPEN_RETRY=[300,900], PROBE_WAIT=3000, RELOADS_MAX=3;
 let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
 function setLock(k){ if(LOCK) return; LOCK=k; leadOff(); if(STARTED) lockUI(); }   // a view-only tab never leads the sync (SYNC-PLAN 4.10): the lock goes with the first write it cannot make
-const idb={ db:null, opening:null,
-  // one open at a time: concurrent callers (saves, the sync engine) share the promise instead of making two connections
-  open(){ if(idb.opening) return idb.opening; return idb.opening=new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
-    const go=v=>{ let r, bt=0; try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
-      r.onupgradeneeded=()=>{ if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});
+const idb={ db:null, opening:null, silent:false, want:false, back:false,   // silent: the start's open never answered (IDB-FALLBACK-PLAN §4.1); want: the storage answered again under the `storage` lock, a reload is requested; back: past the reload limit, the strip asks for the tap
+  // one open at a time: concurrent callers (saves, the sync engine) share the promise instead of making two connections.
+  // o.deadline (the start only): a silence timer per request, cleared by its first event; when it fires the attempt is dead and the promise
+  // rejects with {silent:true}. A dead attempt's late events start nothing and touch nothing: `go` makes no new request, `onsuccess` closes
+  // the connection it got (never done(): idb.db stays the live attempt's), `onerror` is swallowed, `onblocked` sets no lock. Under the
+  // `storage` lock the late answer is the storage coming back (§4.4): a success reloads the page, an error after silence starts the probing
+  open(o={}){ if(idb.opening) return idb.opening; return idb.opening=new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
+    let dead=false, dt=0;
+    const go=v=>{ if(dead) return; let r, bt=0; try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
+      clearTimeout(dt); if(o.deadline) dt=setTimeout(()=>{ dead=true; rej(Object.assign(new Error('timeout'),{silent:true})); }, o.deadline);
+      r.onupgradeneeded=()=>{ clearTimeout(dt); if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});   // a dead attempt's upgrade still makes the stores: the version goes up with this transaction either way, and a database at IDB_VER is never mended later
         if(!d.objectStoreNames.contains('versions')){ const s=d.createObjectStore('versions',{keyPath:'id'}); s.createIndex('note_t',['note','t']); s.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
         if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']});   // тіла блоків за хешем вмісту
         if(!d.objectStoreNames.contains('sync')) d.createObjectStore('sync',{keyPath:'k'});   // sync metadata (SYNC-PLAN 4.3): format, owner, epoch, per-note meta, queue, seen, cursor…
         try{ r.transaction.objectStore('sync').put({k:'format', v:IDB_VER}); }catch(_){} };
-      r.onsuccess=()=>{ clearTimeout(bt); const d=r.result;
+      r.onsuccess=()=>{ clearTimeout(dt); clearTimeout(bt); const d=r.result;
+        if(dead){ try{ d.close(); }catch(_){} if(LOCK==='storage') idbBack(); return; }   // the hung request answered at last: the storage is back
         const done=()=>{ idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
         if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
         if(!LOCK && d.version<IDB_VER && IDB_STORES.some(s=>!d.objectStoreNames.contains(s))){ d.close(); return go(IDB_VER); }   // a new device (an empty v1 from the open without a version) or an old one: the upgrade creates what is missing. A database at IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
         // the second half of the format check: a `format` record above this code's version marks data of a newer app in a database of the same version
         if(!d.objectStoreNames.contains('sync')) return done();
         try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>IDB_VER) setLock('newer'); done(); }; g.onerror=()=>done(); }catch(_){ done(); } };
-      r.onerror=()=>{ clearTimeout(bt); if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
-      r.onblocked=()=>{ clearTimeout(bt); bt=setTimeout(()=>{ setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block stops the writes
+      r.onerror=()=>{ clearTimeout(dt); clearTimeout(bt); if(dead){ if(LOCK==='storage' && idb.silent){ idb.silent=false; idbWatch(); } return; }   // the hung request failed at last: the queue is clear, the probing may start
+        if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
+      r.onblocked=()=>{ clearTimeout(dt); clearTimeout(bt); if(dead) return; bt=setTimeout(()=>{ setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block stops the writes
     go(0); }).finally(()=>{ idb.opening=null; }); },
   async run(mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
     t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
@@ -968,8 +984,12 @@ function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=st
 const db={ backend:'local', inited:false, ready:null,
   // at start: open IndexedDB, move the notes from localStorage (the fallback, and where the first version kept them) and drop their keys, so there are no two stores.
   // Nothing moves while LOCK; a record that is not a note stays for whoever can read it. Saves wait until this is done (db.ready)
+  // A failed open is retried (idbOpenRetry). When it still fails on a device where IndexedDB has worked before (idbWorked), the tab is view-only under
+  // the `storage` lock before anything is written: no writer lock, no fbLocal, no note key; the probe (idbWatch) reloads the page when the storage
+  // is back. Only a device that never had IndexedDB (or a browser without it) takes the localStorage mode (SYNC-PLAN 4.14, item 5)
   init(){ return db.ready=(async()=>{ try{
-    try{ await idb.open(); db.backend='idb'; }catch(_){ db.backend='local'; if(LOCK) return; const w=await writerLock(); if(w) fbLocal(); else setLock(w===false? 'other' : 'nolock'); return; }
+    try{ await idbOpenRetry(); db.backend='idb'; if(!S.idbOk) saveS({idbOk:now()}); try{ sessionStorage.removeItem('sheet:idb-reloads'); }catch(_){} }   // the device has a working IndexedDB from now on; a reload that landed in a healthy start is not part of a lock → reload → lock loop
+    catch(_){ db.backend='local'; if(LOCK) return; if(window.indexedDB && idbWorked()){ setLock('storage'); if(!idb.silent) idbWatch(); return; } const w=await writerLock(); if(w) fbLocal(); else setLock(w===false? 'other' : 'nolock'); return; }
     }finally{ db.inited=true; } })(); },   // with IndexedDB the fallback copies move in through the sync core once it runs: db.move() from start()
   // fallback copies (writes that missed IndexedDB) move into the store through the core, so lrev, the queue and the history see them like any other
   // write; the copy and the backup of the record it displaces are decided over the stored record inside one transaction and go in together.
@@ -1004,6 +1024,39 @@ const db={ backend:'local', inited:false, ready:null,
 function idbLost(e){ const d=idb.db, newer=!!e && e.newVersion!=null && e.newVersion>IDB_VER;
   if(newer && !LOCK){ try{ retrySave(); }catch(_){} }
   if(newer) setLock('updated'); if(d) d.close(); idb.db=null; }
+/* ══ opening the database at start (docs/IDB-FALLBACK-PLAN.md). Chrome on Android fails an open now and then (UnknownError at a cold start, after the
+   system killed the browser, right after the PWA was reinstalled) and the next one succeeds; an open can also hang. So the start retries a failure
+   that finished and gives a silent request one deadline with no retry behind it (a hung request holds the connection queue: every later open of
+   the database, from this tab or another, would wait behind it) ══ */
+const idbWorked=()=>!!(S.idbOk || S.versSwept);   // IndexedDB has opened on this device before: idbOk (this PR), or versSwept, written only after a sweep with the database open
+// the attempts: a failure that finished (`error`, a throw out of indexedDB.open) is tried again after OPEN_RETRY waits, unless a lock was set meanwhile
+// (`newer`, `blocked`: decided inside the open) or IndexedDB is not there; silence ends the loop at once (idb.silent). After 1 s of waiting the strip
+// says the storage is opening (every button hidden), so a slow or hanging open does not look like a frozen app; roSync() at the start's end replaces or hides it
+async function idbOpenRetry(){ const waits=[...OPEN_RETRY], st=setTimeout(()=>{ roMsg.textContent=loc('lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; }, 1000);
+  try{ for(;;){ try{ return await idb.open({deadline:OPEN_WAIT}); }catch(e){ if(e && e.silent){ idb.silent=true; throw e; } if(!waits.length || LOCK || !window.indexedDB) throw e; await new Promise(r=>setTimeout(r, waits.shift())); } } }
+  finally{ clearTimeout(st); } }
+/* the background probe under the `storage` lock, only after an `error` (the queue is clear): 5 s after the lock, then 10, 20 and every 30 s, while the
+   tab is visible; a tab shown again probes at once. A probe is a bare indexedDB.open(IDB_NAME) that never touches idb.db: a success closes its
+   connection and reloads the page (idbBack); an error or a throw is «still closed»; silence ends the probing, and the silent probe is the watch
+   like a silent attempt (its late success reloads, its late error restarts the probing). An open without a version is never blocked */
+const WATCH_GAPS=[5000,10000,20000,30000]; let watchT=0, watchN=0, probing=false;
+const watching=()=>LOCK==='storage' && !idb.silent && !idb.back && !idb.want;   // nothing to ask once the storage has answered (a reload is requested) or behind a silent request
+function idbWatch(){ clearTimeout(watchT); watchT=0; if(!watching() || document.hidden) return; watchT=setTimeout(idbProbe, WATCH_GAPS[Math.min(watchN++, WATCH_GAPS.length-1)]); }   // hidden: the timer pauses until the tab is shown again
+function idbProbe(){ clearTimeout(watchT); watchT=0; if(!watching() || document.hidden || probing) return; let r; try{ r=indexedDB.open(IDB_NAME); }catch(_){ return idbWatch(); }
+  probing=true; let quiet=false; const t=setTimeout(()=>{ quiet=true; idb.silent=true; }, PROBE_WAIT);   // a silent probe is in the queue now: no probe behind it, its own late answer decides
+  r.onupgradeneeded=()=>clearTimeout(t); r.onblocked=()=>clearTimeout(t);
+  r.onsuccess=()=>{ clearTimeout(t); probing=false; try{ r.result.close(); }catch(_){} if(quiet) idb.silent=false; idbBack(); };
+  r.onerror=()=>{ clearTimeout(t); probing=false; if(quiet) idb.silent=false; idbWatch(); }; }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && watching()) idbProbe(); });   // brought back to the app: a probe at once, which is how a phone recovers
+// the storage is back: one reload is requested (idb.want: the probing ends) and the page reloads (a view-only tab holds nothing unsaved), never under
+// a dialog or a share sheet (one recheck timer, however many late answers call this meanwhile), and at most RELOADS_MAX times per tab session in a
+// lock → reload → lock loop (the count moves once per requested navigation and is cleared by a successful open); past that the strip asks for the tap
+let reloading=false, backT=0;
+function idbBack(){ if(LOCK!=='storage' || reloading) return; idb.want=true;
+  if(askDlg.open || choiceDlg.open || tszDlg.open || EXPORTING){ if(!backT) backT=setTimeout(()=>{ backT=0; idbBack(); }, 2000); return; }
+  let n; try{ n=+sessionStorage.getItem('sheet:idb-reloads')||0; sessionStorage.setItem('sheet:idb-reloads', String(n+1)); }catch(_){ n=RELOADS_MAX; }   // a count that cannot be read or kept counts as spent: no reload without a limit
+  if(n<RELOADS_MAX){ reloading=true; location.reload(); return; }
+  if(!idb.back){ idb.back=true; if(STARTED) roSync(); } }
 /* ══ версії нотаток (VERSIONS-PLAN, PR 1: лише сховище, без інтерфейсу) ═══════════════════════════════════════
    versions: {id, note, t (час вмісту), w (час запису), reason: base|auto|import|manual|restore, name?, title, sig, from?, size, sum:{ch,add,del,mv,ttl}, blocks:[запис маніфесту…]}
    blobs: {note, h, s (тіло: html з форматуванням, інакше text; код — код), r (1 = html), z (байти)}; тіло з тим самим хешем пишеться один раз; колізія → ключ h~1.
@@ -1114,7 +1167,8 @@ function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=
     if(SYNC!==eng) return; if(r.next<Infinity){ const d=Math.min(5000, Math.max(50, r.next-(Date.now()+(DEBUG.sync.clock||0)))); driveT=setTimeout(syncWake, d); } })(); }
 // the record changed in storage behind the interface: take it unless this tab has unwritten edits of it (then its pending write merges, §4.10)
 // or the caret stands in one of its fields; `src` names where the change came from, for the strip (without it, the record's base tells when it can)
-const keptView=()=>LOCK==='epoch';   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's data comes onto it, by any path
+let STALE=false;   // the owner changed in another tab while this one had no store (the `storage`, `other`, `nolock` locks, the localStorage mode): the view stays as it is until the reload (IDB-FALLBACK-PLAN §4.3)
+const keptView=()=>LOCK==='epoch' || STALE;   // the notes on this screen belong to the owner the tab knew: nothing of the new owner's data comes onto it, by any path
 async function takeStored(id, src){ if(keptView() || DYING) return; const st=await SYNC.state(id); if(keptView() || !st.note) return; const r=st.note, n=notes.find(x=>x.id===id), lrev=st.meta? st.meta.lrev : 0;
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
@@ -1345,6 +1399,7 @@ async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ awai
 // another tab changed the owner (the «owner» message of bindOwner / the dialog): after an erase or a decision made there this tab reloads; after a
 // binding that kept the records (a first sign-in, «Додати до хмари») the engine is replaced by one that knows the new owner, and the tab goes on
 async function ownerMoved(m){ if(DYING) return;
+  if(db.backend!=='idb'){ STALE=true; setLock('epoch'); accUI(); return; }   // a tab without the store (the `storage` lock, the localStorage mode): the view is the old owner's and stays as it is until the reload (keptView drops every later message); no engine to reload, no SDK to load. The lock lands only on a writing tab of the localStorage mode: a lock already set stays
   if(m.erase || ACC.otherTab) return epochMoved(loc('lock.owner'));   // the records are gone, or the decision was taken in the other tab: this screen is the old owner's
   if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
   LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear();
@@ -1805,7 +1860,7 @@ saveRetry.addEventListener('click',retrySave); saveExport.addEventListener('clic
 if(/[?&]debug=1/.test(location.search)){ dbgRow.hidden=false; dbgGeo.hidden=false; dbgTop.hidden=false; dbgFail.addEventListener('change',()=>{ DEBUG.failSave=dbgFail.checked; }); }
 window.addEventListener('beforeunload',e=>{ if(DYING) return; flushSave(); if(inflight.size||unsaved.size||REVIVING.size){ e.preventDefault(); e.returnValue=''; } });   // незавершений запис — теж незбережене, поки не підтверджено
 window.addEventListener('online',()=>{ if(unsaved.size) retrySave(); });
-function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; tabCur.set(n.id); if(!o.restore) saveS({current:n.id});   // restoring a tab at start is not a new choice: a new tab still gets the note opened last
+function openNote(n, o={}){ closeHist(); flushSave(); dropUndo(); exitSel(); pickClose(); prevHide(); lastField=null; HIST.delete(ttl); if(cur && cur!==n && SYNC) SYNC.left(cur.id); cur=n; if(!(LOCK && MEM.has(n.id))){ tabCur.set(n.id); if(!o.restore) saveS({current:n.id}); }   // restoring a tab at start is not a new choice: a new tab still gets the note opened last. A note that lives only in memory under a lock is gone after the reload: it takes the place neither of this tab's note nor of the note opened last
   if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!ESNAP.has(n.id) || !busy(n)) setSnap(n.id, n, LREV.get(n.id)??0); if(db.backend==='idb') vload(n.id);   // the snapshot is taken synchronously from memory (equal to storage unless the note is busy, whose snapshot stays)
@@ -1870,7 +1925,7 @@ const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note i
 // nothing is editable before the start is done (off), the strip and the classes follow ro()
 function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=r || !STARTED; sheet.inert=off; ttl.contentEditable=off? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
   roStrip.hidden=!r && !a; roPurge.hidden=!r || L; roRestore.hidden=L; roExport.hidden=!L; roReload.hidden=!L;
-  if(L){ roMsg.textContent=loc(LOCK==='epoch'? 'lock.epoch' : LOCK==='blocked'? 'lock.blocked' : LOCK==='other'? 'lock.other' : LOCK==='nolock'? 'lock.nolock' : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
+  if(L){ roMsg.textContent=loc(LOCK==='epoch'? 'lock.epoch' : LOCK==='blocked'? 'lock.blocked' : LOCK==='other'? 'lock.other' : LOCK==='nolock'? 'lock.nolock' : LOCK==='storage'? (idb.back? 'lock.storageBack' : 'lock.storage') : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
   else if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
 roRestore.addEventListener('click',()=>{ if(!cur) return; if(cur.deleted) restoreNote(cur, true); else unarchive(cur); }); roPurge.addEventListener('click',()=>{ if(cur) purgeAsk(cur); });
 roExport.addEventListener('click',()=>exportAll({hist:true})); roReload.addEventListener('click',()=>location.reload());   // view-only: everything this tab has, the history as stored
@@ -1917,16 +1972,17 @@ async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lre
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
 const fmtSize=b=>b<1048576? loc('size.kb',{n:Math.max(1,Math.round(b/1024))}) : loc('size.mb',{n:(b/1048576).toLocaleString(I18N.locale,{maximumFractionDigits:1})});
-function storageUI(){ storInfo.textContent=loc('storage.notes',{n:notes.filter(n=>!n.deleted).length})+(db.backend==='idb'?'':' '+loc('storage.fallback'))+' · '+loc('storage.export',{when:S.lastExport? ago(S.lastExport) : loc('storage.exportNever')})+(db.backend==='idb' && DEBUG.vers.size>0? ' · '+loc('storage.history',{size:fmtSize(DEBUG.vers.size)}) : ''); }   // history: the size of the versions and their bodies
+function storageUI(){ storInfo.textContent=(LOCK==='storage'? loc('storage.closed') : loc('storage.notes',{n:notes.filter(n=>!n.deleted).length})+(db.backend==='idb'?'':' '+loc('storage.fallback')))+' · '+loc('storage.export',{when:S.lastExport? ago(S.lastExport) : loc('storage.exportNever')})+(db.backend==='idb' && DEBUG.vers.size>0? ' · '+loc('storage.history',{size:fmtSize(DEBUG.vers.size)}) : ''); }   // history: the size of the versions and their bodies
 let persistAsked=false;
 function persistOnce(){ if(persistAsked||!navigator.storage||!navigator.storage.persist) return; persistAsked=true; navigator.storage.persist().catch(()=>{}); }   // просимо браузер не вичищати дані при нестачі місця
 const HINT_HTML=toast.innerHTML;
 function say(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>toast.classList.remove('show'),3500); }
+let EXPORTING=false;   // an export is in flight: the download, or the share sheet on a touch device (exportAll)
 async function exportAll(o={}){ flushSave(); const data={app:'baobook',format:1,exported:new Date().toISOString(),settings:{theme:S.theme,grid:S.grid,spell:S.spell},notes:notes.filter(n=>!(MEM.has(n.id) && !n.title && !n.blocks.length)).sort((a,b)=>b.updated-a.updated)};   // an empty view-only note is only on the screen
   if((o.hist || $('exportHist').checked) && db.backend==='idb'){ const h=await historyOf(); if(h) data.history=h; }   // older versions of the app ignore the field
-  const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); const done=()=>{ saveS({lastExport:now()}); storageUI(); };
-  const download=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); done(); };
-  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:loc('export.shareTitle')}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
+  const name='baobook-'+new Date().toISOString().slice(0,10)+'.json', json=JSON.stringify(data,null,1); EXPORTING=true; const end=()=>{ EXPORTING=false; }, done=()=>{ end(); saveS({lastExport:now()}); storageUI(); };   // EXPORTING: the download or the share sheet is in flight, so a view-only tab is not reloaded under it (idbBack)
+  const download=()=>{ try{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([json],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }finally{ done(); } };
+  try{ const file=new File([json],name,{type:'application/json'}); if(TOUCH && navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title:loc('export.shareTitle')}).then(done).catch(e=>{ if(!e || e.name!=='AbortError') download(); else end(); }); return; } }catch(_){}   // share refused rather than cancelled by the user (Chrome on Windows reports canShare for files but may deny share): download the file instead
   download(); }
 // імпорт нічого не видаляє: нові нотатки додаються, наявні замінюються лише новішою версією
 async function importNotes(list, settings){ flushSave(); let added=0,updated=0,skipped=0,failed=0; const wrote=[], blank=notes.every(n=>!n.blocks.length&&!n.title);   // blank: only empty notes so far, i.e. moving in from another device or site
