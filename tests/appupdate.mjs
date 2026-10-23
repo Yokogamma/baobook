@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { until } from './lib/wait.mjs';
+import { FILES, expected, found } from './hashes.mjs';
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 
@@ -13,8 +14,10 @@ const PUB=new URL('../public/', import.meta.url), HTML=fs.readFileSync(new URL('
 const BUILD=+((/const BUILD=(\d+)/.exec(HTML)||[])[1]||0), META=+((/<meta name="baobook-build" content="(\d+)">/.exec(HTML)||[])[1]||-1);
 const FILE=fs.existsSync(new URL('build.json', PUB))? +JSON.parse(fs.readFileSync(new URL('build.json', PUB),'utf8')).build : -2;
 const SW=fs.readFileSync(new URL('sw.js', PUB),'utf8'), SWB=+((/const BUILD=(\d+)/.exec(SW)||[])[1]||-3);
-const QB=[...HTML.matchAll(/<script src="(?:sync|cloud)\.js\?b=(\d+)">/g)].map(m=>+m[1]);
+const QB=[...HTML.matchAll(/<script src="(?:sync|cloud)\.js\?b=(\d+)"/g)].map(m=>+m[1]);
 ok('1 the build marker is one number in the constant, the meta tag, sync.js?b= and cloud.js?b=, sw.js and build.json ('+[BUILD,META,...QB,SWB,FILE].join(', ')+')', BUILD>2026010100 && BUILD===META && BUILD===FILE && BUILD===SWB && QB.length===2 && QB.every(b=>b===BUILD));
+{ const want=expected(), have=found(HTML), stale=FILES.filter(f=>have[f]!==want[f]);   // the page's integrity hashes (tests/hashes.mjs): a file of the build changed without them, and the browser would refuse it
+  ok('1b the integrity hashes in index.html match sync.js, cloud.js and the language files'+(stale.length? ': '+stale.map(f=>f+' must be '+want[f]).join(', ')+' (node tests/hashes.mjs --write)' : ''), !stale.length); }
 const NAME=String(BUILD).replace(/^\d\d(\d\d)(\d\d)(\d\d)(\d\d)$/,(_,y,m,d,n)=>y+'.'+m+'.'+d+'.'+(+n));   // 2026102201 → 26.10.22.1
 
 // a version of the app: the marker t-ver tells the versions apart on screen, the build number goes everywhere BUILD is

@@ -6,23 +6,28 @@
    The page: network first, whole body, at most WAIT; a network that fails, or neither answers nor fails within WAIT (a phone waking up, Wi-Fi
    reconnecting), gets the page of the set instead; the update strip in the page tells about a newer build. A first visit has no set and waits.
    The page's own files carry its build in their address (?b=BUILD): only that exact address answers, from a set or from the network, and
-   when neither has it the request fails rather than take a file of another build. So a page and its files are always of one build. build.json (the build on the server) is never
+   when neither has it the request fails rather than take a file of another build; the page also carries their integrity hashes, so the
+   browser refuses a file of another build that the server answers at that address after a deploy. So a page and its files are always of one build. build.json (the build on the server) is never
    cached. Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
    The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used; a version lives in its path, so a
    cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
-const BUILD=2026102303, PREFIX='baobook-', WAIT=5000;
+const BUILD=2026102304, PREFIX='baobook-', WAIT=5000;
 const SHELL=PREFIX+'shell-'+BUILD, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
 const KEEP=[SHELL, FONTS, SDK];
 const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;
 const PRECACHE=['./','./sync.js'+B,'./cloud.js'+B,'./locales/uk.json'+B,'./locales/en.json'+B,'./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
-// The set is checked before anything is stored: the page must be of this build, and build.json, asked after every file came, must still
-// say this build (a deploy in between would mix two builds: the server keeps no older files). cache:'reload' skips the browser's HTTP
-// cache. A set that fails any check is not installed, and the previous set stays.
-const get=u=>fetch(new Request(u,{cache:'reload'})).then(r=>{ if(!r.ok || r.redirected) throw new Error(u+': '+r.status); return r; });
+// The set is checked before anything is stored: the page must be of this build; every file of the build (?b=) must have the bytes the
+// page was built with, by the integrity hashes the page carries (the browser checks them as the file comes; a deploy in between, or a CDN
+// answering out of step, fails here: the server keeps no older files); and build.json, asked after every file came, must still say this
+// build. cache:'reload' skips the browser's HTTP cache. A set that fails any check is not installed, and the previous set stays.
+const get=(u,integrity)=>fetch(new Request(u,{cache:'reload', integrity})).then(r=>{ if(!r.ok || r.redirected) throw new Error(u+': '+r.status); return r; });
+// the hash of a file as the page carries it: `src="sync.js?b=N" integrity="…"` in a tag, `'locales/uk.json':'…'` in its SRI table (tests/hashes.mjs reads the same)
+const hashIn=(html,u)=>{ const f=u.slice(2).split('?')[0].replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const h=(new RegExp('["\']'+f+'(?:\\?b=\\d+" integrity="|\':\')(sha384-[A-Za-z0-9+/]+=*)').exec(html)||[])[1]; if(!h) throw new Error(u+': the page has no hash for it'); return h; };
 async function fill(){ const page=await get(PRECACHE[0]), html=await page.clone().text();
   if(+(/<meta name="baobook-build" content="(\d+)">/.exec(html)||[])[1]!==BUILD) throw new Error('the page is of another build');
-  const rest=await Promise.all(PRECACHE.slice(1).map(u=>get(u).then(r=>[u,r])));
+  const rest=await Promise.all(PRECACHE.slice(1).map(u=>get(u, u.includes(B)? hashIn(html,u) : undefined).then(r=>[u,r])));
   const now=await fetch(BUILD_URL,{cache:'no-store'}).then(r=>r.ok && !r.redirected? r.json() : null).then(j=>j? +j.build : 0, ()=>0);   // an error page is no confirmation
   if(now!==BUILD) throw new Error('a deploy during the install');
   const c=await caches.open(SHELL); await c.put(PRECACHE[0], page); for(const [u,r] of rest) await c.put(u, r); }
