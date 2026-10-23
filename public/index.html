@@ -2033,7 +2033,8 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('on
    Відкриття нотатки з панелі на телефоні ховає панель, але лишає запис «панель із результатами» (+ запис «нотатка»): Back з нотатки знову показує панель із тим самим запитом і прокруткою,
    другий Back ховає панель, третій іде браузеру. На компʼютері панель — не накладення, тож записів не робить. */
 const nav={ stack:[], skip:0, busy:false, queue:[], skipT:null,
-  open(tag, close){ const top=this.stack[this.stack.length-1]; if(top && top.tag===tag){ top.close=close; return; } const e={tag, close, pushed:false}; this.stack.push(e); if(this.skip>0) this.queue.push(e); else this.push(e); },   // поки свій popstate не прийшов, pushState відкладаємо: go(-1) браузер виконує пізніше й відносно поточного запису
+  open(tag, close){ if(tag!=='acts' && actsId!==null && !this.busy) closeActs();   // a list item's action mode never lies under another layer: closing it would take that layer's entry (LIST-ACTIONS-PLAN 4.4)
+    const top=this.stack[this.stack.length-1]; if(top && top.tag===tag){ top.close=close; return; } const e={tag, close, pushed:false}; this.stack.push(e); if(this.skip>0) this.queue.push(e); else this.push(e); },   // поки свій popstate не прийшов, pushState відкладаємо: go(-1) браузер виконує пізніше й відносно поточного запису
   push(e){ try{ history.pushState({nav:e.tag, d:this.stack.indexOf(e)+1}, ''); e.pushed=true; }catch(_){} },
   close(tag){ const i=this.stack.map(e=>e.tag).lastIndexOf(tag); if(i<0) return; const gone=this.stack.splice(i); this.queue=this.queue.filter(e=>!gone.includes(e)); if(this.busy) return;   // закриваємо з popstate — історія вже відмотана
     const n=gone.filter(e=>e.pushed).length; if(n>0){ this.skip++; history.go(-n); clearTimeout(this.skipT); this.skipT=setTimeout(()=>{ if(this.skip){ this.skip=0; this.flush(); } },600); } },   // закрито з інтерфейсу: знімаємо запис(и), свій popstate глушимо; якщо він не прийшов — не чекаємо вічно
@@ -2695,7 +2696,7 @@ list.addEventListener('scroll',()=>{ if(actsId!==null && !redrawing) closeActs()
 document.addEventListener('pointerdown',e=>{ closedBy=null; swallow=null; if(actsId===null || !e.target.closest) return;
   if(e.target.closest('.item.acts button') || e.target.closest('dialog[open]')) return;   // a dialog an action opened (delete forever asks) sits above the mode in the history: closing the mode under it would take the dialog's entry too
   closedBy={id:e.pointerId, at:performance.now()};
-  if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; closePop(); setMenu(false); e.stopImmediatePropagation(); e.preventDefault(); }   // what this press would have closed on its way closes here   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
+  if(!list.contains(e.target)){ swallow={id:e.pointerId, up:0}; closePop(); setMenu(false); e.stopPropagation(); e.preventDefault(); }   // the press goes no further than the document: the other «outside» listeners there still close their menus   // outside the list the closing press reaches nothing else: no gesture on the sheet (a block), no button, no focus
   closeActs(); },true);
 // the closing press may be held long: its click is counted from its own release, not from the press
 document.addEventListener('pointerup',e=>{ if(swallow && swallow.id===e.pointerId) swallow.up=performance.now(); },true);

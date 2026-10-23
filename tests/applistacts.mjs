@@ -11,7 +11,7 @@ const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const T0=Date.now();
 const NOTES=Array.from({length:12},(_,i)=>({id:'n'+(i+1), title:['Ключі','Покупки','Komax старий','Відпустка','Рецепти','Книги','Сервер','Ідеї','Спорт','Фільми','Подарунки','Ремонт'][i],
-  blocks:[{id:'b'+i,row:2,text:'текст нотатки '+(i+1),fx:0.2}], created:1, updated:T0-i*60000}));
+  blocks:[{id:'b'+i,row:2,text:'текст нотатки '+(i+1),fx:0.2}, ...(i===0? [{id:'ar1',row:6,text:'',fx:0.2,kind:'area',cw:12,ch:4,title:'Область'}] : [])], created:1, updated:T0-i*60000}));   // n1 has an area (check 20)
 const file=notes=>({name:'n.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({app:'baobook',format:1,notes}))});
 const fresh=async(pg)=>{ await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); sessionStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg);
   await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await pg.setInputFiles('#importFile',file(NOTES));
@@ -176,6 +176,14 @@ const anyButtonShown=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .i
   await pg.mouse.click(x, y); await pg.waitForTimeout(400); const st5={menu:await pg.locator('.amenu.hm').count()};
   ok('19 the settings opened from the keyboard close the mode '+JSON.stringify(st1)+'; Back closes them in the app '+JSON.stringify(st2)+'; a click on the sheet closes them '+JSON.stringify(st3)+'; the header «⋯» the same '+JSON.stringify(st4)+' → '+JSON.stringify(st5),
     st1.mode===null && st1.set && !st2.set && st2.app && !st3.set && st4.mode===null && st4.menu===1 && st5.menu===0);
+  // 20 an area's «⋯» menu opened from the keyboard while the mode is open: the mode goes first; Back closes the menu and stays in the app; a click on
+  // the sheet closes it too
+  const amenuOpen=()=>pg.evaluate(()=>!!document.querySelector('#sheet .ablk .amenu'));
+  await holdN2(); await pg.focus('#sheet .ablk .cb.more'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300);
+  const a1={mode:await actsOn(pg), menu:await amenuOpen()}; await pg.goBack(); await pg.waitForTimeout(400); const a2={menu:await amenuOpen(), app:await inApp()};
+  await holdN2(); await pg.focus('#sheet .ablk .cb.more'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); await pg.mouse.click(x, y); await pg.waitForTimeout(400); const a3={menu:await amenuOpen(), mode:await actsOn(pg)};
+  ok('20 an area\'s «⋯» opened from the keyboard closes the mode '+JSON.stringify(a1)+'; Back closes it in the app '+JSON.stringify(a2)+'; a click on the sheet closes it '+JSON.stringify(a3),
+    a1.mode===null && a1.menu && !a2.menu && a2.app && !a3.menu && a3.mode===null);
   console.log(errs.length? errs.join('\n') : '✓ wide touch: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
