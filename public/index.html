@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102403">
+<meta name="baobook-build" content="2026102501">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -567,7 +567,9 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .app.ro .sheet{margin-top:max(48px, calc(var(--roH,0px) + 4px))}   /* a strip taller than its usual rows (the storage lock's text) pushes the sheet down by its own height (--roH), so it covers no block */
 @media (max-width:640px){ .app.ro .rostrip,.app.chg .chgstrip{padding:8px 10px} .app.ro .ro-b{width:100%} .app.ro .ro-b .fbtn{flex:1 1 0} .app.ro .sheet{margin-top:max(96px, calc(var(--roH,0px) + 4px))} .app.chg .sheet{margin-top:96px} .app.arch.chg .sheet{margin-top:144px} }   /* a phone, in the trash: the text, then both buttons on one row; the sheet four rows lower; the change strip may wrap onto two rows too */
 @media (hover:none){ .rostrip .fbtn,.chgstrip .fbtn{height:40px} }
-.app.ro #clearBtn,.app.ro #areaBtn,.app.ro #histBtn{display:none}
+.app.ro #clearBtn,.app.ro #areaBtn{display:none}   /* «Історія» stays: read-only in the trash and in a view-only tab (SYNC-PLAN 4.19) */
+#histBtn{position:relative} .hbadge{position:absolute;top:0;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#c33;color:#fff;font-size:10px;font-weight:600;line-height:16px;text-align:center;pointer-events:none} .hbadge[hidden]{display:none}
+.cmark{display:inline-flex;margin-left:6px;color:#c33;flex:0 0 auto} .cmark .i{width:13px;height:13px} .it-w{font-size:var(--t-xs);color:#c33}
 .app.local #roPurge,.app.local #trashEmpty{display:none}   /* without IndexedDB nothing is deleted for good */
 
 /* ══ дотик (hover:none): усі правила для сенсорних екранів зібрано в одному блоці (план 3.9); порядок — як був у файлі, бо пізніше правило перекриває раніше ══ */
@@ -648,7 +650,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 .hv:hover{background:var(--hover)} .hv.cur{background:var(--hover-2);color:var(--ink)}
 .hist-l:focus-visible .hv.cur{outline:2px solid var(--sel-line);outline-offset:-2px}
 .hv-t{font-size:var(--t-md);font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums} .hv-k{margin-left:8px;color:var(--ink-2)} .hv-s{margin-top:2px;color:var(--ink-3)} .hv-s:empty{display:none}
-.hist-f{padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));border-top:.5px solid var(--line)} .hist-f .fbtn{width:100%;height:34px;font-size:var(--t-md)} .fbtn:disabled{opacity:.45;cursor:default} .fbtn:disabled:hover{background:transparent;color:var(--ink-2)}
+.hist-f{display:flex;gap:8px;padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));border-top:.5px solid var(--line)} .hist-f .fbtn[hidden]{display:none} .hist-f .fbtn{flex:1 1 0;width:100%;height:34px;font-size:var(--t-md)} .fbtn:disabled{opacity:.45;cursor:default} .fbtn:disabled:hover{background:transparent;color:var(--ink-2)}
 #histRange{display:none}
 .sheet.history .grip,.sheet.history .rz,.sheet.history .bact{visibility:hidden}
 .sheet.history .blk.v-ch>.tcard,.sheet.history .blk.v-ch>.cblk,.sheet.history .blk.v-ch>.ablk{box-shadow:-4px 0 0 0 var(--n);border-radius:6px}   /* body or title differs from now */
@@ -744,7 +746,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="tb" id="spellBtn" data-i18n-attr="title:spell.title" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="gridBtn" data-i18n-attr="title:grid.title" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="themeBtn" data-i18n-attr="title:theme.title" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
-        <button class="tb" id="histBtn" data-i18n-attr="title:hist.button" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg></button>
+        <button class="tb" id="histBtn" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg><span class="hbadge" id="histBadge" hidden aria-hidden="true"></span></button>
         <button class="tb" id="clearBtn" data-i18n-attr="title:sheet.clear"><svg class="i" viewBox="0 0 24 24"><path d="M21 3l-7.5 7.5"/><path d="M11.4 8.4l4.2 4.2"/><path d="M11.4 8.4 3.6 12.6 11.4 20.4 15.6 12.6"/><path d="M12.8 9.8 6.2 15.2M14.2 11.2 8.8 17.8"/></svg></button>
         <button class="tb" id="moreBtn" data-i18n-attr="title:menu.more;aria-label:menu.more" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
@@ -763,7 +765,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
     <label class="search hist-q" id="histQBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="histQ" type="search" data-i18n-attr="placeholder:hist.search;aria-label:hist.search" autocomplete="off" spellcheck="false"></label>
     <input type="range" id="histRange" min="0" max="0" step="1" value="0" data-i18n-attr="aria-label:hist.range">
     <div class="hist-l" id="histList" role="listbox" tabindex="0" data-i18n-attr="aria-label:hist.title"></div>
-    <div class="hist-f"><button class="fbtn" id="histRestore" type="button" disabled data-i18n="hist.restore"></button></div>
+    <div class="hist-f"><button class="fbtn" id="histRestore" type="button" disabled data-i18n="hist.restore"></button><button class="fbtn" id="histTake" type="button" hidden data-i18n="conflict.take"></button><button class="fbtn" id="histDrop" type="button" hidden data-i18n="conflict.drop"></button></div>
   </aside>
 </div>
 <div class="undo" id="undo" hidden role="status"><span class="umsg"></span><button class="ubtn" type="button" data-i18n-html="undo.button"></button><button class="uclose" type="button" data-i18n-attr="aria-label:common.hide;title:common.hide">✕</button></div>
@@ -792,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102403" integrity="sha384-wgvtLwaKhRWtodFwJjXmluCsJAt++FjYNlF+7lTqrTbL04I3nolCncNHXGFBNOve"></script>
-<script src="cloud.js?b=2026102403" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102501" integrity="sha384-+jrbr7UgsYXG+UQxmhzwSUpI/STWKjELnJfRwCY7Xe4MLjrIPhIiVZRMGoIRat18"></script>
+<script src="cloud.js?b=2026102501" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -804,9 +806,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'locales/en.json':'sha384-N6tuytYVEZRLHfLW8/K+H2pPMSW9UILkfGEaTYitH6KqCunLlRp6ynBD77jjLglf', 'locales/uk.json':'sha384-QB55Pl15yOgfJMLG415Lzq0reDGKs3nASEp6n1FH+uhc7wsH87LMEJG/o+ongK4D'};
+const SRI={'locales/en.json':'sha384-7kmHlR/SuTMXqGfwA/978lwo8bXR1fkLgqM0LvsDZn/YOYjkxuY2F93Y0vlrXn9h', 'locales/uk.json':'sha384-rgLGw9k9aFZFGwhH/RfFZ+EY/0naP3V3LPLgkHzvefUQATxWa+TdLZIagTB7hQ8e'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102403;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102501;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -917,7 +919,7 @@ function highlight(src, lang){
   out+=escH(src.slice(last));
   return out.split('\n').map(l=>'<span class="ln">'+l+'</span>').join('\n');
 }
-const ICO={copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+const ICO={conflict:'<svg class="i" viewBox="0 0 24 24"><path d="M7 4v9"/><path d="M17 11v9"/><path d="M7 13l10-2"/><circle cx="7" cy="4" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>', copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
   text:'<svg class="i" viewBox="0 0 24 24"><path d="M3 18 7.5 6 12 18M4.7 14h5.6M14 18l3-7.5 3 7.5M15.1 15.5h3.8"/></svg>',
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 7"/></svg>',
   wrap:'<svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-4M4 18h4"/><path d="M13 16l-2 2 2 2"/></svg>',
@@ -1282,7 +1284,7 @@ async function takeStored(id, src){ if(keptView() || DYING) return; const st=awa
   if(st.meta && st.meta.arrived && r.updated>now()) ARRIVED.set(id, st.meta.arrived); else ARRIVED.delete(id);
   if(n && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(id, src||PENDING.get(id)||srcOf(st)); chgUI(); return; }   // the redraw waits for a safe point: the record is written and the caret has left
   if(!n){ notes.push(r); LREV.set(id,lrev); if(cur) renderList(); storageUI(); return; }
-  takeRec(n, r); LREV.set(id,lrev); undoStacks.delete(id); VLAST.delete(id); PENDING.delete(id); setSnap(id, n, lrev);   // the snapshot follows the record, as in takeNote: a whole write of a note not open (a pin) merges over it
+  takeRec(n, r); LREV.set(id,lrev); undoStale(id); VLAST.delete(id); PENDING.delete(id); setSnap(id, n, lrev);   // the snapshot follows the record, as in takeNote: a whole write of a note not open (a pin) merges over it
   if(n===cur) redrawCur(n); else { liveLinks(sheet); renderBacklinks(); }
   relist(); storageUI(); chgUI(); }
 // the source of a change found in storage without a message: the record equals the cloud base written by another device, else another tab of this one
@@ -1290,7 +1292,8 @@ const srcOf=st=>(st.meta && st.meta.base && st.meta.base.dev && st.meta.lrev===s
 // the open note redrawn from its record. The empty text block a click on the sheet just made is not in storage and holds nothing back: it is put
 // back with the caret where it was, if its place is still free (the owner's decision: a change applies when the caret leaves the block)
 function redrawCur(n){ const tb=tempBlock(), spot=tb && !tb.parent? {col:tb.col, row:tb.row} : null; if(tb){ blocks=blocks.filter(x=>x!==tb); tb.el.remove(); }   // taken out first, quietly: its blur handler would otherwise drop it in the middle of the redraw and mark the note dirty
-  closeHist(); const y=window.scrollY; dropUndo(); exitSel(); lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y);
+  closeHist(); const y=window.scrollY; if(!(ACT && ACT.note===n.id)) dropUndo(); exitSel();   // a conflict's toast stays over the redraw its merge brings (SYNC-PLAN 4.19)
+  lastField=null; HIST.delete(ttl); drawNote(n); window.scrollTo(0,y);
   if(spot && fits({col:spot.col, row:spot.row, lines:1, w:MINW})) make({col:spot.col, row:spot.row}, true); }
 // the strip «Є зміни з {device} · Оновити»: the open note has a change waiting in storage, and the wait is for the caret (or for an unsaved write), not
 // for a write in flight, which resolves itself in a moment. «Оновити» saves what is typed and takes the caret out: the safe point follows
@@ -1325,7 +1328,7 @@ async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) ret
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id); EDITS.delete(id);
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); chgUI(); }
 // the engine (this tab leads) applied a document: this tab takes it, and the other tabs are told which record changed, to what lrev and from which device
-function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(ev.kind==='version' || ev.kind==='quarantine'){ if(H.open && cur && (!ev.note || ev.note===cur.id)) loadHist(); if(ev.note) tellTabs({t:'ver', note:ev.note}); } }
+function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(ev.kind==='copy'){ copiesEvent(ev); copyToast(ev); tellTabs({t:'copy', note:ev.note, dn:ev.dn, tab:ev.tab}); } else if(ev.kind==='copies'){ copiesEvent(ev); tellTabs({t:'copies', note:ev.note}); } else if(ev.kind==='version' || ev.kind==='quarantine'){ if(H.open && cur && (!ev.note || ev.note===cur.id)) loadHist(); if(ev.note) tellTabs({t:'ver', note:ev.note}); } }
 function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
 /* ══ the leader tab (SYNC-PLAN 4.10): one tab per data space talks to the cloud, under the Web Lock `baobook-sync:{env}`; the others only write locally.
    The lock goes on pagehide and freeze, so the page may enter the back/forward cache and a frozen tab blocks nobody; a request still waiting in the
@@ -1598,7 +1601,7 @@ const listOrder=(a,b)=>((b.pinned||0)-(a.pinned||0))||(b.updated-a.updated);   /
 const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return false; } };   // a browser without :focus-visible restores nothing
 const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
 const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
-function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; requestAnimationFrame(off); setTimeout(off,100); const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
+function renderList(){ copiesUI(); redrawing=true; const off=()=>{ redrawing=false; }; requestAnimationFrame(off); setTimeout(off,100); const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
   drawList(); snapSave(); if(LOCK==='storage') snapShow(loc('boot.snapLocked')); if(actsId!==null && !list.querySelector('.item.amode')){ actsId=null; nav.close('acts'); } if(palOpen) placePal();   // the note left the list: its action mode goes, and its palette (placePal closes it)
   if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
 // the last list as names only (localStorage sheet:listsnap, at most 60, pinned first): shown greyed while the start waits and under the storage
@@ -1631,7 +1634,8 @@ function found(pool,T){ const query=norm(q.value).trim(); if(!T.length) return [
 function listItem(it,T){ const n=it.n, tr=!!n.deleted, ar=!tr && !!n.archived, pa=!tr && !ar, pin=pa && !!n.pinned, c=!tr && colorOf(n); const d=el('div','item'+(cur&&n.id===cur.id?' cur':'')+(pa?' pa':'')+(ar?' ar':'')+(pin?' pinned':'')+(actsId===n.id?' amode':'')+(pressId===n.id?' press':''),list); d.dataset.id=n.id; d.dataset.k=tr? 't' : ar? 'a' : 'n'; if(c) d.dataset.color=c; d.setAttribute('role','button'); d.tabIndex=0;
   const [rk,ri]=tr? ['trash.restore',ICO.back] : ar? ['archive.unarchive',ICO.back] : ['archive.move',ICO.box], xk=tr? 'trash.purge' : 'notes.delete';
   // the pin keeps one name with aria-pressed (#82); the other buttons are one-shot actions named by their title. In the archive the way back looks pressed
-  d.innerHTML='<div class="it-h">'+(pin? '<i class="pmark" aria-hidden="true">'+ICO.pin+'</i>' : '')+'<div class="it-t"></div></div>'+(pin? '<span class="sr-only">'+locA('list.pinnedState')+'</span>' : '')+'<div class="it-s"></div><div class="it-d"></div>'
+  const cp=copiesN(n.id)>0, ckA=cp? locA(tr? 'list.copiesTrash' : 'list.copies') : '';   // a note with conflict copies (SYNC-PLAN 4.19); in the trash the mark says why it stays
+  d.innerHTML='<div class="it-h">'+(pin? '<i class="pmark" aria-hidden="true">'+ICO.pin+'</i>' : '')+'<div class="it-t"></div>'+(cp? '<i class="cmark" aria-hidden="true" title="'+ckA+'">'+ICO.conflict+'</i>' : '')+'</div>'+(pin? '<span class="sr-only">'+locA('list.pinnedState')+'</span>' : '')+(cp && !tr? '<span class="sr-only">'+ckA+'</span>' : '')+'<div class="it-s"></div><div class="it-d"></div>'+(cp && tr? '<div class="it-w">'+ckA+'</div>' : '')
     +'<span class="it-b" role="group" aria-label="'+locA('list.actions')+'">'+(tr? '' : '<button class="it-c"'+(c? ' data-color="'+c+'"' : '')+' title="'+locA('color.title')+'" aria-label="'+locA('color.button',{name:colorName(c)})+'" aria-haspopup="dialog" aria-expanded="'+!!(palOpen && palOpen.id===n.id)+'">'+ICO.palette+'</button>')+(pa? '<button class="it-p'+(n.pinned? ' on' : '')+'" title="'+locA(n.pinned? 'pin.unpin' : 'pin.pin')+'" aria-label="'+locA('pin.pin')+'" aria-pressed="'+!!n.pinned+'">'+ICO.pin+'</button>' : '')
     +'<button class="it-r'+(ar? ' back' : '')+'" title="'+locA(rk)+'" aria-label="'+locA(rk)+'">'+ri+'</button><button class="it-x" title="'+locA(xk)+'" aria-label="'+locA(xk)+'">'+ICO.trash+'</button></span>';
   fillItem(d,n,T,it.snip); const del=()=>tr? purgeAsk(n) : delNote(n), side=()=>tr? restoreNote(n) : ar? unarchive(n) : archiveNote(n);
@@ -1653,6 +1657,7 @@ function itemMenu(n, d, at, kb){ const tr=!!n.deleted, ar=!tr && !!n.archived, k
   if(!tr) items.push({label:loc('color.title'), row:['',...NOTE_COLORS].map(c=>({html:swatch(c), label:colorName(c), checked:c===colorOf(n), act:go(()=>setColor(n, c), 'it-c')}))});   // the colours in one row, a radio group the arrow keys walk through
   if(!tr && !ar) items.push({ico:ICO.pin, label:loc('pin.pin'), checked:!!n.pinned, act:go(()=>pinNote(n, !n.pinned), 'it-p')});
   items.push(tr? {ico:ICO.back, label:loc('trash.restore'), act:go(()=>restoreNote(n))} : ar? {ico:ICO.back, label:loc('archive.unarchive'), act:go(()=>unarchive(n))} : {ico:ICO.box, label:loc('archive.move'), act:go(()=>archiveNote(n))});
+  if(tr && copiesN(n.id) && !LOCK) items.push({ico:ICO.conflict, label:loc('conflict.dropAll',{n:copiesN(n.id)}), act:go(()=>dropAllCopies(n))});   // the copies keep a note in the trash from the automatic purge (SYNC-PLAN 4.19)
   items.push({node:Object.assign(document.createElement('hr'),{className:'msep'})}, tr? {ico:ICO.trash, label:loc('trash.purge'), danger:true, act:go(()=>purgeAsk(n))} : {ico:ICO.trash, label:loc('notes.delete'), danger:true, act:go(()=>delNote(n))});
   popMenu(d, document.body, 'ctx', items, {at}); }
 // the item first: it shows its buttons. A button keeps the focus while it means the same: the pin always, the others while the note stays in its section
@@ -2010,7 +2015,7 @@ function openNote(n, o={}){ closeActs(); closeHist(); flushSave(); dropUndo(); e
   if(!o.link) hops.length=0; backUI(); setHash(n.id);   // the address names the open note; «back» is only for notes reached by a link
   if(unsaved.has(n.id)) writeNote(n); else savedEl.className='saved';
   if(!ESNAP.has(n.id) || !busy(n)) setSnap(n.id, n, LREV.get(n.id)??0); if(db.backend==='idb') vload(n.id);   // the snapshot is taken synchronously from memory (equal to storage unless the note is busy, whose snapshot stays)
-  drawNote(n); chgUI(); if(SYNC && db.backend==='idb' && !RECEIPTS.has(n.id)) SYNC.state(n.id).then(st=>{ if(cur===n && st.meta && st.meta.err==='receipts'){ RECEIPTS.add(n.id); chgUI(); } }).catch(()=>{});   // a refusal for receipts (the leader found it) is in the record's metadata
+  drawNote(n); chgUI(); copiesUI(); if(SYNC && db.backend==='idb' && !RECEIPTS.has(n.id)) SYNC.state(n.id).then(st=>{ if(cur===n && st.meta && st.meta.err==='receipts'){ RECEIPTS.add(n.id); chgUI(); } }).catch(()=>{});   // a refusal for receipts (the leader found it) is in the record's metadata
   list.querySelectorAll('.item').forEach(d=>d.classList.toggle('cur',d.dataset.id===n.id)); if(isMobile() && app.classList.contains('open')){ setSide(false,{keep:true}); nav.open('note', ()=>setSide(true,{keep:true})); } window.scrollTo(0,0); }   // маршрут: Back із нотатки повертає панель із результатами
 function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); roSync(); renderBacklinks(); }
@@ -2033,13 +2038,18 @@ async function delNote(n){ if(held()) return; if(n===cur) flushSave(); const bar
 function restoreNote(n, open){ if(held() || !notes.includes(n) || !n.deleted) return; delete n.deleted; n.updated=now(); writeNote(n, fieldDelta((C,t)=>{ if(!C.deleted) return null; delete C.deleted; return C; }));
   if(open || cur===n) openNote(n); else say(loc(n.archived? 'trash.restoredArchive' : 'trash.restored',{title:titleOf(n)}));
   relist(); storageUI(); }
-function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } notes=notes.filter(x=>x!==n);
+function purgeNote(n){ if(LOCK) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; }
   if(SYNC && SYNC.hasOwner()){ SYNC.purgeLocal(n.id).then(()=>syncWake()); VLAST.set(n.id,null); } else { db.remove(n.id); vdrop(n.id); }   // with an owner the core removes the record, its history and bodies and queues the tombstone (SYNC-PLAN 4.4)
-  ESNAP.delete(n.id); LREV.delete(n.id); ARRIVED.delete(n.id); PENDING.delete(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
+  forgetNote(n); }
+// the page lets go of a note that storage no longer has
+function forgetNote(n){ notes=notes.filter(x=>x!==n); VLAST.set(n.id,null); COPIES.delete(n.id); ESNAP.delete(n.id); LREV.delete(n.id); ARRIVED.delete(n.id); PENDING.delete(n.id); unsaved.delete(n.id); undoStacks.delete(n.id); saveUI(); tellTabs({t:'del',id:n.id});
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); storageUI(); chgUI(); }   // without IndexedDB nothing is deleted for good: notes stay in the trash
 async function purgeAsk(n){ if(held()) return; if(db.backend!=='idb'){ say(loc('storage.purgeLocal')); return; } let copies=0; try{ copies=SYNC? await SYNC.countCopies(n.id) : 0; }catch(_){}   // conflict copies go only with an explicit «forever», and the dialog names how many
   if(await ask({title:loc('trash.purgeTitle',{title:titleOf(n)}), text:copies? loc('trash.purgeTextCopies',{n:copies}) : loc('trash.purgeText'), ok:loc('trash.purge')}) && notes.includes(n) && n.deleted) purgeNote(n); }
-function purgeOld(){ if(LOCK || db.backend!=='idb' || (SYNC && SYNC.hasOwner())) return; /* with an owner the automatic purge is a cloud transaction (SYNC-PLAN 4.8, PR 3) */ const lim=now()-TRASH_DAYS*864e5; notes.filter(n=>n.deleted && n.deleted<lim && !busy(n)).forEach(purgeNote); }   // at start and every hour while open
+// at start and every hour while open; with an owner the automatic purge is a cloud transaction (SYNC-PLAN 4.8, PR 3). Without one the core deletes the note only
+// if, inside the same transaction, it is still past its days and has no conflict copies: a copy another tab wrote a moment ago keeps it (§4.19)
+function purgeOld(){ if(LOCK || db.backend!=='idb' || !SYNC || SYNC.hasOwner()) return; const lim=now()-TRASH_DAYS*864e5;
+  for(const n of notes.filter(n=>n.deleted && n.deleted<lim && !busy(n))) SYNC.purgeOldLocal(n.id, lim).then(r=>{ if(r && r.ok && r.purged && notes.includes(n)) forgetNote(n); }); }
 function setSection(s){ if(section===s) return; closeActs(); section=s; q.value=''; if(s!=='notes' && isMobile()) nav.open('section', ()=>setSection('notes')); else nav.close('section'); renderList(); list.scrollTop=0; }
 sectBack.addEventListener('click',()=>setSection('notes')); trashRow.addEventListener('click',()=>setSection('trash')); archRow.addEventListener('click',()=>setSection('archive'));
 /* the archive: notes that should stay but not in the list. No time limit; an archived note opens and edits as usual, with a strip to take it back */
@@ -2106,7 +2116,7 @@ function takeNote(r, lrev){ if(!validNote(r) || keptView() || DYING) return; con
   VLAST.delete(n.id);   // the other tab may have written versions: read the latest again before writing one
   if(db.backend==='idb' && (busy(n) || (n===cur && fieldActive()))){ PENDING.set(n.id, PENDING.get(n.id)||{tab:true}); chgUI(); return; }   // the pending write merges over the stored record; the redraw waits for the safe point
   if(busy(n)) return;   // without IndexedDB only one tab writes, so this does not happen
-  takeRec(n, r); setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); undoStacks.delete(n.id);   // undo steps were made on the old copy; with the lrev the snapshot equals the record, so the next write takes the short path
+  takeRec(n, r); setSnap(n.id, n, lrev!=null? lrev : null); if(lrev!=null) LREV.set(n.id,lrev); undoStale(n.id);   // undo steps were made on the old copy; with the lrev the snapshot equals the record, so the next write takes the short path
   if(n===cur) redrawCur(n); else { liveLinks(sheet); renderBacklinks(); }   // another note may be renamed, or link here now
   renderList(); }
 function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM.has(id) || LOCK) return;   // edits here keep the note (its next save writes it back); view-only, memory may hold the last copy left
@@ -2119,6 +2129,7 @@ function tabMsg(m){ if(keptView() || DYING) return;
   else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
+  else if(db.backend==='idb' && m.t==='copy'){ copiesEvent(m); copyToast(m); } else if(db.backend==='idb' && m.t==='copies') copiesEvent(m);   // a copy made or removed in another tab: recount that note
   else if(m.t==='ver' || m.t==='vput'){ if(H.open && cur && cur.id===m.note) loadHist(); }   // a version changed in another tab (SYNC-PLAN 4.9): an open «Історія» of that note reloads
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
@@ -2516,11 +2527,14 @@ function buildCode(b){
    Плашка показує останній запис: дрібний (порожній чи однорядковий блок, розгрупування) — UNDO_MS, вагомий (область із блоками, багаторядковий текст) — без таймера, до ✕ чи наступної дії.
    Повертають по одному: кнопка плашки, Ctrl+Z поза полями, «Скасувати: …» у меню «⋯» шапки. Перехід до іншої нотатки лише ховає плашку — стек нотатки лишається. Пересування стрілками — тихий запис, без плашки. */
 const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStacks=new Map(); let undoT=null, undoRaf=0, undoHideT=0;   // undoHideT: hideUndo's timer that sets hidden after the fade; a new toast cancels it
+// a change from elsewhere makes the snapshots of the undo steps stale; a step that is a core call over the note as stored then (o.safe: a conflict copy's
+// «Відновити» and «Прибрати», SYNC-PLAN 4.19) stays
+function undoStale(id){ const st=undoStacks.get(id); if(!st) return; const k=st.filter(e=>e.safe); if(k.length) undoStacks.set(id,k); else undoStacks.delete(id); }
 function undoStack(id){ id=id||(cur&&cur.id); if(!undoStacks.has(id)) undoStacks.set(id,[]); return undoStacks.get(id); }
-function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now()}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
+function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now(), ro:!!o.ro, safe:!!o.safe}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
 function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st) bytes+=e.size; if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES)) return; oldest.shift(); } }   // найстаріші записи витісняються першими, з будь-якої нотатки
-function showUndo(msg, big){ clearTimeout(undoT); undoT=null; clearTimeout(undoHideT); cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
-function hideUndo(){ clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); clearTimeout(undoHideT); undoHideT=setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
+function showUndo(msg, big){ ACT=null; undoBtn.innerHTML=loc('undo.button'); clearTimeout(undoT); undoT=null; clearTimeout(undoHideT); cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
+function hideUndo(){ ACT=null; clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); clearTimeout(undoHideT); undoHideT=setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
 function dropUndo(){ hideUndo(); }   // ховає плашку; стек лишається (перехід між нотатками, тести)
 /* own confirmation instead of confirm(): ask({title, text, ok}) → Promise<boolean>. A modal <dialog>: the page under it is inert, the safe button has the focus;
    Esc, a click outside and system Back cancel (Back through nav, like the other overlays) */
@@ -2531,9 +2545,10 @@ askYes.addEventListener('click',()=>{ if(askEnd) askEnd(true); }); $('askNo').ad
 askDlg.addEventListener('close',()=>{ if(askEnd) askEnd(false); });   // Esc, or the browser closed it on its own
 askDlg.addEventListener('click',e=>{ if(e.target!==askDlg || !askEnd) return; const r=askDlg.getBoundingClientRect(); if(e.clientX<r.left || e.clientX>r.right || e.clientY<r.top || e.clientY>r.bottom) askEnd(false); });   // a click on the backdrop
 addEventListener('keydown',e=>{ if(askDlg.open) e.stopPropagation(); },true);   // the page under the dialog hears no keys (Ctrl+Z, Delete, Esc for its panels); Esc, Tab and Enter in the dialog are default actions and still work
-function doUndo(){ if(ro()) return false; closeHist(); const e=undoStack().pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
+function doUndo(){ const st=undoStack(), top=st[st.length-1]; if(ro() && !(top && top.ro && !LOCK)) return false; closeHist(); const e=st.pop(); hideUndo(); if(!e) return false; e.restore(); return true; }
 function blockLabel(b){ const line=(b.text||'').trim().split('\n')[0]||loc('block.noText'); return line.length>28? line.slice(0,28)+'…' : line; }
-undoBtn.addEventListener('click',()=>doUndo()); undoEl.querySelector('.uclose').addEventListener('click',()=>hideUndo());
+// an action toast (a conflict's «Показати») runs its action, never the top of the stack
+undoBtn.addEventListener('click',()=>{ if(ACT){ const a=ACT; hideUndo(); a.run(); } else doUndo(); }); undoEl.querySelector('.uclose').addEventListener('click',()=>hideUndo());
 /* ══ історія правок у полях — текстовий блок, код у редагуванні, назви: Ctrl+Z, Ctrl+Shift+Z або Ctrl+Y. Власна, бо браузерна одна на всю сторінку,
    дробиться до букви від будь-якої зміни DOM (автозбереження, список нотаток) і не знає про службові правки (чипи, нульові пробіли).
    Знімок — html поля й виділення. Набір поспіль — один крок; новий крок — після паузи понад секунду, переходу курсора, зміни роду правки
@@ -3052,6 +3067,7 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
    that differ from now; dashed outlines show blocks the version does not have. «Зараз», Esc, ✕ or another note bring the live note back.
    «Відновити цю версію» and «Повернути цей блок» keep the current state as a version, put the version (or one block of it) into the note,
    save it as «restore» and offer «Скасувати». The «⋯» menu names a version, searches the versions and clears the note's history. */
+const histBadge=$('histBadge'), histTake=$('histTake'), histDrop=$('histDrop');
 const hist=$('hist'), histBtn=$('histBtn'), histList=$('histList'), histRestore=$('histRestore'), histClose=$('histClose'), histRange=$('histRange'), histMore=$('histMore');
 const histNameRow=$('histNameRow'), histName=$('histName'), histQBox=$('histQBox'), histQ=$('histQ'), vlayer=$('vlayer'), mainEl=sheet.parentElement;
 const H={open:false, list:[], vis:[], bodies:null, st:{}, sel:'now', view:null, nowSum:null, t:0, q:'', txt:new Map(), geo:null};   // sel: highlighted row ('now' or a version id); view: the version drawn on the sheet; vis: the rows the search leaves; st: the cloud states of the named versions, with an owner (SYNC.versionStates, SYNC-PLAN 4.9)
@@ -3078,7 +3094,8 @@ async function loadHist(){ const n=cur; let list=[], bodies=[], st={};
   H.st=st; H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
   if(H.view){ const nv=H.list.find(v=>v.id===H.view.id); if(nv) H.view=nv; }   // the shown version as stored now (named, renamed here or elsewhere): the menu and its dialogs read it
   if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
-async function openHist(){ if(H.open || !cur || ro()) return; flushSave(); hideUndo(); exitSel(); closePop();
+async function openHist(){ if(H.open || !cur) return;   // read-only in the trash and in a view-only tab: versions can be viewed, nothing changes (SYNC-PLAN 4.19)
+  flushSave(); hideUndo(); exitSel(); closePop();
   H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.st={}; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
   hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
   if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
@@ -3090,17 +3107,17 @@ function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('
   const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
   if(H.bodies && !H.vis.length) el('div','none',histList).textContent=loc(H.q? 'search.none' : 'hist.empty');
   let day=''; for(const v of H.vis){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
-    const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span>'+stateLine(v)+'<div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
+    const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.reason==='copy' && v.updated? v.updated : v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span>'+stateLine(v)+'<div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
   syncHist(); }
 // the state line of a named version, only with an owner: «у хмарі», «ще не надіслано», «лише тут: …», «не синхронізовано»; one received from another
 // device names the device of its document's stamp (after a rename that is the renaming device, so the line never says who created it)
 const VSTATE={cloud:()=>loc('hist.state.cloud'), pending:()=>loc('hist.state.pending'), big:()=>loc('hist.state.big'), partial:()=>loc('hist.state.partial'), shape:()=>loc('hist.state.shape'), error:()=>loc('hist.state.error')};
-function stateLine(v){ const st=v.name && H.st[v.id]; if(!st) return ''; const t=(VSTATE[st]||VSTATE.pending)(), from=v.dn && v.dev && v.dev!==S.devId? v.dn : '';
+function stateLine(v){ if(v.reason==='copy') return '<div class="hv-st">'+locA('hist.copyHere')+'</div>'; const st=v.name && H.st[v.id]; if(!st) return ''; const t=(VSTATE[st]||VSTATE.pending)(), from=v.dn && v.dev && v.dev!==S.devId? v.dn : '';
   return '<div class="hv-st'+(st==='error'? ' bad' : '')+'">'+escHtml(from? loc('hist.stateFrom',{state:t, device:from}) : t)+'</div>'; }
 function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel)), v=H.list.find(x=>x.id===H.sel);
   histList.querySelectorAll('.hv').forEach(d=>{ const on=d.dataset.id===H.sel; d.classList.toggle('cur',on); d.setAttribute('aria-selected',String(on)); });
   histRange.max=String(order.length-1); histRange.value=String(order.length-1-i); histRange.setAttribute('aria-valuetext', v? hm(v.t)+' · '+kindText(v) : loc('hist.now'));   // right end is «Зараз»
-  histRestore.disabled=!H.view; }
+  const copy=!!(H.view && H.view.reason==='copy'), rw=!ro(); histRestore.hidden=copy || !rw; histRestore.disabled=!H.view; histTake.hidden=!copy || !rw; histDrop.hidden=!copy || !!LOCK; }   // a copy: «Відновити» and «Прибрати»; in the trash only «Прибрати»; a view-only tab neither
 function pickHist(id, delay=0){ if(!histOrder().includes(id)) return; H.sel=id; syncHist(); const d=histList.querySelector('.hv[data-id="'+id+'"]'); if(d) d.scrollIntoView({block:'nearest'});
   clearTimeout(H.t); const go=()=>{ if(id==='now') showNow(); else showVersion(H.list.find(v=>v.id===id)); syncHist(); }; if(delay) H.t=setTimeout(go,delay); else go(); }
 const cardOf=b=>b.el.querySelector(':scope>.tcard,:scope>.cblk,:scope>.ablk')||b.el;
@@ -3117,7 +3134,7 @@ function showVersion(v){ if(!v || !cur) return; if(!H.view) flushSave();   // an
   for(const [id,g] of H.geo||[]) if(now.has(id) && !v.blocks.some(e=>e.id===id)){ const d=el('div','ghost-blk',sheet); Object.assign(d.style,{left:g.x+'px', top:g.y+'px', width:g.w+'px', height:g.h+'px'}); }
   markHits(); placeVbtns(); }
 function markHits(){ for(const b of blocks) b.el.classList.toggle('v-hit', !!H.view && !!H.q && norm((b.title||'')+'\n'+(b.text||'')).includes(H.q)); }
-function placeVbtns(){ vlayer.innerHTML=''; if(!H.view) return; const m=mainEl.getBoundingClientRect();
+function placeVbtns(){ vlayer.innerHTML=''; if(!H.view || ro()) return; const m=mainEl.getBoundingClientRect();
   for(const b of blocks){ if(!b.el.classList.contains('v-ch') && !b.el.classList.contains('v-add')) continue; const r=cardOf(b).getBoundingClientRect(); if(!r.width) continue;
     const bt=document.createElement('button'); bt.type='button'; bt.className='vbtn'; bt.dataset.id=b.id; bt.innerHTML='<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'+locA('hist.blockRestore');
     bt.addEventListener('click',()=>restoreBlock(b.id)); vlayer.appendChild(bt);
@@ -3131,7 +3148,7 @@ function restoreWith(v, make){ const n=cur, at=hm(v.t), before={title:n.title, b
   putState(n, make(before));
   if(db.backend==='idb') vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'restore', undefined, v.id);
   return {n, at, before}; }
-function restoreVersion(){ const v=H.view; if(!v || !cur) return; const vb=verBlocks(v);
+function restoreVersion(){ const v=H.view; if(!v || !cur || ro()) return; const vb=verBlocks(v);
   const {n, at, before}=restoreWith(v, ()=>({title:v.title||'', blocks:vb}));
   offerUndo(loc('hist.restored',{time:at}), ()=>{ if(cur===n) putState(n, before); }, {big:true}); }
 // one block: its body, kind, language and title come back; place and size stay as they are now. A block the note no longer has comes back where it was (into its area if that is still there)
@@ -3156,11 +3173,46 @@ async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.cl
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
 histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });
 histRestore.addEventListener('click',restoreVersion);
-histMore.addEventListener('click',()=>{ if(db.backend!=='idb') return; popMenu(histMore, histMore.closest('.hist-h'), 'hm', [
-  ...(H.view && H.view.reason==='copy'? [] : [{label:loc(!H.view? 'hist.nameNow' : H.view.name? 'hist.renameShown' : 'hist.nameShown'), act:nameHist}]),   // a conflict copy is never named: it stays on this device (SYNC-PLAN 4.19)
-  ...(H.view && H.view.name? [{ico:ICO.trash, label:loc('hist.delete'), danger:true, act:deleteVersion}] : []),
-  ...(narrowQ.matches? [{label:loc('hist.search'), act:()=>{ histQBox.classList.add('on'); histQ.focus(); }}] : []),
-  {ico:ICO.trash, label:loc('hist.clear'), danger:true, act:clearHist} ]); });
+histMore.addEventListener('click',()=>{ if(db.backend!=='idb') return; const rw=!ro(), k=cur? copiesN(cur.id) : 0;   // read-only (the trash, a view-only tab): only the search
+  const items=[...(!rw || (H.view && H.view.reason==='copy')? [] : [{label:loc(!H.view? 'hist.nameNow' : H.view.name? 'hist.renameShown' : 'hist.nameShown'), act:nameHist}]),   // a conflict copy is never named: it stays on this device (SYNC-PLAN 4.19)
+    ...(rw && H.view && H.view.name? [{ico:ICO.trash, label:loc('hist.delete'), danger:true, act:deleteVersion}] : []),
+    ...(narrowQ.matches? [{label:loc('hist.search'), act:()=>{ histQBox.classList.add('on'); histQ.focus(); }}] : []),
+    ...(rw && k>1? [{ico:ICO.conflict, label:loc('conflict.dropAll',{n:k}), act:()=>dropAllCopies(cur)}] : []),
+    ...(rw? [{ico:ICO.trash, label:loc('hist.clear'), danger:true, act:clearHist}] : [])];
+  if(items.length) popMenu(histMore, histMore.closest('.hist-h'), 'hm', items); });
+histTake.addEventListener('click',()=>takeCopy()); histDrop.addEventListener('click',()=>dropCopy());
+/* ══ conflict copies in the interface (SYNC-PLAN 4.19, PR 4b). COPIES: the number of copies per note, read once from the core and recounted for a note on
+   every event of its copies (`copy`, `copies`, from the core or another tab), so a message that came between the read and the subscription cannot make it drift ══ */
+let COPIES=new Map(), ACT=null;   // ACT: the action of the toast in the undo toast's place (a conflict's «Показати»), not on the undo stack
+const copiesN=id=>COPIES.get(id)||0;
+Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld()});   // the tests' hand: the page's map, the 30-day rule now
+async function copiesLoad(){ if(!SYNC || db.backend!=='idb') return; try{ COPIES=await SYNC.copiesCount(); }catch(_){} if(STARTED) renderList(); else copiesUI(); }
+async function copiesRecount(id){ if(!SYNC || db.backend!=='idb' || !id) return; let k=0; try{ k=await SYNC.countCopies(id); }catch(_){ return; } if(k===copiesN(id)) return; if(k) COPIES.set(id,k); else COPIES.delete(id); if(STARTED) renderList(); }
+// the badge of the history button and its label, set by code from the map («Історія версій · N конфлікт»)
+function copiesUI(){ const k=cur? copiesN(cur.id) : 0, t=k? loc('hist.buttonCopies',{n:k}) : loc('hist.button'); histBadge.hidden=!k; histBadge.textContent=k? String(k) : ''; histBtn.title=t; histBtn.setAttribute('aria-label',t); }
+// a new copy: only the visible tab that has the note open says so, with «Показати»; no timeout of its own, the badge stays the way back
+function copyToast(m){ if(document.hidden || !cur || cur.id!==m.note || !STARTED) return; const msg=m.tab? loc('conflict.tab') : m.dn? loc('conflict.device',{device:m.dn}) : loc('conflict.anyDevice');
+  showUndo(msg, true); undoBtn.textContent=loc('conflict.show'); const id=m.note; ACT={note:id, run:()=>showCopy(id)}; }
+async function showCopy(id){ if(!cur || cur.id!==id) return; if(!H.open) await openHist(); else await loadHist(); const c=H.list.find(v=>v.reason==='copy'); if(c) pickHist(c.id); }
+function copiesEvent(m){ copiesRecount(m.note); if(H.open && cur && cur.id===m.note) loadHist(); }
+// «Відновити» on a copy: what is typed is written first, then one core transaction (the note, its job, the «base» record, the copy gone); the screen
+// redraws from the stored note. The undo, on the note's stack, merges the state before over what arrived meanwhile and puts the copy back
+async function takeCopy(){ const n=cur, v=H.view; if(!n || !v || v.reason!=='copy' || ro()) return; if(!(await saveNow())){ say(loc('account.unsaved')); return; }
+  if(cur!==n || H.view!==v) return; const r=await SYNC.restoreCopy(n.id, v.id, {title:v.title||'', blocks:verBlocks(v)}); if(!r || !r.ok){ say(loc('conflict.failed')); return; }
+  closeHist(); LREV.set(n.id, r.lrev); await takeStored(n.id); tellTabs({t:'chg', id:n.id, lrev:r.lrev}); syncWake();
+  if(cur===n) offerUndo(loc('conflict.restored'), ()=>undoTake(n.id, r), {big:true, safe:true, size:JSON.stringify([r.before, r.copy]).length}); }
+async function undoTake(id, r){ const u=await SYNC.undoRestore(id, {restored:r.note, before:r.before, copy:r.copy}); if(!u || !u.ok){ say(loc('conflict.cantUndo')); return; }
+  LREV.set(u.id, u.lrev); await takeStored(u.id); tellTabs({t:'chg', id:u.id, lrev:u.lrev}); syncWake(); }
+// «Прибрати»: local, no job. The last copy of a note in the trash asks first and has no undo: the purge may take the note before an undo could run
+async function dropCopy(){ const n=cur, v=H.view; if(!n || !v || v.reason!=='copy' || LOCK) return; const last=!!n.deleted && copiesN(n.id)<=1;
+  if(last && (!await ask({title:loc('conflict.lastTitle'), text:loc('conflict.lastText'), ok:loc('conflict.drop')}) || cur!==n)) return;
+  const r=await SYNC.dropCopies(n.id, [v.id]); if(!r || !r.ok || !r.removed.length) return; H.sel='now'; showNow(); await loadHist();
+  if(!last && cur===n) offerUndo(loc('conflict.dropped'), ()=>putBack(n.id, r.removed), {big:true, safe:true, size:JSON.stringify(r.removed).length, ro:!!n.deleted}); }
+async function putBack(id, recs){ const r=await SYNC.putCopies(id, recs); if(!r || !r.ok) say(loc('conflict.cantUndo')); }
+// «Прибрати конфліктні копії (N)», from the panel's «⋯» and the trash row's menu: asks, no undo
+async function dropAllCopies(n){ if(LOCK || !n) return; const k=copiesN(n.id); if(!k) return;
+  if(!await ask({title:loc('conflict.dropAllTitle',{n:k}), text:loc(n.deleted? 'conflict.lastText' : 'conflict.dropAllText'), ok:loc('conflict.drop')})) return;
+  let ids=[]; try{ ids=(await vlist(n.id)).filter(v=>v.reason==='copy').map(v=>v.id); }catch(_){ return; } await SYNC.dropCopies(n.id, ids); if(H.open && cur===n){ H.sel='now'; showNow(); loadHist(); } }
 histNameRow.addEventListener('submit',e=>{ e.preventDefault(); saveName(); });
 histName.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); histNameRow.hidden=true; histList.focus(); } });
 let hqT; histQ.addEventListener('input',()=>{ clearTimeout(hqT); hqT=setTimeout(()=>{ H.q=norm(histQ.value).trim(); renderHist(); markHits(); },120); });
@@ -3257,7 +3309,7 @@ async function start(){
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
   clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start');
-  STARTED=true; roSync(); snapSave(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
+  STARTED=true; roSync(); snapSave(); copiesLoad(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
