@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102406">
+<meta name="baobook-build" content="2026102407">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -658,7 +658,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 .hist-h{position:relative} .hist-b{display:flex;align-items:center;gap:2px} #histMore{font-size:1.125rem;letter-spacing:1px}
 .hist-name{display:flex;gap:6px;padding:2px 10px 6px} .hist-name input{flex:1;min-width:0;height:30px;padding:0 8px;border:.5px solid var(--sel-line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:var(--t-md);outline:0} .hist-name .fbtn{flex:0 0 auto;padding:0 12px}
 .hist-q{flex:0 0 auto}
-.hv.named .hv-k{color:var(--ink);font-weight:500} .hv-st{margin-top:2px;color:var(--ink-3)} .hv-st.bad{color:#c33}
+.hv.named .hv-k{color:var(--ink);font-weight:500} .hv-note{padding:6px 10px;color:var(--ink-3);font-size:var(--t-sm)} .hv-st{margin-top:2px;color:var(--ink-3)} .hv-st.bad{color:#c33}
 .setpop .chk{gap:8px;padding-left:36px;font-size:var(--t-sm)} .setpop .chk input{margin:0}
 .setpop .acc{display:flex;flex-direction:column;gap:2px;padding:6px 10px 4px;font-size:var(--t-sm);color:var(--ink-2)} .setpop .acc[hidden]{display:none} .setpop .acc-e{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .setpop .acc-s{color:var(--ink-3)}
 .setpop hr[hidden]{display:none}
@@ -690,7 +690,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<span class="devtag" id="devTag" data-i18n="dev.badge" data-i18n-attr="title:dev.title"></span><button class="gear" id="setBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" data-i18n-attr="title:settings.title;aria-label:settings.title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><small data-i18n="brand.tagline"></small></span></b>
       <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button class="side-x" id="sideX" type="button" data-i18n-attr="title:panel.close;aria-label:panel.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
-        <div class="acc" id="accRow" hidden><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
+        <div class="acc" id="accRow" hidden role="button" tabindex="0"><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
         <button class="mi" id="signInBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7.1z"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5a9.5 9.5 0 0 0 8.5 5.2z"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6l3.2-2.5z"/><path d="M12 6.3c1.4 0 2.7.5 3.7 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5c.7-2.2 2.8-3.9 5.3-3.9z"/></svg><span id="signInLbl" data-i18n="account.signIn"></span></button>
         <button class="mi" id="signOutBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></svg><span data-i18n="account.signOut"></span></button>
         <button class="mi" id="removeBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-i18n="account.remove"></span></button>
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102406" integrity="sha384-7ztJ1yoXKJP+n9ZtkDIhEa+0EE8Tx2LOS0Vndx69bgi8pfhSWxHZasUZ0Ndw5GFq"></script>
-<script src="cloud.js?b=2026102406" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102407" integrity="sha384-TvXRngONMlCIhH4myhOloMN77keyBH2bZVJCUJSzE6iIvgV5VOSS4NRenpysv+kS"></script>
+<script src="cloud.js?b=2026102407" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +806,15 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'locales/en.json':'sha384-3OrNjCKPzCy5QwM0arhcejQMmUq9EDFNz8VyHFFF/xqZ6CqR8mHYS+MadUcqzmrY', 'locales/uk.json':'sha384-ZSo1qDFe6rTbluRtuJaeNPGkaWeHSz4Pze2Mbz1qQQKcIGgcue8s18bRlipqnkVS'};
+const SRI={'account/input.js':'sha384-W+mC3dEpA6+q7v2wBuKQTWhPIbfKPiZICylB34ljfXb8vi5ZM9EwMMqTMhY+c8N0', 'account/model.js':'sha384-oAyWDYE/W/Sr0o47hfe/cCP+BbadfV6IKDizdGSmLCUlt09Imwultw4O16802pzU', 'account/panel.js':'sha384-9IsK3Q40TkEwv/S3SRFqXOnG4djkd3qnl6Uip5UB0MdGMHlokeLgyfTXuimRapRP', 'account/view.js':'sha384-kEP2/Jfs3o9AxZ9B9MvVjejqXZAC5aLsJceLyQbeikDciQ6LFoj1mdV0jkkGldUs', 'locales/en.json':'sha384-6qfxEJrlPoN4nY18Hmd6p7rQX5o+tyzKYSQv+oSto7dbRE6n+zBxyhCgNHEOaZGr', 'locales/uk.json':'sha384-u6BqR5kSL7SALsu1mHSlCwWlnty9411lVFkMw2Ik7DgJ493upl95FjkM8WAqRBhY'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102406;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102407;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+// the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
+// on every one and the integrity of the SRI table beside it (a browser without import map integrity loads it unchecked; the service worker checks
+// its set against the same table). Written before any module is imported
+const MODS=Object.keys(SRI).filter(f=>f.endsWith('.js'));
+(()=>{ const m={imports:{}, integrity:{}}; for(const f of MODS){ const u=new URL(f+'?b='+BUILD, location.href).href; m.imports[new URL(f, location.href).href]=u; m.integrity[u]=SRI[f]; }
+  const s=document.createElement('script'); s.type='importmap'; s.textContent=JSON.stringify(m); document.head.append(s); })();
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -1310,7 +1316,7 @@ function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
   // the tab (a replaced one may still finish a step), and after the transaction that reported it, since the status comes from inside its callback
   ref.eng=SC.makeSync({db:SDB, format:FORMAT, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
-    onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status={code,n}; if(LEAD.on) tellTabs(stMsg()); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
+    onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n,st)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status=st||{code,n}; if(LEAD.on) tellTabs(stMsg()); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
   return ref.eng; }
 function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=SYNC; driving=true; clearTimeout(driveT);   // not before the start is done: documents applied then would not reach the list (syncChanged drops them)
   (async()=>{ let r={did:'idle', next:Infinity}; try{ for(let i=0;i<500;i++){ if(SYNC!==eng) break; r=await eng.step(); if(r.did==='idle') break; } }catch(e){ if(/[?&]debug=1/.test(location.search)) console.warn('sync:',e); } finally{ if(SYNC===eng) driving=false; }   // a detached engine (a sign-out that could not wait) ends its run quietly: the flag belongs to the engine in place
@@ -1561,27 +1567,29 @@ async function ownerMoved(m){ snapDrop(); if(DYING) return;
 // the «auth» message of another tab: a sign-in there loads the SDK here (Firebase then brings the user); a sign-out there takes this tab's cloud at once
 function authMsg(m){ if(!accOn() || DYING) return; if(m.uid){ if(!ACC.sdk) sdkLoad(); return; } if(ACC.user || CLOUD){ ACC.user=null; dropCloud(); accUI(); } }
 const authGate=()=>!(CLOUD && CLOUD.uid) || (db.settings().fbUser||{}).uid===CLOUD.uid;   // the cloud this tab would lead with belongs to the user still signed in (the mirror is the synchronous truth)
-/* the status (§4.18): the button in the header and the line under the account in the menu. The leader computes it; the other tabs mirror the
-   leader's («st» message) and know their own states: signed out, checking, the dialog elsewhere */
-const ST_TEXT={synced:()=>loc('sync.st.synced'), sending:()=>loc('sync.st.sending'), waiting:()=>loc('sync.st.sending'), pending:()=>loc('sync.st.pending'), checking:()=>loc('sync.st.checking'), loading:()=>loc('sync.st.loading'),
-  signingIn:()=>loc('sync.st.signingIn'), signingOut:()=>loc('sync.st.signingOut'), offline:n=>loc('sync.st.offline',{n}), signedOut:n=>loc('sync.st.signedOut',{n}), limit:n=>loc('sync.st.limit',{n}),
-  unverified:()=>loc('sync.st.unverified'), denied:()=>loc('sync.st.denied'), open:()=>loc('sync.st.open'), reauth:()=>loc('sync.st.reauth'), other:()=>loc('sync.st.other'), error:()=>loc('sync.st.error'), nospace:()=>loc('sync.st.nospace')};
-const ST_KIND={synced:'synced', sending:'sending', waiting:'sending', pending:'busy', checking:'busy', loading:'busy', signingIn:'busy', signingOut:'busy', offline:'off', signedOut:'off', limit:'off'};
-function accStatus(){ if(!accOn()){ syncBtn.hidden=true; DEBUG.sync.ui=null; return; } const owner=SYNC && SYNC.owner; let code, n=0;
-  if(ACC.signingOut) code='signingOut'; else if(ACC.loading) code='loading'; else if(ACC.signingIn) code='signingIn'; else if(ACC.checking || ACC.dialog) code='checking';
-  else if(ACC.probe && ACC.probe!=='ok') code=ACC.probe; else if(ACC.otherTab) code='other';
-  else if(!owner){ syncBtn.hidden=true; accState.textContent=''; DEBUG.sync.ui={code:'none', text:''}; return; }
-  else { n=SYNC.jobs().length+SYNC.tries().length; if(!ACC.user || !CLOUD) code='signedOut'; else { const st=LEAD.on? DEBUG.sync.status : (ACC.leadSt||{code:'pending', n}); code=st.code; n=st.n; } }
-  if(!ST_TEXT[code]) code=code==='none'? 'pending' : 'error';
-  const text=ST_TEXT[code](n); syncBtn.hidden=false; syncBtn.dataset.st=ST_KIND[code]||'bad'; syncBtn.title=text; syncBtn.setAttribute('aria-label',text); accState.textContent=text; DEBUG.sync.ui={code, text}; }
+/* the status (§4.18) and the account panel (§4.11) live in public/account/ (PR 4c); the page mounts it with what it knows (the host) and calls
+   ACCT.render() where it called the status before. The leader computes the core's status; the other tabs mirror it («st» message) */
+let ACCT=null;
+function accStatus(){ if(ACCT) ACCT.render(); else { syncBtn.hidden=true; DEBUG.sync.ui=accOn()? {code:'none', text:''} : null; } }   // until the module has loaded: no button, as with no status
+function accMount(){ import('./account/panel.js').then(m=>{ ACCT=m.mount({doc:document, t:loc, button:syncBtn, line:accState, opener:syncBtn, nav,
+    when:ms=>({day:dayOf(ms)===loc('hist.today')? '' : dayOf(ms), time:hm(ms)}),
+    account:()=>({on:accOn(), viewOnly:!!LOCK, user:ACC.user, owner:SYNC && SYNC.owner, cloud:!!CLOUD, signingOut:!!ACC.signingOut, loading:!!ACC.loading, signingIn:!!ACC.signingIn, checking:!!ACC.checking, dialog:!!ACC.dialog, probe:ACC.probe||null, otherTab:!!ACC.otherTab}),
+    core:()=>!SYNC || !SYNC.owner? null : (!ACC.user || !CLOUD)? {code:'none', n:0, jobs:SYNC.jobs().length+SYNC.tries().length} : LEAD.on? DEBUG.sync.status : (ACC.leadSt||{code:'pending', n:0}),
+    counts:()=>SYNC && SYNC.owner? unsyncedCount() : Promise.resolve(null), used:()=>SYNC && SYNC.owner? SYNC.usedToday() : null, limit:()=>SYNC && SYNC.owner? SYNC.limits() : null,
+    devName:()=>S.devName||'', title:id=>{ const n=notes.find(x=>x.id===id); return n? titleOf(n) : ''; },
+    attempts:()=>SYNC? SYNC.tries().length+SYNC.vtries().length : 0, leader:()=>LEAD.on, tick:()=>{ if(SYNC) SYNC.status(); },
+    report:ui=>{ DEBUG.sync.ui=ui || (accOn()? {code:'none', text:''} : null); },
+    actions:{signIn:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), openNote:id=>{ const n=notes.find(x=>x.id===id); if(n) openNote(n); },
+      rename:async name=>{ if(!SYNC) return; const r=await SYNC.deviceName(name||uaName()); if(r.ok){ saveS({devName:r.name}); tellTabs({t:'dev'}); ACCT.render(); } }}});
+    accStatus(); }).catch(e=>console.error('account: the module did not load', e)); }
 function accUI(){ const on=accOn(), owner=SYNC && SYNC.owner, user=ACC.user; accRow.hidden=!on || !(user || owner); accEmail.textContent=user? (user.email||user.uid) : ownerName(owner);
   signInBtn.hidden=!on || !!user; signOutBtn.hidden=!on || !user; removeBtn.hidden=!on || !(user || owner); accHr.hidden=!on;
   if(!ACC.loading) signInLbl.textContent=ACC.sdk? loc('account.continue') : loc('account.signIn'); }
-syncBtn.addEventListener('click',()=>{ if(syncBtn.title) say(syncBtn.title); });
+syncBtn.addEventListener('click',()=>{ if(ACCT) ACCT.open(); }); accRow.addEventListener('click',()=>{ if(!ACCT) return; setMenu(false); ACCT.open(); }); accRow.addEventListener('keydown',e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); accRow.click(); } });   // the button and the account row of the menu open the panel
 signInBtn.addEventListener('click',()=>signIn()); signOutBtn.addEventListener('click',()=>signOut()); removeBtn.addEventListener('click',()=>removeFromDevice());
 // the start of the account (the end of start()): the menu, the status, persistence with an owner, the SDK when the device has an owner, a user or a
 // redirect under way; the tab that comes back from a redirect knows it (sessionStorage); the Home Screen hint once on an iPhone outside the app
-function accStart(){ if(!FB) return; accUI(); accStatus(); if(!accOn()) return; const owner=SYNC.owner, s=db.settings();
+function accStart(){ if(!FB) return; if(!ACCT) accMount(); accUI(); accStatus(); if(!accOn()) return; const owner=SYNC.owner, s=db.settings();
   try{ if(sessionStorage.getItem('sheet:signin')==='1'){ ACC.signedHere=true; sessionStorage.removeItem('sheet:signin'); } }catch(_){}
   if(owner) persistOnce();
   if(owner || s.fbUser || s.signin==='pending') sdkLoad().then(ok=>{ if(ok) redirectBack(); });
@@ -2192,7 +2200,7 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
 function tabMsg(m){ if(keptView() || DYING) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
-  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
+  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ const {t, hidden, ...st}=m; ACC.leadSt=st; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); } else if(m.t==='dev'){ const d=db.settings().devName; if(d) S.devName=d; if(LEAD.on && SYNC) SYNC.checkOwner().catch(()=>{}); if(ACCT) ACCT.render(); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
   else if(m.t==='format'){ if(+m.v>FORMAT) fmtNewer(); }   // a tab of a newer app recorded its format (IDB-BARRIER-PLAN §4.2 item 4)
   else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
@@ -3176,6 +3184,7 @@ function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('
   H.vis=H.q? H.list.filter(v=>vtext(v).includes(H.q)) : H.list;
   const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
   if(H.bodies && !H.vis.length) el('div','none',histList).textContent=loc(H.q? 'search.none' : 'hist.empty');
+  const vn=ACCT && ACCT.historyNote(!!(SYNC && SYNC._S.online)); if(vn) el('div','hv-note',histList).textContent=loc(vn);   // versions of another device may still come (SYNC-PLAN 4.18)
   let day=''; for(const v of H.vis){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
     const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.reason==='copy' && v.updated? v.updated : v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span>'+stateLine(v)+'<div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
   syncHist(); }

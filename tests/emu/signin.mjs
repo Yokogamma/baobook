@@ -32,6 +32,13 @@ const a3=await acc(A.pg), m3=await menu(A.pg), own3=await stored(A.pg,'sync','ow
 ok('3 signed in as u1 ('+uid+'): the device is bound to u1 in env dev, the mirror is in the settings, the cloud is connected and this tab leads', uid===u1.uid && a3.user && a3.user.uid===u1.uid && own3 && own3.uid===u1.uid && own3.env==='dev' && own3.email==='one@example.com' && s3.fbUser && s3.fbUser.uid===u1.uid && a3.cloud && a3.cloudUid===u1.uid && a3.lead && a3.probe===null);
 ok('3b the note went through the rules into the emulator with both blocks', !!d3 && d3.rev===1 && d3.blocks && d3.blocks.length===2 && d3.blocks[0].text==='Перша нотатка' && d3.blocks[1].text==='Другий блок');
 ok('3c the menu shows the account and «Вийти», «Прибрати…»; the status button says synced', m3.row && m3.email==='one@example.com' && m3.signOut && m3.remove && !m3.signIn && m3.sync && m3.st==='synced' && m3.title===await loc(A.pg,'sync.st.synced') && m3.state===m3.title);
+// 3c-v (PR 4c): a named version after the sign-in; «Синхронізовано» comes only once both collections are sent and checked
+await A.pg.evaluate(()=>sheetDebug.vers.force('manual','Після входу')); await A.pg.evaluate(()=>sheetDebug.sync.wake());
+const vrec=await A.pg.evaluate(id=>sheetDebug.sync.state(id).then(st=>st.versions.filter(v=>v.name)), id1), vid3=vrec[0] && vrec[0].id;
+for(const t0=Date.now(); Date.now()-t0<20000 && !(vid3 && await readDoc(ROOT+'/versions/'+vid3)); ) await new Promise(r=>setTimeout(r,200));
+await A.pg.waitForFunction(()=>sheetDebug.sync.account().ui.code==='synced', null, {timeout:20000}).catch(()=>{});   // whichever tab leads (the second tab may), this one shows its status
+const ui3v=(await acc(A.pg)).ui, cur3v=await stored(A.pg,'sync','cursor:versions'), dv3=vid3 && await readDoc(ROOT+'/versions/'+vid3);
+ok('3c-v a named version after the sign-in reached Firestore and the status is «Синхронізовано» over both streams, the versions catch-up done ('+JSON.stringify({ui:ui3v, done:cur3v && cur3v.done})+')', !!dv3 && dv3.name==='Після входу' && ui3v && ui3v.code==='synced' && ui3v.text===await loc(A.pg,'sync.st.synced') && !!(cur3v && cur3v.done));
 const probe=await readDoc(ROOT+'/probe/'+s3.devId);
 ok('3d the rules probe left nothing behind (the write was refused, as it should be)', probe===null);
 await untilUI(T2, 'synced'); const aT2=await acc(T2), mT2=await menu(T2);

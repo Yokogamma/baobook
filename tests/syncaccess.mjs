@@ -219,4 +219,40 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   const here=B.db.get('notes',id), up=cloud.doc('notes',id), texts=n=>(n && n.blocks||[]).map(b=>b.text).sort().join('|'), want=local? 'відновлений текст|локальна правка' : 'відновлений текст|перший текст';
   ok('8'+(local? 'h' : 'g')+' the recreated document '+(local? 'and a local edit waiting' : 'with no local edit')+': recognized as recreated, merged with the note here; the recreated text is here and stays in the cloud ('+texts(here)+' / '+texts(up)+'), the quarantine gone', logs(B,'recreated',id).length>=1 && texts(here)===want && texts(up)===want && up.rev===2 && !B.db.get('sync','quarantine:n:'+id) && !B.sync.jobs().length); }
 
+/* ── 20. the full status of PR 4c (§4.18): «waiting» from the engine's own first run of an attempt, both streams in every code, the errors list ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const W={waiting:30000}; let A=await mk(cloud,'A',{pace:W});
+  await note(A,'n1','текст'); await idle(A);
+  const st0=A.sync.status(); ok('20 with both totals matched and nothing waiting: «synced», with the time of the match ('+st0.code+')', st0.code==='synced' && st0.checked>0 && st0.vdone===true && st0.errorN===0);
+  // an attempt held in flight: «sending» until 30 s after this engine first ran it, then «waiting» with no other event
+  const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve:r}; }, h=defer(); cloud.fault('hold',{dev:'A', op:'txn', promise:h.promise});
+  await note(A,'n1','змінено'); const run=A.sync.idle(200); await new Promise(r=>setTimeout(r,50));
+  const s1=A.sync.status(); cloud.advance(29000); const s2=A.sync.status(); cloud.advance(2000); const s3=A.sync.status();
+  ok('20a a held attempt: «sending» at once and at 29 s, «waiting» at 31 s ('+[s1.code,s2.code,s3.code].join(',')+')', s1.code==='sending' && s2.code==='sending' && s3.code==='waiting');
+  // a new engine over the same store resumes the attempt: it counts from its own first run, not from the insurance
+  A.sync.stop(); const db=A.db; const B=device(cloud,'A',{db, pace:W}); await B.sync.start(); await new Promise(r=>setTimeout(r,50));
+  const s4=B.sync.status(); ok('20b a new leader resuming the attempt does not say «waiting» at once ('+s4.code+')', s4.code!=='waiting'); h.resolve(); await run; await idle(B); A=B;
+  // a version job alone is «sending»; a version error alone is «error» with its reason, named in the list
+  await A.off(false); await A.sync.versionLocal({op:'create', rec:{id:'v1', note:'n1', t:cloud.now(), w:cloud.now(), reason:'manual', name:'Версія', keep:1, inline:1, title:'', sig:'s', blocks:[{id:'b',row:1,fx:0,s:'змінено'}], size:1, sum:{}}});
+  const s5=A.sync.status(); await A.off(true); ok('20c offline with only a version waiting: «offline» · 1, and N counts it ('+s5.code+' '+s5.n+')', s5.code==='offline' && s5.n===1);
+  cloud.fault('fail',{dev:'A', op:'txn', code:'permission-denied', n:1}); const s6pre=A.sync.status(); await idle(A); const s6=A.sync.status();
+  ok('20d a version refused by the rules: «error» · 1, the list names the version and its reason ('+s6.code+' '+JSON.stringify(s6.errors)+')', s6pre.code==='sending' && s6.code==='error' && s6.n===1 && s6.errors.length===1 && s6.errors[0].col==='versions' && s6.errors[0].id==='v1' && s6.errors[0].reason==='invalid'); }
+
+/* ── 21. «versions» only while the first catch-up of versions runs; an account with no versions at all still gets cursor:versions.done ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); cloud.write('notes',{id:'nx', title:'', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); for(let i=0;i<3;i++) cloud.write('versions',{id:'vx'+i, note:'nx', t:cloud.now(), name:'x', title:'', blocks:[]},{dev:'phone'});
+  const d=device(cloud,'A'); const codes=[]; const pg=d.proxy.page; let hold=null; d.proxy.page=(c,q,n)=>c==='versions' && hold? hold.then(()=>pg(c,q,n)) : pg(c,q,n);
+  let rel; hold=new Promise(r=>rel=r); await d.sync.setOwner(owner); await d.sync.start(); const run=d.sync.idle(3000); for(let i=0;i<20;i++){ await new Promise(r=>setTimeout(r,30)); codes.push(d.sync.status().code); }
+  ok('21 the first catch-up of versions still running: «versions» ('+[...new Set(codes)].join(',')+')', codes.includes('versions')); hold=null; rel(); await run; await idle(d);
+  ok('21a done: cursor:versions.done is set and the status leaves «versions»', !!(d.db.get('sync','cursor:versions')||{}).done && d.sync.status().code!=='versions');
+  d.sync.online(false); d.sync.online(true); const after=[]; for(let i=0;i<6;i++){ await d.sync.idle(50); after.push(d.sync.status().code); }
+  ok('21b a reconnect after that never says «versions» ('+[...new Set(after)].join(',')+')', !after.includes('versions'));
+  cloud.write('versions',{id:'vx9', note:'nx', t:cloud.now(), name:'y', title:'', blocks:[]},{dev:'phone'}); await idle(d); const s21d=d.sync.status();
+  ok('21d a version delivered after that moves the cursor and keeps «done» in memory too ('+s21d.code+', vdone '+s21d.vdone+')', !!d.db.get('versions','vx9') && s21d.vdone===true);
+  const E=new TestCloud({start:1_700_000_000_000}), e=await mk(E,'E'); ok('21c an account with no version at all reaches cursor:versions.done', !!(e.db.get('sync','cursor:versions')||{}).done); }
+
+/* ── 22. deviceName: the store's device record, then the name of the next document ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','a'); await idle(A);
+  const r=await A.sync.deviceName('  Мій ноутбук  '); await note(A,'n1','b'); await idle(A);
+  ok('22 the name is trimmed, kept in the device record and carried as dn by the next document', r.ok && r.name==='Мій ноутбук' && A.db.get('sync','device').name==='Мій ноутбук' && cloud.doc('notes','n1').dn==='Мій ноутбук' && A.sync.devName==='Мій ноутбук');
+  const long='😀'.repeat(45); const r2=await A.sync.deviceName(long); ok('22a a name over 80 UTF-16 units is cut between code points', r2.ok && r2.name.length===80); }
+
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
