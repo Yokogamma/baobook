@@ -2016,7 +2016,7 @@ function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); roSync(); renderBacklinks(); }
 function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; makeAll(list); }
 function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }   // areas first: their blocks go inside
-/* a field write: archive, unarchive, trash, restore and pin change one field of a note. set(n) makes the change in memory; fn(x, t, C) makes it on x, a copy
+/* a field write: archive, unarchive, trash, restore, the pin and the colour change one field of a note. set(n) makes the change in memory; fn(x, t, C) makes it on x, a copy
    of the record the write lands on (C is the stored record, undefined when there is none; t the write's time) and returns x, or null when x has it already.
    A field write never takes the place of a change the store lacks: while memory may be ahead of the store (a write failed or on its way, a localStorage
    leftover, the open note) the note goes whole, the editor delta of the note as it is now with fn applied to its result, so a merge over an older snapshot
