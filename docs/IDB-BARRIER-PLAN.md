@@ -1,6 +1,6 @@
 # A barrier against old tabs that never waits for them
 
-**Status: plan, awaiting the owner's approval (2026-10-23); two internal review rounds and one independent review in §10, all without a blocker or major finding at the end.** Two PRs into `main`, in this order: **PR 1 (part 2 below, urgent)** — the one-time v3 → v4 upgrade waits for a sleeping tab instead of locking the device; it ships before #100 is released to baobook.matamata.app. **PR 2 (part 1 below)** — old tabs are stopped by a format number checked inside every write, so later format changes never raise the IndexedDB version and never wait for another tab; it ships before the next format change. The sections are numbered by topic; §9 states the order.
+**Status: approved by the owner on 2026-10-24 (the five questions of §8 answered «as recommended»), after two internal review rounds and two independent ones (§10), the last without findings; not implemented yet.** Two PRs into `main`, in this order: **PR 1 (part 2 below, urgent)** — the one-time v3 → v4 upgrade waits for a sleeping tab instead of locking the device; it ships before #100 is released to baobook.matamata.app. **PR 2 (part 1 below)** — old tabs are stopped by a format number checked inside every write, so later format changes never raise the IndexedDB version and never wait for another tab; it ships before the next format change. The sections are numbered by topic; §9 states the order.
 
 ## 1. The incident
 
@@ -218,6 +218,8 @@ Desktop Chromium did not hang with a CDP-frozen holder, so a test that only free
 
 ## 8. Questions for the owner
 
+The owner answered all five on 2026-10-24: **as recommended**.
+
 1. **`blocked` at the start becomes the waiting state** (§3.1 item 2): a lasting block continues by itself when the other tab closes, instead of a view-only tab that needs «Оновити»; the `blocked` lock stays for an open later in the session. Recommended: yes, in PR 1 (the request is alive in both cases and the way out is the same).
 2. **The long wait** (§3.1 item 4): after 60 s the strip adds the full-restart advice and «Оновити», while the request is still kept alive. Alternatives: no change of the strip at all, or a lock after 60 s. Recommended: as described.
 3. **A new device's upgrade** (§3.2) waits too, instead of the localStorage mode on silence. Recommended: wait (one rule for every upgrade request; the fallback there writes notes into a store the next start has to move).
@@ -247,3 +249,5 @@ Each round is an internal review of the plan against the code; the plan is fixed
 - `framenavigated` does not prove a reload: the start's `setHash` → `history.replaceState` fires it without a new document. The scenarios check a marker on `window`, `performance.timeOrigin` and that no main document was requested (§3.5).
 - Several write paths tested in one tab could hit a `LOCK` the first refusal set, hiding a path without the guard: one fresh, unlocked tab per path (`SDB.run`, `idb.tx`, `idb.run`), with the refusal counted inside the created transaction; the missing-`format` check uses a v4 database, which the old code does not upgrade (§4.8 scenarios 3 and 6).
 - `lock.waitLong` stated a holder again after silence: it now starts neutrally, «Сховище досі не вдалося відкрити…» (§3.1 item 4, §3.4).
+
+**Round 4, independent** (relayed on 2026-10-24, against head 52c9aae): no findings.
