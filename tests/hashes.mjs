@@ -8,8 +8,11 @@ import { fileURLToPath } from 'node:url';
 
 const PUB=new URL('../public/', import.meta.url);
 export const sri=body=>'sha384-'+crypto.createHash('sha384').update(body).digest('base64');
-// the files a page of one build loads by ?b=: the two scripts and every language file
-export const FILES=['sync.js','cloud.js',...fs.readdirSync(new URL('locales/', PUB)).filter(f=>f.endsWith('.json')).sort().map(f=>'locales/'+f)];
+// the files a page of one build loads by ?b=: the two scripts, every language file and every ES module of public/<feature>/ (CLAUDE.md «Modular»),
+// whose hashes sit in the SRI table beside the language files
+const MODDIRS=fs.readdirSync(PUB,{withFileTypes:true}).filter(d=>d.isDirectory() && d.name!=='locales').map(d=>d.name).sort();
+export const MODULES=MODDIRS.flatMap(d=>fs.readdirSync(new URL(d+'/', PUB)).filter(f=>f.endsWith('.js')).sort().map(f=>d+'/'+f));
+export const FILES=['sync.js','cloud.js',...fs.readdirSync(new URL('locales/', PUB)).filter(f=>f.endsWith('.json')).sort().map(f=>'locales/'+f), ...MODULES];
 export const expected=()=>Object.fromEntries(FILES.map(f=>[f, sri(fs.readFileSync(new URL(f, PUB)))]));
 const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 // the same pattern as hashIn() in sw.js: `src="sync.js?b=N" integrity="…"` in a tag, `'locales/uk.json':'…'` in the SRI table
