@@ -129,5 +129,27 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   ok('8 the start goes on after a versionchange during its format transaction: the edit is stored in the new database, no strip, no fallback key', saved && !(await msg(C)) && !(await fbKeys(C)).length);
   ok('8a no page errors', !C.errs.length); await ctx.close(); }
 
+/* ── 9. the raise of the format fails (its transaction aborts): the newer tab never starts writing without the barrier. Once: the retry raises it
+       and the start goes on. Always: the tab ends view-only (the device has used IndexedDB before), the format stays 4 and the older tab writes on ── */
+const ABORT=mode=>{ const tx=IDBDatabase.prototype.transaction; let n=0;   // the start's format write aborts its transaction: the first time only, or every time
+  IDBDatabase.prototype.transaction=function(st, m){ const t=tx.apply(this, arguments);
+    if(st==='sync' && m==='readwrite' && (mode==='always' || n++===0)){ const os=t.objectStore.bind(t); t.objectStore=name=>{ const o=os(name), put=o.put.bind(o); o.put=v=>{ const r=put(v); if(v && v.k==='format') r.addEventListener('success',()=>{ try{ t.abort(); }catch(_){ window.__abortMissed=(window.__abortMissed||0)+1; } }); return r; }; return o; }; }
+    return t; }; };
+for(const mode of ['once','always']){
+  const ctx=await context(); const A=await page(ctx,{drop:true}); await typeAt(A,500,300,'стара '+mode);
+  const N=await page(ctx,{noGo:true}); await N.addInitScript(ABORT, mode);
+  await N.route(u=>{ const x=new URL(u); return x.pathname==='/' || x.pathname==='/index.html'; }, r=>r.fulfill({status:200, contentType:'text/html; charset=utf-8', body:NEW5}));
+  await N.goto(SITE);
+  if(mode==='once'){ await ready(N);
+    ok('9 once: the aborted raise is retried, the newer tab starts with format 5', (await fmt(N)).format===5 && !(await msg(N)) && (await state(N)).lock===null);
+    await typeAt(A,500,420,'після'); const m=await waitMsg(A, UNSAVED, 4000);
+    ok('9a once: the older tab is then stopped by the guard', !!m); }
+  else { const m=await waitMsg(N, /Сховище браузера не відкрилося/, 20000); const st=await state(N);
+    const code=await N.evaluate(()=>sheetDebug.fmt.ops.imp().then(()=>'ok', e=>e && e.code || String(e)));
+    ok('9b always: the newer tab never starts writing: view-only under the `storage` lock, its import refused ('+JSON.stringify(st)+', '+code+')', !!m && st.lock==='storage' && code!=='ok');
+    await typeAt(A,500,420,'пише далі'); const f=await fmt(A);
+    ok('9c always: the format stays 4 and the older tab writes on', f.format===4 && !(await msg(A))); }
+  ok('9d '+mode+': no page errors ('+A.errs.concat(N.errs).join(' | ')+')', !A.errs.length && !N.errs.length); await ctx.close(); }
+
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);
