@@ -331,4 +331,12 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   const st=(await A.sync.versionStates('n1')).vL; await A.sync.versionLocal({op:'delete', id:'vL'}); await A.off(true); for(let i=0;i<12;i++){ cloud.advance(1000); await A.sync.idle(100); }
   ok('31 the local-only version ('+st+') deleted here: when B\'s full copy arrives it is tombstoned, so «на всіх пристроях» is the true text', st==='partial' && vdoc(cloud,'vL') && vdoc(cloud,'vL').deleted===true && !A.db.get('versions','vL')); }
 
+/* ── 32. a received named version hashes its bodies as the sending device does: no false «changed», one sig for one snapshot ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'), B=await mk(cloud,'B');
+  await edit(A,'n1',(C,t)=>({title:'Три блоки', blocks:[{id:'a1', row:1, fx:0, text:'', html:'<b>жирний</b> текст'}, {id:'c1', row:2, fx:0, kind:'code', lang:'js', text:'x=1'}, {id:'g1', row:3, fx:0, kind:'area', text:'', w:4, h:3}], created:t, updated:t})); await idle(A);
+  await nameNow(A,'n1','vH','Хеші'); await idle(A,B);
+  const a=A.db.get('versions','vH'), b=B.db.get('versions','vH'), live=S.manifestOf(B.db.get('notes','n1').title, B.db.get('notes','n1').blocks), H=r=>r.blocks.map(e=>e.id+':'+e.h).join(',');
+  ok('32 B\'s received entries have A\'s hashes, no text or code block with the empty one (an area has no body), and the same sig ('+(b&&H(b))+')', !!b && H(a)===H(b) && !b.blocks.some(e=>e.kind!=='area' && e.h===S.hashOf('')) && a.sig===b.sig);
+  ok('32a against B\'s note the received version marks no block as changed', !!b && b.blocks.every(e=>{ const n=live.blocks.find(x=>x.id===e.id); return n && n.h===e.h; })); }
+
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);
