@@ -288,15 +288,21 @@ function makeSync(deps){
     after(()=>emit(deps.onHistory,id)); }
   // a conflict copy is the insurance of a losing side (§4.7): every body goes in full, inline, whatever the limit of the automatic history
   // (a block over V_BODY_MAX has h:null in a manifest; here it gets its real hash, so the record's sig tells copies apart by that body too)
-  async function writeCopies(t, id, copies, tt, after){ if(!copies || !copies.length) return; const list=await versionsOf(t,id), last=lastOf(list); const sigs=new Set(list.filter(v=>v.reason==='copy').map(v=>v.sig)); let any=false;
-    for(const c of copies){ const n=c.note, m=manifestOf(n.title, n.blocks), src=new Map((n.blocks||[]).map(b=>[b.id,b])); let size=0;
-      const blocks=m.blocks.map(e=>{ const d=src.get(e.id), body=bodyOf(d); size+=bytesOf(body); const x={...e, h:e.h||hashOf(body), s:body}; if(!d.kind && d.html) x.r=1; return x; });
-      const bare=blocks.map(x=>{ const e={...x}; delete e.s; delete e.r; return e; }), sig=hashOf(m.title+'\n'+JSON.stringify(bare)); if(sigs.has(sig)) continue; sigs.add(sig); any=true;
-      const tv=Math.min(tt, vnow()), rec={id:vid(), note:id, t:tv, w:tv, reason:'copy', keep:1, inline:1, title:m.title, sig, blocks, size:size+bytesOf(JSON.stringify(bare)), sum:sumOf(m,last), updated:n.updated, dev:c.dev||devId}; const dn=c.dev? c.dn : devName; if(dn) rec.dn=dn; t.put('versions',rec); }
-    if(any) after(()=>emit(deps.onHistory,id)); }
+  // a record with every body inline (a copy, or the «base» kept by restoreCopy): a body over the history's limit is kept too
+  function inlineRec(id, n, reason, tt, last){ const m=manifestOf(n.title, n.blocks), src=new Map((n.blocks||[]).map(b=>[b.id,b])); let size=0;
+    const blocks=m.blocks.map(e=>{ const d=src.get(e.id), body=bodyOf(d); size+=bytesOf(body); const x={...e, h:e.h||hashOf(body), s:body}; if(!d.kind && d.html) x.r=1; return x; });
+    const bare=blocks.map(x=>{ const e={...x}; delete e.s; delete e.r; return e; }), sig=hashOf(m.title+'\n'+JSON.stringify(bare)), tv=Math.min(tt, vnow());
+    return {id:vid(), note:id, t:tv, w:tv, reason, inline:1, title:m.title, sig, blocks, size:size+bytesOf(JSON.stringify(bare)), sum:sumOf(m,last)}; }
+  // from: the document the merge met (its device is the other side when this device lost); a copy of two tabs names no device
+  async function writeCopies(t, id, copies, tt, after, from){ if(!copies || !copies.length) return; const list=await versionsOf(t,id), last=lastOf(list); const sigs=new Set(list.filter(v=>v.reason==='copy').map(v=>v.sig)); let any=false;
+    for(const c of copies){ const n=c.note, rec=inlineRec(id, n, 'copy', tt, last); if(sigs.has(rec.sig)) continue; sigs.add(rec.sig); any=true;
+      Object.assign(rec, {keep:1, updated:n.updated, dev:c.dev||devId}); const dn=c.dev? c.dn : devName; if(dn) rec.dn=dn; t.put('versions',rec); }
+    if(!any) return; const other=copies.find(c=>c.dev && c.dev!==devId) || (from && from.dev && from.dev!==devId? from : null);
+    after(()=>{ emit(deps.onHistory,id); emit(deps.onChange,{id, kind:'copy', note:id, dn:other? other.dn||'' : '', tab:!other && !from}); }); }   // a merge with a document of unknown device says «another device», never «another tab»   // the toast names the other side (§4.19)
   async function hasCopies(t,id){ return (await versionsOf(t,id)).some(v=>v.reason==='copy'); }
   // o.after: the transaction's after-queue, for the named versions (§4.9): o.own on the device that purges the note, o.never when the note was never in the cloud
-  async function deleteRecord(t,id,o={}){ t.del('notes',id); for(const v of await versionsOf(t,id)){ t.del('versions',v.id); if(v.name && v.reason!=='copy' && S.owner && o.after) await vwithNote(t, v, o); } for(const b of await t.blobs(id)) t.del('blobs',[b.note,b.h]); }
+  async function deleteRecord(t,id,o={}){ t.del('notes',id); let copies=false; for(const v of await versionsOf(t,id)){ t.del('versions',v.id); if(v.reason==='copy') copies=true; if(v.name && v.reason!=='copy' && S.owner && o.after) await vwithNote(t, v, o); } for(const b of await t.blobs(id)) t.del('blobs',[b.note,b.h]);
+    if(copies && o.after) o.after(()=>emit(deps.onChange,{id, kind:'copies', note:id})); }
 
   /* ── jobs, tries, marks (cache + store) ── */
   function setJob(t, id, job, after){ t.put('sync',job); after(()=>S.jobs.set(id,job)); }
@@ -321,7 +327,7 @@ function makeSync(deps){
     const bytes=docBytes(wireBody(stored))+512+(meta.base && meta.base.rcpt? bytesOf(JSON.stringify(meta.base.rcpt)) : 0);
     if(bytes>DOC_MAX) meta.err='size'; else if(meta.err==='size' || meta.err==='invalid') delete meta.err;
     t.put('notes',stored); putMeta(t,meta,after); after(()=>{ S.bytes.set(id,bytes); });
-    if(o.copies) await writeCopies(t, id, o.copies, o.t||now(), after);
+    if(o.copies) await writeCopies(t, id, o.copies, o.t||now(), after, o.from);
     return {lrev:meta.lrev, note:stored}; }
   async function writeLocal(id, delta){ if(!S.loaded) await load();
     try{ return await tx(['notes','sync','versions','blobs'], async(t, after)=>{
@@ -351,7 +357,8 @@ function makeSync(deps){
       const nmeta=defMeta('n',targetId); await putNote(t, targetId, note, nmeta, {t:tt}, after); await ensureJob(t, targetId, note, nmeta, after);
       for(const p of passed) p.revivedAs=targetId;
       log({t:'moved', from:originId, to:targetId, existing:false}); after(()=>emit(deps.onChange,{id:targetId, kind:'revived', from:originId, dev:moved.dev, dn:moved.dn})); }
-    for(const v of await versionsOf(t,originId)) if(v.reason==='copy'){ t.put('versions',{...v, note:targetId}); }   // the original's conflict copies follow its text
+    let movedCopies=false; for(const v of await versionsOf(t,originId)) if(v.reason==='copy'){ t.put('versions',{...v, note:targetId}); movedCopies=true; }   // the original's conflict copies follow its text
+    if(movedCopies) after(()=>{ emit(deps.onChange,{id:originId, kind:'copies', note:originId}); emit(deps.onChange,{id:targetId, kind:'copies', note:targetId}); });
     // a named version that may never have reached the cloud follows too (§4.9 «Revival»): marked, so the server read before its first send decides
     if(S.owner) for(const v of await versionsOf(t,originId)){ if(!v.name || v.reason==='copy') continue; const vm=await getMeta(t,'v',v.id); if(vm.base || vm.gone || await t.get('sync',K.tr('v',v.id)) || await t.get('sync',K.seen('v',v.id))) continue;
       t.put('versions',{...v, note:targetId}); vm.movedFrom=originId; putMeta(t,vm,after); if(!vm.local && !(await t.get('sync',K.out('v',v.id)))) setVJob(t,v.id,vjob(v.id),after); log({t:'vmoved', id:v.id, to:targetId}); }
@@ -402,8 +409,8 @@ function makeSync(deps){
   async function mergeCore(t, id, C, meta, doc, body, tt, after){ await writeIncoming(t, id, C, tt, after);
     const ctx={dev:devId, t:tt}, R={...body, dev:doc.dev, dn:doc.dn}, m=meta.base? merge3(noteBody(meta.base), C, R, ctx) : merge0(C, R, ctx);
     meta.base=storeBase(doc); meta.arrived=tt; log({t:'merged', id, rev:doc.rev, trace:m.trace, same:m.same});
-    if(m.same){ await putNote(t, id, m.note, meta, {baseEq:true, copies:m.copies, t:tt}, after); dropJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'done'; }
-    await putNote(t, id, m.note, meta, {copies:m.copies, t:tt}, after); await ensureJob(t, id, m.note, meta, after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'again'; }
+    if(m.same){ await putNote(t, id, m.note, meta, {baseEq:true, copies:m.copies, t:tt, from:doc}, after); dropJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'done'; }
+    await putNote(t, id, m.note, meta, {copies:m.copies, t:tt, from:doc}, after); await ensureJob(t, id, m.note, meta, after); after(()=>emit(deps.onChange,{id, kind:'note', lrev:meta.lrev, dev:doc.dev, dn:doc.dn})); return 'again'; }
   // the cursor never moves back (§4.6): the stored one decides, not this runner's memory, which may be behind another tab's leadership
   async function bumpCursor(t, col, last, after){ const stored=await t.get('sync',K.cursor(col)), prev=stored? {srv:stored.srv, id:stored.id} : null, best=cursorMax(prev, last); if(best!==prev) t.put('sync',{...(stored||{}), k:K.cursor(col), ...best}); after(()=>{ S.cursor[col]=cursorMax(S.cursor[col], best); }); }
   async function applyIncoming(col, doc, source){ if(col==='versions') return applyVersionDoc(doc, source);
@@ -585,13 +592,13 @@ function makeSync(deps){
   // the history of an export file (VERSIONS-PLAN 3.8, §4.9 «Import»): records and bodies this device does not have yet, one transaction; a named
   // version deleted here (a tombstone base, a tombstone job or attempt, `gone`) is skipped, so an old export never brings it back; a new one is queued
   async function importHistory(h, noteIds){ if(!S.loaded) await load(); const ids=new Set(noteIds||[]);
-    try{ return await tx(['notes','versions','blobs','sync'], async(t,after)=>{ let added=0, size=0, skipped=0; const touched=new Set();
+    try{ return await tx(['notes','versions','blobs','sync'], async(t,after)=>{ let added=0, size=0, skipped=0; const touched=new Set(), copied=new Set();
       for(const b of h.blobs||[]){ if(!b || !ids.has(b.note) || typeof b.h!=='string' || typeof b.s!=='string') continue; if(!(await t.get('blobs',[b.note,b.h]))) t.put('blobs',{note:b.note, h:b.h, s:b.s, r:b.r? 1 : 0, z:+b.z||bytesOf(b.s)}); }
       for(const v of h.versions||[]){ if(!v || typeof v.id!=='string' || !ids.has(v.note) || !Array.isArray(v.blocks) || typeof v.sig!=='string') continue; if(await t.get('versions',v.id)) continue;
         if(v.name && v.reason!=='copy' && S.owner){ const m=await getMeta(t,'v',v.id), j=await t.get('sync',K.out('v',v.id)), tr=await t.get('sync',K.tr('v',v.id));
           if(m.gone || (m.base && m.base.deleted) || (j && j.tomb) || (tr && tr.result && tr.result.deleted)){ skipped++; continue; } }
-        t.put('versions',v); added++; size+=v.size||0; touched.add(v.note); if(v.name && v.reason!=='copy') await queueV(t, v, after); }
-      for(const n of touched) after(()=>emit(deps.onHistory,n)); if(skipped) log({t:'import-vskip', n:skipped}); return {ok:true, added, size, skipped}; }); }
+        t.put('versions',v); added++; size+=v.size||0; touched.add(v.note); if(v.reason==='copy') copied.add(v.note); if(v.name && v.reason!=='copy') await queueV(t, v, after); }
+      for(const n of touched) after(()=>emit(deps.onHistory,n)); for(const n of copied) after(()=>emit(deps.onChange,{id:n, kind:'copies', note:n})); if(skipped) log({t:'import-vskip', n:skipped}); return {ok:true, added, size, skipped}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   // the migration (§4.9): every named record without a sync decision, also a job written by code before 4a with no meta, is judged once; an orphan job goes
   // o.jobs: only the jobs without a meta (S.vjudge, written by an old tab meanwhile); the full pass over the records runs once per epoch (`vmigrated`)
@@ -904,8 +911,55 @@ function makeSync(deps){
   async function unsynced(){ if(!S.loaded) await load(); return db.tx(['versions','sync'],'readonly', async t=>{ const ids=async p=>(await t.range('sync',p,p+'\uffff')).map(r=>r.k.slice(p.length));
     const n=new Set([...await ids('out:n:'), ...await ids('try:n:')]), v=new Set([...await ids('out:v:'), ...await ids('try:v:')]), copies=new Set(); let local=0;
     for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ const id=m.k.slice(7); if(m.local && !v.has(id)){ const r=await t.get('versions',id); if(r && r.name) local++; } }   // the small meta records first: a body is read only for a version kept here
-    for(const r of await t.range('versions','','\uffff')) if(r.reason==='copy') copies.add(r.note);   // the whole store, once per erase dialog; 4b's map of copies replaces it
+    for(const r of await t.range('versions','','\uffff')) if(r.reason==='copy') copies.add(r.note);   // the whole store, once per erase dialog (as copiesCount at start)
     return {notes:n.size, versions:v.size, local, copies:copies.size}; }); }
+  /* ── conflict copies in the interface (§4.19, PR 4b) ── */
+  // the number of copies of every note, one read at start; the page keeps it up to date by recounting a note on its events (countCopies)
+  async function copiesCount(){ if(!S.loaded) await load(); return db.tx(['versions'],'readonly', async t=>{ const m=new Map(); for(const v of await t.range('versions','','\uffff')) if(v.reason==='copy') m.set(v.note,(m.get(v.note)||0)+1); return m; }); }
+  // the note that holds a note's copies now: itself, or the note a revival moved them into (purged:n:{id}.revivedAs, followed)
+  async function ownerOf(t, id){ let cur=id; const seen=new Set(); while(cur && !seen.has(cur)){ seen.add(cur); const n=await t.get('notes',cur); if(n) return n; const p=await t.get('sync',K.purged(cur)); cur=p && p.revivedAs; } return null; }
+  // «Відновити» on a copy: one transaction with the epoch check. The note takes the copy's state (state: its title and blocks as the page rebuilt them)
+  // through the local write path (lrev, the job), the state before is kept as «base» with every body inline, and the copy goes
+  async function restoreCopy(note, copyId, state){ if(!S.loaded) await load();
+    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const C=await t.get('notes',note), copy=await t.get('versions',copyId);
+      if(!C) return {ok:false, code:'missing'}; if(!copy || copy.reason!=='copy' || copy.note!==note) return {ok:false, code:'nocopy'};
+      const meta=await getMeta(t,'n',note), clock=(await t.get('sync','clock'))||{k:'clock', last:0}, tt=nextUpdated(now(), clock.last), last=lastOf(await versionsOf(t,note));
+      const base=inlineRec(note, C, 'base', tt, last); base.t=Math.min(+C.updated||tt, vnow()); if(!last || last.sig!==base.sig || !last.inline) t.put('versions', base);   // the time of the state, as every history record; the newest record is enough only when it holds every body itself
+      const body={...noteBody(C), title:state.title||'', blocks:state.blocks||[], updated:tt}; t.put('sync',{k:'clock', last:tt});
+      const res=await putNote(t, note, body, meta, {t:tt}, after); await ensureJob(t, note, body, meta, after); t.del('versions',copyId);
+      after(()=>{ emit(deps.onHistory,note); emit(deps.onChange,{id:note, kind:'copies', note}); });
+      return {ok:true, lrev:res.lrev, note:res.note, before:{...C}, copy}; }); }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
+  // its undo, one transaction: the copy goes back under the note that holds the copies now (only if that note exists), and the note goes back as a
+  // delta, merge3(restored, before, C), so an edit that arrived meanwhile stays; a local write with a fresh `updated`, never `before` wholesale
+  async function undoRestore(note, e){ if(!S.loaded) await load();
+    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const C=await ownerOf(t, note); if(!C) return {ok:false, code:'gone'}; const id=C.id;
+      const meta=await getMeta(t,'n',id), clock=(await t.get('sync','clock'))||{k:'clock', last:0}, tt=nextUpdated(now(), clock.last);
+      const m=merge3(e.restored, {...e.before, updated:tt}, C, {dev:devId, t:tt}), body={...noteBody(m.note), updated:tt}; t.put('sync',{k:'clock', last:tt});
+      const res=await putNote(t, id, body, meta, {copies:m.copies, t:tt, from:meta.base||{}}, after); await ensureJob(t, id, body, meta, after);
+      if(e.copy && !(await t.get('versions',e.copy.id))) t.put('versions',{...e.copy, note:id});
+      after(()=>{ emit(deps.onHistory,id); emit(deps.onChange,{id, kind:'copies', note:id}); });
+      return {ok:true, id, lrev:res.lrev, note:res.note}; }); }
+    catch(err){ return {ok:false, code:codeOf(err), error:err}; } }
+  // «Прибрати» and «Прибрати конфліктні копії (N)»: local, one transaction over `versions` with the epoch check (no job: copies never sync); the
+  // removed records come back for the undo
+  // o.last: the page asked about removing the last copy of a note in the trash; without it that removal is refused (code 'last'), whatever the page believed
+  async function dropCopies(note, ids, o={}){ if(!S.loaded) await load();
+    try{ return await tx(['notes','versions','sync'], async(t,after)=>{ const C=await t.get('notes',note), all=(await versionsOf(t,note)).filter(v=>v.reason==='copy'), drop=all.filter(v=>ids.includes(v.id)), last=!!(C && C.deleted) && drop.length>0 && drop.length===all.length;
+      if(last && !o.last) return {ok:false, code:'last'}; for(const v of drop) t.del('versions',v.id);
+      if(drop.length) after(()=>{ emit(deps.onHistory,note); emit(deps.onChange,{id:note, kind:'copies', note}); }); return {ok:true, removed:drop, last}; }); }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
+  async function putCopies(note, recs){ if(!S.loaded) await load();
+    try{ return await tx(['notes','versions','sync'], async(t,after)=>{ const C=await ownerOf(t, note); if(!C) return {ok:false, code:'gone'};
+      for(const r of recs) if(!(await t.get('versions',r.id))) t.put('versions',{...r, note:C.id}); after(()=>{ emit(deps.onHistory,C.id); emit(deps.onChange,{id:C.id, kind:'copies', note:C.id}); }); return {ok:true, id:C.id}; }); }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
+  // the 30-day rule without an owner (purgeOld): the trash date, the note's state and the absence of copies are read in the transaction that deletes it, so a
+  // copy another tab wrote a moment ago keeps the note
+  async function purgeOldLocal(id, before){ if(!S.loaded) await load();
+    try{ return await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const C=await t.get('notes',id); if(!C || !C.deleted || C.deleted>=before) return {ok:true, purged:false};
+      if(await hasCopies(t,id)) return {ok:true, purged:false, kept:'copies'}; await deleteRecord(t,id,{after, own:true, never:true}); t.del('sync',K.meta('n',id)); dropJob(t,id,after); dropRefetch(t,id,after);
+      after(()=>{ S.bytes.delete(id); emit(deps.onChange,{id, kind:'purged'}); }); return {ok:true, purged:true}; }); }
+    catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function countCopies(id){ if(!S.loaded) await load(); return db.tx(['versions'],'readonly', async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
   async function importOne(t, raw, body, after){ const id=String(raw.id), tt=now();
     if(await t.get('sync',K.purged(id))){ const target=await revive(t, id, body, {t:tt}, after); return {ok:true, kind:'revived', id:target}; }
@@ -929,7 +983,7 @@ function makeSync(deps){
   async function seenAll(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
   async function lrevOf(ids){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
-  return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, countCopies, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
+  return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
     left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
