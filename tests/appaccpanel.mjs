@@ -65,7 +65,7 @@ await connect(pg); await untilUI(pg, 'synced');
   await pg.fill('#accPanel .accp-name input','Мій ПК'); await pg.keyboard.press('Enter'); await pg.keyboard.press('Escape');
   await pg.click('#newBtn'); await pg.waitForTimeout(300); await typeAt(pg,500,300,'з новою назвою'); const id=await curId(pg); const dn=await until(async()=>{ await settle(pg,100); const d=cloud.doc('notes',id); return d && d.dn==='Мій ПК'? d.dn : null; }, 8000);
   ok('4 a new device name goes as dn in the next document', dn==='Мій ПК');
-  await T2.bringToFront(); await T2.evaluate(()=>document.getElementById('syncBtn').click()); const q=await until(()=>panel(T2), 3000); const lead=await ui(pg);
+  await T2.bringToFront(); await T2.evaluate(()=>document.getElementById('syncBtn').click()); const q=await until(async()=>{ const x=await panel(T2); return x && x.name==='Мій ПК'? x : null; }, 5000) || await panel(T2); const lead=await ui(pg);   // the «dev» message may come after the panel opened: it draws the name again
   ok('4a the second tab\'s panel shows the new name and the leader\'s status ('+(q&&q.st)+' / '+(lead&&lead.text)+')', !!q && q.name==='Мій ПК' && q.st===lead.text); await T2.keyboard.press('Escape'); await T2.close(); await pg.bringToFront(); }
 
 /* ── 5. «Історія» of an account with no versions: done, no «версії ще завантажуються» ── */
