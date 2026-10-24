@@ -318,4 +318,9 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   await nameNow(A,'n1','v1','Подія'); const c0=A.changes.length; await idle(A);
   ok('29 an accepted send emits a version change of its note, so an open «Історія» turns it to «у хмарі»', A.changes.slice(c0).some(e=>e.kind==='version' && e.id==='v1' && e.note==='n1')); }
 
+/* ── 30. a rename here makes this device the stamp of the local record: «Історія» names no other device ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'), B=await mk(cloud,'B'); await note(B,'n1','текст'); await nameNow(B,'n1','v1','З B'); await idle(B,A);
+  const r0=A.db.get('versions','v1'); await A.sync.versionLocal({op:'rename', id:'v1', name:'Перейменовано на A'}); await idle(A,B); const r1=A.db.get('versions','v1');
+  ok('30 received from B the record says B; after A\'s accepted rename it says A ('+(r0&&r0.dn)+' → '+(r1&&r1.dn)+')', r0 && r0.dev==='B' && r1 && r1.dev==='A' && r1.dn==='Device A' && vdoc(cloud,'v1').dev==='A'); }
+
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);

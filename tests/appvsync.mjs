@@ -47,13 +47,13 @@ const state=(pg,v)=>pg.evaluate(v=>{ const r=document.querySelector('#histList .
   const meta=await pg.evaluate(v=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const q=r.result.transaction('sync','readonly').objectStore('sync').get('meta:v:'+v); q.onsuccess=()=>{ res(q.result||null); r.result.close(); }; }; }), vid);
   ok('1f A\'s record knows its cloud state: base rev 2, no job', !!meta && meta.base && meta.base.rev===2 && meta.lrev===meta.baseLrev);
   // «Видалити версію» on A: the dialog says «на всіх пристроях», the version leaves B's open «Історія»
-  await pg.locator('#histList .hv[data-id="'+vid+'"]').click(); await menu(pg,'Видалити версію');
+  await pg.locator('#histList .hv[data-id="'+vid+'"]').click(); await menu(pg,'Перейменувати версію…'); await menu(pg,'Видалити версію');
   const ask=await until(()=>pg.evaluate(()=>document.getElementById('ask').open? document.getElementById('askTitle').textContent+' | '+document.getElementById('askText').textContent : null), 3000);
   ok('1g «Видалити версію» asks «Видалити версію «Реліз 2»?» with «на всіх пристроях» ('+ask+')', /Видалити версію «Реліз 2»\?/.test(ask||'') && /на всіх пристроях/.test(ask||''));
   await pg.click('#askYes');
   const tomb=await until(async()=>{ await settle(pg,100); const d=vdoc(vid); return d && d.deleted? d : null; }, 8000);
   const gone=await until(async()=>{ await settle(B.pg,100); return B.pg.evaluate(v=>!document.querySelector('#histList .hv[data-id="'+v+'"]'), vid); }, 8000);
-  ok('1h the tombstone is in the cloud, A shows «Зараз», and the row left B\'s open «Історія»', !!tomb && gone && await pg.evaluate(()=>!document.querySelector('#histList .hv.named') && document.querySelector('#histList .hv.cur').dataset.id==='now'));
+  ok('1h the tombstone is in the cloud, A shows «Зараз» with the rename field closed, and the row left B\'s open «Історія»', !!tomb && gone && await pg.evaluate(()=>!document.querySelector('#histList .hv.named') && document.querySelector('#histList .hv.cur').dataset.id==='now' && document.getElementById('histNameRow').hidden));
   // local-only: naming an automatic version whose body is gone, and one too large for the cloud
   await closeHist(pg); await pg.evaluate(([n,big])=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const t=r.result.transaction(['versions','blobs'],'readwrite'), V=t.objectStore('versions'), t0=Date.now()-3600000;
       V.put({id:'vPart', note:n, t:t0, w:t0, reason:'auto', title:'', sig:'p', size:1, sum:{ch:1,add:0,del:0,mv:0,ttl:0}, blocks:[{id:'b1', row:1, fx:0, h:'gone-hash'}]});
@@ -75,7 +75,7 @@ const state=(pg,v)=>pg.evaluate(v=>{ const r=document.querySelector('#histList .
   ok('1k the second tab\'s open «Історія» shows the version named in the first', inT2);
   const lead2=await T2.evaluate(()=>sheetDebug.sync.lead()); await T2.bringToFront(); await T2.locator('#histList .hv[data-id="now"]').click(); await menu(T2,'Зафіксувати версію…'); await T2.fill('#histName','З другої'); await T2.keyboard.press('Enter');
   const t0=Date.now(), sent=await until(async()=>{ await settle(pg,50); return cloud.all('versions').some(d=>d.name==='З другої'); }, 8000);
-  ok('1l named in the tab that does not lead ('+JSON.stringify(lead2)+'), it reaches the cloud without waiting for the minute ('+(Date.now()-t0)+' ms)', sent && Date.now()-t0<8000);
+  ok('1l named in the tab that does not lead ('+JSON.stringify(lead2)+'), it reaches the cloud without waiting for the minute ('+(Date.now()-t0)+' ms)', sent && Date.now()-t0<3000);
   ok('1m no page errors', !A.errs.length && !B.errs.length); await A.close(); await B.close(); }
 
 /* ── 2. the v4 barrier: an old page goes view-only before the new sender runs ── */

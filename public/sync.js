@@ -732,6 +732,7 @@ function makeSync(deps){
     if(outcome.kind==='accepted'){ const rev=outcome.rev, after_=meta.base? meta.base.srv||null : null;
       const nb={...tr.result, rev, srv:outcome.srv||null, dev:devId, op:tr.op, v:1}; if(devName) nb.dn=devName; nb.rcpt=outcome.echo? outcome.echo.rcpt : {...(meta.base && meta.base.rcpt || {}), [devId]:tr.op};
       if(!meta.base || rev>meta.base.rev) meta.base=nb; setSeen(t,'v',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
+      if(!tr.result.deleted){ const rec=await t.get('versions',id); if(rec && (rec.dev!==devId || (rec.dn||'')!==(devName||''))){ const r={...rec, dev:devId}; if(devName) r.dn=devName; else delete r.dn; t.put('versions',r); } }   // the stamp is this device's now: «Історія» names no other device
       if(tr.result.deleted){ dropVJob(t,id,after); delete meta.held; delete meta.movedFrom; }
       else if(meta.held){ delete meta.held; setVJob(t,id,vjob(id,{tomb:true}),after); }   // its note went while the attempt was out: accepted, the version goes with the original
       else if(meta.lrev===tr.sentLrev){ meta.baseLrev=meta.lrev; if(job && !job.tomb) dropVJob(t,id,after); }
@@ -902,7 +903,8 @@ function makeSync(deps){
   // only here (local-only: too large, incomplete, a shape the rules refuse) and notes with conflict copies; one read transaction
   async function unsynced(){ if(!S.loaded) await load(); return db.tx(['versions','sync'],'readonly', async t=>{ const ids=async p=>(await t.range('sync',p,p+'\uffff')).map(r=>r.k.slice(p.length));
     const n=new Set([...await ids('out:n:'), ...await ids('try:n:')]), v=new Set([...await ids('out:v:'), ...await ids('try:v:')]), copies=new Set(); let local=0;
-    for(const r of await t.range('versions','','\uffff')){ if(r.reason==='copy') copies.add(r.note); else if(r.name && !v.has(r.id)){ const m=await t.get('sync',K.meta('v',r.id)); if(m && m.local) local++; } }
+    for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ const id=m.k.slice(7); if(m.local && !v.has(id)){ const r=await t.get('versions',id); if(r && r.name) local++; } }   // the small meta records first: a body is read only for a version kept here
+    for(const r of await t.range('versions','','\uffff')) if(r.reason==='copy') copies.add(r.note);   // the whole store, once per erase dialog; 4b's map of copies replaces it
     return {notes:n.size, versions:v.size, local, copies:copies.size}; }); }
   async function countCopies(id){ if(!S.loaded) await load(); return db.tx(['versions'],'readonly', async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
   async function importOne(t, raw, body, after){ const id=String(raw.id), tt=now();

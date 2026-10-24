@@ -792,7 +792,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102403" integrity="sha384-Jjsleci9FAnlb51Do+Oq4MIBEZVWrszCjQQwqcqLtdjQIFwlm0XtOCpyFiMmhUmQ"></script>
+<script src="sync.js?b=2026102403" integrity="sha384-oft5qskW8tONhbQ2I9b8EbxR1JKfwpN65SzYvKInWm2XKVfnEfPAHCmLnUgKunOs"></script>
 <script src="cloud.js?b=2026102403" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -3066,7 +3066,7 @@ async function loadHist(){ const n=cur; let list=[], bodies=[], st={};
   H.st=st; H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
   if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
 async function openHist(){ if(H.open || !cur || ro()) return; flushSave(); hideUndo(); exitSel(); closePop();
-  H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
+  H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.st={}; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
   hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
   if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
   await loadHist(); }
@@ -3081,8 +3081,8 @@ function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('
   syncHist(); }
 // the state line of a named version, only with an owner: «у хмарі», «ще не надіслано», «лише тут: …», «не синхронізовано»; one received from another
 // device names the device of its document's stamp (after a rename that is the renaming device, so the line never says who created it)
-const VSTATE={cloud:'hist.state.cloud', pending:'hist.state.pending', big:'hist.state.big', partial:'hist.state.partial', shape:'hist.state.shape', error:'hist.state.error'};
-function stateLine(v){ const st=v.name && H.st[v.id]; if(!st) return ''; const t=loc(VSTATE[st]||'hist.state.pending'), from=v.dn && v.dev && v.dev!==S.devId? v.dn : '';
+const VSTATE={cloud:()=>loc('hist.state.cloud'), pending:()=>loc('hist.state.pending'), big:()=>loc('hist.state.big'), partial:()=>loc('hist.state.partial'), shape:()=>loc('hist.state.shape'), error:()=>loc('hist.state.error')};
+function stateLine(v){ const st=v.name && H.st[v.id]; if(!st) return ''; const t=(VSTATE[st]||VSTATE.pending)(), from=v.dn && v.dev && v.dev!==S.devId? v.dn : '';
   return '<div class="hv-st'+(st==='error'? ' bad' : '')+'">'+escHtml(from? loc('hist.stateFrom',{state:t, device:from}) : t)+'</div>'; }
 function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel)), v=H.list.find(x=>x.id===H.sel);
   histList.querySelectorAll('.hv').forEach(d=>{ const on=d.dataset.id===H.sel; d.classList.toggle('cur',on); d.setAttribute('aria-selected',String(on)); });
@@ -3095,7 +3095,7 @@ function liveGeo(){ const s=sheet.getBoundingClientRect(), m=new Map(); for(cons
 function showVersion(v){ if(!v || !cur) return; if(!H.view) flushSave();   // an edit made with «Зараз» open is written first: flushSave skips while a version is shown, and showNow redraws the note from storage
   const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
   if(!H.view) H.geo=liveGeo();   // where the live blocks are, for the outlines of the blocks this version has not
-  H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
+  histNameRow.hidden=true; H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
   const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
   for(const b of blocks){ const e=v.blocks.find(x=>x.id===b.id), n=now.get(b.id);
     b.el.classList.toggle('v-add', !n); b.el.classList.toggle('v-ch', !!n && !!e && ((!!e.h && n.h!==e.h) || (n.title||'')!==(e.title||'') || (n.kind||'')!==(e.kind||'') || (n.lang||'')!==(e.lang||'')));
@@ -3109,7 +3109,7 @@ function placeVbtns(){ vlayer.innerHTML=''; if(!H.view) return; const m=mainEl.g
     const bt=document.createElement('button'); bt.type='button'; bt.className='vbtn'; bt.dataset.id=b.id; bt.innerHTML='<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'+locA('hist.blockRestore');
     bt.addEventListener('click',()=>restoreBlock(b.id)); vlayer.appendChild(bt);
     const x=Math.min(r.right-m.left+8, mainEl.clientWidth-bt.offsetWidth-8); bt.style.left=Math.max(8,x)+'px'; bt.style.top=(r.top-m.top)+'px'; } }   // right of the block; at the right edge, over it
-function showNow(){ vlayer.innerHTML=''; sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove()); if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
+function showNow(){ histNameRow.hidden=true; vlayer.innerHTML=''; sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove()); if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
   const y=window.scrollY; drawNote(cur); window.scrollTo(0,y); }
 function putState(n, st){ n.title=st.title; drawBlocks(st.blocks); ttl.textContent=n.title; document.title=docTitle(n); markDirty(); flushSave(); updateItem(n); }
 // both restores: the state before becomes a version (R1, skipped when it already is the newest), the result is written as «restore» from the version (R5)
@@ -3136,7 +3136,7 @@ async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if
 async function deleteVersion(){ const n=cur, v=H.view; if(!n || !v || !v.name) return; const here=!SYNC.owner || ['big','partial','shape'].includes(H.st[v.id]);
   if(!await ask({title:loc('hist.deleteTitle',{name:v.name}), text:loc(here? 'hist.deleteHere' : 'hist.deleteAll'), ok:loc('hist.deleteOk')}) || cur!==n || H.view!==v) return;
   let done=true; await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:'delete', id:v.id}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } VLAST.delete(n.id); tellTabs({t:'vput', note:n.id}); syncWake(); });
-  if(!done) return; H.sel='now'; showNow(); say(loc('hist.deleted',{name:v.name})); storageUI(); await loadHist(); }
+  if(!done) return; DEBUG.vers.size=Math.max(0, DEBUG.vers.size-(v.size||0)); H.sel='now'; showNow(); say(loc('hist.deleted',{name:v.name})); storageUI(); await loadHist(); }
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
   await vqueue(n.id, async()=>{ const list=await vlist(n.id), stay=list.filter(v=>v.keep || v.name); await vdelete(n.id, list.filter(v=>!v.keep && !v.name), stay); const top=stay.sort((a,b)=>b.t-a.t)[0]; VLAST.set(n.id, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); }); storageUI(); await loadHist(); }   // only this device's automatic history goes; named versions and conflict copies stay (SYNC-PLAN §2)
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
