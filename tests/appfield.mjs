@@ -153,5 +153,14 @@ await pg.bringToFront(); await pg.evaluate(()=>{ sheetDebug.saveGate=null; windo
 const a15=await stored('n2'), c15=await pg.evaluate(async()=>(await sheetDebug.vers.list('n2')).filter(v=>v.reason==='copy').length); await B3.close();
 ok('15 archived in both tabs at once: stored archived '+!!(a15&&a15.archived)+' «'+texts(a15)+'», conflict copies '+c15, a15 && a15.archived>0 && texts(a15)==='молоко' && c15===0);
 
+// 16 the open note's edit on its way (held), and meanwhile a newer copy of the note fails to import: that write lands without the import, so the warning stays,
+// and «Повторити» stores the import
+await fresh(); await open('n2'); await pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=st=>st.includes('notes')? window.__gate : Promise.resolve(); });
+await type(' 16'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(500); await failing(true); await imp([{...NOTES[1], blocks:[{id:'b1',row:2,text:'молоко IMPORT 16',fx:0.2}], updated:Date.now()+60000}]); await failing(false);
+await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await pg.waitForTimeout(700); const w16=await warn(), s16=await stored('n2'); await retry(); await pg.waitForTimeout(700); const a16=await stored('n2'), wa16=await warn();
+await reload(); const b16=await stored('n2');
+ok('16 the held edit landed («'+texts(s16)+'») after the import failed: ⚠ '+w16+'; «Повторити» stored «'+texts(a16)+'», ⚠ '+wa16+'; after a reload «'+texts(b16)+'»',
+  w16 && texts(a16)==='молоко IMPORT 16' && !wa16 && texts(b16)==='молоко IMPORT 16');
+
 console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);

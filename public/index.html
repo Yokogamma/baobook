@@ -1986,7 +1986,8 @@ function markDirty(){ if(H.view || ro() || !STARTED || DYING) return; const firs
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
 let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), STORED=new Map(), LAG=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 // STORED: id → the latest revision that stored the whole note (every change of it made before that write is in the store); LAG: id → {rev, reason} of the latest
-// write that failed after a newer one began, while the newest is on its way: that write decides whether the failure is covered
+// write that failed after a newer one began, while the newest is on its way: that write decides whether the failure is covered. An unsaved entry carries the revision
+// of its failure (rev; one made outside a write, by an import, is newer than every write begun before it) and the delta that failed (of)
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands. A field write (fieldWrite) clears the warning
@@ -1994,14 +1995,15 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), STOR
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const whole=!(delta && delta.field), snap={...n}, D=noteSnap(n), p=db.save(n, delta && delta.make? delta.make(rev) : delta||editorDelta(n, rev)); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs; whole: it carries the note as it is in memory; make: a delta made for this revision from the note as it is now (a retry makes it again)
   p.then(r=>{ if(r.ok && (whole || r.whole)) STORED.set(n.id, Math.max(STORED.get(n.id)||0, rev));
     if(REV.get(n.id)!==rev){ if(!r.ok && r.code!=='purged') lagged(n, rev, r.reason, delta); else if(r.ok) covered(n, rev, whole || r.whole, delta); return; }   // a newer write decides the status, but this failure does not vanish, and this success covers an older one
-    inflight.delete(n.id); const lag=LAG.get(n.id); LAG.delete(n.id); const left=lag && (STORED.get(n.id)||0)<lag.rev && !sameChange(lag, delta)? lag : null;   // an older write failed and no write begun after it stored the whole note, nor did this one store the same change
-    if(r.ok){ if(left) unsaved.set(n.id,{reason:left.reason, since:now(), rev:left.rev, of:left.of}); else if(whole || r.whole || sameChange(unsaved.get(n.id), delta)) unsaved.delete(n.id);   // the older failure stays, retried whole
+    inflight.delete(n.id); const lag=LAG.get(n.id); LAG.delete(n.id); const left=lag && (STORED.get(n.id)||0)<lag.rev && !sameChange(lag, delta, rev)? lag : null;   // an older write failed and no write begun after it stored the whole note, nor did this one store the same change
+    const u0=unsaved.get(n.id), later=!!(u0 && u0.rev!=null && u0.rev>rev);   // an entry made while this write was on its way (an import that failed meanwhile): this write did not carry it
+    if(r.ok){ if(left) unsaved.set(n.id,{reason:left.reason, since:now(), rev:left.rev, of:left.of}); else if(((whole || r.whole) && !later) || sameChange(u0, delta, rev)) unsaved.delete(n.id);   // the older failure stays, retried whole
       if(r.note){ const same=SC.sameDoc(r.note, D); n.updated=r.note.updated; if(!same){ const typed=n===cur && n.title!==D.title? n.title : null; takeRec(n, r.note); if(typed!==null) n.title=typed; if(!PENDING.has(n.id)){ PENDING.set(n.id,{tab:true}); srcLater(n.id); } }   // the stored result is the truth: the record had moved under the editor, so the screen catches up at a safe point. A title typed after this write
         // began is newer than its result: it stays, and the next write merges it over the result (the snapshot below is this write's)
         setSnap(n.id, D, same? r.lrev : null, rev); if(r.lrev!=null) LREV.set(n.id, r.lrev); if(!same) relist(); }   // what the merge brought may move the note between the groups or sections, or empty the section shown
       tellTabs({t:'put',n:r.note||snap, lrev:r.lrev}); }   // the stored result as it is: a field it lost in a merge (an unpin from another tab) must not come back from this tab's copy
     else if(r.code==='purged'){ removeStored(n.id); return; }   // the note was purged meanwhile: its text already went to the revived note
-    else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta:left && !whole? undefined : delta, rev, of:delta}); }   // the same delta is retried later (the whole note when it is a field write and an older failure is left); another owner in the store: view-only, the text stays under the unsaved warning
+    else { if(r.code==='epoch') setLock('epoch'); unsaved.set(n.id,{reason:r.reason,since:now(),delta:(left || later) && !whole? undefined : delta, rev, of:delta}); }   // the same delta is retried later (the whole note when it is a field write and an older failure, or one made meanwhile, is left); another owner in the store: view-only, the text stays under the unsaved warning
     const good=r.ok && !unsaved.has(n.id);
     if(n===cur && saveP===p && !(r.ok && dirty)){ savedShow(good?'ok':'err', good? loc('save.ok') : loc('save.failedReason',{reason:r.ok? unsaved.get(n.id).reason : r.reason}), good?'✓':''); clearTimeout(savedEl._t); if(good){ savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); persistOnce(); } }
     saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
@@ -2012,10 +2014,10 @@ function lagged(n, rev, reason, delta){ if((STORED.get(n.id)||0)>rev || !notes.i
   const u=unsaved.get(n.id); if(u && !(u.delta && u.delta.field)) return;
   unsaved.set(n.id,{reason, since:now(), rev, of:delta}); if(n===cur){ clearTimeout(savedEl._t); savedShow('err', loc('save.failedReason',{reason}), ''); } saveUI(); storageUI(); chgUI(); }
 // a failure is covered by a write that stored the same change again (its delta: «Повторити», the note opened), or by one begun after it that stored the whole note
-const sameChange=(e, delta)=>!!(e && delta && (e.delta===delta || e.of===delta));
+const sameChange=(e, delta, rev)=>!!(e && delta && (e.delta===delta || e.of===delta) && (e.rev==null || e.rev<=rev));   // the failure of that change, not a later one of it
 // a write a newer one replaced has succeeded: a failure it covers goes, also when the newest write has settled already
-function covered(n, rev, all, delta){ const l=LAG.get(n.id); if(l && ((all && l.rev<rev) || sameChange(l, delta))) LAG.delete(n.id);
-  const u=unsaved.get(n.id); if(!u || !((all && u.rev!=null && u.rev<rev) || sameChange(u, delta))) return; unsaved.delete(n.id);
+function covered(n, rev, all, delta){ const l=LAG.get(n.id); if(l && ((all && l.rev<rev) || sameChange(l, delta, rev))) LAG.delete(n.id);
+  const u=unsaved.get(n.id); if(!u || !((all && u.rev!=null && u.rev<rev) || sameChange(u, delta, rev))) return; unsaved.delete(n.id);
   if(n===cur && !inflight.has(n.id) && !dirty){ savedShow('ok', loc('save.ok'), '✓'); clearTimeout(savedEl._t); savedEl._t=setTimeout(()=>{ savedEl.className='saved'; },1800); } saveUI(); storageUI(); chgUI(); }
 // a change met by a write, whose source nobody told this tab: the record's base says whether it came from another device
 async function srcLater(id){ try{ const st=await SYNC.state(id); if(PENDING.has(id) && st.note) PENDING.set(id, srcOf(st)); chgUI(); }catch(_){} }
@@ -2176,7 +2178,7 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
       const importDelta=(C,meta,t)=>(!C || n.updated>C.updated)? {note:n, keepUpdated:true} : null;
       const r=DEBUG.failSave? {ok:false, code:'test', reason:loc('save.reason.test')} : await SYNC.importNote(n);
       if(!r.ok){ failed++; if(!ex) notes.push(n); else if(n.updated>ex.updated){ if(!ESNAP.has(ex.id)) setSnap(ex.id, ex, LREV.get(ex.id)??0); takeRec(ex, n); if(cur===ex){ dirty=false; redrawCur(ex); } }   // kept in memory as unsaved: the warning, «Повторити» with the same delta, export.
-        unsaved.set(n.id,{reason:r.reason||loc('save.reason.error',{name:r.code}), since:now(), delta:importDelta, rev:REV.get(n.id)||0}); continue; }   // A note that exists takes the newer copy as the import would have (its snapshot stays the base): a write of the note in memory then carries the import, so a pin that goes whole stores it rather than dropping it
+        unsaved.set(n.id,{reason:r.reason||loc('save.reason.error',{name:r.code}), since:now(), delta:importDelta, rev:(REV.get(n.id)||0)+.5}); continue; }   // A note that exists takes the newer copy as the import would have (its snapshot stays the base): a write of the note in memory then carries the import, so a pin that goes whole stores it rather than dropping it
       if(r.kind==='skipped' || r.kind==='same'){ skipped++; continue; }
       if(r.kind==='revived'){ const st=await SYNC.state(r.id); if(st.note){ const rv=notes.find(x=>x.id===r.id); if(rv) takeRec(rv, st.note); else notes.push(st.note); LREV.set(r.id, st.meta? st.meta.lrev : 0); updated++; wrote.push([st.note,'updated']); } continue; }
       if(r.kind==='added'){ notes.push(r.note); LREV.set(n.id, r.lrev); added++; wrote.push([r.note,'added']); }
@@ -2184,7 +2186,7 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
       if(SYNC) syncWake(); continue; }
     if(!ex){ notes.push(n); if((await writeNote(n)).ok){ added++; wrote.push([n,'added']); } else failed++; } else if(n.updated>ex.updated){ takeRec(ex, n); if((await writeNote(ex)).ok){ updated++; wrote.push([ex,'updated']); } else failed++; if(cur===ex){ dirty=false; openNote(ex); } } else skipped++; }   // without IndexedDB: the plain write
   // read storage back: only what is really there counts as imported; the rest stays in memory as unsaved (warning, retry, export)
-  const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now(),rev:REV.get(n.id)||0}); }
+  const back=await storedNotes(); for(const [n,k] of wrote){ const s=back.get(n.id); if(s && s.updated===n.updated) continue; if(k==='added') added--; else updated--; failed++; unsaved.set(n.id,{reason:loc('save.reason.unconfirmed'),since:now(),rev:(REV.get(n.id)||0)+.5}); }
   if(failed) saveUI(); const applied=blank && added>0 && applySettings(settings);
   notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ return (await storedWithLrev()).m; }
