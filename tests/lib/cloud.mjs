@@ -77,6 +77,8 @@ export class TestCloud{
     const out=list.slice(0,n).map(d=>this.out(d)); const h=this.take('hold',o.dev,'page'); if(h) await h.promise; return out; }   // held after the read, like get
   listen(col, from, onDocs, onErr, o={}){ const f=this.take('fail',o.dev,'listen'); if(f){ queueMicrotask(()=>onErr(err(f.code||'unavailable','injected'))); return ()=>{}; }   // a listener refused or lost: the error comes by the callback, as the SDK's does
     const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
+  // the server ends live listeners with an error (a lost stream, a refused query), as the SDK reports it: by the callback, once, after which the listener is gone
+  end(col, o={}){ const ended=this.subs.filter(s=>s.live && s.col===col && (o.dev===undefined || s.dev===o.dev)); for(const sub of ended){ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); queueMicrotask(()=>sub.onErr(err(o.code||'unavailable','the listener ended'))); } return ended.length; }
   // deliver what changed to every listener: the first call is the server snapshot; `dup` repeats the batch, `reorder` shuffles it
   pump(){ for(const sub of this.subs){ if(!sub.live) continue; const docs=this.visible(sub.col).filter(d=>!sub.from || cmpSrv(d.srv,sub.from)>=0).filter(d=>sub.seen.get(d.id)!==d.seq);
       if(!docs.length && !sub.first) continue; for(const d of docs) sub.seen.set(d.id,d.seq); let batch=docs.map(d=>this.out(d)); const dup=this.take('dup',sub.dev), re=this.take('reorder',sub.dev);
