@@ -171,7 +171,7 @@ function placeAgainstSeen(doc, seen, serverRead){ if(!seen) return 'fresh'; cons
 
 /* ── history manifests (VERSIONS-PLAN), shared with the versions code of index.html ── */
 const bodyOf=d=>d.kind? (d.text||'') : (d.html||d.text||'');
-const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; delete e.s; delete e.r; const b=bodyOf(d); e.h=b.length>V_BODY_MAX? null : hashOf(b); return e; };   // a body too big for the history gets h:null
+const entryOf=d=>{ const e={...d}; delete e.text; delete e.html; delete e.s; delete e.r; const b=d.s!==undefined? d.s : bodyOf(d); e.h=b.length>V_BODY_MAX? null : hashOf(b); return e; };   // a body too big for the history gets h:null   // an entry of the wire or of a record carries its body in `s` (html when `r`, else text): the same hash as the block it came from
 function manifestOf(title, blocks){ const m=(blocks||[]).filter(d=>d&&d.id).map(entryOf).sort((x,y)=>x.id<y.id?-1:1); return {title:title||'', blocks:m, sig:hashOf((title||'')+'\n'+JSON.stringify(m))}; }
 function sumOf(m, prev){ const s={ch:0,add:0,del:0,mv:0,ttl:0}; if(!prev){ s.add=m.blocks.length; return s; } const P=new Map(prev.blocks.map(e=>[e.id,e])), seen=new Set();
   for(const e of m.blocks){ const p=P.get(e.id); seen.add(e.id); if(!p){ s.add++; continue; }
@@ -691,13 +691,13 @@ function makeSync(deps){
         setVTry(t,id,{k:K.tr('v',id), op, expect:base.rev, result:{note:base.note, deleted:true}, sentLrev:meta.lrev, epoch:S.epoch},after); return 'insured'; }
       const rec=await t.get('versions',id); if(!rec){ dropVJob(t,id,after); return 'dropped'; }
       if(meta.movedFrom && !base){ delete meta.movedFrom; putMeta(t,meta,after); }   // the read found no document: the moved version belongs to the revived note (§4.9 «Revival»)
-      if(base && rec.name===base.name){ dropVJob(t,id,after); meta.baseLrev=meta.lrev; putMeta(t,meta,after); return 'dropped'; }   // nothing to send (a rename back)
-      if(!base){ const kind=vlocalKind(rec); if(kind){ meta.local=kind; putMeta(t,meta,after); dropVJob(t,id,after); return 'dropped'; } }
+      if(base && rec.name===base.name){ dropVJob(t,id,after); meta.baseLrev=meta.lrev; putMeta(t,meta,after); after(()=>emit(deps.onChange,{id, kind:'version', note:rec.note})); return 'dropped'; }   // nothing to send (a rename back): «ще не надіслано» turns back to «у хмарі»
+      if(!base){ const kind=vlocalKind(rec); if(kind){ meta.local=kind; putMeta(t,meta,after); dropVJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'version', note:rec.note})); return 'dropped'; } }
       setVTry(t,id,{k:K.tr('v',id), op, expect:base? base.rev : 0, result:vwire(rec, base), sentLrev:meta.lrev, epoch:S.epoch},after); return 'insured'; }); }
   async function runVTry(id){ const tr=S.vtries.get(id); if(!tr || !S.online) return; S.netBusy=true; try{
       const res=await net(()=>S.cloud.txn('versions', id, D=>{ if(D && D.rcpt && D.rcpt[devId]===tr.op) return null; if((D? D.rev : 0)!==tr.expect) return null; if(atLimit(D)) return null; const w={...tr.result, v:1, rev:tr.expect+1, op:tr.op, dev:devId, rcpt:{...(D && D.rcpt || {}), [devId]:tr.op}}; if(devName) w.dn=devName; return w; }));
       if(res.error){ const code=res.error.code; if(isNetErr(code)){ await vbackoff(id, res.error); return; } if(code==='permission-denied'){ await refusedVWrite(id, tr); return; } if(code==='resource-exhausted'){ pauseDay(); return; }
-        await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.tr('v',id)); if(!cur || cur.op!==tr.op) return; dropVTry(t,id,after); const meta=await getMeta(t,'v',id); meta.err='invalid'; putMeta(t,meta,after); log({t:'rejected-write', col:'v', id, code}); }); return; }
+        await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.tr('v',id)); if(!cur || cur.op!==tr.op) return; dropVTry(t,id,after); const meta=await getMeta(t,'v',id); meta.err='invalid'; putMeta(t,meta,after); log({t:'rejected-write', col:'v', id, code}); after(()=>emit(deps.onChange,{id, kind:'version', note:tr.result.note})); }); return; }
       const {read:D, wrote}=res.value; countRead(1); if(wrote){ countWrite(1); if(!tr.result.deleted) countRead(1); }   // a create or a rename makes the rules read its note (noteAlive, §4.17)
       let outcome; if(wrote) outcome={kind:'accepted', rev:tr.expect+1, srv:null}; else if(D && D.rcpt && D.rcpt[devId]===tr.op) outcome=D.rev===tr.expect+1? {kind:'accepted', rev:D.rev, srv:D.srv||null, echo:D} : {kind:'accepted', rev:tr.expect+1, srv:null, later:{...D, id}}; else if(D && D.rev>tr.expect) outcome={kind:'rejected'}; else if(D && D.rev===tr.expect && atLimit(D)) outcome={kind:'receipts'}; else outcome={kind:'invariant', D};
       await tx(['notes','versions','blobs','sync'], async(t,after)=>finishV(t, id, tr, outcome, after)); }
@@ -714,7 +714,7 @@ function makeSync(deps){
         if(await t.get('notes',note) && !(await t.get('sync',K.out('n',note)))) setJob(t,note,{k:K.out('n',note), tries:0, next:0},after); if(job) setVJob(t,id,{...job, tries:0, next:0},after); after(()=>S.vblocked.add(id)); return; }
       if(!tr.result.deleted && N.purged){ log({t:'vrefused-purged', id}); await vnoteGone(t, id, meta, job, after); return; }
       if(meta.lrev!==tr.sentLrev){ if(job) setVJob(t,id,{...job, tries:0, next:0},after); log({t:'rejected-write', col:'v', id, stale:true}); return; }   // edited (renamed, deleted) while the check read was out: the newer state goes, unmarked
-      meta.err='invalid'; putMeta(t,meta,after); log({t:'rejected-write', col:'v', id, code:'permission-denied'}); }); }
+      meta.err='invalid'; putMeta(t,meta,after); log({t:'rejected-write', col:'v', id, code:'permission-denied'}); after(()=>emit(deps.onChange,{id, kind:'version', note})); }); }
   // its note is purged in the cloud: a held version (its note already went here) moves into the revived note when the create was refused, or goes;
   // one with a base is tombstoned; an unsent one keeps its record until the note's tombstone arrives here and decides (revival or deletion)
   async function vnoteGone(t, id, meta, job, after){
@@ -727,10 +727,12 @@ function makeSync(deps){
     if(job) dropVJob(t,id,after); }
   // §4.5 step 5 for a version, only if the attempt is still the same one
   async function finishV(t, id, tr, outcome, after){ const cur=await t.get('sync',K.tr('v',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.vtries.get(id)===tr) S.vtries.delete(id); S.queueAt=0; }); return 'stale'; }
+    if(tr.result.note) after(()=>emit(deps.onChange,{id, kind:'version', note:tr.result.note}));   // its state in «Історія» moved (sent, refused, blocked)
     const meta=await getMeta(t,'v',id), job=await t.get('sync',K.out('v',id)), seen=await t.get('sync',K.seen('v',id)); dropVTry(t,id,after);
     if(outcome.kind==='accepted'){ const rev=outcome.rev, after_=meta.base? meta.base.srv||null : null;
       const nb={...tr.result, rev, srv:outcome.srv||null, dev:devId, op:tr.op, v:1}; if(devName) nb.dn=devName; nb.rcpt=outcome.echo? outcome.echo.rcpt : {...(meta.base && meta.base.rcpt || {}), [devId]:tr.op};
       if(!meta.base || rev>meta.base.rev) meta.base=nb; setSeen(t,'v',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
+      if(!tr.result.deleted){ const rec=await t.get('versions',id); if(rec && (rec.dev!==devId || (rec.dn||'')!==(devName||''))){ const r={...rec, dev:devId}; if(devName) r.dn=devName; else delete r.dn; t.put('versions',r); } }   // the stamp is this device's now: «Історія» names no other device
       if(tr.result.deleted){ dropVJob(t,id,after); delete meta.held; delete meta.movedFrom; }
       else if(meta.held){ delete meta.held; setVJob(t,id,vjob(id,{tomb:true}),after); }   // its note went while the attempt was out: accepted, the version goes with the original
       else if(meta.lrev===tr.sentLrev){ meta.baseLrev=meta.lrev; if(job && !job.tomb) dropVJob(t,id,after); }
@@ -897,6 +899,13 @@ function makeSync(deps){
       setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true},after); dropRefetch(t,id,after); after(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:true, copies}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function tombstoneAuto(id){ if(!S.loaded) await load(); return tx(['notes','sync'], async(t,after)=>{ const C=await t.get('notes',id); if(!C || !C.deleted) return {ok:false}; const job=await t.get('sync',K.out('n',id)); if(job && !job.tomb) return {ok:false, code:'busy'}; if(job && job.wait) return {ok:false, code:'waiting'}; setJob(t,id,{k:K.out('n',id), tries:0, next:0, tomb:true, auto:true},after); return {ok:true}; }); }   // waiting: the rules refused it as early; it keeps its day
+  // what is not in the cloud, for the dialogs that erase the device (§4.11): notes and named versions with a job or an attempt, named versions kept
+  // only here (local-only: too large, incomplete, a shape the rules refuse) and notes with conflict copies; one read transaction
+  async function unsynced(){ if(!S.loaded) await load(); return db.tx(['versions','sync'],'readonly', async t=>{ const ids=async p=>(await t.range('sync',p,p+'\uffff')).map(r=>r.k.slice(p.length));
+    const n=new Set([...await ids('out:n:'), ...await ids('try:n:')]), v=new Set([...await ids('out:v:'), ...await ids('try:v:')]), copies=new Set(); let local=0;
+    for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ const id=m.k.slice(7); if(m.local && !v.has(id)){ const r=await t.get('versions',id); if(r && r.name) local++; } }   // the small meta records first: a body is read only for a version kept here
+    for(const r of await t.range('versions','','\uffff')) if(r.reason==='copy') copies.add(r.note);   // the whole store, once per erase dialog; 4b's map of copies replaces it
+    return {notes:n.size, versions:v.size, local, copies:copies.size}; }); }
   async function countCopies(id){ if(!S.loaded) await load(); return db.tx(['versions'],'readonly', async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
   async function importOne(t, raw, body, after){ const id=String(raw.id), tt=now();
     if(await t.get('sync',K.purged(id))){ const target=await revive(t, id, body, {t:tt}, after); return {ok:true, kind:'revived', id:target}; }
@@ -920,7 +929,7 @@ function makeSync(deps){
   async function seenAll(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
   async function lrevOf(ids){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
-  return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, countCopies, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, get devId(){ return devId; }, get devName(){ return devName; },
+  return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, countCopies, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
     left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};

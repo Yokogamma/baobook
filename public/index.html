@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102403">
+<meta name="baobook-build" content="2026102404">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -656,7 +656,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
 .hist-h{position:relative} .hist-b{display:flex;align-items:center;gap:2px} #histMore{font-size:1.125rem;letter-spacing:1px}
 .hist-name{display:flex;gap:6px;padding:2px 10px 6px} .hist-name input{flex:1;min-width:0;height:30px;padding:0 8px;border:.5px solid var(--sel-line);border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:var(--t-md);outline:0} .hist-name .fbtn{flex:0 0 auto;padding:0 12px}
 .hist-q{flex:0 0 auto}
-.hv.named .hv-k{color:var(--ink);font-weight:500}
+.hv.named .hv-k{color:var(--ink);font-weight:500} .hv-st{margin-top:2px;color:var(--ink-3)} .hv-st.bad{color:#c33}
 .setpop .chk{gap:8px;padding-left:36px;font-size:var(--t-sm)} .setpop .chk input{margin:0}
 .setpop .acc{display:flex;flex-direction:column;gap:2px;padding:6px 10px 4px;font-size:var(--t-sm);color:var(--ink-2)} .setpop .acc[hidden]{display:none} .setpop .acc-e{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .setpop .acc-s{color:var(--ink-3)}
 .setpop hr[hidden]{display:none}
@@ -792,8 +792,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102403" integrity="sha384-+Wfuh7xrrsgKhOOWnqQVqilY+aHM7M/CK0esow4iS/YeCYlGwegKmMBhlyw+dcVz"></script>
-<script src="cloud.js?b=2026102403" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102404" integrity="sha384-2hl7BRGFDMkaf0NQsKL2y0umz2lhXrphhqBBlFyn1y8jZL49Qa+ZXXxhvG+P9djO"></script>
+<script src="cloud.js?b=2026102404" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -804,9 +804,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'locales/en.json':'sha384-75mK/Ke1gGZDkZekcamRXVUILHHAkLoVT8f8FTMZabKRFcYANi/CYvmTRbjowW2J', 'locales/uk.json':'sha384-2tRbLLF1aI8+0KUcgaRu+qlGl280dNJK797NnJoLUwlw2F33qkYeUBd4Trxj3CXr'};
+const SRI={'locales/en.json':'sha384-N6tuytYVEZRLHfLW8/K+H2pPMSW9UILkfGEaTYitH6KqCunLlRp6ynBD77jjLglf', 'locales/uk.json':'sha384-QB55Pl15yOgfJMLG415Lzq0reDGKs3nASEp6n1FH+uhc7wsH87LMEJG/o+ongK4D'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102403;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102404;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -1361,7 +1361,7 @@ async function removeStoredNow(id){ const n=notes.find(x=>x.id===id); if(!n) ret
   notes=notes.filter(x=>x!==n); ESNAP.delete(id); LREV.delete(id); VLAST.delete(id); ARRIVED.delete(id); PENDING.delete(id); undoStacks.delete(id); unsaved.delete(id); inflight.delete(id); EDITS.delete(id);
   if(cur===n){ cur=null; dirty=false; openNote(firstNote()); } relist(); saveUI(); storageUI(); chgUI(); }
 // the engine (this tab leads) applied a document: this tab takes it, and the other tabs are told which record changed, to what lrev and from which device
-function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(ev.kind==='version' || ev.kind==='quarantine'){ if(H.open && cur) loadHist(); if(ev.note) tellTabs({t:'ver', note:ev.note}); } }
+function syncChanged(ev){ if(!STARTED || keptView()){ return; } if(ev.kind==='purged'){ removeStored(ev.id); tellTabs({t:'gone', id:ev.id}); } else if(ev.kind==='note' || ev.kind==='revived'){ const src={dn:ev.dn, dev:ev.dev}; takeStored(ev.id, src); tellTabs({t:'chg', id:ev.id, lrev:ev.lrev, dn:ev.dn, dev:ev.dev}); } else if(ev.kind==='receipts'){ RECEIPTS.add(ev.id); chgUI(); } else if(ev.kind==='version' || ev.kind==='quarantine'){ if(H.open && cur && (!ev.note || ev.note===cur.id)) loadHist(); if(ev.note) tellTabs({t:'ver', note:ev.note}); } }
 function syncHistory(id){ VLAST.delete(id); vqueue(id, ()=>vthin(id)); storageUI(); if(H.open && cur && cur.id===id) loadHist(); }
 /* ══ the leader tab (SYNC-PLAN 4.10): one tab per data space talks to the cloud, under the Web Lock `baobook-sync:{env}`; the others only write locally.
    The lock goes on pagehide and freeze, so the page may enter the back/forward cache and a frozen tab blocks nobody; a request still waiting in the
@@ -1494,10 +1494,13 @@ choiceDlg.addEventListener('click',e=>{ if(e.target!==choiceDlg || !choiceEnd) r
 addEventListener('keydown',e=>{ if(choiceDlg.open) e.stopPropagation(); },true);
 // everything typed is in storage, or the owner does not change: the write is awaited (up to 5 s), a failed one keeps the dialog open
 async function saveNow(){ flushSave(); const t0=Date.now(); while((inflight.size || REVIVING.size) && Date.now()-t0<5000) await sleep(50); return !unsaved.size && !inflight.size && !REVIVING.size && !dirty; }
-// what is not in the cloud: the notes with a job or an attempt waiting, the named versions queued; without an owner, every note on the device
-async function unsyncedCount(){ let n=0, v=0; try{ await SDB.tx(['sync'],'readonly', async t=>{ const ids=new Set(); for(const r of await t.range('sync','out:n:','out:n:\uffff')) ids.add(r.k.slice(6)); for(const r of await t.range('sync','try:n:','try:n:\uffff')) ids.add(r.k.slice(6)); n=ids.size; v=(await t.range('sync','out:v:','out:v:\uffff')).length; }); }catch(_){}
-  if(!SYNC.owner) n=notes.filter(x=>!x.deleted && (x.title || x.blocks.length)).length; return {notes:n, versions:v}; }
-function unsyncedText(c){ const parts=[]; if(c.notes) parts.push(loc('account.unsyncedNotes',{n:c.notes})); if(c.versions) parts.push(loc('account.unsyncedVersions',{n:c.versions})); return parts.length? parts.join(' ') : loc('account.unsyncedNone'); }
+// what is not in the cloud (SYNC-PLAN 4.11), from the core: the notes and named versions with a job or an attempt waiting, the named versions kept
+// only here and the notes with conflict copies, which the erase takes with the rest; without an owner, every note on the device
+async function unsyncedCount(){ let c={notes:0, versions:0, local:0, copies:0}; try{ c=await SYNC.unsynced(); }catch(_){}
+  if(!SYNC.owner) c={...c, notes:notes.filter(x=>!x.deleted && (x.title || x.blocks.length)).length}; return c; }
+function unsyncedText(c){ const parts=[]; if(c.notes) parts.push(loc('account.unsyncedNotes',{n:c.notes})); if(c.versions) parts.push(loc('account.unsyncedVersions',{n:c.versions}));
+  if(!parts.length && !c.local && !c.copies) parts.push(loc('account.unsyncedNone'));
+  if(c.local) parts.push(loc('account.onlyHere',{n:c.local})); if(c.copies) parts.push(loc('account.copies',{n:c.copies})); return parts.join(' '); }
 // «Увійти через Google»: the first press loads the SDK (a popup has to open from the press itself, so a second press opens it; a user Firebase
 // remembers is checked without one), then a popup on a computer, a redirect on touch devices and in the installed app (§4.12)
 async function signIn(){ if(!accOn() || ACC.signingIn || ACC.signingOut || DYING) return;
@@ -3088,7 +3091,7 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
    save it as «restore» and offer «Скасувати». The «⋯» menu names a version, searches the versions and clears the note's history. */
 const hist=$('hist'), histBtn=$('histBtn'), histList=$('histList'), histRestore=$('histRestore'), histClose=$('histClose'), histRange=$('histRange'), histMore=$('histMore');
 const histNameRow=$('histNameRow'), histName=$('histName'), histQBox=$('histQBox'), histQ=$('histQ'), vlayer=$('vlayer'), mainEl=sheet.parentElement;
-const H={open:false, list:[], vis:[], bodies:null, sel:'now', view:null, nowSum:null, t:0, q:'', txt:new Map(), geo:null};   // sel: highlighted row ('now' or a version id); view: the version drawn on the sheet; vis: the rows the search leaves
+const H={open:false, list:[], vis:[], bodies:null, st:{}, sel:'now', view:null, nowSum:null, t:0, q:'', txt:new Map(), geo:null};   // sel: highlighted row ('now' or a version id); view: the version drawn on the sheet; vis: the rows the search leaves; st: the cloud states of the named versions, with an owner (SYNC.versionStates, SYNC-PLAN 4.9)
 const hm=t=>new Date(t).toLocaleTimeString(I18N.locale,{hour:'2-digit',minute:'2-digit'});
 function dayOf(t){ const d=new Date(t), y=new Date(); y.setDate(y.getDate()-1); return d.toDateString()===new Date().toDateString()? loc('hist.today') : d.toDateString()===y.toDateString()? loc('hist.yesterday') : fmtDate(t); }
 const SUM={ch:n=>loc('hist.sum.ch',{n}), add:n=>loc('hist.sum.add',{n}), del:n=>loc('hist.sum.del',{n}), mv:n=>loc('hist.sum.mv',{n})},
@@ -3105,13 +3108,15 @@ function verBlocks(v){ return v.blocks.map(e=>{ const d={...e}; delete d.h; dele
     else d.text='';   // a missing body is shown as missing («текст цього блоку не зберігся»), never as today's text
     return d; }); }
 const vtext=v=>{ if(!H.txt.has(v.id)) H.txt.set(v.id, norm([v.title||'', ...verBlocks(v).map(d=>(d.title||'')+'\n'+(d.text||''))].join('\n'))); return H.txt.get(v.id); };
-async function loadHist(){ const n=cur; let list=[], bodies=[];
+async function loadHist(){ const n=cur; let list=[], bodies=[], st={};
   if(db.backend==='idb'){ try{ if(saveP) await saveP; await (VQ.get(n.id)||Promise.resolve()); [list,bodies]=await Promise.all([vlist(n.id), vbodies(n.id)]); }catch(_){} }   // versions of the last save are written after it
+  if(db.backend==='idb' && SYNC && SYNC.owner){ try{ st=await SYNC.versionStates(n.id)||{}; }catch(_){} }
   if(!H.open || cur!==n) return;
-  H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
+  H.st=st; H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
+  if(H.view){ const nv=H.list.find(v=>v.id===H.view.id); if(nv) H.view=nv; }   // the shown version as stored now (named, renamed here or elsewhere): the menu and its dialogs read it
   if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
 async function openHist(){ if(H.open || !cur || ro()) return; flushSave(); hideUndo(); exitSel(); closePop();
-  H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
+  H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.st={}; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
   hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
   if(narrowQ.matches) nav.open('hist', closeHist); fabSync(); renderHist(); if(!TOUCH) histList.focus();
   await loadHist(); }
@@ -3122,8 +3127,13 @@ function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('
   const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
   if(H.bodies && !H.vis.length) el('div','none',histList).textContent=loc(H.q? 'search.none' : 'hist.empty');
   let day=''; for(const v of H.vis){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
-    const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span><div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
+    const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span>'+stateLine(v)+'<div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
   syncHist(); }
+// the state line of a named version, only with an owner: «у хмарі», «ще не надіслано», «лише тут: …», «не синхронізовано»; one received from another
+// device names the device of its document's stamp (after a rename that is the renaming device, so the line never says who created it)
+const VSTATE={cloud:()=>loc('hist.state.cloud'), pending:()=>loc('hist.state.pending'), big:()=>loc('hist.state.big'), partial:()=>loc('hist.state.partial'), shape:()=>loc('hist.state.shape'), error:()=>loc('hist.state.error')};
+function stateLine(v){ const st=v.name && H.st[v.id]; if(!st) return ''; const t=(VSTATE[st]||VSTATE.pending)(), from=v.dn && v.dev && v.dev!==S.devId? v.dn : '';
+  return '<div class="hv-st'+(st==='error'? ' bad' : '')+'">'+escHtml(from? loc('hist.stateFrom',{state:t, device:from}) : t)+'</div>'; }
 function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel)), v=H.list.find(x=>x.id===H.sel);
   histList.querySelectorAll('.hv').forEach(d=>{ const on=d.dataset.id===H.sel; d.classList.toggle('cur',on); d.setAttribute('aria-selected',String(on)); });
   histRange.max=String(order.length-1); histRange.value=String(order.length-1-i); histRange.setAttribute('aria-valuetext', v? hm(v.t)+' · '+kindText(v) : loc('hist.now'));   // right end is «Зараз»
@@ -3135,7 +3145,7 @@ function liveGeo(){ const s=sheet.getBoundingClientRect(), m=new Map(); for(cons
 function showVersion(v){ if(!v || !cur) return; if(!H.view) flushSave();   // an edit made with «Зараз» open is written first: flushSave skips while a version is shown, and showNow redraws the note from storage
   const now=new Map(manifestOf(cur.title,cur.blocks).blocks.map(e=>[e.id,e]));
   if(!H.view) H.geo=liveGeo();   // where the live blocks are, for the outlines of the blocks this version has not
-  H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
+  histNameRow.hidden=true; H.view=v; DEBUG.vers.view=v.id; sheet.classList.add('history'); sheet.inert=true; ttl.contentEditable='false';
   const y=window.scrollY; drawBlocks(verBlocks(v)); ttl.textContent=v.title||''; window.scrollTo(0,y);
   for(const b of blocks){ const e=v.blocks.find(x=>x.id===b.id), n=now.get(b.id);
     b.el.classList.toggle('v-add', !n); b.el.classList.toggle('v-ch', !!n && !!e && ((!!e.h && n.h!==e.h) || (n.title||'')!==(e.title||'') || (n.kind||'')!==(e.kind||'') || (n.lang||'')!==(e.lang||'')));
@@ -3149,7 +3159,7 @@ function placeVbtns(){ vlayer.innerHTML=''; if(!H.view) return; const m=mainEl.g
     const bt=document.createElement('button'); bt.type='button'; bt.className='vbtn'; bt.dataset.id=b.id; bt.innerHTML='<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>'+locA('hist.blockRestore');
     bt.addEventListener('click',()=>restoreBlock(b.id)); vlayer.appendChild(bt);
     const x=Math.min(r.right-m.left+8, mainEl.clientWidth-bt.offsetWidth-8); bt.style.left=Math.max(8,x)+'px'; bt.style.top=(r.top-m.top)+'px'; } }   // right of the block; at the right edge, over it
-function showNow(){ vlayer.innerHTML=''; sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove()); if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
+function showNow(){ histNameRow.hidden=true; vlayer.innerHTML=''; sheet.querySelectorAll('.ghost-blk').forEach(g=>g.remove()); if(!H.view) return; H.view=null; DEBUG.vers.view=null; sheet.classList.remove('history'); sheet.inert=false; ttl.contentEditable='true';
   const y=window.scrollY; drawNote(cur); window.scrollTo(0,y); }
 function putState(n, st){ n.title=st.title; drawBlocks(st.blocks); ttl.textContent=n.title; document.title=docTitle(n); markDirty(); flushSave(); updateItem(n); }
 // both restores: the state before becomes a version (R1, skipped when it already is the newest), the result is written as «restore» from the version (R5)
@@ -3171,13 +3181,21 @@ async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if
   let done=true; if(v) await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:v.name? 'rename' : 'name', id:v.id, name}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } tellTabs({t:'vput', note:n.id}); syncWake(); });   // through the core (SYNC-PLAN 4.9): the name, keep/inline and the bodies the history still has (a missing one makes it «неповна»), with its job and lrev
   else { flushSave(); done=!!(await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name)); }   // «Зараз» becomes a named version (R4)
   if(done) say(loc('hist.named',{name})); await loadHist(); }   // a refusal of the core (another owner, a locked tab) names nothing, so it says nothing
+// «Видалити версію» (SYNC-PLAN 4.9, 4.19): only a named version, through the core (a tombstone job when it is or may be in the cloud); no undo,
+// since the tombstone is final there. The dialog says where it goes: from this device only without an owner; with one, on every device, a version
+// kept only here included (local-only does not prove the cloud has no copy of the same id: another device may have sent it in full, §4.9)
+async function deleteVersion(){ const n=cur, v=H.view; if(!n || !v || !v.name) return;
+  if(!await ask({title:loc('hist.deleteTitle',{name:v.name}), text:loc(SYNC.owner? 'hist.deleteAll' : 'hist.deleteHere'), ok:loc('hist.deleteOk')}) || cur!==n || !H.view || H.view.id!==v.id) return;
+  let done=true; await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:'delete', id:v.id}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } VLAST.delete(n.id); tellTabs({t:'vput', note:n.id}); syncWake(); });
+  if(!done) return; DEBUG.vers.size=Math.max(0, DEBUG.vers.size-(v.size||0)); H.sel='now'; showNow(); say(loc('hist.deleted',{name:v.name})); storageUI(); await loadHist(); }
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
   await vqueue(n.id, async()=>{ const list=await vlist(n.id), stay=list.filter(v=>v.keep || v.name); await vdelete(n.id, list.filter(v=>!v.keep && !v.name), stay); const top=stay.sort((a,b)=>b.t-a.t)[0]; VLAST.set(n.id, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); }); storageUI(); await loadHist(); }   // only this device's automatic history goes; named versions and conflict copies stay (SYNC-PLAN §2)
 histBtn.addEventListener('click',()=>{ H.open? closeHist() : openHist(); });
 histClose.addEventListener('click',()=>{ closeHist(); histBtn.focus(); });
 histRestore.addEventListener('click',restoreVersion);
 histMore.addEventListener('click',()=>{ if(db.backend!=='idb') return; popMenu(histMore, histMore.closest('.hist-h'), 'hm', [
-  ...(H.view && H.view.reason==='copy'? [] : [{label:loc(H.view? 'hist.nameShown' : 'hist.nameNow'), act:nameHist}]),   // a conflict copy is never named: it stays on this device (SYNC-PLAN 4.19)
+  ...(H.view && H.view.reason==='copy'? [] : [{label:loc(!H.view? 'hist.nameNow' : H.view.name? 'hist.renameShown' : 'hist.nameShown'), act:nameHist}]),   // a conflict copy is never named: it stays on this device (SYNC-PLAN 4.19)
+  ...(H.view && H.view.name? [{ico:ICO.trash, label:loc('hist.delete'), danger:true, act:deleteVersion}] : []),
   ...(narrowQ.matches? [{label:loc('hist.search'), act:()=>{ histQBox.classList.add('on'); histQ.focus(); }}] : []),
   {ico:ICO.trash, label:loc('hist.clear'), danger:true, act:clearHist} ]); });
 histNameRow.addEventListener('submit',e=>{ e.preventDefault(); saveName(); });
