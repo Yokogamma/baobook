@@ -119,5 +119,39 @@ await B2.close(); await reload(); const b11=await stored('n3');
 ok('11 archived here under a held write, trashed in the other tab (stored: in the trash '+!!(s11b&&s11b.deleted)+'): stored in the trash '+!!(a11&&a11.deleted)+', archived '+!!(a11&&a11.archived)+'; after a reload in the trash '+!!(b11&&b11.deleted)+', archived '+!!(b11&&b11.archived),
   s11b && s11b.deleted>0 && a11 && a11.deleted>0 && !a11.archived && b11 && b11.deleted>0 && !b11.archived && texts(b11)==='відпустка');
 
+const imp=async notes=>{ await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await pg.setInputFiles('#importFile',file(notes)); await pg.waitForFunction(()=>/Імпортовано/.test(document.getElementById('toast').textContent),null,{timeout:15000}); await pg.waitForTimeout(300); };
+const failing=v=>pg.evaluate(v=>{ sheetDebug.failSave=v; }, v), retry=()=>pg.evaluate(()=>document.getElementById('saveRetry').click());
+
+// 12 the open note's archive fails, then a newer copy of the note is imported and stored: «Повторити» archives the imported note, it does not bring the old text back
+await fresh(); await open('n2'); await failing(true); await btn('n2','.it-r'); await failing(false); await imp([{...NOTES[1], blocks:[{id:'b1',row:2,text:'молоко NEW',fx:0.2}], updated:Date.now()+60000}]);
+const i12=await stored('n2'); await retry(); await pg.waitForTimeout(700); const a12=await stored('n2'), w12=await warn(); await reload(); const b12=await stored('n2');
+ok('12 a failed archive, then an import stored «'+texts(i12)+'»; «Повторити» stored «'+texts(a12)+'», archived '+!!(a12&&a12.archived)+', ⚠ '+w12+'; after a reload «'+texts(b12)+'», archived '+!!(b12&&b12.archived),
+  texts(i12)==='молоко NEW' && a12 && texts(a12)==='молоко NEW' && a12.archived>0 && !w12 && b12 && texts(b12)==='молоко NEW' && b12.archived>0);
+
+// 13 a newer copy of a note that is not open fails to import; with the storage back, a pin of that note (never opened) stores the imported text with the pin
+await fresh(); await open('n1'); await failing(true); await imp([{...NOTES[2], blocks:[{id:'c1',row:2,text:'відпустка IMPORTED',fx:0.2}], updated:Date.now()+60000}]); const w13=await warn(); await failing(false);
+await btn('n3','.it-p'); const a13=await stored('n3'), wa13=await warn(); await reload(); const b13=await stored('n3');
+ok('13 a failed import of a note that exists (⚠ '+w13+'), then its pin: stored «'+texts(a13)+'», pinned '+!!(a13&&a13.pinned)+', ⚠ '+wa13+'; after a reload «'+texts(b13)+'», pinned '+!!(b13&&b13.pinned),
+  w13 && a13 && texts(a13)==='відпустка IMPORTED' && a13.pinned>0 && !wa13 && b13 && texts(b13)==='відпустка IMPORTED' && b13.pinned>0);
+
+// 14 a failed pin of a note that is not open, then three held writes: «Повторити» (fails), the note opened, «Повторити» again; they land as the first fails, the third
+// succeeds and the second succeeds last: the pin is stored and no warning is left, in the panel or in the header
+await fresh(); await open('n1'); await failing(true); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n3"] .it-p').click()); await pg.waitForTimeout(300); await failing(false); await noLS();
+await pg.evaluate(()=>{ window.__q=[]; sheetDebug.saveGate=st=>st.includes('notes')? new Promise((yes,no)=>window.__q.push({yes,no})) : Promise.resolve(); document.getElementById('saveRetry').click(); });
+await pg.waitForFunction(()=>window.__q.length===1); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n3"]').click()); await pg.waitForFunction(()=>window.__q.length===2);
+await retry(); await pg.waitForFunction(()=>window.__q.length===3);
+await pg.evaluate(()=>window.__q[0].no(new DOMException('full','QuotaExceededError'))); await pg.waitForTimeout(200); await pg.evaluate(()=>window.__q[2].yes()); await pg.waitForTimeout(300);
+await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__q[1].yes(); }); await pg.waitForTimeout(500); await healed();
+const a14=await stored('n3'), w14=await warn(), h14=await pg.locator('#saved').getAttribute('class');
+ok('14 held writes out of order after a failed pin: stored pinned '+!!(a14&&a14.pinned)+', ⚠ '+w14+', the header «'+h14+'»', a14 && a14.pinned>0 && !w14 && !/err/.test(h14));
+
+// 15 with an owner, the open note archived here under a held write and in the other tab too, its text untouched: one archive, and no conflict copy
+await fresh(); await pg.evaluate(()=>sheetDebug.sync.connect({owner:{env:'test', uid:'field', email:'field@test'}})); await open('n2'); const B3=await tab(); await pg.bringToFront();
+await pg.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=st=>st.includes('notes')? window.__gate : Promise.resolve(); document.querySelector('#list .item[data-id="n2"] .it-r').click(); }); await pg.waitForTimeout(300);
+await B3.bringToFront(); await B3.evaluate(()=>document.querySelector('#list .item[data-id="n2"] .it-r').click()); await B3.waitForTimeout(600);
+await pg.bringToFront(); await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__open(); }); await pg.waitForTimeout(800);
+const a15=await stored('n2'), c15=await pg.evaluate(async()=>(await sheetDebug.vers.list('n2')).filter(v=>v.reason==='copy').length); await B3.close();
+ok('15 archived in both tabs at once: stored archived '+!!(a15&&a15.archived)+' «'+texts(a15)+'», conflict copies '+c15, a15 && a15.archived>0 && texts(a15)==='молоко' && c15===0);
+
 console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
 await br.close(); process.exit(fails?1:0);
