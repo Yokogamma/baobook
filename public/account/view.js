@@ -20,7 +20,7 @@ const el=(doc, tag, cls, text)=>{ const e=doc.createElement(tag); if(cls) e.clas
  *   the day is empty for today
  */
 export function renderPanel(body, p, t, when){ const doc=body.ownerDocument, keep=body.querySelector('.accp-name input');
-  const typing=keep && doc.activeElement===keep? keep.value : null; body.textContent='';
+  const typing=keep && doc.activeElement===keep? {v:keep.value, a:keep.selectionStart, b:keep.selectionEnd} : null; body.textContent='';
   if(p.email) body.append(el(doc,'div','accp-e',p.email));
   if(p.status){ const s=el(doc,'div','accp-s'); s.dataset.st=p.status.kind; s.append(el(doc,'span','accp-dot'), el(doc,'span','accp-st',t(p.text,{n:p.status.n}))); body.append(s, el(doc,'p','accp-why',t(p.why,{n:p.status.n}))); }
   if(p.errors.length){ const ul=el(doc,'ul','accp-err'); for(const e of p.errors){ const li=el(doc,'li');
@@ -29,11 +29,11 @@ export function renderPanel(body, p, t, when){ const doc=body.ownerDocument, kee
   if(p.counts.length){ const ul=el(doc,'ul','accp-n'); for(const c of p.counts) ul.append(el(doc,'li','',t(c.key,{n:c.n}))); body.append(ul); }
   if(p.checked){ const w=when(p.checked); body.append(el(doc,'div','accp-sub', w.day? t('account.checkedDay',{day:w.day, time:w.time}) : t('account.checked',{time:w.time}))); }
   if(p.budget) body.append(el(doc,'div','accp-sub',t('account.reads',{n:p.budget.reads, max:p.budget.readsMax})), el(doc,'div','accp-sub',t('account.writes',{n:p.budget.writes, max:p.budget.writesMax})));
-  const lab=el(doc,'label','accp-name'), inp=doc.createElement('input'); lab.append(el(doc,'span','',t('account.devName'))); inp.maxLength=80; inp.autocomplete='off'; inp.value=typing ?? p.devName; inp.disabled=p.readOnly; lab.append(inp); body.append(lab);
-  if(typing!=null) inp.focus();
+  if(p.nameField){ const lab=el(doc,'label','accp-name'), inp=doc.createElement('input'); lab.append(el(doc,'span','',t('account.devName'))); inp.maxLength=80; inp.autocomplete='off'; inp.value=typing? typing.v : p.devName; lab.append(inp); body.append(lab);
+    if(typing){ inp.focus(); try{ inp.setSelectionRange(typing.a, typing.b); }catch(_){} } }
   if(p.actions.length){ const row=el(doc,'div','accp-b'); for(const a of p.actions){ const b=el(doc,'button','fbtn'+(a==='remove'? ' danger' : ''), t(ACT[a])); b.type='button'; b.dataset.act=a; row.append(b); } body.append(row); }
 }
-const ACT={signIn:'account.signIn', signOut:'account.signOut', remove:'account.remove'};
+const ACT={signIn:'account.signIn', signOut:'account.signOut', export:'account.export', remove:'account.remove'};
 
 // the styles of the panel: a dialog on a computer, a bottom sheet on a phone (with its own history entry, closed by Back: panel.js)
 export const CSS=`
@@ -54,5 +54,5 @@ export const CSS=`
 .accp-name{display:flex;flex-direction:column;gap:4px;margin:12px 0 4px;font-size:var(--t-sm);color:var(--ink-2)}
 .accp-name input{font:inherit;color:var(--ink);background:var(--page);border:.5px solid var(--line-2);border-radius:6px;padding:6px 8px}
 .accp-b{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px} .accp-b .fbtn{flex:1 1 auto}
-@media (max-width:640px){ .accp{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:12px 12px 0 0;max-height:85vh} .accp-body{max-height:calc(85vh - 48px);padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))} .accp-b .fbtn{min-height:44px} }
+@media (max-width:640px){ .accp{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:12px 12px 0 0;max-height:85vh;max-height:85dvh} .accp-body{max-height:calc(85vh - 48px);max-height:calc(85dvh - 48px);padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))} .accp-b .fbtn{min-height:44px} }
 `;

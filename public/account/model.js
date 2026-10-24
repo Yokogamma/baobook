@@ -94,24 +94,27 @@ export const REASON=Object.freeze({size:'account.reason.size', loop:'account.rea
 /**
  * The account panel, from the top (§4.11): the email, the status with its explanation and, for «Не синхронізовано», the list of what is stuck;
  * the counts shown only when not zero; «Перевірено» with the time of the last matching totals check of both collections; today's budget; the
- * device name; the actions this state offers. A view-only tab reads it without the actions.
+ * device name; the actions this state offers. A view-only tab reads it with the leader's status, the counts and the export, without the name
+ * field and the buttons that change the account (§4.11).
  * @param {{acc:AccountState, core:?CoreStatus, counts:?Counts, used:?Budget, limit:?Budget, devName:string, title?:(id:string)=>string}} o
  */
 export function panelOf(o){ const {acc, core, counts, used, limit}=o, st=statusOf(acc, core), person=acc.user || acc.owner;
   const c=counts||{notes:0, versions:0, local:0, copies:0};
+  const shown=st || (acc.viewOnly? statusOf({...acc, viewOnly:false}, core) : null);
   return {
     email: person? (person.email || person.uid) : '',
     signedIn: !!acc.user,
-    status: st,
-    text: st? TEXT[st.code] : null,
-    why: st? EXPLAIN[st.code] : null,
-    errors: st && st.code==='error' && core && core.errors? core.errors.slice(0,20).map(e=>({...e, reason:REASON[e.reason]||REASON.invalid, title:e.col==='notes' && o.title? o.title(e.id) : ''})) : [],
+    status: shown,
+    text: shown? TEXT[shown.code] : null,
+    why: shown? EXPLAIN[shown.code] : null,
+    errors: shown && shown.code==='error' && core && core.errors? core.errors.slice(0,20).map(e=>({...e, reason:REASON[e.reason]||REASON.invalid, title:e.col==='notes' && o.title? o.title(e.id) : ''})) : [],
     counts: [['notes','account.unsyncedNotes'], ['versions','account.unsyncedVersions'], ['local','account.onlyHere'], ['copies','account.copies']]
       .filter(([k])=>c[k]>0).map(([k,key])=>({k, key, n:c[k]})),
     checked: core && core.checked? core.checked : 0,
     budget: used && limit? {reads:used.reads, writes:used.writes, readsMax:limit.reads, writesMax:limit.writes} : null,
     devName: o.devName||'',
-    actions: acc.viewOnly? [] : [...(acc.user? ['signOut'] : ['signIn']), ...((acc.user || acc.owner)? ['remove'] : [])],
+    nameField: !acc.viewOnly,
+    actions: acc.viewOnly? ((acc.user || acc.owner)? ['export'] : []) : [...(acc.user? ['signOut'] : ['signIn']), ...((acc.user || acc.owner)? ['export', 'remove'] : [])],
     readOnly: !!acc.viewOnly };
 }
 

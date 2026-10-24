@@ -831,7 +831,7 @@ function makeSync(deps){
     const st={code, n: code==='scan'? S.scanFound : code==='error'? errors.length : jobs, jobs, errorN:errors.length, errors:errors.slice(0,20), checked, vdone};
     setStatus(code, st.n, st); return st; }
   // every status report goes through here, so a direct report (a pass's progress, denied, no space) and the computed one never disagree
-  function setStatus(code, n, full){ const st={...(full||{}), code, n:n||0}, key=JSON.stringify([code, st.n, st.errorN||0, st.checked||0, !!st.vdone, (st.errors||[]).map(e=>e.id)]);
+  function setStatus(code, n, full){ const keep=S.lastStatus? {jobs:S.lastStatus.jobs, errorN:S.lastStatus.errorN, errors:S.lastStatus.errors, checked:S.lastStatus.checked, vdone:S.lastStatus.vdone} : {}, st={...(full||keep), code, n:n||0}, key=JSON.stringify([code, st.n, st.errorN||0, st.checked||0, !!st.vdone, (st.errors||[]).map(e=>e.id)]);
     if(!S.lastStatus || S.lastStatus.key!==key){ S.lastStatus={...st, key}; emit(deps.onStatus, code, st.n, st); } }
   // the next step's time; the version queue counts with its retry time and the device pace; a job no pick would take (an error that blocks it, no
   // network, no access) sets no time: going online or a new owner wakes the engine itself
@@ -906,7 +906,7 @@ function makeSync(deps){
   async function recheckQuarantine(){ return tx(['sync'], async(t,after)=>{ for(const q of await t.range('sync','quarantine:n:','quarantine:n:\uffff')){ if(q.reason!=='shape' || !q.raw || q.recheck) continue; const id=q.k.slice(13);
       if(normNote(q.raw, deps).bad) continue; t.put('sync',{...q, recheck:true}); setRefetch(t,id,after); log({t:'recheck', id}); } }); }
   function stop(){ S.started=false; S.runId=(S.runId||0)+1; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
-  function online(on){ const was=S.online; S.online=!!on; if(on && !was) reconnect(); }
+  function online(on){ const was=S.online; S.online=!!on; if(!on) S.ranAt.clear(); if(on && !was) reconnect(); }   // an attempt sent again after a reconnect counts its 30 s anew
   function reconnect(){ if(!S.started || !S.cloud || !S.owner) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
     S.lastReconnect=now(); startListener('notes'); startListener('versions'); startCatchup('notes'); emit(deps.wake); }
 
@@ -1004,7 +1004,7 @@ function makeSync(deps){
   return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, deviceName, usedToday:()=>{ const q=quotaNow(); return {reads:q.reads, writes:q.writes}; }, limits:()=>({...budgets()}), countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
     left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
-    get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
+    get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, isOnline:()=>S.online, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
 }
 
 return {DOC_MAX, V_BODY_MAX, LIM, SERVICE, isColor, hashOf, canon, cjson, hashDoc, noteBody, noUpdated, sameDoc, docBytes, cmpSrv, clearlyNewer, validSrv, normBlock, normBlocks, normNote, normVersion,

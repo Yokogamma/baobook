@@ -23,7 +23,7 @@ const ui=pg=>pg.evaluate(()=>sheetDebug.sync.account().ui);
 const untilUI=(pg, code, timeout=15000)=>pg.waitForFunction(c=>{ const a=sheetDebug.sync.account(); return !!a.ui && a.ui.code===c; }, code, {timeout});
 const panel=pg=>pg.evaluate(()=>{ const d=document.getElementById('accPanel'); if(!d || !d.open) return null; const q=s=>d.querySelector(s), all=s=>[...d.querySelectorAll(s)].map(x=>x.textContent);
   return {email:(q('.accp-e')||{}).textContent||'', st:(q('.accp-st')||{}).textContent||'', kind:(q('.accp-s')||{dataset:{}}).dataset.st||'', why:all('.accp-body > .accp-why'), sub:all('.accp-sub'), counts:all('.accp-n li'), errs:all('.accp-err li'),
-    acts:[...d.querySelectorAll('.accp-b button')].map(b=>b.dataset.act), name:(q('.accp-name input')||{}).value, nameOff:!!(q('.accp-name input')||{}).disabled, box:d.getBoundingClientRect().toJSON()}; });
+    acts:[...d.querySelectorAll('.accp-b button')].map(b=>b.dataset.act), name:(q('.accp-name input')||{}).value, nameField:!!q('.accp-name input'), box:d.getBoundingClientRect().toJSON()}; });
 const openBtn=async pg=>{ await pg.evaluate(()=>document.getElementById('syncBtn').click()); return until(()=>panel(pg), 3000); };
 const connect=(pg, o={})=>pg.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:{env:'test', uid:'u1', email:'u@test'}, user:o.user, devId:'D', devName:'Device D', pace:o.pace, budgets:{reads:20000, writes:5000}}), {user:USER, pace:PACE, ...o});
 
@@ -34,7 +34,7 @@ await connect(pg); await untilUI(pg, 'synced');
 { const p=await openBtn(pg);
   ok('1 the button opens the panel: the email, «Синхронізовано» with its explanation ('+(p&&p.st)+')', !!p && p.email==='u@test' && p.st===await loc(pg,'sync.st.synced') && p.kind==='synced' && p.why[0]===await loc(pg,'account.why.synced'));
   ok('1a «Перевірено о …» and today\'s budget as two lines ('+(p&&p.sub.join(' | '))+')', !!p && p.sub.some(s=>/^Перевірено о \d/.test(s)) && p.sub.some(s=>/^Читань сьогодні: \d+ із 20000$/.test(s)) && p.sub.some(s=>/^Записів сьогодні: \d+ із 5000$/.test(s)));
-  ok('1b signed in: «Вийти» and «Прибрати»; the device name field', !!p && p.acts.join()==='signOut,remove' && p.name==='Device D');
+  ok('1b signed in: «Вийти», «Експортувати з історією» and «Прибрати»; the device name field', !!p && p.acts.join()==='signOut,export,remove' && p.name==='Device D');
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); ok('1c Esc closes it', !(await panel(pg)));
   await pg.evaluate(()=>document.getElementById('accRow').click()); const p2=await until(()=>panel(pg), 3000);
   await pg.goBack(); await pg.waitForTimeout(300); ok('1d the account row of the menu opens it, and Back closes it', !!p2 && !(await panel(pg)));
@@ -79,9 +79,10 @@ await connect(pg); await untilUI(pg, 'synced');
 
 /* ── 6. signed out: what waits; a view-only tab opens the panel read-only ── */
 { await pg.evaluate(()=>sheetDebug.sync.online(false)); await typeAt(pg,500,600,'чекає'); await pg.evaluate(()=>sheetDebug.sync.signOut()); await untilUI(pg,'signedOut'); const p=await openBtn(pg);
-  ok('6 signed out: «Вийшли · N змін чекають», «Увійти» and «Прибрати» ('+(p&&p.st)+')', !!p && /^Вийшли · \d+ змін/.test(p.st) && p.acts.join()==='signIn,remove'); await pg.keyboard.press('Escape');
+  ok('6 signed out: «Вийшли · N змін чекають», «Увійти», the export and «Прибрати» ('+(p&&p.st)+')', !!p && /^Вийшли · \d+ змін/.test(p.st) && p.acts.join()==='signIn,export,remove'); await pg.keyboard.press('Escape');
   await pg.evaluate(()=>sheetDebug.lock('updated')); await pg.evaluate(()=>document.getElementById('accRow').click()); const v=await until(()=>panel(pg), 3000);
-  ok('6a a view-only tab: the menu row opens the panel read-only, no status button, no actions, the name field off', !!v && !v.acts.length && v.nameOff && !v.st && await pg.evaluate(()=>document.getElementById('syncBtn').hidden)); }
+  ok('6a a view-only tab: the menu row opens the panel read-only with the status and the export only, no name field, no status button ('+(v&&v.st)+' '+(v&&v.acts.join())+')', !!v && v.acts.join()==='export' && !v.nameField && /^Вийшли/.test(v.st) && await pg.evaluate(()=>document.getElementById('syncBtn').hidden));
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(100); ok('6a-f closed, the focus goes back to the gear that opened the menu, not to the hidden status button', await pg.evaluate(()=>document.activeElement && document.activeElement.id==='setBtn')); }
 ok('6b no page errors', !D.errs.length); await D.close();
 
 /* ── 7. a phone: a bottom sheet at 390 and 320 wide ── */

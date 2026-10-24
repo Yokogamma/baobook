@@ -690,7 +690,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
       <b class="brand"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8" stroke-width="2.4"/></svg><span>Baobook<span class="devtag" id="devTag" data-i18n="dev.badge" data-i18n-attr="title:dev.title"></span><button class="gear" id="setBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" data-i18n-attr="title:settings.title;aria-label:settings.title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><small data-i18n="brand.tagline"></small></span></b>
       <button class="new" id="newBtn" data-i18n="notes.new" data-i18n-attr="title:notes.new.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button><button class="side-x" id="sideX" type="button" data-i18n-attr="title:panel.close;aria-label:panel.close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       <div class="setpop" id="setPop" hidden role="group" data-i18n-attr="aria-label:settings.title">
-        <div class="acc" id="accRow" hidden role="button" tabindex="0"><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
+        <div class="acc" id="accRow" hidden role="button" tabindex="0" aria-haspopup="dialog"><span class="acc-e" id="accEmail"></span><span class="acc-s" id="accState"></span></div>
         <button class="mi" id="signInBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7.1z"/><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5a9.5 9.5 0 0 0 8.5 5.2z"/><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6l3.2-2.5z"/><path d="M12 6.3c1.4 0 2.7.5 3.7 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5c.7-2.2 2.8-3.9 5.3-3.9z"/></svg><span id="signInLbl" data-i18n="account.signIn"></span></button>
         <button class="mi" id="signOutBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></svg><span data-i18n="account.signOut"></span></button>
         <button class="mi" id="removeBtn" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-i18n="account.remove"></span></button>
@@ -794,7 +794,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102407" integrity="sha384-TvXRngONMlCIhH4myhOloMN77keyBH2bZVJCUJSzE6iIvgV5VOSS4NRenpysv+kS"></script>
+<script src="sync.js?b=2026102407" integrity="sha384-UbXIVPTkqshJniuQeK9KkECzE8HrUkPEY2h9QxRO52dMqecjO7gaUCj64kHpMLO2"></script>
 <script src="cloud.js?b=2026102407" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -806,7 +806,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'account/input.js':'sha384-W+mC3dEpA6+q7v2wBuKQTWhPIbfKPiZICylB34ljfXb8vi5ZM9EwMMqTMhY+c8N0', 'account/model.js':'sha384-oAyWDYE/W/Sr0o47hfe/cCP+BbadfV6IKDizdGSmLCUlt09Imwultw4O16802pzU', 'account/panel.js':'sha384-9IsK3Q40TkEwv/S3SRFqXOnG4djkd3qnl6Uip5UB0MdGMHlokeLgyfTXuimRapRP', 'account/view.js':'sha384-kEP2/Jfs3o9AxZ9B9MvVjejqXZAC5aLsJceLyQbeikDciQ6LFoj1mdV0jkkGldUs', 'locales/en.json':'sha384-6qfxEJrlPoN4nY18Hmd6p7rQX5o+tyzKYSQv+oSto7dbRE6n+zBxyhCgNHEOaZGr', 'locales/uk.json':'sha384-u6BqR5kSL7SALsu1mHSlCwWlnty9411lVFkMw2Ik7DgJ493upl95FjkM8WAqRBhY'};
+const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-XiLt6tNLEyC+2YxH6rxgCXH96hWT2Up/p2FLyltFx3hvnY4rl+sekZ8vB8ix22tw', 'account/panel.js':'sha384-Oe73YRWVIfloa4pI3EjpW0TXNg2ZvrsbzfaJPOnKLhFmPB99XyuS0UUxmyk8TsNM', 'account/view.js':'sha384-4qzV8nVHBIQmbQmn1MNS7YnnQFrCnVZmhOpF9xyoaepQOZ564NPXnmwzMRJsnj8j', 'locales/en.json':'sha384-6qfxEJrlPoN4nY18Hmd6p7rQX5o+tyzKYSQv+oSto7dbRE6n+zBxyhCgNHEOaZGr', 'locales/uk.json':'sha384-u6BqR5kSL7SALsu1mHSlCwWlnty9411lVFkMw2Ik7DgJ493upl95FjkM8WAqRBhY'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
 const BUILD=2026102407;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
@@ -1573,19 +1573,19 @@ let ACCT=null;
 function accStatus(){ if(ACCT) ACCT.render(); else { syncBtn.hidden=true; DEBUG.sync.ui=accOn()? {code:'none', text:''} : null; } }   // until the module has loaded: no button, as with no status
 function accMount(){ import('./account/panel.js').then(m=>{ ACCT=m.mount({doc:document, t:loc, button:syncBtn, line:accState, opener:syncBtn, nav,
     when:ms=>({day:dayOf(ms)===loc('hist.today')? '' : dayOf(ms), time:hm(ms)}),
-    account:()=>({on:accOn(), viewOnly:!!LOCK, user:ACC.user, owner:SYNC && SYNC.owner, cloud:!!CLOUD, signingOut:!!ACC.signingOut, loading:!!ACC.loading, signingIn:!!ACC.signingIn, checking:!!ACC.checking, dialog:!!ACC.dialog, probe:ACC.probe||null, otherTab:!!ACC.otherTab}),
-    core:()=>!SYNC || !SYNC.owner? null : (!ACC.user || !CLOUD)? {code:'none', n:0, jobs:SYNC.jobs().length+SYNC.tries().length} : LEAD.on? DEBUG.sync.status : (ACC.leadSt||{code:'pending', n:0}),
+    account:()=>({on:!!FB && db.backend==='idb', viewOnly:!!LOCK, user:ACC.user, owner:SYNC && SYNC.owner, cloud:!!CLOUD, signingOut:!!ACC.signingOut, loading:!!ACC.loading, signingIn:!!ACC.signingIn, checking:!!ACC.checking, dialog:!!ACC.dialog, probe:ACC.probe||null, otherTab:!!ACC.otherTab}),
+    core:()=>!SYNC || !SYNC.owner? null : (!ACC.user || !CLOUD)? {code:'none', n:0, jobs:new Set([...SYNC.jobs(), ...SYNC.tries()]).size+new Set([...SYNC.vjobs(), ...SYNC.vtries()]).size} : LEAD.on? DEBUG.sync.status : (ACC.leadSt||{code:'pending', n:0}),
     counts:()=>SYNC && SYNC.owner? unsyncedCount() : Promise.resolve(null), used:()=>SYNC && SYNC.owner? SYNC.usedToday() : null, limit:()=>SYNC && SYNC.owner? SYNC.limits() : null,
     devName:()=>S.devName||'', title:id=>{ const n=notes.find(x=>x.id===id); return n? titleOf(n) : ''; },
     attempts:()=>SYNC? SYNC.tries().length+SYNC.vtries().length : 0, leader:()=>LEAD.on, tick:()=>{ if(SYNC) SYNC.status(); },
     report:ui=>{ DEBUG.sync.ui=ui || (accOn()? {code:'none', text:''} : null); },
-    actions:{signIn:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), openNote:id=>{ const n=notes.find(x=>x.id===id); if(n) openNote(n); },
+    actions:{signIn:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), export:async()=>{ await exportAll({hist:true}); say(loc('account.exported')); }, openNote:id=>{ const n=notes.find(x=>x.id===id); if(n) openNote(n); },
       rename:async name=>{ if(!SYNC) return; const r=await SYNC.deviceName(name||uaName()); if(r.ok){ saveS({devName:r.name}); tellTabs({t:'dev'}); ACCT.render(); } }}});
     accStatus(); }).catch(e=>console.error('account: the module did not load', e)); }
 function accUI(){ const on=accOn(), owner=SYNC && SYNC.owner, user=ACC.user; accRow.hidden=!on || !(user || owner); accEmail.textContent=user? (user.email||user.uid) : ownerName(owner);
   signInBtn.hidden=!on || !!user; signOutBtn.hidden=!on || !user; removeBtn.hidden=!on || !(user || owner); accHr.hidden=!on;
   if(!ACC.loading) signInLbl.textContent=ACC.sdk? loc('account.continue') : loc('account.signIn'); }
-syncBtn.addEventListener('click',()=>{ if(ACCT) ACCT.open(); }); accRow.addEventListener('click',()=>{ if(!ACCT) return; setMenu(false); ACCT.open(); }); accRow.addEventListener('keydown',e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); accRow.click(); } });   // the button and the account row of the menu open the panel
+syncBtn.addEventListener('click',()=>{ if(ACCT) ACCT.open(syncBtn); }); accRow.addEventListener('click',()=>{ if(!ACCT) return; setMenu(false); ACCT.open(setBtn); }); accRow.addEventListener('keydown',e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); accRow.click(); } });   // the button and the account row of the menu open the panel
 signInBtn.addEventListener('click',()=>signIn()); signOutBtn.addEventListener('click',()=>signOut()); removeBtn.addEventListener('click',()=>removeFromDevice());
 // the start of the account (the end of start()): the menu, the status, persistence with an owner, the SDK when the device has an owner, a user or a
 // redirect under way; the tab that comes back from a redirect knows it (sessionStorage); the Home Screen hint once on an iPhone outside the app
@@ -3184,7 +3184,7 @@ function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('
   H.vis=H.q? H.list.filter(v=>vtext(v).includes(H.q)) : H.list;
   const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
   if(H.bodies && !H.vis.length) el('div','none',histList).textContent=loc(H.q? 'search.none' : 'hist.empty');
-  const vn=ACCT && ACCT.historyNote(!!(SYNC && SYNC._S.online)); if(vn) el('div','hv-note',histList).textContent=loc(vn);   // versions of another device may still come (SYNC-PLAN 4.18)
+  const vn=ACCT && ACCT.historyNote(!!(SYNC && SYNC.isOnline())); if(vn) el('div','hv-note',histList).textContent=loc(vn);   // versions of another device may still come (SYNC-PLAN 4.18)
   let day=''; for(const v of H.vis){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
     const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.reason==='copy' && v.updated? v.updated : v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span>'+stateLine(v)+'<div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
   syncHist(); }

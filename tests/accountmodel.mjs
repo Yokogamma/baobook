@@ -27,15 +27,15 @@ const p=panelOf({acc:acc(), core:core('synced',{checked:1700000000000}), counts:
 ok('2 the email, the status, «synced», its text and explanation', p.email==='u@test' && p.status.code==='synced' && p.text==='sync.st.synced' && p.why==='account.why.synced' && p.signedIn);
 ok('2a the counts shown only when not zero, in their order ('+p.counts.map(c=>c.k).join(',')+')', p.counts.map(c=>c.k).join(',')==='versions,local' && p.counts[0].key==='account.unsyncedVersions' && p.counts[0].n===2);
 ok('2b «Перевірено» and today\'s budget', p.checked===1700000000000 && p.budget.reads===12 && p.budget.readsMax===20000 && p.budget.writes===3 && p.budget.writesMax===5000);
-ok('2c signed in: «Вийти» and «Прибрати»; the device name', p.actions.join()==='signOut,remove' && p.devName==='Ноутбук');
+ok('2c signed in: «Вийти», the export and «Прибрати»; the device name field', p.actions.join()==='signOut,export,remove' && p.devName==='Ноутбук' && p.nameField);
 const many=Array.from({length:25},(_,i)=>({col:i%2? 'versions' : 'notes', id:'x'+i, reason:i===0? 'receipts' : 'mystery'}));
 const pe=panelOf({acc:acc(), core:core('error',{n:25, errors:many}), title:id=>'Нотатка '+id});
 ok('2d «Не синхронізовано»: at most 20 rows, each with its reason key, a note with its title, an unknown reason as «refused»', pe.errors.length===20 && pe.errors[0].reason==='account.reason.receipts' && pe.errors[1].reason==='account.reason.invalid' && pe.errors[0].title==='Нотатка x0' && pe.errors[1].title==='');
 ok('2e no list for any other code', panelOf({acc:acc(), core:core('sending',{n:1, errors:many})}).errors.length===0);
 const po=panelOf({acc:acc({user:null}), core:core('none',{jobs:2})});
-ok('2f signed out: the owner\'s email, «Увійти» and «Прибрати»', po.email==='u@test' && !po.signedIn && po.actions.join()==='signIn,remove' && po.status.code==='signedOut');
-const pv=panelOf({acc:acc({viewOnly:true}), core:core('synced')});
-ok('2g a view-only tab reads the panel with no status and no actions', pv.status===null && pv.actions.length===0 && pv.readOnly && pv.email==='u@test');
+ok('2f signed out: the owner\'s email, «Увійти», the export and «Прибрати»', po.email==='u@test' && !po.signedIn && po.actions.join()==='signIn,export,remove' && po.status.code==='signedOut');
+const pv=panelOf({acc:acc({viewOnly:true}), core:core('error',{n:1, errors:[{col:'notes', id:'n1', reason:'size'}]})});
+ok('2g a view-only tab reads the panel with the leader\'s status, its list and only the export: no name field, no account buttons', pv.status.code==='error' && pv.text==='sync.st.error' && pv.errors.length===1 && pv.actions.join()==='export' && !pv.nameField && pv.readOnly && pv.email==='u@test');
 ok('2h no owner and not signed in: only «Увійти»', panelOf({acc:acc({user:null, owner:null}), core:null}).actions.join()==='signIn');
 
 /* ── 3. «Історія» while versions still come; the device name ── */

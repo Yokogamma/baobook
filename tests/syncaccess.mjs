@@ -228,6 +228,7 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   await note(A,'n1','змінено'); const run=A.sync.idle(200); await new Promise(r=>setTimeout(r,50));
   const s1=A.sync.status(); cloud.advance(29000); const s2=A.sync.status(); cloud.advance(2000); const s3=A.sync.status();
   ok('20a a held attempt: «sending» at once and at 29 s, «waiting» at 31 s ('+[s1.code,s2.code,s3.code].join(',')+')', s1.code==='sending' && s2.code==='sending' && s3.code==='waiting');
+  A.sync.online(false); A.sync.online(true); await new Promise(r=>setTimeout(r,50)); const s3b=A.sync.status(); ok('20a-r after a reconnect the attempt sent again counts its 30 s anew ('+s3b.code+')', s3b.code!=='waiting');
   // a new engine over the same store resumes the attempt: it counts from its own first run, not from the insurance
   A.sync.stop(); const db=A.db; const B=device(cloud,'A',{db, pace:W}); await B.sync.start(); await new Promise(r=>setTimeout(r,50));
   const s4=B.sync.status(); ok('20b a new leader resuming the attempt does not say «waiting» at once ('+s4.code+')', s4.code!=='waiting'); h.resolve(); await run; await idle(B); A=B;
