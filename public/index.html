@@ -1580,7 +1580,7 @@ function accMount(){ import('./account/panel.js').then(m=>{ ACCT=m.mount({doc:do
     attempts:()=>SYNC? SYNC.tries().length+SYNC.vtries().length : 0, leader:()=>LEAD.on, tick:()=>{ if(SYNC) SYNC.status(); },
     report:ui=>{ DEBUG.sync.ui=ui || (accOn()? {code:'none', text:''} : null); },
     actions:{signIn:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), export:async()=>{ await exportAll({hist:true}); say(loc('account.exported')); }, openNote:id=>{ const n=notes.find(x=>x.id===id); if(n) openNote(n); },
-      rename:async name=>{ if(!SYNC) return; const r=await SYNC.deviceName(name||uaName()); if(r.ok){ saveS({devName:r.name}); tellTabs({t:'dev'}); ACCT.render(); } }}});
+      rename:async name=>{ if(!SYNC) return; const r=await SYNC.deviceName(name||uaName()); if(r.ok){ saveS({devName:r.name}); tellTabs({t:'dev', name:r.name}); ACCT.render(); } }}});
     accStatus(); }).catch(e=>console.error('account: the module did not load', e)); }
 function accUI(){ const on=accOn(), owner=SYNC && SYNC.owner, user=ACC.user; accRow.hidden=!on || !(user || owner); accEmail.textContent=user? (user.email||user.uid) : ownerName(owner);
   signInBtn.hidden=!on || !!user; signOutBtn.hidden=!on || !user; removeBtn.hidden=!on || !(user || owner); accHr.hidden=!on;
@@ -2200,7 +2200,7 @@ function dropNote(id){ const n=notes.find(x=>x.id===id); if(!n || busy(n) || MEM
 const TABQ=[];   // messages of other tabs that came before the start was done: the start reads the storage first, then they apply
 function tabMsg(m){ if(keptView() || DYING) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
-  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ const {t, hidden, ...st}=m; ACC.leadSt=st; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); } else if(m.t==='dev'){ const d=db.settings().devName; if(d) S.devName=d; if(LEAD.on && SYNC) SYNC.checkOwner().catch(()=>{}); if(ACCT) ACCT.render(); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
+  else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ const {t, hidden, ...st}=m; ACC.leadSt=st; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); } else if(m.t==='dev'){ const d=typeof m.name==='string' && m.name? m.name : db.settings().devName; if(d) S.devName=d; if(LEAD.on && SYNC) SYNC.checkOwner().catch(()=>{}); if(ACCT) ACCT.render(); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
   else if(m.t==='format'){ if(+m.v>FORMAT) fmtNewer(); }   // a tab of a newer app recorded its format (IDB-BARRIER-PLAN §4.2 item 4)
   else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
