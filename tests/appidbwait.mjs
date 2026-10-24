@@ -5,7 +5,8 @@
 // (`lock.waitTab`), after 60 s it names no cause and shows «Оновити» (`lock.waitLong`), and when the holder lets go the start goes on in the same
 // page, without a reload. The hang is reproduced with real IndexedDB: a holder page keeps a connection and ignores versionchange, and an init script
 // withholds the `blocked` event from the app's versioned requests (the versionless open is left alone), as the Android browser did. An open later in
-// the session keeps the `blocked` lock; a second tab of this code queued behind the wait still gets the `storage` lock and reloads by itself after.
+// the session keeps the `blocked` lock. A second tab of this code queued behind the wait waits too (the waiting tab holds the Web Lock
+// baobook:idb-upgrade, IDB-BARRIER-PLAN §4.7) and goes on in the same page; no lock is left behind after two tabs start together.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -86,16 +87,26 @@ async function v3device(ctx){ const O=await oldPage(ctx); await O.goto(SITE); aw
   ok('2 a lasting `blocked`: the strip says another tab holds the storage ('+((Date.now()-t0)/1000).toFixed(1)+' s)', !!m);
   await A.waitForTimeout(2000);
   ok('2a no `blocked` lock: still waiting', HOLDS.test(await msg(A)) && !BLOCKED.test(await msg(A)));
+  ok('2a\' the waiting tab holds the upgrade lock (IDB-BARRIER-PLAN §4.7)', await A.evaluate(()=>navigator.locks.query().then(q=>q.held.some(l=>l.name==='baobook:idb-upgrade'))));
   const C=await page(ctx); await C.goto(SITE);
-  const mc=await waitMsg(C, STORAGE, 12000);
-  ok('2b a second tab queued behind the wait gets the `storage` lock for now (the cross-tab hint comes with PR 2)', !!mc);
-  const doc=await mark(A); let navC=0; C.on('framenavigated',f=>{ if(f===C.mainFrame()) navC++; });
+  await C.waitForTimeout(9000);   // past the versionless open's 8 s deadline
+  const mc=await msg(C);
+  ok('2b a second tab queued behind the wait waits too, not the `storage` lock ('+mc.slice(0,40)+'…)', SILENT.test(mc) && !STORAGE.test(mc));
+  const docC=await mark(C), doc=await mark(A);
   await H.evaluate(()=>window.__hold.close());
   const li=await until(async()=>{ try{ const l=await items(A); return l.some(t=>/нотатка з v3/.test(t))? l : null; }catch(_){ return null; } }, 5000);
   ok('2c the holder lets go: the start goes on in the same page, no reload', !!li && await same(A,doc) && !(await msg(A)));
   const lc=await until(async()=>{ try{ const l=await items(C); return l.some(t=>/нотатка з v3/.test(t)) && !(await msg(C))? l : null; }catch(_){ return null; } }, 15000);
-  ok('2d the second tab reloads by itself into a healthy start', !!lc && navC>0 && await editable(C));
+  ok('2d the second tab goes on too, in the same page, with no upgrade request of its own ('+JSON.stringify(await opens(C))+')', !!lc && await same(C,docC) && await editable(C) && JSON.stringify(await opens(C))==='[0]');
+  ok('2f no tab holds the upgrade lock once the upgrade is done', !(await A.evaluate(()=>navigator.locks.query().then(q=>q.held.concat(q.pending).some(l=>l.name==='baobook:idb-upgrade')))));
   ok('2e no page errors', !A.errs.length && !C.errs.length); await ctx.close(); }
+
+/* ── 2g. two tabs of this code starting together on a v3 database, no holder: both start, and no upgrade lock is left behind (one release per request) ── */
+{ const ctx=await context(false); const O=await v3device(ctx); await O.evaluate(()=>window.__hold.close()); await O.goto('about:blank');
+  const A=await page(ctx), B=await page(ctx); await Promise.all([A.goto(SITE), B.goto(SITE)]); await Promise.all([ready(A), ready(B)]); await A.waitForTimeout(500);
+  const left=await A.evaluate(()=>navigator.locks.query().then(q=>q.held.concat(q.pending).filter(l=>l.name==='baobook:idb-upgrade').length));
+  ok('2g two tabs started together: both show the v3 note, no upgrade lock left ('+left+')', (await items(A)).some(t=>/нотатка з v3/.test(t)) && (await items(B)).some(t=>/нотатка з v3/.test(t)) && left===0);
+  ok('2h no page errors', !A.errs.length && !B.errs.length); await ctx.close(); }
 
 /* ── 3. a new device: the holder keeps the empty v1, no `blocked`: the start waits, never the localStorage mode ── */
 { const ctx=await context(true); const H=await page(ctx); await H.goto(SITE+'blank.html');
