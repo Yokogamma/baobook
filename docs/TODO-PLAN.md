@@ -528,7 +528,7 @@ Not built in T0–T2. **There is one plan for assistant access: `docs/MCP-PLAN.m
 
 **This plan owns** the data the tools read and write: the block and task shapes (§3), authors by device id with the reserved id `claude` (§3.2), the normalizer and the merge by task (§6.13, §6.17), `todoText` and the to-do search lines (`todo/model.js`, §6.19), and the rule that unknown block and task fields are kept. MCP-PLAN's shared text module (`public/notetext.js`, its §7.5) takes a to-do block's lines from `todo/model.js`, so the app and the server search lists the same way.
 
-**MCP-PLAN owns** everything about the server: where it runs, OAuth, the credential, the tools and their contracts, the mirror, limits, logs, security, its stages, and whether its read-only stages come before the refactoring (`CLAUDE.md`, «Roadmap», puts assistant access after it; the owner decides).
+**MCP-PLAN owns** everything about the server: where it runs, OAuth, the credential, the tools and their contracts, the mirror, limits, logs, security, its stages, and its stages. All of them, the read-only ones included, come after the refactoring (`CLAUDE.md`, «Roadmap»; the owner's decision, 2026-10-24).
 
 **The owner's requirements handed to MCP-PLAN** (2026-10-23 and 2026-10-24):
 

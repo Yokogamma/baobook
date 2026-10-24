@@ -42,7 +42,7 @@ Moving out of `mockups`, with no new features. Steps:
 2. **To-do lists** (`docs/TODO-PLAN.md`): T0 goes into `main` after sync PR 4 and reaches production with the sync release; then T1 and T2. The to-do code lives in its own modules (`public/todo/`), not in `index.html`, typed with JSDoc and checked by `tsc --noEmit` in CI.
 3. **Backups** to Google Drive and to the device (`docs/BACKUP-PLAN.md`, B1–B4).
 4. **Refactoring:** split the app into modules so that it is easy to update and to extend, and move to TypeScript. That brings a build step, so the «no build step» rule above, the hand-kept `PRECACHE` list and the build marker change with it.
-5. **Assistant access** to notes and lists from the Claude apps (and ChatGPT): one plan, `docs/MCP-PLAN.md` (PR #80); §12 of `docs/TODO-PLAN.md` holds the boundary and the owner's requirements for writes. After the refactoring, unless the owner moves MCP-PLAN's read-only stages earlier.
+5. **Assistant access** to notes and lists from the Claude apps (and ChatGPT): one plan, `docs/MCP-PLAN.md` (PR #80); §12 of `docs/TODO-PLAN.md` holds the boundary and the owner's requirements for writes. All of it, its read-only stages included, after the refactoring (the owner's decision, 2026-10-24).
 
 ## Localization
 
