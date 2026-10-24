@@ -111,5 +111,19 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   ok('7b the holder lets go: the newer tab goes on, the database at v5 with format 5, the note there', JSON.stringify(await fmt(N))==='{"version":5,"format":5}' && (await N.locator('#list .item').allInnerTexts()).some(t=>/перед оновленням/.test(t)));
   ok('7c no page errors', !A.errs.length && !N.errs.length); await ctx.close(); }
 
+/* ── 8. a versionchange while the start's format transaction waits (here a delete; a newer app's upgrade is the same event): the connection closed by
+       it is not adopted, so the start opens again and the tab writes into the new database instead of keeping a dead connection ── */
+{ const ctx=await context(); const W=await page(ctx); await typeAt(W,500,300,'до видалення'); await W.close();
+  const H=await page(ctx,{noGo:true}); await H.goto(SITE+'blank.html');
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;   // a long write on `sync`: the start's format transaction queues behind it
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); d.onversionchange=()=>{ go=false; d.close(); }; window.__stop=()=>{ go=false; }; res(); }; }));
+  const C=await page(ctx,{noGo:true}); await C.goto(SITE); await C.waitForTimeout(1500);   // C's versionless open succeeded, its format transaction waits behind H's
+  await H.evaluate(()=>{ window.__del=new Promise(res=>{ const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=()=>res(); }); });   // versionchange at H and at C
+  await H.evaluate(()=>window.__del); await ready(C);
+  await typeAt(C,500,420,'після видалення'); await C.waitForTimeout(500);
+  const saved=await C.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; if(!d.objectStoreNames.contains('notes')){ d.close(); return res(false); } const g=d.transaction('notes','readonly').objectStore('notes').getAll(); g.onsuccess=()=>{ d.close(); res(JSON.stringify(g.result).includes('після видалення')); }; }; }));
+  ok('8 the start goes on after a versionchange during its format transaction: the edit is stored in the new database, no strip, no fallback key', saved && !(await msg(C)) && !(await fbKeys(C)).length);
+  ok('8a no page errors', !C.errs.length); await ctx.close(); }
+
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);

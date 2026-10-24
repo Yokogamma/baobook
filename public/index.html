@@ -1008,23 +1008,23 @@ const idb={ db:null, opening:null, silent:false, want:false, back:false, waiting
   // silence or a lasting `blocked` is the waiting state (idbWait), and its late success goes on with the start (IDB-BARRIER-PLAN §3)
   open(o={}){ if(idb.opening) return idb.opening; return idb.opening=new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
     let dead=false, dt=0;
-    const go=v=>{ if(dead) return; let r, bt=0, wt=0, gone=false, held=false, rel=null, ac=null; const up=!!(v && o.deadline); try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
+    const go=v=>{ if(dead) return; let r, bt=0, wt=0, gone=false, over=false, held=false, rel=null, ac=null; const up=!!(v && o.deadline); try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
       const kill=()=>{ dead=true; rej(Object.assign(new Error('timeout'),{silent:true})); };
       // the versionless open's deadline: when another tab's start holds UP_LOCK, this request is queued behind that tab's waiting upgrade, not dead (§4.7)
       clearTimeout(dt); if(o.deadline && !up) dt=setTimeout(()=>{ let q=null; try{ q=hasLocks() && navigator.locks.query? navigator.locks.query() : null; }catch(_){} if(!q) return kill();
         q.then(st=>{ if(gone) return; if((st.held||[]).some(l=>l.name===UP_LOCK)){ held=true; idbWait('silent'); } else kill(); }, ()=>{ if(!gone) kill(); }); }, o.deadline);
       if(up){ wt=setTimeout(()=>idbWait('silent'), UPGRADE_WAIT);
-        if(hasLocks()) try{ ac=new AbortController(); navigator.locks.request(UP_LOCK, {signal:ac.signal}, ()=>gone? null : new Promise(r=>rel=r)).catch(()=>{}); }catch(_){} }   // one release per request: a grant after the answer is dropped (ac) or returns at once (gone)
+        if(hasLocks()) try{ ac=new AbortController(); navigator.locks.request(UP_LOCK, {signal:ac.signal}, ()=>over? null : new Promise(r=>rel=r)).catch(()=>{}); }catch(_){} }   // one release per request: a grant after success or error is dropped (ac) or returns at once (over)
       const answered=()=>{ gone=true; clearTimeout(dt); clearTimeout(bt); clearTimeout(wt); if(up || held) idbWaitOff(); };   // the request's first real answer ends every timer of the wait
-      const settled=()=>{ answered(); if(ac){ try{ ac.abort(); }catch(_){} } if(rel) rel(); };   // the lock goes only with success or error: during the upgrade a tab queued behind it still waits
+      const settled=()=>{ answered(); over=true; if(ac){ try{ ac.abort(); }catch(_){} } if(rel) rel(); };   // the lock goes only with success or error: during the upgrade a tab queued behind it still waits
       r.onupgradeneeded=()=>{ answered(); if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});   // a dead attempt's upgrade still makes the stores: the version goes up with this transaction either way, and a database at IDB_VER is never mended later
         if(!d.objectStoreNames.contains('versions')){ const s=d.createObjectStore('versions',{keyPath:'id'}); s.createIndex('note_t',['note','t']); s.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
         if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']});   // тіла блоків за хешем вмісту
         if(!d.objectStoreNames.contains('sync')) d.createObjectStore('sync',{keyPath:'k'});   // sync metadata (SYNC-PLAN 4.3): format, owner, epoch, per-note meta, queue, seen, cursor…
         try{ r.transaction.objectStore('sync').put({k:'format', v:FORMAT}); }catch(_){} };
-      r.onsuccess=()=>{ settled(); const d=r.result; d.onversionchange=()=>{ try{ d.close(); }catch(_){} };   // until done() sets idbLost: a newer app's upgrade during the format transaction below is not kept waiting by this connection
+      r.onsuccess=()=>{ settled(); const d=r.result; let lost=false; d.onversionchange=()=>{ lost=true; try{ d.close(); }catch(_){} };   // until done() sets idbLost: a newer app's upgrade (or a delete) during the format transaction below is not kept waiting by this connection
         if(dead){ try{ d.close(); }catch(_){} if(LOCK==='storage') idbBack(); return; }   // the hung request answered at last: the storage is back
-        const done=()=>{ idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
+        const done=()=>{ if(lost) return res(); idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };   // a connection closed by that handler is never adopted: idb.db stays null and the next use opens again
         if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
         // the second half of the format check, before any upgrade: a `format` record above this code's version marks data of a newer app, which opens
         // view-only as it is (an upgrade would write this code's format over it). Then a new device (an empty v1 from the open without a version) or an
