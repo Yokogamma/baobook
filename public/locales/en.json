@@ -423,6 +423,7 @@
   "conflict.dropAll": "Remove conflict copies ({n})",
   "conflict.dropAllTitle": "Remove conflict copies ({n})?",
   "conflict.dropAllText": "They will be deleted from this device. This cannot be undone.",
+  "conflict.dropAllTrashText": "After that the note will be deleted automatically when its time in the trash is over. This cannot be undone.",
   "list.copies": "has conflict copies",
   "list.copiesTrash": "not deleted automatically: has conflict copies",
   "hist.renameShown": "Rename this version…",

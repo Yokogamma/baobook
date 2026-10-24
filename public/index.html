@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102501">
+<meta name="baobook-build" content="2026102404">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102501" integrity="sha384-+jrbr7UgsYXG+UQxmhzwSUpI/STWKjELnJfRwCY7Xe4MLjrIPhIiVZRMGoIRat18"></script>
-<script src="cloud.js?b=2026102501" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102404" integrity="sha384-wa6cAMCVHp5MNBLGVOxxNJr9hQi0O0VNPGtWazcAmsZb33Re8pGNrLWTaBwn0fQR"></script>
+<script src="cloud.js?b=2026102404" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +806,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'locales/en.json':'sha384-7kmHlR/SuTMXqGfwA/978lwo8bXR1fkLgqM0LvsDZn/YOYjkxuY2F93Y0vlrXn9h', 'locales/uk.json':'sha384-rgLGw9k9aFZFGwhH/RfFZ+EY/0naP3V3LPLgkHzvefUQATxWa+TdLZIagTB7hQ8e'};
+const SRI={'locales/en.json':'sha384-huPIdDdNje7cRrd04nDutEW33lH65VX5Gfan1BQHqYz5s3jJopt2X82+Zb3liKEC', 'locales/uk.json':'sha384-OEu1bzNXD2lTMxp5LAKLRu04GP9/G9zh2Eyt40JIJihJH8BRII02ASNa8miJjAKt'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102501;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102404;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -2532,7 +2532,7 @@ const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStack
 function undoStale(id){ const st=undoStacks.get(id); if(!st) return; const k=st.filter(e=>e.safe); if(k.length) undoStacks.set(id,k); else undoStacks.delete(id); }
 function undoStack(id){ id=id||(cur&&cur.id); if(!undoStacks.has(id)) undoStacks.set(id,[]); return undoStacks.get(id); }
 function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now(), ro:!!o.ro, safe:!!o.safe}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
-function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st) bytes+=e.size; if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES)) return; oldest.shift(); } }   // найстаріші записи витісняються першими, з будь-якої нотатки
+function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null, newest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st){ bytes+=e.size; if(!newest || e.at>=newest.at) newest=e; } if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES) || oldest[0]===newest) return; oldest.shift(); } }   // the newest entry is kept whatever its size, until the next action (SYNC-PLAN 4.19)   // найстаріші записи витісняються першими, з будь-якої нотатки
 function showUndo(msg, big){ ACT=null; undoBtn.innerHTML=loc('undo.button'); clearTimeout(undoT); undoT=null; clearTimeout(undoHideT); cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
 function hideUndo(){ ACT=null; clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); clearTimeout(undoHideT); undoHideT=setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
 function dropUndo(){ hideUndo(); }   // ховає плашку; стек лишається (перехід між нотатками, тести)
@@ -2748,7 +2748,7 @@ function sizeMenu(b){ const cur=b.ch||b.lines||1; const set=ch=>{ const done=pla
 const THEME_NAMES={light:loc('theme.short.light'),dark:loc('theme.short.dark'),sand:loc('theme.short.sand')};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
   ...(ro()? [] : [{ico:areaBtn.querySelector('svg').outerHTML, label:loc('area.new'), small:loc('area.new.touchHint'), act:()=>areaBtn.click()}]),
-  ...(undoStack().length && !ro()? [{label:loc('undo.menu',{msg:undoStack()[undoStack().length-1].msg}), small:loc('undo.untilReload'), act:()=>doUndo()}] : []),
+  ...(undoStack().length && (!ro() || (undoStack()[undoStack().length-1].ro && !LOCK))? [{label:loc('undo.menu',{msg:undoStack()[undoStack().length-1].msg}), small:loc('undo.untilReload'), act:()=>doUndo()}] : []),
   {label:loc('spell.title'), small: loc(spell? 'common.on' : 'common.off'), act:()=>spellBtn.click()},
   {label:loc('grid.title'), small: loc(sheet.classList.contains('nogrid')? 'common.off' : 'common.on'), act:()=>gridBtn.click()},
   {ico:ICO.palette, label:loc('theme.title'), small: THEME_NAMES[curTheme()]||'', act:()=>themeBtn.click()},
@@ -3116,8 +3116,8 @@ function stateLine(v){ if(v.reason==='copy') return '<div class="hv-st">'+locA('
   return '<div class="hv-st'+(st==='error'? ' bad' : '')+'">'+escHtml(from? loc('hist.stateFrom',{state:t, device:from}) : t)+'</div>'; }
 function syncHist(){ const order=histOrder(), i=Math.max(0,order.indexOf(H.sel)), v=H.list.find(x=>x.id===H.sel);
   histList.querySelectorAll('.hv').forEach(d=>{ const on=d.dataset.id===H.sel; d.classList.toggle('cur',on); d.setAttribute('aria-selected',String(on)); });
-  histRange.max=String(order.length-1); histRange.value=String(order.length-1-i); histRange.setAttribute('aria-valuetext', v? hm(v.t)+' · '+kindText(v) : loc('hist.now'));   // right end is «Зараз»
-  const copy=!!(H.view && H.view.reason==='copy'), rw=!ro(); histRestore.hidden=copy || !rw; histRestore.disabled=!H.view; histTake.hidden=!copy || !rw; histDrop.hidden=!copy || !!LOCK; }   // a copy: «Відновити» and «Прибрати»; in the trash only «Прибрати»; a view-only tab neither
+  histRange.max=String(order.length-1); histRange.value=String(order.length-1-i); histRange.setAttribute('aria-valuetext', v? hm(v.reason==='copy' && v.updated? v.updated : v.t)+' · '+kindText(v) : loc('hist.now'));   // right end is «Зараз»
+  const copy=!!(H.view && H.view.reason==='copy'), rw=!ro(); histMore.hidden=!rw && !narrowQ.matches; histRestore.hidden=copy || !rw; histRestore.disabled=!H.view; histTake.hidden=!copy || !rw; histDrop.hidden=!copy || !!LOCK; }   // a copy: «Відновити» and «Прибрати»; in the trash only «Прибрати»; a view-only tab neither
 function pickHist(id, delay=0){ if(!histOrder().includes(id)) return; H.sel=id; syncHist(); const d=histList.querySelector('.hv[data-id="'+id+'"]'); if(d) d.scrollIntoView({block:'nearest'});
   clearTimeout(H.t); const go=()=>{ if(id==='now') showNow(); else showVersion(H.list.find(v=>v.id===id)); syncHist(); }; if(delay) H.t=setTimeout(go,delay); else go(); }
 const cardOf=b=>b.el.querySelector(':scope>.tcard,:scope>.cblk,:scope>.ablk')||b.el;
@@ -3186,8 +3186,10 @@ histTake.addEventListener('click',()=>takeCopy()); histDrop.addEventListener('cl
 let COPIES=new Map(), ACT=null;   // ACT: the action of the toast in the undo toast's place (a conflict's «Показати»), not on the undo stack
 const copiesN=id=>COPIES.get(id)||0;
 Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld()});   // the tests' hand: the page's map, the 30-day rule now
-async function copiesLoad(){ if(!SYNC || db.backend!=='idb') return; try{ COPIES=await SYNC.copiesCount(); }catch(_){} if(STARTED) renderList(); else copiesUI(); }
-async function copiesRecount(id){ if(!SYNC || db.backend!=='idb' || !id) return; let k=0; try{ k=await SYNC.countCopies(id); }catch(_){ return; } if(k===copiesN(id)) return; if(k) COPIES.set(id,k); else COPIES.delete(id); if(STARTED) renderList(); }
+// the read of the whole store waits a moment after the start (the leader's catch-up comes first); a note recounted meanwhile is recounted again after it
+let copiesLoading=null; const copiesLate=new Set();
+function copiesLoad(){ if(!SYNC || db.backend!=='idb') return; copiesLoading=new Promise(res=>setTimeout(res, 1500)).then(()=>SYNC.copiesCount()).then(m=>{ COPIES=m; }, ()=>{}).finally(()=>{ copiesLoading=null; for(const id of copiesLate) copiesRecount(id); copiesLate.clear(); if(STARTED) renderList(); else copiesUI(); }); }
+async function copiesRecount(id){ if(!SYNC || db.backend!=='idb' || !id) return; if(copiesLoading){ copiesLate.add(id); return; } let k=0; try{ k=await SYNC.countCopies(id); }catch(_){ return; } if(k===copiesN(id)) return; if(k) COPIES.set(id,k); else COPIES.delete(id); if(STARTED) renderList(); }
 // the badge of the history button and its label, set by code from the map («Історія версій · N конфлікт»)
 function copiesUI(){ const k=cur? copiesN(cur.id) : 0, t=k? loc('hist.buttonCopies',{n:k}) : loc('hist.button'); histBadge.hidden=!k; histBadge.textContent=k? String(k) : ''; histBtn.title=t; histBtn.setAttribute('aria-label',t); }
 // a new copy: only the visible tab that has the note open says so, with «Показати»; no timeout of its own, the badge stays the way back
@@ -3211,7 +3213,7 @@ async function dropCopy(){ const n=cur, v=H.view; if(!n || !v || v.reason!=='cop
 async function putBack(id, recs){ const r=await SYNC.putCopies(id, recs); if(!r || !r.ok) say(loc('conflict.cantUndo')); }
 // «Прибрати конфліктні копії (N)», from the panel's «⋯» and the trash row's menu: asks, no undo
 async function dropAllCopies(n){ if(LOCK || !n) return; const k=copiesN(n.id); if(!k) return;
-  if(!await ask({title:loc('conflict.dropAllTitle',{n:k}), text:loc(n.deleted? 'conflict.lastText' : 'conflict.dropAllText'), ok:loc('conflict.drop')})) return;
+  if(!await ask({title:loc('conflict.dropAllTitle',{n:k}), text:loc(n.deleted? 'conflict.dropAllTrashText' : 'conflict.dropAllText'), ok:loc('conflict.drop')})) return;
   let ids=[]; try{ ids=(await vlist(n.id)).filter(v=>v.reason==='copy').map(v=>v.id); }catch(_){ return; } await SYNC.dropCopies(n.id, ids); if(H.open && cur===n){ H.sel='now'; showNow(); loadHist(); } }
 histNameRow.addEventListener('submit',e=>{ e.preventDefault(); saveName(); });
 histName.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); histNameRow.hidden=true; histList.focus(); } });

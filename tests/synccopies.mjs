@@ -87,4 +87,15 @@ async function conflict(cloud){ const A=await mk(cloud,'A'), B=await mk(cloud,'B
   const C0=JSON.stringify(A.db.get('notes','n1')), lrev0=A.db.get('sync','meta:n:n1').lrev; fail=true; const r=await A.sync.restoreCopy('n1','vf',{title:'Збій', blocks:[{id:'b1',row:1,fx:0,text:'з копії'}]}); fail=false;
   ok('9 the note\'s write fails: refused, the note, its lrev and the copy as they were, no «base» record', !r.ok && JSON.stringify(A.db.get('notes','n1'))===C0 && A.db.get('sync','meta:n:n1').lrev===lrev0 && !!A.db.get('versions','vf') && !A.db.all('versions').some(v=>v.reason==='base' && v.inline)); }
 
+/* ── 10. a copy with a body over the history's limit restores it into the note in full; copies from an import and through setOwner are never queued ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A',{owner:false}); const big='ю'.repeat(300000);
+  await edit(A,'n1',(C,t)=>({title:'Мала', blocks:two('мале','друге'), created:t, updated:t}));
+  await A.db.tx(['versions'],'readwrite', async t=>{ t.put('versions',{id:'vB', note:'n1', t:1, w:1, reason:'copy', keep:1, inline:1, title:'Мала', sig:'B', blocks:[{id:'b1',row:1,fx:0,h:null,s:big}], size:big.length}); });
+  const r=await A.sync.restoreCopy('n1','vB',{title:'Мала', blocks:[{id:'b1',row:1,fx:0,text:big},{id:'b2',row:2,fx:0,text:'друге'}]});
+  ok('10 the 300 000-character body of the copy is in the note in full', r.ok && A.db.get('notes','n1').blocks[0].text===big);
+  const h={versions:[{id:'vI', note:'n1', t:2, w:2, reason:'copy', keep:1, inline:1, title:'Мала', sig:'I', blocks:[{id:'b1',row:1,fx:0,h:'x',s:'з файлу'}], size:7}], blobs:[]};
+  const im=await A.sync.importHistory(h,['n1']); await A.sync.setOwner(owner); await A.sync.start(); await idle(A);
+  const ids=['vI', ...A.db.all('versions').filter(v=>v.reason==='copy').map(v=>v.id)];
+  ok('10a a copy from a history file and every copy bound to an account by setOwner: no job, no attempt, no document', im.ok && im.added===1 && ids.every(id=>!A.db.get('sync','out:v:'+id) && !A.db.get('sync','try:v:'+id) && !cloud.doc('versions',id)) && !!cloud.doc('notes','n1')); }
+
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);

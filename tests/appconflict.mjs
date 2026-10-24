@@ -63,6 +63,11 @@ const cloud=new TestCloud({start:Date.now()});
   const undone=await textOf(pg);
   ok('2b Ctrl+Z: the state before comes back, the other device\'s new block stays, the copy is back ('+undone+')', (await noteText()).startsWith(before) && /новий блок з іншого/.test(undone) && (await copyRecs(pg,id)).length===1 && (await btn(pg)).badge==='1');
   await settle(pg); ok('2c the cloud still holds no copy', await cloudClean(pg));
+  // undo after the toast is gone: «Відновити» again, leave the note, come back, «Скасувати: …» in the header «⋯»
+  const before2=await noteText(); await pg.click('#histBtn'); await pg.waitForTimeout(400); await pg.locator('#histList .hv[data-id="'+copy.id+'"]').click(); await pg.waitForTimeout(200); await pg.click('#histTake'); await pg.waitForTimeout(700);
+  const restored2=await noteText(); await pg.click('#newBtn'); await pg.waitForTimeout(400); await openNote(pg,id); await pg.waitForTimeout(300);
+  await pg.evaluate(()=>document.getElementById('moreBtn').click()); const item=pg.locator('.amenu .mi',{hasText:'Скасувати:'}); const has=await item.count(); if(has) await item.first().click(); await pg.waitForTimeout(800);
+  ok('2d after leaving the note and coming back, «Скасувати: …» in the header menu takes the restore back ('+restored2+' → '+(await noteText())+')', has>0 && restored2!==before2 && (await noteText())===before2 && (await copyRecs(pg,id)).length===1);
 
 /* ── 3. «Прибрати» and «Скасувати»; «Прибрати конфліктні копії (2)» ── */
   await pg.click('#histBtn'); await pg.waitForTimeout(400); const c2=(await copyRecs(pg,id))[0]; await pg.locator('#histList .hv[data-id="'+c2.id+'"]').click(); await pg.waitForTimeout(200);
@@ -72,8 +77,8 @@ const cloud=new TestCloud({start:Date.now()});
   ok('3a «Скасувати» brings it back', (await copyRecs(pg,id)).length===1 && (await btn(pg)).badge==='1');
   // a second copy (as a second merge would leave it), then the page starts again and reads the map
   await pg.evaluate(c=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const t=r.result.transaction('versions','readwrite'); t.objectStore('versions').put({...c, id:c.id+'x', sig:c.sig+'x', t:c.t+1, w:c.w+1}); t.oncomplete=()=>{ r.result.close(); res(); }; }; }), c2);
-  await pg.reload(); await pg.waitForSelector('html[data-ready]',{state:'attached'}); await pg.waitForTimeout(500); await openNote(pg,id); await pg.waitForTimeout(300);
-  ok('3b after a reload the map counts both: the badge 2', (await btn(pg)).badge==='2');
+  await pg.reload(); await pg.waitForSelector('html[data-ready]',{state:'attached'}); await pg.waitForTimeout(500); await openNote(pg,id);
+  ok('3b after a reload the map counts both: the badge 2', !!(await until(async()=>(await btn(pg)).badge==='2', 5000)));
   await pg.click('#histBtn'); await pg.waitForTimeout(400); await pg.click('#histMore'); const lbl=await pg.locator('.amenu .mi',{hasText:'Прибрати конфліктні копії (2)'}).count();
   await pg.locator('.amenu .mi',{hasText:'Прибрати конфліктні копії (2)'}).click(); const ask=await until(()=>pg.evaluate(()=>document.getElementById('ask').open? document.getElementById('askTitle').textContent : null), 3000); await pg.click('#askYes'); await pg.waitForTimeout(500);
   ok('3c «Прибрати конфліктні копії (2)» asks ('+ask+') and removes both', lbl===1 && /Прибрати конфліктні копії \(2\)\?/.test(ask||'') && (await copyRecs(pg,id)).length===0 && (await btn(pg)).badge==='');
@@ -92,6 +97,16 @@ const cloud=new TestCloud({start:Date.now()});
   ok('4a the leader merged and shows no toast; the second tab, with the note open, shows «Показати» ('+tT2+')', !!got && /Показати/.test(tT2||'') && !/Показати/.test(tA));
   await T2.waitForTimeout(4000); ok('4b it stays past 3.5 s and is reachable by Tab', /Показати/.test(await toastOf(T2)) && await T2.evaluate(()=>{ const b=document.querySelector('#undo .ubtn'); return !!b && b.tabIndex>=0 && !b.disabled; }));
   ok('4c the second tab\'s badge follows', (await btn(T2)).badge==='1');
+  // a third tab with the note open when the second restores the copy: it takes the restored note
+  const T3=await newTab(A, SITE, {connect:{pace:PACE}}); await openNote(T3,id); await T3.waitForTimeout(300);
+  await T2.bringToFront(); await T2.locator('#undo .ubtn').click(); await T2.waitForTimeout(500); await T2.click('#histTake'); await T2.waitForTimeout(800);
+  const want=await textOf(T2), got3=await until(async()=>(await textOf(T3))===want, 5000);
+  ok('4e a third tab with the note open takes the restored note ('+want+')', !!got3 && (await btn(T3)).badge==='');
+  // a tab that is hidden shows no toast for a new copy, but its badge follows
+  await T2.evaluate(()=>{ Object.defineProperty(document,'hidden',{configurable:true, get:()=>true}); });
+  await A.pg.evaluate(()=>sheetDebug.sync.online(false)); await editFirst(T2,' знову C'); await editFirst(B.pg,' знову D'); await settle(B.pg); await A.pg.evaluate(()=>sheetDebug.sync.online(true));
+  await until(async()=>{ await settle(A.pg,100); return (await copyRecs(A.pg,id)).length? true : null; }, 10000); await T2.waitForTimeout(800);
+  ok('4f the hidden tab shows no toast and its badge follows', !/Показати/.test(await toastOf(T2)) && !!(await until(async()=>(await btn(T2)).badge==='1', 3000)));
   ok('4d no page errors', !A.errs.length && !B.errs.length); await A.close(); await B.close(); }
 
 /* ── 5. without an owner: a note past its days in the trash with a copy stays, marked; read-only «Історія»; the last copy asks, no undo; then it goes ── */
@@ -122,7 +137,7 @@ const cloud=new TestCloud({start:Date.now()});
     t.objectStore('versions').put({id:'vcp', note:'np', t:n, w:n, reason:'copy', keep:1, inline:1, title:'Телефон', sig:'p', blocks:[{id:'b1',row:1,fx:0,h:'x',s:'інший'}], size:10, updated:n, dev:'pc', dn:'ПК'});
     t.oncomplete=()=>{ r.result.close(); res(); }; }; }));
   await pg.reload(); await pg.waitForSelector('html[data-ready]',{state:'attached'}); await pg.waitForTimeout(800); await pg.evaluate(()=>{ const d=document.querySelector('#list .item[data-id="np"]'); if(d) d.click(); }); await pg.waitForTimeout(500);
-  const badge=await pg.evaluate(()=>{ const g=document.getElementById('histBadge'), r=g.getBoundingClientRect(); return !g.hidden && r.width>0 && r.right<=390; });
+  const badge=await until(()=>pg.evaluate(()=>{ const g=document.getElementById('histBadge'), r=g.getBoundingClientRect(); return !g.hidden && r.width>0 && r.right<=390; }), 5000);   // the map is read a moment after the start
   await pg.evaluate(()=>document.getElementById('histBtn').click()); await pg.waitForTimeout(500); await pg.evaluate(()=>document.querySelector('#histList .hv[data-id="vcp"]').click()); await pg.waitForTimeout(300);
   const fit=await pg.evaluate(()=>{ const a=document.getElementById('histTake').getBoundingClientRect(), b=document.getElementById('histDrop').getBoundingClientRect(); return {a:[a.left,a.right,a.top], b:[b.left,b.right,b.top]}; });
   ok('6 on a phone the badge shows and the two buttons sit side by side inside 390 px ('+JSON.stringify(fit)+')', badge && fit.a[0]>=0 && fit.b[1]<=390 && fit.a[1]<=fit.b[0] && Math.abs(fit.a[2]-fit.b[2])<2 && !errs.length); await ctx.close(); }
