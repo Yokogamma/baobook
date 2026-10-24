@@ -117,7 +117,11 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   const H=await page(ctx,{noGo:true}); await H.goto(SITE+'blank.html');
   await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;   // a long write on `sync`: the start's format transaction queues behind it
     const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); d.onversionchange=()=>{ go=false; d.close(); }; window.__stop=()=>{ go=false; }; res(); }; }));
-  const C=await page(ctx,{noGo:true}); await C.goto(SITE); await C.waitForTimeout(1500);   // C's versionless open succeeded, its format transaction waits behind H's
+  const C=await page(ctx,{noGo:true});
+  await C.addInitScript(()=>{ const tx=IDBDatabase.prototype.transaction; IDBDatabase.prototype.transaction=function(st, mode){ const t=tx.apply(this, arguments); if(st==='sync' && mode==='readwrite' && !window.__fmtTx){ window.__fmtTx=1; t.addEventListener('complete',()=>{ window.__fmtTx=2; }); } return t; }; });   // the start's format transaction: created (1), done (2)
+  await C.goto(SITE);
+  const queued=await until(()=>C.evaluate(()=>window.__fmtTx===1).catch(()=>false), 5000); await C.waitForTimeout(300);
+  ok('8 (setup) C\'s versionless open succeeded and its format transaction waits behind H\'s write', queued && await C.evaluate(()=>window.__fmtTx===1));
   await H.evaluate(()=>{ window.__del=new Promise(res=>{ const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=()=>res(); }); });   // versionchange at H and at C
   await H.evaluate(()=>window.__del); await ready(C);
   await typeAt(C,500,420,'після видалення'); await C.waitForTimeout(500);
