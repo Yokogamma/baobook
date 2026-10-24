@@ -56,6 +56,12 @@ line(d.rev===5 && !('tsrv' in d) && !('deleted' in d) && !('tsrv' in rw), 'a res
 r=await A.txn('notes','n1', D=>({v:1, rev:D.rev+1, op:'o6', dev:'devA', rcpt:{...D.rcpt, devA:'o6'}, purged:T0+99}));
 d=await A.get('notes','n1'); rw=await raw(N('n1'));
 line(d.rev===6 && d.purged===T0+99 && !('tsrv' in d) && !('title' in d) && Object.keys(rw).sort().join()==='dev,op,purged,rcpt,rev,srv,v', 'a tombstone: only its fields, no tsrv');
+// a version tombstone carries `deleted: true`, which is not a trash date: it must get no tsrv (the rules' vtomb refuses any other key; found on the emulator in PR 4a)
+await A.txn('notes','nv', D=>stamp(D,'p1'));
+r=await A.txn('versions','v1', D=>({v:1, rev:1, op:'q1', dev:'devA', rcpt:{devA:'q1'}, note:'nv', t:T0, name:'Named', title:'A note', blocks:[{id:'b1', row:0, fx:0, s:'text'}]}));
+r=await A.txn('versions','v1', D=>({v:1, rev:D.rev+1, op:'q2', dev:'devA', rcpt:{...D.rcpt, devA:'q2'}, note:D.note, deleted:true}));
+rw=await raw(ROOT+'/versions/v1');
+line(r.wrote && rw.deleted===true && rw.rev===2 && !('tsrv' in rw) && Object.keys(rw).sort().join()==='deleted,dev,note,op,rcpt,rev,srv,v', 'a version tombstone through the adapter: only its fields, no tsrv');
 r=await A.txn('notes','n1', D=>null);
 line(r.wrote===false && r.read.rev===6 && (await A.get('notes','n1')).rev===6, 'a callback that returns null writes nothing and reports what it read');
 r=await A.txn('notes','n2', D=>({...stamp(D,'p1'), deleted:T0}));

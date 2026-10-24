@@ -50,6 +50,10 @@ const bad=[[null,'shape'],[{title:5,blocks:[],created:1,updated:1},'title'],[{ti
 ok('4 bad shapes are reported, not repaired: '+bad.map(([d,why])=>S.normNote(d,{cleanRich:clean}).bad).join(','), bad.every(([d,why])=>S.normNote(d,{cleanRich:clean}).bad===why));
 ok('4b a good revived field with dn and title passes', S.normNote({title:'',blocks:[],created:1,updated:1,revived:{from:'n1',dev:'dev1',dn:'Chrome',title:'Стара',at:5}},{cleanRich:clean}).note.revived.title==='Стара');
 ok('4b2 a pinned note keeps its pin time; pinned:0 or null means «not pinned» and is dropped', S.normNote({title:'',blocks:[],created:1,updated:1,pinned:7},{}).note.pinned===7 && !('pinned' in S.normNote({title:'',blocks:[],created:1,updated:1,pinned:0},{}).note) && !('pinned' in S.normNote({title:'',blocks:[],created:1,updated:1,pinned:null},{}).note));
+{ const N0={title:'',blocks:[],created:1,updated:1}, nc=c=>S.normNote({...N0,color:c},{});
+  ok('4b3 a colour is kept: the five names and an unknown name of the same format (a later version\'s)', ['yellow','green','blue','pink','purple','teal','x-2'].every(c=>nc(c).note.color===c));
+  ok('4b4 a bad colour is reported: a number, upper case, a space, 25 characters', [5,'Blue','bl ue','a'.repeat(25),true,{}].every(c=>nc(c).bad==='color'));
+  ok('4b5 an absent, null or empty colour means «Стандартний»: no field, and the canonical form does not change', ['',null,undefined].every(c=>!('color' in nc(c).note)) && S.cjson({...N0,color:''})===S.cjson(N0) && S.cjson({...N0,color:'blue'})!==S.cjson(N0)); }
 ok('4c html goes through cleanRich and an empty result drops the field', S.normNote({title:'',blocks:[{id:'a',row:1,fx:0,text:'t',html:'<i>t</i>'}],created:1,updated:1},{cleanRich:()=>''}).note.blocks[0].html===undefined);
 
 // 5 versions

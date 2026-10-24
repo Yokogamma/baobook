@@ -13,7 +13,7 @@ const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const T0=Date.now();
 
-/* ── 1. v2 → v3: a PR 0 database with notes and versions opens as v3 with the sync store, format 3, data intact ── */
+/* ── 1. v2 → v4: a PR 0 database with notes and versions opens as v4 with the sync store, format 4, data intact ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
   await pg.goto(SITE+'blank.html');
   await pg.evaluate(T=>new Promise(res=>{ const r=indexedDB.open('sheet',2); r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore('notes',{keyPath:'id'}); const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); d.createObjectStore('blobs',{keyPath:['note','h']}); };
@@ -22,7 +22,7 @@ const T0=Date.now();
   await pg.goto(SITE); await pg.waitForSelector('html[data-ready]',{state:'attached'}); await pg.waitForTimeout(400);
   const ver=await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const o={version:d.version, stores:[...d.objectStoreNames]}; d.close(); res(o); }; }));
   const sync=await stored(pg,'sync'), notes=await stored(pg,'notes'), vers=await stored(pg,'versions');
-  ok('1 v2 → v3: version '+ver.version+', stores '+ver.stores.join(',')+', format 3, the device record', ver.version===3 && ver.stores.includes('sync') && sync.some(r=>r.k==='format' && r.v===3) && sync.some(r=>r.k==='device' && r.id && r.name));
+  ok('1 v2 → v4: version '+ver.version+', stores '+ver.stores.join(',')+', format 4, the device record', ver.version===4 && ver.stores.includes('sync') && sync.some(r=>r.k==='format' && r.v===4) && sync.some(r=>r.k==='device' && r.id && r.name));
   ok('1b the notes and versions of v2 are intact and the note shows', notes.some(n=>n.id==='old1' && n.blocks[0].text==='з версії 2') && vers.some(v=>v.id==='v1') && (await pg.locator('#list .item').allInnerTexts()).some(t=>/Стара/.test(t)));
   ok('1c no owner: no jobs, no listener, status none', !(await syncRecs(pg,'out:')).length && (await pg.evaluate(()=>sheetDebug.sync.status.code))==='none');
   // an edit without an owner: lrev grows, no job

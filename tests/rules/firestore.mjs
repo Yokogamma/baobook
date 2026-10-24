@@ -154,6 +154,14 @@ await deny('more than 5000 blocks', () => put(N('n1'), next(d, { title: 'x', blo
 await deny('deleted that is not a number', () => put(N('n1'), next(d, { title: 'x', deleted: true, tsrv: serverTimestamp() })));
 await deny('archived that is not a number', () => put(N('n1'), next(d, { title: 'x', archived: 'yes' })));
 await deny('pinned that is not a number', () => put(N('n1'), next(d, { title: 'x', pinned: true })));
+await deny('color that is a number', () => put(N('n1'), next(d, { title: 'x', color: 5 })));
+await deny('an empty color', () => put(N('n1'), next(d, { title: 'x', color: '' })));
+await deny('an upper-case color', () => put(N('n1'), next(d, { title: 'x', color: 'Blue' })));
+await deny('a color of 25 characters', () => put(N('n1'), next(d, { title: 'x', color: 'a'.repeat(25) })));
+await allow('color blue', () => put(N('n1'), next(d, { title: 'x', color: 'blue' })));
+d = await read(N('n1'));
+await allow('an unknown color of the right format (a later version\'s)', () => put(N('n1'), next(d, { title: 'x', color: 'teal' })));
+d = await read(N('n1'));
 await deny('revived that is not a map', () => put(N('n1'), next(d, { title: 'x', revived: 'n0' })));
 await allow('archived, pinned and revived of the right types', () => put(N('n1'), next(d, { title: 'x', archived: T0, pinned: T0, revived: { from: 'n0', dev: 'devB', at: T0 } })));
 d = await read(N('n1'));
@@ -224,8 +232,13 @@ await seed(N('p1'), { v: 1, rev: 5, op: 'o-t', srv: old(DAY), dev: 'devA', rcpt:
 await allow('the owner creates a version of a live note', () => put(V('v1'), { ...stamp(null), ...vbody('n1') }));
 await allow('the owner creates a version of a note in the trash (only a purge stops it)', () => put(V('v2'), { ...stamp(null), ...vbody('n2') }));
 await allow('the owner reads a version', () => getDoc(doc(owner, V('v1'))));
-await allow('the owner lists the versions by srv', async () => { const s = await getDocs(query(collection(owner, `env/dev/users/${OWNER}/versions`), where('srv', '>=', old(DAY)), orderBy('srv'))); expect(s.size === 2, 'got ' + s.size); });
-await allow('the owner runs count() and sum(rev) over the versions: 2 versions, sum 2', async () => { const t = await totals(owner, 'versions'); expect(t.n === 2 && t.s === 2, JSON.stringify(t)); });
+d = await read(V('v2'));
+await allow('renaming a version whose note is in the trash (PR 4a)', () => put(V('v2'), next(d, { name: 'In the trash' })));
+await allow('a version name of 40 emoji: size() counts UTF-16 units, 80 here, as the core does (PR 4a)', () => put(V('vE'), { ...stamp(null), ...vbody('n1', { name: '😀'.repeat(40) }) }));
+await deny('a version name of 41 emoji: 82 UTF-16 units (PR 4a)', () => put(V('vF'), { ...stamp(null), ...vbody('n1', { name: '😀'.repeat(41) }) }));
+await deny('a version tombstone with no document: a tombstone is never created (PR 4a)', () => put(V('vT'), clean({ ...stamp(null), note: 'n1', deleted: true })));
+await allow('the owner lists the versions by srv (3: v1, v2 and the emoji name)', async () => { const s = await getDocs(query(collection(owner, `env/dev/users/${OWNER}/versions`), where('srv', '>=', old(DAY)), orderBy('srv'))); expect(s.size === 3, 'got ' + s.size); });
+await allow('the owner runs count() and sum(rev) over the versions: 3 versions, sum 1 + 2 + 1 (v2 renamed)', async () => { const t = await totals(owner, 'versions'); expect(t.n === 3 && t.s === 4, JSON.stringify(t)); });
 d = await read(V('v1'));
 await allow('renaming: name and the stamp change', () => put(V('v1'), next(d, { name: 'Renamed' })));
 d = await read(V('v1'));
@@ -252,9 +265,12 @@ await allow('deleting a version whose note is purged (deleting is always allowed
 d = await read(V('w1'));
 await deny('a deleted version stays deleted: renamed back to life', () => put(V('w1'), clean({ ...stamp(d), ...vbody('p1') })));
 await deny('a deleted version stays deleted: another tombstone over it', () => put(V('w1'), vtomb(d)));
+await deny('a deleted version stays deleted: a create-shaped write (rev 1) over its tombstone (PR 4a)', () => put(V('w1'), { ...stamp(null), ...vbody('p1') }));
+d = await read(V('v2'));
+await allow('deleting a version whose note is in the trash (PR 4a)', () => put(V('v2'), vtomb(d)));
 d = await read(V('v1'));
 await allow('deleting a version of a live note', () => put(V('v1'), vtomb(d)));
-await allow('count() and sum(rev) still see every version, tombstones included: 3 versions, sum 3 + 1 + 4', async () => { const t = await totals(owner, 'versions'); expect(t.n === 3 && t.s === 8, JSON.stringify(t)); });
+await allow('count() and sum(rev) still see every version, tombstones included: 4 versions, sum 3 + 3 + 1 + 4', async () => { const t = await totals(owner, 'versions'); expect(t.n === 4 && t.s === 11, JSON.stringify(t)); });
 
 await scenario('the note id of a version: up to 64 characters, the id limit of the core (finding against §4.16, which had 40)');
 const id64 = 'n'.repeat(64), id65 = 'n'.repeat(65);

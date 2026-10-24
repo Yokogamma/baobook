@@ -97,9 +97,9 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   await load(pg,[{...NOTES[2], pinned:Date.now(), updated:Date.now()+2000}]);
   ok('7c a newer copy with «pinned» pins it ('+await listText(pg)+')', /^\[Закріплені\],n3,\[Інші\]/.test(await listText(pg)) && (await stored(pg,'n3')).pinned>0);
 
-  // 7d the keyboard: Tab from the item reaches the pin first; Enter and Space toggle it, keep the focus on it and do not open the note
+  // 7d the keyboard: Tab from the item reaches the palette, then the pin (LIST-ACTIONS-PLAN 5.4); Enter and Space toggle it, keep the focus on it and do not open the note
   await open(pg,'n1'); await pg.waitForTimeout(300); const item=pg.locator('#list .item[data-id="n2"]');
-  await item.focus(); await pg.keyboard.press('Tab'); const f1=await pg.evaluate(()=>document.activeElement.className);
+  await item.focus(); await pg.keyboard.press('Tab'); await pg.keyboard.press('Tab'); const f1=await pg.evaluate(()=>document.activeElement.className);
   await pg.keyboard.press('Enter'); await pg.waitForTimeout(400); const k1=!!(await stored(pg,'n2')).pinned, f2=await pg.evaluate(()=>document.activeElement.className+'@'+(document.activeElement.closest('.item')||{dataset:{}}).dataset.id);
   await pg.keyboard.press(' '); await pg.waitForTimeout(400);
   ok('7d Tab → «'+f1+'»; Enter pins «Покупки» (focus on '+f2+'), Space unpins it; «Ключі» stays open', f1==='it-p' && k1 && f2==='it-p on@n2' && !(await stored(pg,'n2')).pinned && await cur(pg)==='n1');
@@ -258,7 +258,7 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('8i stored «'+s9.blocks.map(b=>b.text).join(' | ')+'», pinned '+!!s9.pinned+'; A lists '+await listText(A), s9.blocks.some(b=>/3% 4$/.test(b.text)) && !s9.pinned && !(await listText(A)).includes('[З'));
 
   // 8j a keyboard focus on an item's archive button stays there while another tab's change redraws the list
-  await A.bringToFront(); await A.locator('#list .item[data-id="n2"]').focus(); await A.keyboard.press('Tab'); await A.keyboard.press('Tab'); const fa=await A.evaluate(()=>document.activeElement.className);
+  await A.bringToFront(); await A.locator('#list .item[data-id="n2"]').focus(); await A.keyboard.press('Tab'); await A.keyboard.press('Tab'); await A.keyboard.press('Tab'); const fa=await A.evaluate(()=>document.activeElement.className);
   await B.evaluate(()=>document.querySelector('#list .item[data-id="n1"] .it-p').click()); await until(async()=>(await listText(A)).startsWith('[Закріплені],n1')); await A.waitForTimeout(200);
   const fb=await A.evaluate(()=>{ const a=document.activeElement; return a.className+'@'+((a.closest&&a.closest('.item'))||{dataset:{}}).dataset.id; });
   ok('8j the focus on «'+fa+'» of n2 stays after B\'s pin redrew A\'s list ('+fb+')', fa==='it-r' && fb==='it-r@n2');
@@ -362,28 +362,30 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   await pg.click('#sideBtn'); await pg.waitForTimeout(400);
   ok('10c the panel shows it under «Закріплені»: '+await listText(pg), await listText(pg)==='[Закріплені],n3,[Інші],n1,n2');
   await pg.screenshot({path:OUT+'/apppin-phone.png'});
-  const cb=await box(pg.locator('#list .item[data-id="n3"] .it-p'));
-  ok('10d the open note\'s pin button shows in the panel ('+cb.w+'×'+cb.h+')', cb.w>0 && await pg.locator('#list .item[data-id="n3"] .it-p').isVisible());
+  const hold=async(loc)=>{ const b=await box(loc); await touch('touchStart',[{x:b.x+b.w/2, y:b.y+b.h/2}]); await pg.waitForTimeout(650); await touch('touchEnd',[]); await pg.waitForTimeout(250); };   // a long press (LIST-ACTIONS-PLAN 4.3)
+  ok('10d at rest the open note\'s buttons stay hidden on touch; its item shows the pin mark instead', !(await pg.locator('#list .item[data-id="n3"] .it-p').isVisible()) && await pg.locator('#list .item[data-id="n3"] .pmark').isVisible());
   await open(pg,'n3'); await pg.waitForTimeout(400); await tapBtn(pg.locator('#moreBtn')); const mu=pg.locator('.amenu.hm .mi',{hasText:'Відкріпити'});
   ok('10e for a pinned note the «⋯» offers «Відкріпити»', (await mu.count())===1);
   await tapBtn(mu); await until(async()=>!((await stored(pg,'n3'))||{}).pinned);
   ok('10f it unpins: «'+await pg.locator('#toast').innerText()+'»', /відкріплено/.test(await pg.locator('#toast').innerText()));
-  // 10g–10l the panel covers the phone screen, the item buttons are 44 px targets with gaps, a tap on the pin pins, and the panel's «×» and «back» close it
-  await pg.click('#sideBtn'); await pg.waitForTimeout(400); const tp=await targets(pg,'n3');
+  // 10g–10l the panel covers the phone screen; a long press shows the item's buttons as 48 px targets with gaps, a tap on the pin pins, and the panel's «×» and «back» close it
+  await pg.click('#sideBtn'); await pg.waitForTimeout(400); await hold(pg.locator('#list .item[data-id="n3"]')); const tp=await targets(pg,'n3');
   ok('10g the panel takes the full width ('+Math.round(tp.side)+' of '+tp.vw+')', Math.round(tp.side)===tp.vw);
-  ok('10h the pin, archive and bin are at least 44×44 and apart ('+sz(tp)+')', tp.bs.every(b=>b.w>=44 && b.h>=44) && tp.gaps.every(g=>g>=6));
-  ok('10i the title makes room for the buttons and ends with an ellipsis ('+tp.clip+'), and the pin\'s centre hits the pin ('+tp.hit+')', tp.room && tp.clip==='ellipsis' && tp.hit==='it-p');
+  ok('10h after a long press the pin, archive and bin are at least 48×48 and 12 px apart ('+sz(tp)+')', tp.bs.every(b=>b.w>=48 && b.h>=48) && tp.gaps.every(g=>g>=12));
+  ok('10i the title keeps its ellipsis ('+tp.clip+'), and the pin\'s centre hits the pin ('+tp.hit+')', tp.clip==='ellipsis' && tp.hit==='it-p');
   await tapEl(pg.locator('#list .item[data-id="n3"] .it-p')); await until(async()=>((await stored(pg,'n3'))||{}).pinned>0);
   const n3=await stored(pg,'n3');
   ok('10j a tap at the pin\'s centre pins the note and archives or trashes nothing', n3.pinned>0 && !n3.archived && !n3.deleted && await listText(pg)==='[Закріплені],n3,[Інші],n1,n2');
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
   await tapBtn(pg.locator('#sideX')); await pg.waitForTimeout(400);
   const c1=await pg.evaluate(()=>({open:document.getElementById('app').classList.contains('open'), inSide:document.getElementById('side').contains(document.activeElement)}));
   ok('10k the panel\'s «×» closes it and the focus leaves the panel', !c1.open && !c1.inSide);
   await pg.click('#sideBtn'); await pg.waitForTimeout(400); await pg.goBack(); await pg.waitForTimeout(400);
   ok('10l «back» closes the panel and keeps the note open', !(await pg.evaluate(()=>document.getElementById('app').classList.contains('open'))) && await cur(pg)==='n3');
-  // 10m a touch tablet (800 px) keeps the panel and the buttons as they were, without the «×»
-  await pg.setViewportSize({width:800,height:1000}); await pg.click('#sideBtn'); await pg.waitForTimeout(400); const tt=await targets(pg,'n3');
-  ok('10m at 800px on touch: the panel '+Math.round(tt.side)+' of '+tt.vw+', buttons '+sz(tt)+', no «×»', tt.side<tt.vw && tt.bs.every(b=>Math.round(b.w)===24 && Math.round(b.h)===24) && !(await pg.locator('#sideX').isVisible()));
+  // 10m a touch tablet (800 px): the narrower panel and no «×», and the same long press (by input, not width)
+  await pg.setViewportSize({width:800,height:1000}); await pg.click('#sideBtn'); await pg.waitForTimeout(400);
+  const rest=await pg.locator('#list .item[data-id="n3"] .it-p').isVisible(); await hold(pg.locator('#list .item[data-id="n3"]')); const tt=await targets(pg,'n3');
+  ok('10m at 800px on touch: the panel '+Math.round(tt.side)+' of '+tt.vw+', no «×», no buttons at rest ('+rest+'), after a long press '+sz(tt), tt.side<tt.vw && !rest && tt.bs.every(b=>b.w>=48 && b.h>=48) && !(await pg.locator('#sideX').isVisible()));
   console.log(errs.length? errs.join('\n') : '✓ phone: no errors'); if(errs.length) fails++;
   await ctx.close(); }
 
