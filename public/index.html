@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102404">
+<meta name="baobook-build" content="2026102405">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102404" integrity="sha384-wa6cAMCVHp5MNBLGVOxxNJr9hQi0O0VNPGtWazcAmsZb33Re8pGNrLWTaBwn0fQR"></script>
-<script src="cloud.js?b=2026102404" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102405" integrity="sha384-CBhr8xFf3Hm22LRavgqnAM/3xRUkL1bMlwq92wEu3g225rU9kQ1fGSlm3r3z1nCF"></script>
+<script src="cloud.js?b=2026102405" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -808,7 +808,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
 const SRI={'locales/en.json':'sha384-huPIdDdNje7cRrd04nDutEW33lH65VX5Gfan1BQHqYz5s3jJopt2X82+Zb3liKEC', 'locales/uk.json':'sha384-OEu1bzNXD2lTMxp5LAKLRu04GP9/G9zh2Eyt40JIJihJH8BRII02ASNa8miJjAKt'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102404;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102405;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -852,7 +852,7 @@ const BOOT={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5), at
 function bootSave(){ try{ const all=(JSON.parse(localStorage.getItem('sheet:boot')||'[]')||[]).filter(r=>r && r.id!==BOOT.id); all.push(BOOT); localStorage.setItem('sheet:boot', JSON.stringify(all.slice(-5))); }catch(_){} }
 function boot(step){ BOOT.m.push([step, Math.round(performance.now())]); BOOT.w=Math.round(performance.now()); bootSave(); }
 boot('main');
-const DEBUG={failSave:false, relist:()=>renderList()}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
+const DEBUG={failSave:false, relist:()=>renderList(), fmt:{refused:0}}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
@@ -986,6 +986,11 @@ const IDB_NAME='sheet';
 // 4 (SYNC-PLAN 4.9, PR 4a): no new store; the upgrade from 3 fires versionchange in every tab of the code before it, which then turns view-only (idbLost),
 // so no old tab writes versions past the core's queue once the version sender runs
 const IDB_VER=4, IDB_STORES=['notes','versions','blobs','sync'];
+// FORMAT (IDB-BARRIER-PLAN §4): the data format of this code, the `format` record in `sync`. IDB_VER is raised only when stores or indexes change;
+// FORMAT when tabs of older code must stop writing (a field changes meaning, a write moves to another path). Every tab records it at start (an
+// ordinary write, nobody is waited for), and every write transaction reads it first: a value above this code's aborts the write and turns the tab
+// view-only (fmtNewer), so a tab woken from freezing stops at its first write. A change of stores raises both
+const FORMAT=4, UP_LOCK='baobook:idb-upgrade';   // UP_LOCK: held while the start's upgrade request waits, so another tab's start queued behind it waits too (§4.7)
 // opening the database at start (IDB-FALLBACK-PLAN §4.1): OPEN_WAIT, the silence deadline of one request (no event at all); OPEN_RETRY, the waits
 // before the attempts that follow a failure that finished (`error`, a throw); PROBE_WAIT, the deadline of a background probe under the
 // `storage` lock; RELOADS_MAX, the automatic reloads a tab allows itself in one lock → reload → lock loop (sessionStorage sheet:idb-reloads)
@@ -1005,18 +1010,23 @@ const idb={ db:null, opening:null, silent:false, want:false, back:false, waiting
   // silence or a lasting `blocked` is the waiting state (idbWait), and its late success goes on with the start (IDB-BARRIER-PLAN §3)
   open(o={}){ if(idb.opening) return idb.opening; return idb.opening=new Promise((res,rej)=>{ if(!window.indexedDB) return rej(new Error('no indexedDB'));
     let dead=false, dt=0;
-    const go=v=>{ if(dead) return; let r, bt=0, wt=0; const up=!!(v && o.deadline); try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
-      clearTimeout(dt); if(o.deadline && !up) dt=setTimeout(()=>{ dead=true; rej(Object.assign(new Error('timeout'),{silent:true})); }, o.deadline);
-      if(up) wt=setTimeout(()=>idbWait('silent'), UPGRADE_WAIT);
-      const answered=()=>{ clearTimeout(dt); clearTimeout(bt); clearTimeout(wt); if(up) idbWaitOff(); };   // the request's first real answer ends every timer of the wait
+    const go=v=>{ if(dead) return; let r, bt=0, wt=0, gone=false, over=false, held=false, rel=null, ac=null; const up=!!(v && o.deadline); try{ r=v? indexedDB.open(IDB_NAME,v) : indexedDB.open(IDB_NAME); }catch(e){ return rej(e); }
+      const kill=()=>{ dead=true; rej(Object.assign(new Error('timeout'),{silent:true})); };
+      // the versionless open's deadline: when another tab's start holds UP_LOCK, this request is queued behind that tab's waiting upgrade, not dead (§4.7)
+      clearTimeout(dt); if(o.deadline && !up) dt=setTimeout(()=>{ let q=null; try{ q=hasLocks() && navigator.locks.query? navigator.locks.query() : null; }catch(_){} if(!q) return kill();
+        q.then(st=>{ if(gone) return; if((st.held||[]).some(l=>l.name===UP_LOCK)){ held=true; idbWait('silent'); } else kill(); }, ()=>{ if(!gone) kill(); }); }, o.deadline);
+      if(up){ wt=setTimeout(()=>idbWait('silent'), UPGRADE_WAIT);
+        if(hasLocks()) try{ ac=new AbortController(); navigator.locks.request(UP_LOCK, {signal:ac.signal}, ()=>over? null : new Promise(r=>rel=r)).catch(()=>{}); }catch(_){} }   // one release per request: a grant after success or error is dropped (ac) or returns at once (over)
+      const answered=()=>{ gone=true; clearTimeout(dt); clearTimeout(bt); clearTimeout(wt); if(up || held) idbWaitOff(); };   // the request's first real answer ends every timer of the wait
+      const settled=()=>{ answered(); over=true; if(ac){ try{ ac.abort(); }catch(_){} } if(rel) rel(); };   // the lock goes only with success or error: during the upgrade a tab queued behind it still waits
       r.onupgradeneeded=()=>{ answered(); if(!v) return; const d=r.result; if(!d.objectStoreNames.contains('notes')) d.createObjectStore('notes',{keyPath:'id'});   // a dead attempt's upgrade still makes the stores: the version goes up with this transaction either way, and a database at IDB_VER is never mended later
         if(!d.objectStoreNames.contains('versions')){ const s=d.createObjectStore('versions',{keyPath:'id'}); s.createIndex('note_t',['note','t']); s.createIndex('t','t'); }   // версії нотаток (VERSIONS-PLAN 3.1)
         if(!d.objectStoreNames.contains('blobs')) d.createObjectStore('blobs',{keyPath:['note','h']});   // тіла блоків за хешем вмісту
         if(!d.objectStoreNames.contains('sync')) d.createObjectStore('sync',{keyPath:'k'});   // sync metadata (SYNC-PLAN 4.3): format, owner, epoch, per-note meta, queue, seen, cursor…
-        try{ r.transaction.objectStore('sync').put({k:'format', v:IDB_VER}); }catch(_){} };
-      r.onsuccess=()=>{ answered(); const d=r.result;
+        try{ r.transaction.objectStore('sync').put({k:'format', v:FORMAT}); }catch(_){} };
+      r.onsuccess=()=>{ settled(); const d=r.result; let lost=false; d.onversionchange=()=>{ lost=true; try{ d.close(); }catch(_){} };   // until done() sets idbLost: a newer app's upgrade (or a delete) during the format transaction below is not kept waiting by this connection
         if(dead){ try{ d.close(); }catch(_){} if(LOCK==='storage') idbBack(); return; }   // the hung request answered at last: the storage is back
-        const done=()=>{ idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };
+        const done=()=>{ if(lost) return res(); idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };   // a connection closed by that handler is never adopted: idb.db stays null and the next use opens again
         if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
         // the second half of the format check, before any upgrade: a `format` record above this code's version marks data of a newer app, which opens
         // view-only as it is (an upgrade would write this code's format over it). Then a new device (an empty v1 from the open without a version) or an
@@ -1024,25 +1034,51 @@ const idb={ db:null, opening:null, silent:false, want:false, back:false, waiting
         // IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
         const next=()=>{ if(!LOCK && d.version<IDB_VER){ d.close(); return go(IDB_VER); } done(); };
         if(!d.objectStoreNames.contains('sync')) return next();
-        try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>IDB_VER){ setLock('newer'); return done(); } next(); }; g.onerror=()=>next(); }catch(_){ next(); } };
-      r.onerror=()=>{ answered(); if(dead){ if(LOCK==='storage' && idb.silent){ idb.silent=false; idbWatch(); } return; }   // the hung request failed at last: the queue is clear, the probing may start
+        // one readwrite transaction: a format above this code's is a newer app's data (view-only); a lower one or none is raised to FORMAT here, before any
+        // upgrade request, and the other tabs are told at once (§4.2 item 1): those with the guard stop writing even if the upgrade then has to wait
+        try{ const t=d.transaction('sync','readwrite'), g=t.objectStore('sync').get('format'); let raised=false, newer=false;
+          g.onsuccess=()=>{ const f=g.result? +g.result.v : 0; if(f>FORMAT){ newer=true; return; } if(f<FORMAT && !LOCK){ t.objectStore('sync').put({k:'format', v:FORMAT}); raised=true; } };
+          t.oncomplete=()=>{ if(newer){ setLock('newer'); return done(); } if(raised) tellTabs({t:'format', v:FORMAT}); next(); }; t.onabort=()=>{ if(newer){ setLock('newer'); return done(); } try{ d.close(); }catch(_){} rej(t.error||new Error('format')); }; }catch(e){ try{ d.close(); }catch(_){} rej(e); } };   // the format not confirmed (the transaction aborted or could not start): a failed open, never a start without the barrier — the start retries it (idbOpenRetry) and ends view-only if it keeps failing
+      r.onerror=()=>{ settled(); if(dead){ if(LOCK==='storage' && idb.silent){ idb.silent=false; idbWatch(); } return; }   // the hung request failed at last: the queue is clear, the probing may start
         if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
       r.onblocked=()=>{ clearTimeout(dt); clearTimeout(bt); clearTimeout(wt); if(dead) return; bt=setTimeout(()=>{ if(up) return idbWait('blocked'); setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block waits (the start) or stops the writes (later)
     go(0); }).finally(()=>{ idb.opening=null; }); },
-  async run(mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction('notes',mode); q=fn(t.objectStore('notes')); }catch(e){ return rej(e); }
-    t.oncomplete=()=>res(q? q.result : undefined); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },
-  async tx(stores,mode,fn){ const w=mode==='readwrite'; if(w && LOCK) throw new Error('locked'); if(!idb.db) await idb.open(); if(w && LOCK) throw new Error('locked'); return new Promise((res,rej)=>{ let t,q; try{ t=idb.db.transaction(stores,mode); q=fn(t); }catch(e){ return rej(e); }
-    t.oncomplete=()=>res(q&&q.result!==undefined? q.result : q); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
+  async run(mode,fn){ return idb.tx(['notes'], mode, t=>fn(t.objectStore('notes')), true); },
+  // `one`: idb.run's shape, the result of fn's request or undefined. A write first reads the format (fmtGuard) and calls fn only when it is not newer,
+  // inside the same transaction, so a refused write never queued a request; `failed` keeps the refusal over the AbortError and the null t.error that follow
+  async tx(stores,mode,fn,one){ const w=mode==='readwrite'; if(w && LOCK) throw fmtLocked(); if(!idb.db) await idb.open(); if(w && LOCK) throw fmtLocked(); return new Promise((res,rej)=>{ let t,q,failed=null;
+    const call=()=>{ try{ q=fn(t); }catch(e){ failed=failed||e; try{ t.abort(); }catch(_){} } };
+    try{ t=idb.db.transaction(w? fmtScope(idb.db, stores) : stores, mode); if(w) fmtGuard(t, call, e=>{ failed=e; }); else call(); }catch(e){ return rej(e); }
+    t.oncomplete=()=>res(one? (q? q.result : undefined) : (q&&q.result!==undefined? q.result : q)); t.onerror=()=>rej(failed||t.error); t.onabort=()=>rej(failed||t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
+/* the format guard of every write (IDB-BARRIER-PLAN §4.2 item 2): `sync` joins the scope, the transaction's first request reads `format`, and only a
+   value at or below FORMAT (or none, or no `sync` store in a damaged database) lets `go` run the write. A newer one records the refusal first (`fail`,
+   a {code:'locked'} error the transaction's promise rejects with), turns the tab view-only and aborts: nothing of the write was queued */
+const fmtScope=(d,stores)=>stores.includes('sync') || !d.objectStoreNames.contains('sync')? stores : [...stores,'sync'];   // a damaged database without `sync` keeps the scope it asked for (the guard then lets the write go)
+const fmtLocked=()=>Object.assign(new Error('locked'),{code:'locked'});
+function fmtGuard(t, go, fail){ if(!t.objectStoreNames.contains('sync')) return go(); const g=t.objectStore('sync').get('format');
+  g.onsuccess=()=>{ if(g.result && +g.result.v>FORMAT){ DEBUG.fmt.refused++; fail(fmtLocked()); fmtNewer(); try{ t.abort(); }catch(_){} return; } go(); }; }
+// a newer format is in the store: this tab was opened before a newer app raised it. View-only («оновився в іншій вкладці», with «Експортувати
+// незбережене» when an edit could not be written); the connection closes, so a later real upgrade does not wait for this tab. No retrySave(): it would be refused
+function fmtNewer(){ setLock('updated'); const d=idb.db; if(d && LOCK==='updated'){ idb.db=null; try{ d.close(); }catch(_){} } }
+// a tab shown again, or back from the page cache, reads the format once: an awake tab stops before its next keystroke, not at it (§4.2 item 5)
+function fmtCheck(){ const d=idb.db; if(!d || LOCK || !d.objectStoreNames.contains('sync')) return; try{ const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ if(g.result && +g.result.v>FORMAT) fmtNewer(); }; }catch(_){} }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) fmtCheck(); }); window.addEventListener('pageshow',e=>{ if(e.persisted) fmtCheck(); });
+// the test's hands (appformatgen): the tab's lock and connection, and one write through each path, answering the refusal's code
+Object.assign(DEBUG.fmt, { state:()=>({lock:LOCK, refused:DEBUG.fmt.refused, db:!!idb.db}),
+  ops:{ named:()=>vwrite(cur.id, manifestOf(cur.title, blocks), blocks, {t:Date.now(), w:Date.now(), reason:'manual', name:'test'}),
+    imp:()=>SYNC.importMany(()=>[{id:'imp1', title:'test', blocks:[], created:Date.now(), updated:Date.now()}], {id:'imp1'}).then(r=>{ if(!r || !r.ok) throw (r && r.error) || {code:r && r.code}; }),
+    auto:()=>vwrite(cur.id, manifestOf(cur.title, cur.blocks), cur.blocks, {t:Date.now(), w:Date.now(), reason:'auto'}), del:()=>idb.del(cur.id) } });
 /* SDB: the transactional store the sync core runs on (sync.js, docs/SYNC-PLAN.md PR 1). One IndexedDB transaction, created synchronously when the connection is
    open, so a save made in idbLost still lands before close(); inside `fn` only the transaction's own requests may be awaited (a foreign await commits it early) */
 const SDB={ tx(stores, mode, fn){ const locked=()=>Object.assign(new Error('locked'),{code:'locked'}); if(mode==='readwrite' && LOCK) return Promise.reject(locked()); if(!idb.db) return idb.open().then(()=>SDB.tx(stores,mode,fn));
     if(mode==='readwrite' && DEBUG.saveGate) return Promise.resolve().then(()=>DEBUG.saveGate(stores)).then(()=>SDB.run(stores,mode,fn)); return SDB.run(stores,mode,fn); },   // saveGate: a test's hand on every write (appsave): it waits for the promise, or fails with its error
-  run(stores, mode, fn){ return new Promise((res0,rej)=>{ const res=v=>{ if(mode==='readwrite' && stores.includes('notes') && DEBUG.saveHold) Promise.resolve(DEBUG.saveHold(stores)).then(()=>res0(v), rej); else res0(v); };   /* saveHold: a test's hand after the write landed (appstatus) */ let t; try{ t=idb.db.transaction(stores.filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); }   // a store a damaged database lacks is left out: only a request to it fails
+  run(stores, mode, fn){ return new Promise((res0,rej)=>{ const res=v=>{ if(mode==='readwrite' && stores.includes('notes') && DEBUG.saveHold) Promise.resolve(DEBUG.saveHold(stores)).then(()=>res0(v), rej); else res0(v); };   /* saveHold: a test's hand after the write landed (appstatus) */ let t; try{ t=idb.db.transaction((mode==='readwrite'? fmtScope(idb.db, stores) : stores).filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); }   // a store a damaged database lacks is left out: only a request to it fails
     const req=r=>new Promise((ok,ko)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); });
     const T={ get:(st,k)=>req(t.objectStore(st).get(k)), put:(st,v)=>{ t.objectStore(st).put(v); }, del:(st,k)=>{ t.objectStore(st).delete(k); },
       range:(st,a,b)=>req(t.objectStore(st).getAll(IDBKeyRange.bound(a,b))), byNote:(st,n)=>req(t.objectStore(st).index('note_t').getAll(IDBKeyRange.bound([n,-Infinity],[n,Infinity]))), blobs:n=>req(t.objectStore('blobs').getAll(IDBKeyRange.bound([n,''],[n,'￿']))) };
-    let v, failed=null; Promise.resolve().then(()=>fn(T)).then(x=>{ v=x; }, e=>{ failed=e; try{ t.abort(); }catch(_){} });
+    let v, failed=null; const w=mode==='readwrite', go=()=>Promise.resolve().then(()=>fn(T)).then(x=>{ v=x; }, e=>{ failed=failed||e; try{ t.abort(); }catch(_){} });
+    if(w) fmtGuard(t, go, e=>{ failed=e; }); else go();   // a write reads the format first and runs fn only when it is not newer (fmtGuard)
     t.oncomplete=()=>res(v); t.onerror=()=>rej(failed||t.error); t.onabort=()=>rej(failed||t.error||new Error('abort')); }); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? loc('save.reason.full') : loc('save.reason.error',{name:n||loc('save.reason.unknown')}); };
@@ -1270,7 +1306,7 @@ function uaName(){ const u=navigator.userAgent||'', b=/Edg\//.test(u)? 'Edge' : 
 function makeEngine(o={}){ if(!S.devId) saveS({devId:'d'+now().toString(36)+Math.random().toString(36).slice(2,8)}); if(!S.devName) saveS({devName:uaName()}); const ref={};
   // «reload»: the engine's check found another owner in the store (another tab signed in or removed the notes, §4.4 step 1). Only the current engine may lock
   // the tab (a replaced one may still finish a step), and after the transaction that reported it, since the status comes from inside its callback
-  ref.eng=SC.makeSync({db:SDB, format:IDB_VER, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
+  ref.eng=SC.makeSync({db:SDB, format:FORMAT, cloud:o.cloud||null, now:()=>Date.now()+(DEBUG.sync.clock||0), vnow, random:Math.random, cleanRich, env:o.env||SYNC_ENV, devId:o.devId||S.devId, devName:o.devName||S.devName, budgets:o.budgets||TUNE.budgets, pace:o.pace||TUNE.pace,
     onChange:ev=>{ if(SYNC===ref.eng) syncChanged(ev); }, onStatus:(code,n)=>{ if(SYNC!==ref.eng) return; DEBUG.sync.status={code,n}; if(LEAD.on) tellTabs(stMsg()); accStatus(); if(code==='reload') setTimeout(()=>{ if(SYNC===ref.eng) setLock('epoch'); },0); if(code==='reauth') reauthNeeded(); }, onHistory:id=>{ if(SYNC===ref.eng) syncHistory(id); }, wake:()=>{ if(SYNC===ref.eng) syncWake(); }, sweep:()=>vsweep(), log:ev=>{ if(/[?&]debug=1/.test(location.search)) console.debug('sync', ev); }});
   return ref.eng; }
 function syncWake(){ if(!SYNC || driving || LOCK || !STARTED) return; const eng=SYNC; driving=true; clearTimeout(driveT);   // not before the start is done: documents applied then would not reach the list (syncChanged drops them)
@@ -2126,12 +2162,13 @@ const TABQ=[];   // messages of other tabs that came before the start was done: 
 function tabMsg(m){ if(keptView() || DYING) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
   else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ ACC.leadSt={code:m.code, n:m.n}; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
+  else if(m.t==='format'){ if(+m.v>FORMAT) fmtNewer(); }   // a tab of a newer app recorded its format (IDB-BARRIER-PLAN §4.2 item 4)
   else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
   else if(db.backend==='idb' && m.t==='gone') removeStored(m.id);
   else if(db.backend==='idb' && m.t==='copy'){ copiesEvent(m); copyToast(m); } else if(db.backend==='idb' && m.t==='copies') copiesEvent(m);   // a copy made or removed in another tab: recount that note
   else if(m.t==='ver' || m.t==='vput'){ if(H.open && cur && cur.id===m.note) loadHist(); }   // a version changed in another tab (SYNC-PLAN 4.9): an open «Історія» of that note reloads
-  if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
+  if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?','format'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
 if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
 async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok}=await storedWithLrev(); if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
 

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const WEIGHTS = {
-  appidbfail: 110, appidbfail2: 105, appidbfail3: 110, appidbwait: 110, apppin: 96, applistacts: 74, appformat: 74, appnavwait: 62, appsend: 57, apprecv: 57, apptrash: 39,
+  appidbfail: 110, appidbfail2: 105, appidbfail3: 110, appidbwait: 110, appformatgen: 30, apppin: 96, applistacts: 74, appformat: 74, appnavwait: 62, appsend: 57, apprecv: 57, apptrash: 39,
   apprevive: 37, apptotals: 36, appswap: 26, appboot: 26, appsave: 25, appask: 24, appleader: 23, appversions3: 22,
   appsync: 21, appundo: 20, appsri: 20, appmenu: 20, appupdate: 18, appeditor: 18, appcard: 18, appnav: 16, apparchive: 16,
   applinks: 15, appchip: 15, apptouch: 14, appconflict: 60,
