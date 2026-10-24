@@ -36,9 +36,12 @@ export function mount(host){ const {doc, t}=host;
   // drawn again only when what it shows changed: a redraw replaces the buttons (a press in progress) and the name field
   const draw=()=>{ if(!dlg.open) return; const p=now(), key=JSON.stringify(p);
     if(key===drawn) return; drawn=key; renderPanel(body, p, t, host.when); };
-  // the counts and today's use come from the store: read when the panel opens and again shortly after each change while it is open
+  // the counts and today's use come from the store: read when the panel opens, shortly after each status change (the queue's length is part of
+  // it) and on the timer below while it is open
   async function aux(){ const n=++auxN; let c=null, u=null; try{ c=await host.counts(); }catch(_){} try{ u=await host.used(); }catch(_){} if(n!==auxN) return; counts=c; used=u; draw(); }
   const auxSoon=()=>{ clearTimeout(auxT); auxT=setTimeout(()=>{ if(dlg.open) aux(); }, 250); };
+  // and every 2 s: today's use moves with each read and write, and in a tab that does not lead nothing tells it so
+  setInterval(()=>{ if(dlg.open) aux(); }, 2000);
   // the button and the menu row; the panel follows when open
   function render(){ const st=statusOf(host.account(), host.core()), text=renderStatus(host.button, host.line, st, st? TEXT[st.code] : null, t);
     host.report(st? {code:st.code, text} : null); draw(); if(dlg.open) auxSoon(); }

@@ -60,6 +60,14 @@ await connect(pg); await untilUI(pg, 'synced');
   await pg.click('#histBtn'); await pg.locator('#histList .hv[data-id="now"]').waitFor(); await pg.click('#histMore'); await pg.locator('.amenu .mi',{hasText:'Зафіксувати версію…'}).click(); await pg.fill('#histName','Відмовлена'); await pg.keyboard.press('Enter');
   await pg.click('#histBtn'); const e=await until(async()=>{ await settle(pg,100); const u=await ui(pg); return u && u.code==='error'? u : null; }, 8000); const p=await openBtn(pg);
   ok('3 a refused version: «'+(e&&e.text)+'», the panel lists it with «хмара відмовила» ('+(p&&p.errs.join(' | '))+')', !!e && e.text===await loc(pg,'sync.st.error',{n:1}) && !!p && p.errs.length===1 && p.errs[0].includes(await loc(pg,'account.errVersion')) && p.errs[0].includes(await loc(pg,'account.reason.invalid')));
+  // 3d: the error stays, a note is held and then goes: the status reads the same all along, the open panel still follows the queue and the use
+  await pg.keyboard.press('Escape'); let rel; const hold=new Promise(r=>rel=r); cloud.fault('hold',{dev:'D', op:'txn', promise:hold});
+  await pg.click('#newBtn'); await pg.waitForTimeout(300); await typeAt(pg,500,300,'поки помилка'); await until(()=>pg.evaluate(()=>sheetDebug.sync.tries().length>0), 5000);
+  const ERR=await loc(pg,'sync.st.error',{n:1}), NOTE=await loc(pg,'account.unsyncedNotes',{n:1}); await openBtn(pg);
+  const pre=await until(async()=>{ const x=await panel(pg); return x && x.counts.includes(NOTE)? x : null; }, 3000); const u0=await pg.evaluate(()=>sheetDebug.sync.engine().usedToday());
+  rel(); let last=null; const post=await until(async()=>{ const x=await panel(pg), u=await pg.evaluate(()=>sheetDebug.sync.engine().usedToday()); last=x;
+    const r=await loc(pg,'account.reads',{n:u.reads, max:20000}), w=await loc(pg,'account.writes',{n:u.writes, max:5000}); return x && !x.counts.includes(NOTE) && u.writes>u0.writes && x.sub.includes(r) && x.sub.includes(w)? x : null; }, 8000);
+  ok('3d a version stays refused while a held note goes: «'+(last&&last.st)+'» all along, and the open panel drops the note\'s count and shows the new use ('+JSON.stringify(last&&[last.counts, last.sub])+')', !!pre && pre.st===ERR && !!post && post.st===ERR);
   await pg.keyboard.press('Escape');
   await pg.click('#histBtn'); await pg.locator('#histList .hv[data-id="now"]').waitFor(); await openBtn(pg); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
   ok('3b Esc over «Історія» closes only the panel: the history stays open', !(await panel(pg)) && await pg.evaluate(()=>!document.getElementById('hist').hidden)); await pg.click('#histBtn'); }

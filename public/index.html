@@ -794,7 +794,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102407" integrity="sha384-IW3wPSRNJLWtfbzo+plHZn86bmXLZl4sqjUMF3fHz+v4MGshS2P+dkVhwyAip/dJ"></script>
+<script src="sync.js?b=2026102407" integrity="sha384-OahdLBI9/0iRIJQ1kaO6+4mDE2kwJnRxPmug2N5BpcXOIUdZ6db7w7g4RFmxgfGN"></script>
 <script src="cloud.js?b=2026102407" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -806,7 +806,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-XiLt6tNLEyC+2YxH6rxgCXH96hWT2Up/p2FLyltFx3hvnY4rl+sekZ8vB8ix22tw', 'account/panel.js':'sha384-kxF/FatwS9nM8ziwt/37fbsLRvcj86ABLDlw7YiWduo8U9Vz/HEosmHnwX+wdu5a', 'account/view.js':'sha384-4qzV8nVHBIQmbQmn1MNS7YnnQFrCnVZmhOpF9xyoaepQOZ564NPXnmwzMRJsnj8j', 'locales/en.json':'sha384-VzjrFhgXwD6b9xAN4cFvG4II39M39Aub7e6oPeamUURDQcxxpwd8VlA8sW0Um2d2', 'locales/uk.json':'sha384-DeH7bofeNbBrA2QF4V2/ZUWe2485sNKhJFDNHERehvi27sE6PBVwAxtiRBllKqhQ'};
+const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-XiLt6tNLEyC+2YxH6rxgCXH96hWT2Up/p2FLyltFx3hvnY4rl+sekZ8vB8ix22tw', 'account/panel.js':'sha384-dsetcjEgcrmtbJ+eswf7h2/pyVM/Ybw/mEwdonb1IydZ4iL9xPkBgfOA4SLoJeQD', 'account/view.js':'sha384-4qzV8nVHBIQmbQmn1MNS7YnnQFrCnVZmhOpF9xyoaepQOZ564NPXnmwzMRJsnj8j', 'locales/en.json':'sha384-VzjrFhgXwD6b9xAN4cFvG4II39M39Aub7e6oPeamUURDQcxxpwd8VlA8sW0Um2d2', 'locales/uk.json':'sha384-DeH7bofeNbBrA2QF4V2/ZUWe2485sNKhJFDNHERehvi27sE6PBVwAxtiRBllKqhQ'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
 const BUILD=2026102407;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=

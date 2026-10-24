@@ -833,7 +833,7 @@ function makeSync(deps){
     const st={code, n: code==='scan'? S.scanFound : code==='error'? errors.length : jobs, jobs, errorN:errors.length, errors:errors.slice(0,20), checked, vdone};
     setStatus(code, st.n, st); return st; }
   // every status report goes through here, so a direct report (a pass's progress, denied, no space) and the computed one never disagree
-  function setStatus(code, n, full){ const keep=S.lastStatus? {jobs:S.lastStatus.jobs, errorN:S.lastStatus.errorN, errors:S.lastStatus.errors, checked:S.lastStatus.checked, vdone:S.lastStatus.vdone} : {}, st={...(full||keep), code, n:n||0}, key=JSON.stringify([code, st.n, st.errorN||0, st.checked||0, !!st.vdone, (st.errors||[]).map(e=>e.id)]);
+  function setStatus(code, n, full){ const keep=S.lastStatus? {jobs:S.lastStatus.jobs, errorN:S.lastStatus.errorN, errors:S.lastStatus.errors, checked:S.lastStatus.checked, vdone:S.lastStatus.vdone} : {}, st={...(full||keep), code, n:n||0}, key=JSON.stringify([code, st.n, st.jobs||0, st.errorN||0, st.checked||0, !!st.vdone, (st.errors||[]).map(e=>e.id)]);
     if(!S.lastStatus || S.lastStatus.key!==key){ S.lastStatus={...st, key}; emit(deps.onStatus, code, st.n, st); } }
   // the next step's time; the version queue counts with its retry time and the device pace; a job no pick would take (an error that blocks it, no
   // network, no access) sets no time: going online or a new owner wakes the engine itself
