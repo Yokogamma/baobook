@@ -943,9 +943,11 @@ function makeSync(deps){
     catch(err){ return {ok:false, code:codeOf(err), error:err}; } }
   // «Прибрати» and «Прибрати конфліктні копії (N)»: local, one transaction over `versions` with the epoch check (no job: copies never sync); the
   // removed records come back for the undo
-  async function dropCopies(note, ids){ if(!S.loaded) await load();
-    try{ return await tx(['versions','sync'], async(t,after)=>{ const removed=[]; for(const id of ids){ const v=await t.get('versions',id); if(v && v.reason==='copy' && v.note===note){ t.del('versions',id); removed.push(v); } }
-      if(removed.length) after(()=>{ emit(deps.onHistory,note); emit(deps.onChange,{id:note, kind:'copies', note}); }); return {ok:true, removed}; }); }
+  // o.last: the page asked about removing the last copy of a note in the trash; without it that removal is refused (code 'last'), whatever the page believed
+  async function dropCopies(note, ids, o={}){ if(!S.loaded) await load();
+    try{ return await tx(['notes','versions','sync'], async(t,after)=>{ const C=await t.get('notes',note), all=(await versionsOf(t,note)).filter(v=>v.reason==='copy'), drop=all.filter(v=>ids.includes(v.id)), last=!!(C && C.deleted) && drop.length>0 && drop.length===all.length;
+      if(last && !o.last) return {ok:false, code:'last'}; for(const v of drop) t.del('versions',v.id);
+      if(drop.length) after(()=>{ emit(deps.onHistory,note); emit(deps.onChange,{id:note, kind:'copies', note}); }); return {ok:true, removed:drop, last}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function putCopies(note, recs){ if(!S.loaded) await load();
     try{ return await tx(['notes','versions','sync'], async(t,after)=>{ const C=await ownerOf(t, note); if(!C) return {ok:false, code:'gone'};

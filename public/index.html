@@ -794,7 +794,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102405" integrity="sha384-CBhr8xFf3Hm22LRavgqnAM/3xRUkL1bMlwq92wEu3g225rU9kQ1fGSlm3r3z1nCF"></script>
+<script src="sync.js?b=2026102405" integrity="sha384-7ztJ1yoXKJP+n9ZtkDIhEa+0EE8Tx2LOS0Vndx69bgi8pfhSWxHZasUZ0Ndw5GFq"></script>
 <script src="cloud.js?b=2026102405" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -2568,7 +2568,7 @@ const UNDO_MS=7000, UNDO_MAX=20, UNDO_TOTAL=200, UNDO_BYTES=2e6; const undoStack
 // «Відновити» and «Прибрати», SYNC-PLAN 4.19) stays
 function undoStale(id){ const st=undoStacks.get(id); if(!st) return; const k=st.filter(e=>e.safe); if(k.length) undoStacks.set(id,k); else undoStacks.delete(id); }
 function undoStack(id){ id=id||(cur&&cur.id); if(!undoStacks.has(id)) undoStacks.set(id,[]); return undoStacks.get(id); }
-function offerUndo(msg, restore, o={}){ if(!cur) return; const st=undoStack(); st.push({msg, restore, size:o.size||0, at:Date.now(), ro:!!o.ro, safe:!!o.safe}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
+function offerUndo(msg, restore, o={}){ const id=o.note||(cur&&cur.id); if(!id) return; const st=undoStack(id); st.push({msg, restore, size:o.size||0, at:Date.now(), ro:!!o.ro, safe:!!o.safe}); while(st.length>UNDO_MAX) st.shift(); trimUndo(); if(!cur || cur.id!==id) return; if(!o.quiet) showUndo(msg, !!o.big); else if(!undoEl.hidden) hideUndo(); }   // o.note: a step that finished after the note was left goes onto that note's stack, with no toast here   // a silent entry hides the toast: its button would now undo that entry, not what the toast says
 function trimUndo(){ for(;;){ let total=0, bytes=0, oldest=null, newest=null; for(const st of undoStacks.values()){ total+=st.length; for(const e of st){ bytes+=e.size; if(!newest || e.at>=newest.at) newest=e; } if(st.length && (!oldest || st[0].at<oldest[0].at)) oldest=st; } if(!oldest || (total<=UNDO_TOTAL && bytes<=UNDO_BYTES) || oldest[0]===newest) return; oldest.shift(); } }   // the newest entry is kept whatever its size, until the next action (SYNC-PLAN 4.19)   // найстаріші записи витісняються першими, з будь-якої нотатки
 function showUndo(msg, big){ ACT=null; undoBtn.innerHTML=loc('undo.button'); clearTimeout(undoT); undoT=null; clearTimeout(undoHideT); cancelAnimationFrame(undoRaf); undoMsg.textContent=msg; undoEl.hidden=false; toast.classList.remove('show'); layoutBottom(); fabSync(); revealCaret(); undoRaf=requestAnimationFrame(()=>undoEl.classList.add('show')); if(!big) undoT=setTimeout(hideUndo,UNDO_MS); }
 function hideUndo(){ ACT=null; clearTimeout(undoT); undoT=null; cancelAnimationFrame(undoRaf); undoEl.classList.remove('show'); clearTimeout(undoHideT); undoHideT=setTimeout(()=>{ if(!undoEl.classList.contains('show')){ undoEl.hidden=true; layoutBottom(); fabSync(); } },220); }
@@ -3127,11 +3127,12 @@ const vtext=v=>{ if(!H.txt.has(v.id)) H.txt.set(v.id, norm([v.title||'', ...verB
 async function loadHist(){ const n=cur; let list=[], bodies=[], st={};
   if(db.backend==='idb'){ try{ if(saveP) await saveP; await (VQ.get(n.id)||Promise.resolve()); [list,bodies]=await Promise.all([vlist(n.id), vbodies(n.id)]); }catch(_){} }   // versions of the last save are written after it
   if(db.backend==='idb' && SYNC && SYNC.owner){ try{ st=await SYNC.versionStates(n.id)||{}; }catch(_){} }
+  if(keptView()){ closeHist(); return; }   // the owner changed while the store was read: none of it comes onto this screen
   if(!H.open || cur!==n) return;
   H.st=st; H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
   if(H.view){ const nv=H.list.find(v=>v.id===H.view.id); if(nv) H.view=nv; }   // the shown version as stored now (named, renamed here or elsewhere): the menu and its dialogs read it
   if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
-async function openHist(){ if(H.open || !cur) return;   // read-only in the trash and in a view-only tab: versions can be viewed, nothing changes (SYNC-PLAN 4.19)
+async function openHist(){ if(H.open || !cur || keptView()) return;   // read-only in the trash and in a view-only tab: versions can be viewed, nothing changes (SYNC-PLAN 4.19); never after the owner changed: the store holds another owner's data now
   flushSave(); hideUndo(); exitSel(); closePop();
   H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.st={}; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
   hist.hidden=false; app.classList.add('hist-open'); histBtn.setAttribute('aria-pressed','true');
@@ -3222,7 +3223,7 @@ histTake.addEventListener('click',()=>takeCopy()); histDrop.addEventListener('cl
    every event of its copies (`copy`, `copies`, from the core or another tab), so a message that came between the read and the subscription cannot make it drift ══ */
 let COPIES=new Map(), ACT=null;   // ACT: the action of the toast in the undo toast's place (a conflict's «Показати»), not on the undo stack
 const copiesN=id=>COPIES.get(id)||0;
-Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld()});   // the tests' hand: the page's map, the 30-day rule now
+Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld(), lock:k=>setLock(k)});   // the tests' hand: the page's map, the 30-day rule now, a lock as another tab's change would set it
 // the read of the whole store waits a moment after the start (the leader's catch-up comes first); a note recounted meanwhile is recounted again after it
 let copiesLoading=null; const copiesLate=new Set();
 function copiesLoad(){ if(!SYNC || db.backend!=='idb') return; copiesLoading=new Promise(res=>setTimeout(res, 1500)).then(()=>SYNC.copiesCount()).then(m=>{ COPIES=m; }, ()=>{}).finally(()=>{ copiesLoading=null; for(const id of copiesLate) copiesRecount(id); copiesLate.clear(); if(STARTED) renderList(); else copiesUI(); }); }
@@ -3238,20 +3239,22 @@ function copiesEvent(m){ copiesRecount(m.note); if(H.open && cur && cur.id===m.n
 // redraws from the stored note. The undo, on the note's stack, merges the state before over what arrived meanwhile and puts the copy back
 async function takeCopy(){ const n=cur, v=H.view; if(!n || !v || v.reason!=='copy' || ro()) return; if(!(await saveNow())){ say(loc('account.unsaved')); return; }
   if(cur!==n || H.view!==v) return; const r=await SYNC.restoreCopy(n.id, v.id, {title:v.title||'', blocks:verBlocks(v)}); if(!r || !r.ok){ say(loc('conflict.failed')); return; }
-  closeHist(); LREV.set(n.id, r.lrev); await takeStored(n.id); tellTabs({t:'chg', id:n.id, lrev:r.lrev}); syncWake();
-  if(cur===n) offerUndo(loc('conflict.restored'), ()=>undoTake(n.id, r), {big:true, safe:true, size:JSON.stringify([r.before, r.copy]).length}); }
+  if(cur===n) closeHist(); LREV.set(n.id, r.lrev); await takeStored(n.id); tellTabs({t:'chg', id:n.id, lrev:r.lrev}); syncWake();
+  offerUndo(loc('conflict.restored'), ()=>undoTake(n.id, r), {note:n.id, big:true, safe:true, size:JSON.stringify([r.before, r.copy]).length}); }
 async function undoTake(id, r){ const u=await SYNC.undoRestore(id, {restored:r.note, before:r.before, copy:r.copy}); if(!u || !u.ok){ say(loc('conflict.cantUndo')); return; }
   LREV.set(u.id, u.lrev); await takeStored(u.id); tellTabs({t:'chg', id:u.id, lrev:u.lrev}); syncWake(); }
 // «Прибрати»: local, no job. The last copy of a note in the trash asks first and has no undo: the purge may take the note before an undo could run
-async function dropCopy(){ const n=cur, v=H.view; if(!n || !v || v.reason!=='copy' || LOCK) return; const last=!!n.deleted && copiesN(n.id)<=1;
-  if(last && (!await ask({title:loc('conflict.lastTitle'), text:loc('conflict.lastText'), ok:loc('conflict.drop')}) || cur!==n)) return;
-  const r=await SYNC.dropCopies(n.id, [v.id]); if(!r || !r.ok || !r.removed.length) return; H.sel='now'; showNow(); await loadHist();
-  if(!last && cur===n) offerUndo(loc('conflict.dropped'), ()=>putBack(n.id, r.removed), {big:true, safe:true, size:JSON.stringify(r.removed).length, ro:!!n.deleted}); }
+// the core decides inside its transaction whether this is the last copy of a note in the trash (another tab may have removed one meanwhile): then it asks
+async function dropCopy(){ const n=cur, v=H.view; if(!n || !v || v.reason!=='copy' || LOCK) return; const ask1=()=>ask({title:loc('conflict.lastTitle'), text:loc('conflict.lastText'), ok:loc('conflict.drop')});
+  let sure=!!n.deleted && copiesN(n.id)<=1; if(sure && (!await ask1() || cur!==n)) return;
+  let r=await SYNC.dropCopies(n.id, [v.id], {last:sure}); if(r && !r.ok && r.code==='last'){ if(!await ask1() || cur!==n) return; r=await SYNC.dropCopies(n.id, [v.id], {last:true}); }
+  if(!r || !r.ok || !r.removed.length) return; if(cur===n && H.open){ H.sel='now'; showNow(); await loadHist(); }
+  if(!r.last) offerUndo(loc('conflict.dropped'), ()=>putBack(n.id, r.removed), {note:n.id, big:true, safe:true, size:JSON.stringify(r.removed).length, ro:!!n.deleted}); }   // the last copy of a note in the trash has no undo: the purge may take the note first
 async function putBack(id, recs){ const r=await SYNC.putCopies(id, recs); if(!r || !r.ok) say(loc('conflict.cantUndo')); }
 // «Прибрати конфліктні копії (N)», from the panel's «⋯» and the trash row's menu: asks, no undo
 async function dropAllCopies(n){ if(LOCK || !n) return; const k=copiesN(n.id); if(!k) return;
   if(!await ask({title:loc('conflict.dropAllTitle',{n:k}), text:loc(n.deleted? 'conflict.dropAllTrashText' : 'conflict.dropAllText'), ok:loc('conflict.drop')})) return;
-  let ids=[]; try{ ids=(await vlist(n.id)).filter(v=>v.reason==='copy').map(v=>v.id); }catch(_){ return; } await SYNC.dropCopies(n.id, ids); if(H.open && cur===n){ H.sel='now'; showNow(); loadHist(); } }
+  let ids=[]; try{ ids=(await vlist(n.id)).filter(v=>v.reason==='copy').map(v=>v.id); }catch(_){ return; } await SYNC.dropCopies(n.id, ids, {last:true}); if(H.open && cur===n){ H.sel='now'; showNow(); loadHist(); } }
 histNameRow.addEventListener('submit',e=>{ e.preventDefault(); saveName(); });
 histName.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); histNameRow.hidden=true; histList.focus(); } });
 let hqT; histQ.addEventListener('input',()=>{ clearTimeout(hqT); hqT=setTimeout(()=>{ H.q=norm(histQ.value).trim(); renderHist(); markHits(); },120); });

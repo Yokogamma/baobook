@@ -98,4 +98,12 @@ async function conflict(cloud){ const A=await mk(cloud,'A'), B=await mk(cloud,'B
   const ids=['vI', ...A.db.all('versions').filter(v=>v.reason==='copy').map(v=>v.id)];
   ok('10a a copy from a history file and every copy bound to an account by setOwner: no job, no attempt, no document', im.ok && im.added===1 && ids.every(id=>!A.db.get('sync','out:v:'+id) && !A.db.get('sync','try:v:'+id) && !cloud.doc('versions',id)) && !!cloud.doc('notes','n1')); }
 
+/* ── 11. the last copy of a note in the trash: two removals, each of one copy, as two tabs make them; the second is refused until it is confirmed ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A',{owner:false}); const d=cloud.now()-864e5;
+  await A.db.tx(['notes','versions'],'readwrite', async t=>{ t.put('notes',{id:'tr', title:'', blocks:[], created:1, updated:d, deleted:d});
+    for(const id of ['c1','c2']) t.put('versions',{id, note:'tr', t:1, w:1, reason:'copy', keep:1, inline:1, title:'', sig:id, blocks:[], size:1}); });
+  const r1=await A.sync.dropCopies('tr',['c1']), r2=await A.sync.dropCopies('tr',['c2']);
+  ok('11 the first removal goes (not the last), the second is refused as the last one and its copy stays', r1.ok && !r1.last && !r2.ok && r2.code==='last' && !!A.db.get('versions','c2'));
+  const r3=await A.sync.dropCopies('tr',['c2'],{last:true}); ok('11a confirmed, it goes and says it was the last', r3.ok && r3.last && !A.db.get('versions','c2')); }
+
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);

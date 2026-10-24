@@ -142,5 +142,23 @@ const cloud=new TestCloud({start:Date.now()});
   const fit=await pg.evaluate(()=>{ const a=document.getElementById('histTake').getBoundingClientRect(), b=document.getElementById('histDrop').getBoundingClientRect(); return {a:[a.left,a.right,a.top], b:[b.left,b.right,b.top]}; });
   ok('6 on a phone the badge shows and the two buttons sit side by side inside 390 px ('+JSON.stringify(fit)+')', badge && fit.a[0]>=0 && fit.b[1]<=390 && fit.a[1]<=fit.b[0] && Math.abs(fit.a[2]-fit.b[2])<2 && !errs.length); await ctx.close(); }
 
+/* ── 7. leaving the note while «Відновити» is held: the undo lands on that note's stack; after the owner changed, no history opens ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
+  await pg.goto(SITE); await pg.waitForSelector('html[data-ready]',{state:'attached'}); await pg.waitForTimeout(500);
+  await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const t=r.result.transaction(['notes','versions'],'readwrite'), n=Date.now();
+    t.objectStore('notes').put({id:'nh', title:'Затримка', blocks:[{id:'b1',row:1,fx:0,text:'як є'}], created:n, updated:n});
+    t.objectStore('versions').put({id:'vch', note:'nh', t:n, w:n, reason:'copy', keep:1, inline:1, title:'Затримка', sig:'h', blocks:[{id:'b1',row:1,fx:0,h:'x',s:'з копії'}], size:7, updated:n, dev:'pc', dn:'ПК'});
+    t.oncomplete=()=>{ r.result.close(); res(); }; }; }));
+  await pg.reload(); await pg.waitForSelector('html[data-ready]',{state:'attached'}); await pg.waitForTimeout(800); await openNote(pg,'nh');
+  await pg.click('#histBtn'); await pg.waitForTimeout(400); await pg.locator('#histList .hv[data-id="vch"]').click(); await pg.waitForTimeout(200);
+  await pg.evaluate(()=>{ window.__held=new Promise(r=>{ window.__go=r; }); sheetDebug.saveGate=st=>st.includes('versions') && st.includes('notes')? window.__held : null; });
+  await pg.click('#histTake'); await pg.waitForTimeout(300); await pg.click('#newBtn'); await pg.waitForTimeout(300);
+  await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__go(); }); await pg.waitForTimeout(800);
+  const stored=async()=>(await idb(pg,'notes')).find(n=>n.id==='nh').blocks[0].text;
+  const s1=await stored(); await openNote(pg,'nh'); await pg.waitForTimeout(300); await pg.mouse.click(1000,800); await pg.keyboard.press('Escape'); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(800);
+  ok('7 restored while another note was open ('+s1+'); back on the note Ctrl+Z takes it back and the copy returns', s1==='з копії' && (await stored())==='як є' && (await copyRecs(pg,'nh')).length===1);
+  await pg.evaluate(()=>sheetDebug.lock('epoch')); await pg.evaluate(()=>document.getElementById('histBtn').click()); await pg.waitForTimeout(400);
+  ok('7a after the owner changed (the `epoch` lock) «Історія» does not open: the store is another owner\'s now', await pg.evaluate(()=>document.getElementById('hist').hidden) && !errs.length); await ctx.close(); }
+
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);
