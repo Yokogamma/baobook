@@ -18,7 +18,7 @@ function device(cloud, name, o={}){ const d={name, db:o.db||new MemStore(), onli
   d.proxy={ get:(c,i)=>cloud.get(c,i,{dev:name}), page:(c,q,n)=>cloud.page(c,q,n,{dev:name}), totals:c=>cloud.totals(c,{dev:name}), scan:(c,q,n)=>cloud.scan(c,q,n,{dev:name}), txn:(c,i,f)=>cloud.txn(c,i,f,{dev:name}),
     listen:(c,from,onDocs,onErr)=>cloud.listen(c,from,(docs,info)=>{ if(d.online) onDocs(docs,info); },onErr,{dev:name}) };
   d.sync=S.makeSync({db:d.db, cloud:d.proxy, now:()=>cloud.now()+d.clock, random:Math.random, cleanRich:h=>h, env:'test', devId:name, devName:'Device '+name, budgets:o.budgets||{reads:1e9, writes:1e9},
-    pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50}, log:e=>d.logs.push(e), onChange:e=>d.changes.push(e)});
+    pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50, ...(o.pace||{})}, log:e=>d.logs.push(e), onChange:e=>d.changes.push(e)});
   d.off=async on=>{ d.online=on; d.sync.online(on); }; return d; }
 async function mk(cloud, name, o={}){ const d=device(cloud, name, o); if(o.before) await o.before(d); await d.sync.setOwner(owner); await d.sync.start(); await d.sync.idle(300); return d; }
 const idle=async(...ds)=>{ for(let i=0;i<4;i++) for(const d of ds) await d.sync.idle(400); };
@@ -280,5 +280,63 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   full=true; await A.off(true); await idle(A);
   for(let i=0;i<6;i++){ cloud.advance(60000); await A.sync.idle(100); }
   ok('24 the collision met in the prepare step cannot be stored: at most two reads of vC, then «no space»; the job and the local version stay ('+gets+')', gets<=2 && A.sync.status().code==='nospace' && A.logs.some(e=>e.t==='nospace') && !!A.db.get('sync','out:v:vC') && A.db.get('versions','vC').name==='Моя'); }
+
+/* ── 25. a version that vanished from the cloud, found by the full pass, is created again ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A',{pace:{totalsEvery:1000, totalsAfterMatch:1000, totalsRecheck:500}});
+  await note(A,'n1','текст'); await nameNow(A,'n1','v1','Зникне'); await idle(A);
+  cloud.docs.versions.delete('v1');   // gone past the rules, with no event for the listener
+  for(let i=0;i<30 && !vdoc(cloud,'v1'); i++){ cloud.advance(600); await A.sync.idle(100); }
+  ok('25 the full pass of versions finds v1 vanished and creates it again, named', A.logs.some(e=>e.t==='vanished' && e.col==='versions' && e.id==='v1') && vdoc(cloud,'v1') && vdoc(cloud,'v1').name==='Зникне' && !A.sync.vjobs().length); }
+
+/* ── 26. a version whose document holds 200 other receipts: blocked as «receipts», counted as an error, no loop ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await nameNow(A,'n1','v1','Багато пристроїв'); await idle(A);
+  const d=vdoc(cloud,'v1'), rcpt={}; for(let i=0;i<200;i++) rcpt['dev'+i]='o'+i; cloud.docs.versions.set('v1',{...d, rcpt});
+  await A.sync.versionLocal({op:'rename', id:'v1', name:'Не пройде'}); const w0=writesOf(cloud,'A','versions'); await idle(A); for(let i=0;i<4;i++){ cloud.advance(60000); await A.sync.idle(100); }
+  const st=await A.sync.versionStates('n1');
+  ok('26 the rename meets the receipt limit: no write, the state is «error», the status «error», the job stays and is not tried again ('+st.v1+')', writesOf(cloud,'A','versions')===w0 && st.v1==='error' && A.sync.status().code==='error' && A.sync.vjobs().includes('v1') && A.logs.filter(e=>e.t==='vinsure' && e.id==='v1').length<=2); }
+
+/* ── 27. the budget counts a version write and its noteAlive read; notes go before versions ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A); const q=()=>({...A.sync._S.quota});
+  await nameNow(A,'n1','v1','Бюджет'); await idle(A);
+  let a=q(); await A.sync.versionLocal({op:'rename', id:'v1', name:'Бюджет 2'}); await idle(A); let b=q(); const rename={r:b.reads-a.reads, w:b.writes-a.writes};
+  a=q(); await A.sync.versionLocal({op:'delete', id:'v1'}); await idle(A); b=q(); const tomb={r:b.reads-a.reads, w:b.writes-a.writes};
+  ok('27 a rename and a tombstone cost one write each; the rename one read more, the noteAlive read of the rules ('+JSON.stringify({rename, tomb})+')', rename.w===1 && tomb.w===1 && rename.r===tomb.r+1);
+  await A.off(false); await note(A,'n2','друга'); await nameNow(A,'n1','v2','Після нотатки'); const c0=cloud.events.length; await A.off(true); await idle(A);
+  const order=cloud.events.slice(c0).filter(e=>e.t==='commit' && e.dev==='A').map(e=>e.col);
+  ok('27a a note job and a version job of a note already in the cloud: the note goes first ('+order.join(',')+')', order[0]==='notes' && order.includes('versions')); }
+
+/* ── 28. unsynced(): notes and versions waiting, named versions kept only here, notes with conflict copies ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await note(A,'n2','друга'); await idle(A);
+  await A.off(false); await note(A,'n1','змінено'); await nameNow(A,'n2','v1','Чекає');
+  const p={...vrec(A.db.get('notes','n2'),'vP','Неповна')}; p.blocks=p.blocks.map(e=>{ const x={...e}; delete x.s; x.h='gone'; return x; }); delete p.inline; await A.sync.versionLocal({op:'create', rec:p});
+  await A.db.tx(['versions'],'readwrite', async t=>{ t.put('versions',{...vrec(A.db.get('notes','n2'),'vC','x'), name:undefined, reason:'copy', dev:'phone', dn:'Телефон'}); });
+  const u=await A.sync.unsynced();
+  ok('28 unsynced counts one note and one version waiting, one version only here, one note with copies ('+JSON.stringify(u)+')', u.notes===1 && u.versions===1 && u.local===1 && u.copies===1); }
+
+/* ── 29. the sender tells the page when a version's state moves (sent, refused) ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A);
+  await nameNow(A,'n1','v1','Подія'); const c0=A.changes.length; await idle(A);
+  ok('29 an accepted send emits a version change of its note, so an open «Історія» turns it to «у хмарі»', A.changes.slice(c0).some(e=>e.kind==='version' && e.id==='v1' && e.note==='n1')); }
+
+/* ── 30. a rename here makes this device the stamp of the local record: «Історія» names no other device ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'), B=await mk(cloud,'B'); await note(B,'n1','текст'); await nameNow(B,'n1','v1','З B'); await idle(B,A);
+  const r0=A.db.get('versions','v1'); await A.sync.versionLocal({op:'rename', id:'v1', name:'Перейменовано на A'}); await idle(A,B); const r1=A.db.get('versions','v1');
+  ok('30 received from B the record says B; after A\'s accepted rename it says A ('+(r0&&r0.dn)+' → '+(r1&&r1.dn)+')', r0 && r0.dev==='B' && r1 && r1.dev==='A' && r1.dn==='Device A' && vdoc(cloud,'v1').dev==='A'); }
+
+/* ── 31. a version kept only here (partial) deleted while another device's full copy of the same id is still on its way: the copy is tombstoned too ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A);
+  const p={...vrec(A.db.get('notes','n1'),'vL','Тут неповна')}; p.blocks=p.blocks.map(e=>{ const x={...e}; delete x.s; x.h='gone'; return x; }); delete p.inline; await A.sync.versionLocal({op:'create', rec:p}); await idle(A);
+  const full=vrec(A.db.get('notes','n1'),'vL','Повна з B'); const w={id:'vL', note:'n1', t:full.t, name:full.name, title:full.title, blocks:full.blocks.map(e=>{ const x={...e}; delete x.h; return x; })};
+  await A.off(false); cloud.write('versions', w, {dev:'B', dn:'Device B'});   // B sent it in full; A is offline, so its delivery comes with the catch-up
+  const st=(await A.sync.versionStates('n1')).vL; await A.sync.versionLocal({op:'delete', id:'vL'}); await A.off(true); for(let i=0;i<12;i++){ cloud.advance(1000); await A.sync.idle(100); }
+  ok('31 the local-only version ('+st+') deleted here: when B\'s full copy arrives it is tombstoned, so «на всіх пристроях» is the true text', st==='partial' && vdoc(cloud,'vL') && vdoc(cloud,'vL').deleted===true && !A.db.get('versions','vL')); }
+
+/* ── 32. a received named version hashes its bodies as the sending device does: no false «changed», one sig for one snapshot ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'), B=await mk(cloud,'B');
+  await edit(A,'n1',(C,t)=>({title:'Три блоки', blocks:[{id:'a1', row:1, fx:0, text:'', html:'<b>жирний</b> текст'}, {id:'c1', row:2, fx:0, kind:'code', lang:'js', text:'x=1'}, {id:'g1', row:3, fx:0, kind:'area', text:'', w:4, h:3}], created:t, updated:t})); await idle(A);
+  await nameNow(A,'n1','vH','Хеші'); await idle(A,B);
+  const a=A.db.get('versions','vH'), b=B.db.get('versions','vH'), live=S.manifestOf(B.db.get('notes','n1').title, B.db.get('notes','n1').blocks), H=r=>r.blocks.map(e=>e.id+':'+e.h).join(',');
+  ok('32 B\'s received entries have A\'s hashes, no text or code block with the empty one (an area has no body), and the same sig ('+(b&&H(b))+')', !!b && H(a)===H(b) && !b.blocks.some(e=>e.kind!=='area' && e.h===S.hashOf('')) && a.sig===b.sig);
+  ok('32a against B\'s note the received version marks no block as changed', !!b && b.blocks.every(e=>{ const n=live.blocks.find(x=>x.id===e.id); return n && n.h===e.h; })); }
 
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);
