@@ -97,9 +97,9 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   await load(pg,[{...NOTES[2], pinned:Date.now(), updated:Date.now()+2000}]);
   ok('7c a newer copy with «pinned» pins it ('+await listText(pg)+')', /^\[Закріплені\],n3,\[Інші\]/.test(await listText(pg)) && (await stored(pg,'n3')).pinned>0);
 
-  // 7d the keyboard: Tab from the item reaches the pin first; Enter and Space toggle it, keep the focus on it and do not open the note
+  // 7d the keyboard: Tab from the item reaches the palette, then the pin (LIST-ACTIONS-PLAN 5.4); Enter and Space toggle it, keep the focus on it and do not open the note
   await open(pg,'n1'); await pg.waitForTimeout(300); const item=pg.locator('#list .item[data-id="n2"]');
-  await item.focus(); await pg.keyboard.press('Tab'); const f1=await pg.evaluate(()=>document.activeElement.className);
+  await item.focus(); await pg.keyboard.press('Tab'); await pg.keyboard.press('Tab'); const f1=await pg.evaluate(()=>document.activeElement.className);
   await pg.keyboard.press('Enter'); await pg.waitForTimeout(400); const k1=!!(await stored(pg,'n2')).pinned, f2=await pg.evaluate(()=>document.activeElement.className+'@'+(document.activeElement.closest('.item')||{dataset:{}}).dataset.id);
   await pg.keyboard.press(' '); await pg.waitForTimeout(400);
   ok('7d Tab → «'+f1+'»; Enter pins «Покупки» (focus on '+f2+'), Space unpins it; «Ключі» stays open', f1==='it-p' && k1 && f2==='it-p on@n2' && !(await stored(pg,'n2')).pinned && await cur(pg)==='n1');
@@ -259,7 +259,7 @@ const pinOf=(pg,id)=>pg.evaluate(id=>{ const b=document.querySelector('#list .it
   ok('8i stored «'+s9.blocks.map(b=>b.text).join(' | ')+'», pinned '+!!s9.pinned+'; A lists '+await listText(A), s9.blocks.some(b=>/3% 4$/.test(b.text)) && !s9.pinned && !(await listText(A)).includes('[З'));
 
   // 8j a keyboard focus on an item's archive button stays there while another tab's change redraws the list
-  await A.bringToFront(); await A.locator('#list .item[data-id="n2"]').focus(); await A.keyboard.press('Tab'); await A.keyboard.press('Tab'); const fa=await A.evaluate(()=>document.activeElement.className);
+  await A.bringToFront(); await A.locator('#list .item[data-id="n2"]').focus(); await A.keyboard.press('Tab'); await A.keyboard.press('Tab'); await A.keyboard.press('Tab'); const fa=await A.evaluate(()=>document.activeElement.className);
   await B.evaluate(()=>document.querySelector('#list .item[data-id="n1"] .it-p').click()); await until(async()=>(await listText(A)).startsWith('[Закріплені],n1')); await A.waitForTimeout(200);
   const fb=await A.evaluate(()=>{ const a=document.activeElement; return a.className+'@'+((a.closest&&a.closest('.item'))||{dataset:{}}).dataset.id; });
   ok('8j the focus on «'+fa+'» of n2 stays after B\'s pin redrew A\'s list ('+fb+')', fa==='it-r' && fb==='it-r@n2');

@@ -142,7 +142,7 @@ ok('4w its edit reaches the cloud', !!sent);
 
 /* ── 5. any view-only mode releases the lock: another tab opens the database with a newer version ── */
 const G=await newTab(A, SITE, {connect:false});
-await G.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgradeneeded=()=>{}; r.onsuccess=()=>{ r.result.close(); res('ok'); }; r.onblocked=()=>res('blocked'); r.onerror=()=>res('error'); }));
+await G.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',5); r.onupgradeneeded=()=>{}; r.onsuccess=()=>{ r.result.close(); res('ok'); }; r.onblocked=()=>res('blocked'); r.onerror=()=>res('error'); }));
 const gone=await until(async()=>!(await lead(N)).held && !(await locks(G)).held.includes(LOCK), 5000);
 ok('5 the leader was locked out by the newer database («updated»): the lock is free, nobody leads', gone && (await locked(N)).strip && !(await lead(N)).on);
 

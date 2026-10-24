@@ -8,23 +8,49 @@ on:
     paths: ['public/**', 'tests/**', 'worker/**', 'wrangler.jsonc', '.github/workflows/tests.yml', 'firestore.rules', 'firebase.json']
   workflow_dispatch:
 
+# A new push to a pull request cancels the run of its previous commit. Pushes to main are never cancelled: the build-marker job
+# compares each merge with the one before it.
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PLAYWRIGHT_VERSION: 1.63.0
+
 jobs:
+  # The scenarios in tests/*.mjs run on SHARDS runners at once, each with its own Chromium (tests/lib/shard.mjs splits them by
+  # measured time). Chromium comes from a cache keyed by the Playwright version; `playwright install --with-deps` is not used:
+  # ubuntu-latest already has the libraries Chromium needs, and the step spent up to 14 minutes on apt fetching CJK fonts.
   playwright:
+    name: scenarios ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # the suite outgrew 30 min with appnavwait and appidbfail (long negative waits)
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      SHARDS: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Playwright and Chromium
-        run: |
-          npm i --no-save playwright@1.63.0
-          npx playwright install --with-deps chromium
-      - name: All scenarios in tests/
+      - name: Playwright
+        run: npm i --no-save playwright@${{ env.PLAYWRIGHT_VERSION }}
+      - name: Chromium cache
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ env.PLAYWRIGHT_VERSION }}-${{ runner.os }}
+      - name: Chromium
+        if: steps.chromium.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
+      - name: Scenarios of shard ${{ matrix.shard }}
         run: |
           status=0
-          for f in tests/*.mjs; do
+          for f in $(node tests/lib/shard.mjs ${{ matrix.shard }} $SHARDS); do
             n=$(basename "$f" .mjs)
             echo "::group::$n"
             if node "$f"; then echo "PASS $n"; else echo "FAIL $n"; status=1; fi
@@ -35,7 +61,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tests-screenshots
+          name: tests-screenshots-${{ matrix.shard }}
           path: /tmp/sheet-tests
           if-no-files-found: ignore
 
@@ -89,7 +115,7 @@ jobs:
 
   # The sync scenarios on the Auth and Firestore emulators (tests/emu/*.mjs, docs/SYNC-PLAN.md PR 3): Playwright drives the app with the
   # Firebase SDK served from a local cache in place of gstatic; every other request to a Google host is aborted, so nothing reaches the real
-  # project. The emulators come from firebase-tools in tests/rules; Playwright from the repository root, as in the first job.
+  # project. The emulators come from firebase-tools in tests/rules; Playwright and the Chromium cache as in the first job.
   sync-emulator:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -107,10 +133,17 @@ jobs:
       - name: firebase-tools (tests/rules)
         run: npm ci
         working-directory: tests/rules
-      - name: Playwright and Chromium
-        run: |
-          npm i --no-save playwright@1.63.0
-          npx playwright install --with-deps chromium
+      - name: Playwright
+        run: npm i --no-save playwright@${{ env.PLAYWRIGHT_VERSION }}
+      - name: Chromium cache
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ env.PLAYWRIGHT_VERSION }}-${{ runner.os }}
+      - name: Chromium
+        if: steps.chromium.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
       - name: Firebase emulators download cache
         uses: actions/cache@v4
         with:
