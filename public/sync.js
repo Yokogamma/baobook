@@ -25,7 +25,7 @@ function canon(doc){ if(!isObj(doc)) return canonValue(doc); const o={};
   for(const k of Object.keys(doc).sort()){ const v=doc[k]; if(v===undefined) continue;
     if(k==='blocks' && Array.isArray(v)){ o.blocks=v.filter(isObj).slice().sort(blockCmp).map(canonBlock); continue; }
     if((k==='deleted' || k==='archived' || k==='pinned') && !v) continue;   // absent, 0 or null all mean «not»
-    if(k==='revived' && !v) continue;
+    if((k==='revived' || k==='color') && !v) continue;   // a colour: absent or '' mean «Стандартний»
     o[k]=canonValue(v); }
   return o; }
 const cjson=doc=>JSON.stringify(canon(doc));
@@ -86,7 +86,9 @@ function normNote(raw, deps){ if(!isObj(raw)) return {bad:'shape'};
   const note={title:raw.title, blocks, created:raw.created, updated:raw.updated};
   for(const k of ['deleted','archived','pinned']){ const v=raw[k]; if(v===undefined || v===null || v===0 || v===false) continue; if(!isNum(v) || v<=0) return {bad:k}; note[k]=v; }
   const rv=normRevived(raw.revived); if(rv===false) return {bad:'revived'}; if(rv) note.revived=rv;
+  const c=raw.color; if(c!==undefined && c!==null && c!==''){ if(!isColor(c)) return {bad:'color'}; note.color=c; }   // an unknown name of the right format is kept: a later version may know it
   return {note}; }
+const isColor=c=>typeof c==='string' && c.length>=1 && c.length<=LIM.color && /^[a-z0-9-]+$/.test(c);
 // a named version or conflict copy from the cloud: full bodies in `s`
 function normVersion(raw, deps){ if(!isObj(raw)) return {bad:'shape'};
   if(!isStr(raw.note,LIM.id) || !raw.note.length) return {bad:'note'}; if(!isNum(raw.t)) return {bad:'t'}; if(!isStr(raw.name,LIM.name) || !raw.name.length) return {bad:'name'};
@@ -106,7 +108,7 @@ const contentHash=b=>hashOf(gjson(b,false));   // the hash of a block's content 
 // the key of a side in a conflict: (updated, dev, hash of the canonical form); a side without dev (a local record) is this device
 const keyOf=(doc, dev)=>[+doc.updated||0, doc.dev||dev||'', hashDoc(noUpdated(doc))];
 const cmpKey=(a,b)=>{ for(let i=0;i<3;i++){ if(a[i]<b[i]) return -1; if(a[i]>b[i]) return 1; } return 0; };
-const NOTE_FIELDS=['title','deleted','archived','revived'], SOFT_FIELDS=['pinned'], MERGE_FIELDS=[...NOTE_FIELDS, ...SOFT_FIELDS];   // a soft field changed differently on both sides goes by the key and makes no conflict copy
+const NOTE_FIELDS=['title','deleted','archived','revived'], SOFT_FIELDS=['pinned','color'], MERGE_FIELDS=[...NOTE_FIELDS, ...SOFT_FIELDS];   // a soft field changed differently on both sides goes by the key and makes no conflict copy
 function fixParents(blocks){ const areas=new Set(blocks.filter(b=>b.kind==='area').map(b=>b.id)); return blocks.map(b=>{ if(!b.parent || areas.has(b.parent)) return b; const c={...b}; delete c.parent; delete c.col; c.fx=0; return c; }); }
 const byId=blocks=>new Map((blocks||[]).map(b=>[b.id,b]));
 const contentChanged=(a,b)=>JSON.stringify(canon({title:a.title,blocks:a.blocks}))!==JSON.stringify(canon({title:b.title,blocks:b.blocks}));
@@ -151,7 +153,7 @@ function merge0(L, R, ctx={}){ if(sameDoc(L,R)) return {note:noteBody(R), copies
   return finishMerge(res, L, R, ctx, {local:true, remote:true}, trace); }   // both source copies are kept
 // a late copy of a purged original goes into the revived note: a union without a common base; the revived note keeps its own fields
 function moveInto(revived, moved, ctx={}){ const trace=[];
-  if(!revived){ const note={title:moved.title, blocks:fixParents((moved.blocks||[]).map(b=>({...b}))), created:+moved.created||ctx.t||0, updated:ctx.t||+moved.updated||0}; if(moved.archived) note.archived=moved.archived; if(moved.deleted) note.deleted=moved.deleted; return {note, copies:[], trace, changed:true}; }
+  if(!revived){ const note={title:moved.title, blocks:fixParents((moved.blocks||[]).map(b=>({...b}))), created:+moved.created||ctx.t||0, updated:ctx.t||+moved.updated||0}; if(moved.archived) note.archived=moved.archived; if(moved.deleted) note.deleted=moved.deleted; if(moved.color) note.color=moved.color; return {note, copies:[], trace, changed:true}; }   // a revived copy keeps its colour (its look), not its pin (a place in a list)
   const rWins=cmpKey(keyOf(revived,ctx.dev), keyOf(moved,ctx.dev))>=0, Vm=byId(revived.blocks), Mm=byId(moved.blocks), ids=[...Vm.keys(), ...[...Mm.keys()].filter(id=>!Vm.has(id))];
   const blocks=fixParents(ids.map(id=>{ const v=Vm.get(id), m=Mm.get(id); if(!v || !m) return v||m; if(blockJson(v)===blockJson(m)) return v; if(gjson(v,false)!==gjson(m,false)) trace.push({id, side:rWins? 'M' : 'V', cause:'key', h:contentHash(rWins? m : v)}); return rWins? v : m; }));
   const res={...revived, blocks}; const changed=!sameDoc(res, revived); if(changed) res.updated=ctx.t||res.updated;
@@ -915,6 +917,6 @@ function makeSync(deps){
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
 }
 
-return {DOC_MAX, V_BODY_MAX, LIM, SERVICE, hashOf, canon, cjson, hashDoc, noteBody, noUpdated, sameDoc, docBytes, cmpSrv, clearlyNewer, validSrv, normBlock, normBlocks, normNote, normVersion,
+return {DOC_MAX, V_BODY_MAX, LIM, SERVICE, isColor, hashOf, canon, cjson, hashDoc, noteBody, noUpdated, sameDoc, docBytes, cmpSrv, clearlyNewer, validSrv, normBlock, normBlocks, normNote, normVersion,
   keyOf, cmpKey, contentHash, merge3, merge0, moveInto, nextUpdated, placeAgainstSeen, bodyOf, entryOf, manifestOf, sumOf, budgetOf, dayKey, PACE, makeSync};
 });

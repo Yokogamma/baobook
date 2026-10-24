@@ -89,6 +89,20 @@ const text=(n,id)=>(n.blocks.find(b=>b.id===id)||{}).text;
   ok('8e merge0 of copies that differ only by the pin: no conflict copies, the key decides (L later → pinned 1900; R later → pinned 1400)', po.copies.length===0 && !po.lost.local && !po.lost.remote && po.note.pinned===1900 && po2.copies.length===0 && po2.note.pinned===1400 && po2.same);
   ok('8d merge0 takes pinned from the side with the larger key', p.note.pinned===1800 && S.merge0(L,cloud({...R,pinned:1700,updated:3000}),ctx).note.pinned===1700); }
 
+// 7g color is a soft field like pinned: one side's colour comes through with the other's edit; coloured differently on both sides, the key decides with no copy
+{ const m=S.merge3(base,{...base,updated:2000,color:'blue'},cloud({...base,updated:1500,blocks:[blk('a',1,'A-r'),blk('b',2,'B'),blk('c',3,'C')]}),ctx);
+  ok('7g coloured here, edited there: the colour and the edit both come through, no copies', m.note.color==='blue' && text(m.note,'a')==='A-r' && m.copies.length===0);
+  const m2=S.merge3({...base,color:'pink'},{...base,color:'pink',updated:2000,blocks:[blk('a',1,'A-l'),blk('b',2,'B'),blk('c',3,'C')]},cloud({...base,updated:1500}),ctx);
+  ok('7h the colour removed there («Стандартний»), edited here: no colour, the edit stays', m2.note.color===undefined && text(m2.note,'a')==='A-l' && m2.copies.length===0);
+  const m3=S.merge3(base,{...base,updated:2000,color:'green'},cloud({...base,updated:2500,color:'yellow'}),ctx), m4=S.merge3(base,{...base,updated:2600,color:'green'},cloud({...base,updated:2500,color:'yellow'}),ctx);
+  ok('7i coloured differently on both sides: the later key wins (R yellow, then L green), no conflict copy', m3.note.color==='yellow' && m4.note.color==='green' && m3.copies.length===0 && m4.copies.length===0 && !m3.lost.local && !m3.lost.remote);
+  const m5=S.merge3(base,{...base,updated:2000,color:'purple',blocks:[blk('a',1,'A-l'),blk('b',2,'B'),blk('c',3,'C')]},cloud({...base,updated:1500,blocks:[blk('a',1,'A'),blk('b',2,'B-r'),blk('c',3,'C')]}),ctx);
+  ok('7j a colour and content changes together: both blocks and the colour merge', m5.note.color==='purple' && text(m5.note,'a')==='A-l' && text(m5.note,'b')==='B-r' && m5.copies.length===0);
+  const z=S.merge0({...base,updated:2000,color:'blue'},cloud({...base,updated:1500,color:'pink'}),ctx), z2=S.merge0({...base,updated:1000},cloud({...base,updated:1500,color:'pink'}),ctx);
+  ok('7k merge0 of copies that differ only by the colour: no copies, the key decides', z.copies.length===0 && !z.lost.local && !z.lost.remote && z.note.color==='blue' && z2.copies.length===0 && z2.note.color==='pink');
+  const r=S.moveInto(null,{...base,updated:4500,color:'green',pinned:4400},{...ctx,t:7000});
+  ok('7l moveInto without a revived note keeps the colour and drops the pin', r.note.color==='green' && r.note.pinned===undefined); }
+
 // 9 moveInto: {A, B} plus a late {A′} that never saw B → {A′ or A by key, B}, both sources as copies, B stays
 { const revived={title:'Відновлена',created:1,updated:4000,deleted:3900,blocks:[blk('a',1,'A'),blk('b',2,'B')]}, late={title:'Стара',created:1,updated:4500,blocks:[blk('a',1,'A′')]};
   const m=S.moveInto(revived,late,ctx);
