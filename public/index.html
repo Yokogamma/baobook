@@ -792,7 +792,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102403" integrity="sha384-oft5qskW8tONhbQ2I9b8EbxR1JKfwpN65SzYvKInWm2XKVfnEfPAHCmLnUgKunOs"></script>
+<script src="sync.js?b=2026102403" integrity="sha384-dMP3aankYPi9qmkygXJTQhLyMZ6q7VkXqeL35tfDkOvrV98qnRvu8rGnL/Cf3Yo+"></script>
 <script src="cloud.js?b=2026102403" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -3076,6 +3076,7 @@ async function loadHist(){ const n=cur; let list=[], bodies=[], st={};
   if(db.backend==='idb' && SYNC && SYNC.owner){ try{ st=await SYNC.versionStates(n.id)||{}; }catch(_){} }
   if(!H.open || cur!==n) return;
   H.st=st; H.list=list.sort((a,b)=>b.t-a.t); H.bodies=new Map(bodies.map(x=>[x.h,x])); H.txt.clear(); H.nowSum=H.list[0]? sumOf(manifestOf(n.title,n.blocks), H.list[0]) : null;
+  if(H.view){ const nv=H.list.find(v=>v.id===H.view.id); if(nv) H.view=nv; }   // the shown version as stored now (named, renamed here or elsewhere): the menu and its dialogs read it
   if(H.sel!=='now' && !H.list.some(v=>v.id===H.sel)){ H.sel='now'; showNow(); } renderHist(); }
 async function openHist(){ if(H.open || !cur || ro()) return; flushSave(); hideUndo(); exitSel(); closePop();
   H.open=true; H.list=[]; H.vis=[]; H.bodies=null; H.st={}; H.sel='now'; H.view=null; H.q=''; histQ.value=''; histQBox.classList.remove('on'); histNameRow.hidden=true;
@@ -3144,9 +3145,10 @@ async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if
   else { flushSave(); done=!!(await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name)); }   // «Зараз» becomes a named version (R4)
   if(done) say(loc('hist.named',{name})); await loadHist(); }   // a refusal of the core (another owner, a locked tab) names nothing, so it says nothing
 // «Видалити версію» (SYNC-PLAN 4.9, 4.19): only a named version, through the core (a tombstone job when it is or may be in the cloud); no undo,
-// since the tombstone is final there. The dialog says where it goes: on every device, or from this one (no owner, or a version kept only here)
-async function deleteVersion(){ const n=cur, v=H.view; if(!n || !v || !v.name) return; const here=!SYNC.owner || ['big','partial','shape'].includes(H.st[v.id]);
-  if(!await ask({title:loc('hist.deleteTitle',{name:v.name}), text:loc(here? 'hist.deleteHere' : 'hist.deleteAll'), ok:loc('hist.deleteOk')}) || cur!==n || H.view!==v) return;
+// since the tombstone is final there. The dialog says where it goes: from this device only without an owner; with one, on every device, a version
+// kept only here included (local-only does not prove the cloud has no copy of the same id: another device may have sent it in full, §4.9)
+async function deleteVersion(){ const n=cur, v=H.view; if(!n || !v || !v.name) return;
+  if(!await ask({title:loc('hist.deleteTitle',{name:v.name}), text:loc(SYNC.owner? 'hist.deleteAll' : 'hist.deleteHere'), ok:loc('hist.deleteOk')}) || cur!==n || !H.view || H.view.id!==v.id) return;
   let done=true; await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:'delete', id:v.id}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } VLAST.delete(n.id); tellTabs({t:'vput', note:n.id}); syncWake(); });
   if(!done) return; DEBUG.vers.size=Math.max(0, DEBUG.vers.size-(v.size||0)); H.sel='now'; showNow(); say(loc('hist.deleted',{name:v.name})); storageUI(); await loadHist(); }
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();

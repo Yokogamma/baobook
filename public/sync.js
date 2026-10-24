@@ -691,7 +691,7 @@ function makeSync(deps){
         setVTry(t,id,{k:K.tr('v',id), op, expect:base.rev, result:{note:base.note, deleted:true}, sentLrev:meta.lrev, epoch:S.epoch},after); return 'insured'; }
       const rec=await t.get('versions',id); if(!rec){ dropVJob(t,id,after); return 'dropped'; }
       if(meta.movedFrom && !base){ delete meta.movedFrom; putMeta(t,meta,after); }   // the read found no document: the moved version belongs to the revived note (§4.9 «Revival»)
-      if(base && rec.name===base.name){ dropVJob(t,id,after); meta.baseLrev=meta.lrev; putMeta(t,meta,after); return 'dropped'; }   // nothing to send (a rename back)
+      if(base && rec.name===base.name){ dropVJob(t,id,after); meta.baseLrev=meta.lrev; putMeta(t,meta,after); after(()=>emit(deps.onChange,{id, kind:'version', note:rec.note})); return 'dropped'; }   // nothing to send (a rename back): «ще не надіслано» turns back to «у хмарі»
       if(!base){ const kind=vlocalKind(rec); if(kind){ meta.local=kind; putMeta(t,meta,after); dropVJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'version', note:rec.note})); return 'dropped'; } }
       setVTry(t,id,{k:K.tr('v',id), op, expect:base? base.rev : 0, result:vwire(rec, base), sentLrev:meta.lrev, epoch:S.epoch},after); return 'insured'; }); }
   async function runVTry(id){ const tr=S.vtries.get(id); if(!tr || !S.online) return; S.netBusy=true; try{

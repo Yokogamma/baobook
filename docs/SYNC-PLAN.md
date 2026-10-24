@@ -628,7 +628,7 @@ The owner's decision (§2): conflict copies are kept until the owner removes the
 **Named versions in «Історія»** (PR 4a, §4.9):
 - the row of a named version shows its state under the name, only with an owner: «у хмарі», «ще не надіслано», «лише тут: завелика», «лише тут: неповна», «не синхронізовано»;
 - «⋯» on a shown named version: «Перейменувати версію…» (the existing «Назвати цю версію…» takes this label on a named version; its field keeps `maxlength=80`, which counts UTF-16 units like the core and the rules) and «Видалити версію»;
-- «Видалити версію» asks in the in-app dialog: «Видалити версію «{name}»?» with «Її буде видалено на всіх пристроях.» when the version is or may be in the cloud, else (no owner, or a local-only version) «Її буде видалено з цього пристрою.»; there is no undo, since the tombstone is final in the cloud. The panel then shows «Зараз».
+- «Видалити версію» asks in the in-app dialog: «Видалити версію «{name}»?» with «Її буде видалено на всіх пристроях.» whenever the device has an owner, a local-only version included (local-only does not prove the cloud has no copy of the same id, §4.9: another device may have sent it in full, and the deletion then tombstones that copy), else «Її буде видалено з цього пристрою.»; there is no undo, since the tombstone is final in the cloud. The panel then shows «Зараз».
 
 ## 5. Pull requests (into `main`, checked on .dev)
 

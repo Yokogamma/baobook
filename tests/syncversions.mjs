@@ -323,4 +323,12 @@ const defer=()=>{ let r; const p=new Promise(x=>r=x); return {promise:p, resolve
   const r0=A.db.get('versions','v1'); await A.sync.versionLocal({op:'rename', id:'v1', name:'Перейменовано на A'}); await idle(A,B); const r1=A.db.get('versions','v1');
   ok('30 received from B the record says B; after A\'s accepted rename it says A ('+(r0&&r0.dn)+' → '+(r1&&r1.dn)+')', r0 && r0.dev==='B' && r1 && r1.dev==='A' && r1.dn==='Device A' && vdoc(cloud,'v1').dev==='A'); }
 
+/* ── 31. a version kept only here (partial) deleted while another device's full copy of the same id is still on its way: the copy is tombstoned too ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const A=await mk(cloud,'A'); await note(A,'n1','текст'); await idle(A);
+  const p={...vrec(A.db.get('notes','n1'),'vL','Тут неповна')}; p.blocks=p.blocks.map(e=>{ const x={...e}; delete x.s; x.h='gone'; return x; }); delete p.inline; await A.sync.versionLocal({op:'create', rec:p}); await idle(A);
+  const full=vrec(A.db.get('notes','n1'),'vL','Повна з B'); const w={id:'vL', note:'n1', t:full.t, name:full.name, title:full.title, blocks:full.blocks.map(e=>{ const x={...e}; delete x.h; return x; })};
+  await A.off(false); cloud.write('versions', w, {dev:'B', dn:'Device B'});   // B sent it in full; A is offline, so its delivery comes with the catch-up
+  const st=(await A.sync.versionStates('n1')).vL; await A.sync.versionLocal({op:'delete', id:'vL'}); await A.off(true); for(let i=0;i<12;i++){ cloud.advance(1000); await A.sync.idle(100); }
+  ok('31 the local-only version ('+st+') deleted here: when B\'s full copy arrives it is tombstoned, so «на всіх пристроях» is the true text', st==='partial' && vdoc(cloud,'vL') && vdoc(cloud,'vL').deleted===true && !A.db.get('versions','vL')); }
+
 console.log(fails? '\n'+fails+' FAILED' : '\nall passed'); process.exit(fails? 1 : 0);

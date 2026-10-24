@@ -46,10 +46,17 @@ const state=(pg,v)=>pg.evaluate(v=>{ const r=document.querySelector('#histList .
   ok('1e A\'s open «Історія» shows the new name from B, «у хмарі · Device B» ('+kA+')', !!kA);
   const meta=await pg.evaluate(v=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const q=r.result.transaction('sync','readonly').objectStore('sync').get('meta:v:'+v); q.onsuccess=()=>{ res(q.result||null); r.result.close(); }; }; }), vid);
   ok('1f A\'s record knows its cloud state: base rev 2, no job', !!meta && meta.base && meta.base.rev===2 && meta.lrev===meta.baseLrev);
-  // «Видалити версію» on A: the dialog says «на всіх пристроях», the version leaves B's open «Історія»
-  await pg.locator('#histList .hv[data-id="'+vid+'"]').click(); await menu(pg,'Перейменувати версію…'); await menu(pg,'Видалити версію');
+  // a rename and a rename back offline send nothing, and the open «Історія» turns back to «у хмарі»
+  const rename=async(p,name)=>{ await menu(p,'Перейменувати версію…'); await p.fill('#histName',name); await p.keyboard.press('Enter'); await p.waitForTimeout(150); };
+  await pg.locator('#histList .hv[data-id="'+vid+'"]').click(); await pg.evaluate(()=>sheetDebug.sync.online(false));
+  await rename(pg,'Тимчасова'); const stP=await until(async()=>/ще не надіслано/.test(await state(pg,vid)), 3000); await rename(pg,'Реліз 2'); await pg.evaluate(()=>sheetDebug.sync.online(true));
+  const stBack=await until(async()=>{ await settle(pg,100); const t=await state(pg,vid); return /^у хмарі/.test(t)? t : null; }, 5000);
+  ok('1f2 a rename back before sending: no write, the queue empty, the row back to «у хмарі» ('+stBack+')', stP && !!stBack && vdoc(vid).rev===2 && vdoc(vid).name==='Реліз 2');
+  // «Видалити версію» on A right after a rename here, with the rename field open again: the dialog names the new name and says «на всіх пристроях»
+  await rename(pg,'Реліз 3'); await until(async()=>{ await settle(pg,100); return vdoc(vid).rev===3; }, 5000);
+  await menu(pg,'Перейменувати версію…'); await menu(pg,'Видалити версію');
   const ask=await until(()=>pg.evaluate(()=>document.getElementById('ask').open? document.getElementById('askTitle').textContent+' | '+document.getElementById('askText').textContent : null), 3000);
-  ok('1g «Видалити версію» asks «Видалити версію «Реліз 2»?» with «на всіх пристроях» ('+ask+')', /Видалити версію «Реліз 2»\?/.test(ask||'') && /на всіх пристроях/.test(ask||''));
+  ok('1g «Видалити версію» asks «Видалити версію «Реліз 3»?» (the name as stored now) with «на всіх пристроях» ('+ask+')', /Видалити версію «Реліз 3»\?/.test(ask||'') && /на всіх пристроях/.test(ask||''));
   await pg.click('#askYes');
   const tomb=await until(async()=>{ await settle(pg,100); const d=vdoc(vid); return d && d.deleted? d : null; }, 8000);
   const gone=await until(async()=>{ await settle(B.pg,100); return B.pg.evaluate(v=>!document.querySelector('#histList .hv[data-id="'+v+'"]'), vid); }, 8000);
@@ -64,6 +71,9 @@ const state=(pg,v)=>pg.evaluate(v=>{ const r=document.querySelector('#histList .
   await settle(pg);
   const sp=await state(pg,'vPart'), sb=await state(pg,'vBig');
   ok('1i an automatic version whose body is gone, named: «лише тут: неповна»; a too large one: «лише тут: завелика»; neither is sent ('+sp+' / '+sb+')', sp==='лише тут: неповна' && sb==='лише тут: завелика' && !vdoc('vPart') && !vdoc('vBig'));
+  // the version just named offers «Видалити версію» without being picked again, and with an owner even one kept only here may be in the cloud: «на всіх пристроях»
+  await menu(pg,'Видалити версію'); const askL=await until(()=>pg.evaluate(()=>document.getElementById('ask').open? document.getElementById('askText').textContent : null), 3000); await pg.click('#askNo');
+  ok('1i2 a version kept only here, with an owner: the dialog says «на всіх пристроях» ('+askL+')', /на всіх пристроях/.test(askL||'') && !!(await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const q=r.result.transaction('versions','readonly').objectStore('versions').get('vBig'); q.onsuccess=()=>{ res(q.result||null); r.result.close(); }; }; }))));
   // «Прибрати нотатки з пристрою» counts them as kept only here
   await pg.evaluate(()=>{ sheetDebug.sync.remove(); }); const txt=await until(()=>pg.evaluate(()=>document.getElementById('choice').open? document.getElementById('choiceText').textContent : null), 3000);
   await pg.evaluate(()=>sheetDebug.sync.choose('cancel'));
