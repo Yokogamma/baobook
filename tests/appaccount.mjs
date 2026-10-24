@@ -44,7 +44,9 @@ await D.pg.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:{env
   const m3=await menu(D.pg);
   ok('3b offline with an edit: «'+m3.title+'», the button marked off', m3.st==='off' && m3.title===await loc(D.pg,'sync.st.offline',{n:1}));
   await D.pg.evaluate(()=>sheetDebug.sync.online(true)); await untilUI(D.pg, 'synced'); await D.pg.evaluate(()=>{ document.getElementById('syncBtn').click(); });
-  ok('3c online again: synced; a press on the button says the status in a toast', (await menu(D.pg)).toast===await loc(D.pg,'sync.st.synced'));
+  const pan=await D.pg.waitForFunction(()=>{ const d=document.getElementById('accPanel'); return d && d.open? d.querySelector('.accp-st').textContent : null; },null,{timeout:5000}).then(h=>h.jsonValue()).catch(()=>null);
+  ok('3c online again: synced; a press on the button opens the panel with the status ('+pan+')', pan===await loc(D.pg,'sync.st.synced'));
+  await D.pg.keyboard.press('Escape'); await D.pg.waitForTimeout(200);
   await D.pg.reload(); await D.pg.waitForSelector('html[data-ready]',{state:'attached',timeout:10000}); await until(D.pg, ()=>sheetDebug.sync.account().ui && sheetDebug.sync.account().ui.code==='signedOut'); const m4=await menu(D.pg);
   ok('3d after a reload (the owner stored, the SDK still unreachable, no Firebase user): «'+m4.title+'», the sign-in offered, the owner named, no report of the quiet load', m4.st==='off' && m4.title===await loc(D.pg,'sync.st.signedOut',{n:0}) && m4.signIn && m4.row && m4.email==='u@test' && m4.toast!==await loc(D.pg,'account.loadFailed') && blocked.length===6); }   // the toast after a reload is the editing hint, not the load
 
@@ -64,7 +66,7 @@ await settle(D.pg,300); await until(D.pg, ()=>!!document.querySelector('#list .i
 ok('5 the note with the receipts arrived and opens without a strip', !(await menu(D.pg)).rc);
 await typeAt(D.pg, 500, 420, 'Правка з D'); await untilUI(D.pg, 'error'); await until(D.pg, ()=>sheetDebug.sync.account().receipts.includes('r1'));
 { const m=await menu(D.pg), st=await D.pg.evaluate(()=>sheetDebug.sync.state('r1')), before=cloud.docs.notes.get('r1').rev;
-  ok('5b the write was refused for the receipts: the note marked, «'+m.title+'», the strip on it', st.meta.err==='receipts' && !!st.job && m.st==='bad' && m.title===await loc(D.pg,'sync.st.error') && m.rc && await D.pg.evaluate(()=>document.querySelector('#rcStrip span[data-i18n]').textContent)===await loc(D.pg,'sync.receipts'));
+  ok('5b the write was refused for the receipts: the note marked, «'+m.title+'», the strip on it', st.meta.err==='receipts' && !!st.job && m.st==='bad' && m.title===await loc(D.pg,'sync.st.error',{n:1}) && m.rc && await D.pg.evaluate(()=>document.querySelector('#rcStrip span[data-i18n]').textContent)===await loc(D.pg,'sync.receipts'));
   await D.pg.evaluate(()=>{ document.getElementById('rcCopy').click(); }); await until(D.pg, ()=>sheetDebug.cur()!=='r1'); const id2=await D.pg.evaluate(()=>sheetDebug.cur()); await untilUI(D.pg, 'synced'); await settle(D.pg,300);
   const m5=await menu(D.pg), st5=await D.pg.evaluate(()=>sheetDebug.sync.state('r1')), copy=cloud.docs.notes.get(id2), orig=cloud.docs.notes.get('r1');
   ok('5c «Створити копію нотатки»: the copy is open and in the cloud with both blocks, the original unmarked and without a job, untouched in the cloud; «'+m5.toast+'»', !!copy && copy.blocks.length===2 && copy.blocks[1].text==='Правка з D' && orig.rev===before && orig.blocks.length===1 && !st5.meta.err && !st5.job && !m5.rc && m5.st==='synced' && m5.toast===await loc(D.pg,'sync.copied',{title:'Нотатка з 200 квитанціями'}));
