@@ -113,6 +113,9 @@
   "lock.storage": "The browser storage did not open, so the notes on this device cannot be read right now. Reload the page; if that does not help, close the app and open it again.",
   "lock.storageBack": "The browser storage is available again. Reload the page to continue.",
   "lock.opening": "Opening the browser storage…",
+  "lock.waitTab": "Another Baobook tab or the installed app is open and holding the storage, so it cannot be updated. Switch to it for a moment or close it, and this page will continue by itself.",
+  "lock.waitSilent": "Another Baobook tab or the installed app seems to be open and asleep, so the storage cannot be updated. Switch to it for a moment or close it, and this page will continue by itself.",
+  "lock.waitLong": "The storage still could not be opened. Close the other Baobook tabs and the app; if that does not help, close the app completely and open it again.",
 
   "time.justNow": "just now",
   "time.minutesAgo": { "one": "{n} min ago", "other": "{n} min ago" },
