@@ -359,7 +359,16 @@ PR 4a adds four rules tests: a create-shaped write (`rev` 1) over an existing to
 - **Other tabs** only write locally. BroadcastChannel carries `{id, lrev}` (PR 2: `put {n, lrev}`, `chg {id, lrev, dn, dev}`, `gone {id}` and `owner`); `takeNote` compares `lrev` whenever both sides know it (equal `lrev` → by `updated`), with or without an owner.
 - **The editor snapshot `E`:**
   - a save: `D` = the screen; in the transaction write `merge3(E, D, C)` over the current `C`; then `E := D`, even without redrawing;
-  - the record is never overwritten wholesale from the DOM.
+  - the record is never overwritten wholesale from the DOM;
+  - a write reads `E` when it runs, unless a newer write's result replaced it meanwhile (writes held out of order): then its base is the `E` taken with its `D`, since `D` lacks what the newer write added.
+- **A field write** (archive, unarchive, trash, restore, the pin and the colour; `fieldWrite`) never takes the place of a change the store lacks:
+  - while the note in memory may be ahead of the store (a write failed or on its way, a localStorage fallback copy, the open note), it goes whole: the editor delta with the field set outright on its result, so a merge over an older `E` cannot undo it. The merge takes that field from `E`, so another side's value of it is no conflict (the same archive in two tabs makes no conflict copy). The whole write is made for its revision from the note as it is then, and «Повторити» or the note opened makes it again: a retry never writes the state the note had before an import replaced it;
+  - otherwise only the field goes over the current `C`, which keeps a change another tab or device put there;
+  - a note never opened takes its `E` before its first field write; an `E` taken outside a write (an import, a record from storage, a note opened) counts as newer than every write begun before it, so such a write that runs later merges over its own `E`;
+  - a failed import of a note that exists puts the newer copy into memory, as a new note's does, with `E` left as the base: a whole write of the note then carries the import;
+  - a note with a localStorage fallback copy counts as one with unsaved edits: memory and the key are the copy's only places, so a record from another tab or device waits (as for a write in flight) until a whole write merges the copy in, and only that write drops the key;
+  - a field write keeps the stored value of a field it may not set: an archive merged over a note another tab moved to the trash leaves `archived` as stored, as a pin does with `pinned`;
+  - only a write that carried the whole note clears the «не збережено» warning and drops the fallback copies (a field write clears the warning only as the retry of its own failure). Each warning entry carries the revision of its failure (one made outside a write, by an import, is newer than every write begun before it) and the delta that failed: it is covered by a later success of the same delta, or by a whole write begun after it, also when that write lands after the newest one has settled. A write a newer one replaced keeps its failure until then; such a failure is retried whole.
 - **A safe point:** wait for `compositionend` → save → redraw from IndexedDB, `E := C`.
 - **Tests:** several saves without a redraw; IME; two tabs; a frozen leader; two runners of one `op`; bfcache (a tab that still holds a Web Lock may not enter it: the test reads `notRestoredReasons` instead of assuming either).
 

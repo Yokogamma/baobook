@@ -273,6 +273,10 @@ not count for conflict copies or backups, like `pinned`.
   without a snapshot → busy; the open note written whole through `editorDelta`). `PINREV` stays one record per note (renamed `SOFTREV`): a
   field-only write of either field in flight is replaced by the next soft write, which sets its own field outright and reads the stored record,
   so a pin after a colour on a closed note does not answer «busy».
+  Since #90 `softSet` is a field write (`fieldWrite`, `docs/SYNC-PLAN.md` §4.10): while the note may be ahead of the store (a write failed or
+  on its way, a localStorage leftover, the open note) it goes whole with its field set outright on the result, so the waits after a failed
+  write and with a leftover (`pin.unsaved`/`color.unsaved`, `pin.wait`/`color.wait`) and `SOFTREV` are gone; only the wait while the note is
+  revived stays (`pin.busy`/`color.busy`). The merge rule of the last table row stays: where a field does not apply, its stored value stays.
 - Hover layout: the offsets of the buttons and the title padding are fixed per button today (`.it-p{right:58px}`, `.item.pa:hover .it-t
   {padding-right:54px}`); the palette gets the fourth offset and the title padding grows by one button (checked in the desktop test).
 - UI: the palette button is first among the item buttons (touch mode and hover), with the note's colour as its background and a dot of the
@@ -292,7 +296,7 @@ not count for conflict copies or backups, like `pinned`.
 - Item background: `.item[data-color=…]` with the area colour tokens (light, dark, sand, as `.ablk[data-color]` has them); a pinned note with a
   colour keeps its colour and shows the pin mark; the current item keeps its outline over any colour.
 - Strings in both files: `color.title`, `color.button`, `color.none` («Стандартний»), `color.yellow`, `color.green`, `color.blue`, `color.pink`,
-  `color.purple`, `color.unsaved`, `color.wait`, `color.busy` (mirroring `pin.*`), and the new text of `list.holdHint`.
+  `color.purple`, `color.busy` (mirroring `pin.busy`; `color.unsaved` and `color.wait` went with #90), and the new text of `list.holdHint`.
 
 ### 5.5 Tests (PR B)
 
