@@ -1,16 +1,21 @@
 # Assistant access to the notes over MCP (read-only)
 
-**Status: research and a proposed plan for the owner's approval (2026-10-20); nothing is implemented.** No code, infrastructure, Firebase rules, access or data was changed for this document, and no token or other secret was created. The facts of §3 were checked on 2026-10-20 against the sources in §17; the deployed state of §2 was probed with `curl` the same day. The plan keeps three things apart everywhere: **works** (in production or confirmed by the owner), **proposed** (this plan), **to decide** (§12). Implementation starts only after the owner approves the plan and answers §12.
+**Status: research and a proposed plan for the owner's approval (2026-10-20); nothing is implemented.** **Place in the roadmap (the owner's decision, 2026-10-24):** item 5 of the «Roadmap» in CLAUDE.md (PR #84), after sync, to-do lists, backups and the refactoring into modules and TypeScript; all of it, the read-only stages included, starts after the refactoring, so the file layout here (`public/notetext.js`, `mcp/`, no build step), §2 and the build-marker and integrity rules are revisited then. **This is the one plan for assistant access:** §12 of [TODO-PLAN.md](TODO-PLAN.md) (PR #84) states the boundary between the two plans and hands over the owner's requirements of 2026-10-23/24, confirmed by the owner in this plan's session on 2026-10-24; §1, §7.7, §10 and §12 take them in. No code, infrastructure, Firebase rules, access or data was changed for this document, and no token or other secret was created. The facts of §3 were checked on 2026-10-20 against the sources in §17; the deployed state of §2 was probed with `curl` the same day. The plan keeps three things apart everywhere: **works** (in production or confirmed by the owner), **proposed** (this plan), **to decide** (§12). Implementation starts only after the owner approves the plan and answers §12.
 
 ## 1. Goal
 
 - The owner asks an assistant they already use (ChatGPT, Claude, and, if it turns out to be possible, a ChatGPT «dot») something like «Знайди мої нотатки про резервне копіювання Firebird і поясни, який варіант я вибрав». The assistant searches Baobook, reads the right notes or blocks and answers with links back to them.
-- A remote MCP server with two read-only tools: `search(query)` and `fetch(id)`. No LLM inside Baobook: the connected assistant writes the queries and the answer.
-- The first version only reads. Not in it: creating, editing, deleting, restoring, the trash, version history, a bulk export tool.
+- A remote MCP server; its read-only stages have two tools, `search(query)` and `fetch(id)`. No LLM inside Baobook: the connected assistant writes the queries and the answer.
+- **Phone first:** the owner talks to Claude mostly from the phone (the claude.ai connector in the Claude app), also from Claude Desktop and Claude Code; ChatGPT next.
+- The read-only stages (M1–M3) only read. **Writes come later as M5** (§7.7), the owner's requirements of 2026-10-23/24: ticking tasks, adding tasks and text, appending to comments, setting titles, applied at once, each change visible and undoable in «Історія». Never, in any stage: deleting, restoring, the trash, version history, a bulk export tool.
+- **A sheet is a project:** the assistant works with whole sheets (text blocks, areas, code blocks, to-do lists), not only with lists.
+- **The boundary with TODO-PLAN** (its §12): that plan owns the to-do data (the block `kind:'todo'` and its tasks, authors by device id with the reserved id `claude`, the normalizer and the merge by task, `todoText` and the to-do search lines in `public/todo/model.js`); this plan owns the server (hosting, OAuth, the credential, the tools, the mirror, security, the stages).
 - The connection is made once per assistant and lasts («a plugin»), with a consent screen, and each connection can be revoked on its own.
 - It builds on what exists: Firebase Auth with Google sign-in identifies the owner, and the notes are read from the Firestore copy that sync already keeps. Neither is redesigned here.
 
 ## 2. The project today (checked 2026-10-20)
+
+A snapshot of 2026-10-20, revisited when the stage starts. Since then, by 2026-10-24: the owner published the rules on 2026-10-20 and again with the note fields `pinned` (2026-10-21) and `color` (2026-10-24); sync PR 4a-1 (the core sends named versions) is built; every PR that changes `public/` raises a build marker and the page carries integrity hashes of its own scripts; `.app` still had no sync on 2026-10-24 (`/cloud.js` → 404, `/__/auth/handler` → 404).
 
 ### 2.1 What exists, where it runs, what is confirmed
 
@@ -215,7 +220,7 @@ ChatGPT / Claude ──HTTPS──▶ baobook.matamata.{dev|app}
 ### 7.2 `fetch`
 
 - **Input:** `{id: string}` matching `^[\w-]{1,64}(/[\w-]{1,64})?$`.
-- **Output:** `{id, title, text, url, metadata}`. `text` is the note in reading order (the order of `lines()`): an area's title as a heading followed by its blocks, code blocks fenced with their language, text blocks as paragraphs, link labels as written. For `note/block`: that block, and for an area its blocks. `metadata`: `updated`, `created`, `synced` (the server time of the last write, `srv`), `as_of` (when the server read it), `archived`, `blocks`, `truncated`, and for a truncated note `outline`: the remaining blocks' ids and first lines, to fetch them one by one.
+- **Output:** `{id, title, text, url, metadata}`. `text` is the note in reading order (the order of `lines()`): an area's title as a heading followed by its blocks, code blocks fenced with their language, text blocks as paragraphs, link labels as written, to-do lists as `[x]`/`[ ]` lines with their comments (the lines of `todo/model.js`). For `note/block`: that block, and for an area its blocks. `metadata`: `updated`, `created`, `synced` (the server time of the last write, `srv`), `as_of` (when the server read it), `archived`, `blocks`, `truncated`, and for a truncated note `outline`: the remaining blocks' ids and first lines, to fetch them one by one.
 - **Limit:** 30 000 characters of `text` (about 8–12 thousand tokens of Cyrillic; under Claude Code's 25 000-token default and far under claude.ai's 150 000 characters).
 - **Annotations** as for `search`.
 
@@ -231,7 +236,7 @@ The server reads the cloud copy. Every `fetch` reads the document from Firestore
 
 ### 7.5 Shared text code
 
-`lines()`, `titleOf()` and the search normalization move from `index.html` into a small UMD module (`public/notetext.js`, like `sync.js`: no build step, loaded by the app as a script, required by the MCP Worker), so the server's text and ranking are the app's. The search matches the app's (`found()`: every term, title first, then text with a snippet) with two additions for a model's longer queries: normalization (NFKC, lower case, ё → е, the apostrophes ’ ʼ ` ' as one, without the zero-width and private-use marks of the editor and soft hyphens), and when fewer than 3 notes contain every term, the notes with the most terms follow, ranked by how many they contain. Stemming (Snowball uk/ru) and a library index come only with a test set of real queries (M3 or later).
+`lines()`, `titleOf()` and the search normalization move from `index.html` into a small UMD module (`public/notetext.js`, like `sync.js`: no build step, loaded by the app as a script, required by the MCP Worker), so the server's text and ranking are the app's. The search matches the app's (`found()`: every term, title first, then text with a snippet) with two additions for a model's longer queries: normalization (NFKC, lower case, ё → е, the apostrophes ’ ʼ ` ' as one, without the zero-width and private-use marks of the editor and soft hyphens), and when fewer than 3 notes contain every term, the notes with the most terms follow, ranked by how many they contain. Stemming (Snowball uk/ru) and a library index come only with a test set of real queries (M3 or later). With to-do lists (TODO-PLAN), a sheet is a project and the order is the note's title, then a list's title, then the text of tasks and comments; the to-do lines come from `todo/model.js`, so the app and the server search lists the same way. «Today's list» is found by titles and the note's `updated`; there is no project field.
 
 ### 7.6 The mirror (M3, if approved)
 
@@ -240,6 +245,26 @@ The server reads the cloud copy. Every `fetch` reads the document from Firestore
 - **Completeness** the way sync proves it (§4.6): `count()` and `sum(rev)` in one aggregation against the mirror's own count and sum, at most every 15 minutes; a mismatch → a catch-up, and if it persists, a full pass by id at most once a day.
 - **Erasure:** revoking the last grant, «Відключити всі», or removing the uid from the allowlist deletes the object's storage.
 - Cost: one read per catch-up plus the changed notes, ⌈N/1000⌉ reads per aggregate; for 2 000 notes and 50 searches a day, well under 1 000 reads a day.
+
+### 7.7 Writes (M5, the owner's requirements of 2026-10-23/24)
+
+In outline; designed in detail when the stage starts, after the read-only stages and after to-do T1. The block and task shapes are TODO-PLAN's (its §3 and §12).
+
+- **Tools**, each a small named operation, none of them deleting (names fixed at the stage; ids follow the link form `note/block`, with a task id after it):
+  - `todo_tick(id, done, comment?)`: tick or untick a task, a comment appended if given;
+  - `todo_add(list, text)`: add a task;
+  - `comment_append(task, text)`: append a paragraph «{date} · Claude: …» to a task's comment, never replacing it; over 10 000 characters the tool refuses and says so;
+  - `todo_edit(task, text)`: replace a task's text;
+  - `block_add(note, text)`: add a text block (a project description);
+  - `title_set(block, title)`: set the title of a list, an area or a code block;
+  - `untitled(note?)`: a report of what has no title or description, so sheets do not turn into a heap of unnamed things (reads only).
+- **Through the sync core, as a device.** Every write goes through `sync.js` as the device with the fixed id `claude` and the name «Claude», never as a raw Firestore write: the merge by task applies (a tick by Claude and a tick on the phone at the same moment merge like two devices), each note keeps one receipt for Claude (the rules allow 200 per document over its lifetime, SYNC-PLAN §4.16; a new id per request would use them up), and every other device puts the state before the change into its automatic history (SYNC-PLAN §2), which is what makes the change visible and undoable in «Історія»; tasks record `by` and `doneBy` = `claude`.
+- **The server's store:** a Durable Object with SQLite storage is the core's transactional store (`makeSync`'s `db`: bases, `seen`, jobs, attempts, the cursor) and the only writer, so calls are serialized as the leader tab serializes a device. Firestore's REST API has no listener, so the object catches up from its cursor at each call and on an alarm. The same object can serve the search (decision 15).
+- **The credential: the rules stay in force.** A write role on the `datastore.viewer` key would bypass the rules, so writes use a credential the rules check: the owner's Firebase refresh token, given at a separate consent for writing and kept encrypted by the Worker, exchanged for ID tokens. It can do whatever the rules allow the owner, so: a separate scope `notes:write` with its own consent and revocation, only the operations above exist, a daily limit of writes, and a log line per write (operation, ids, no text). Whether reads move to it too is decision 14.
+- **Budgets:** the server is one more device in SYNC-PLAN §4.17.
+- **Fields:** no new note field if it can be helped (a note field needs the rules and a release, as `pinned` and `color` did); block and task fields need neither, and unknown ones are kept.
+- **Confirmations:** writes carry `readOnlyHint: false`; `todo_edit` and `title_set` overwrite and carry `destructiveHint: true`, the others `false`; `untitled` is read-only. ChatGPT asks before a write unless allowed for the conversation; in Claude each tool can be set to «Always allow», which «applied at once» needs (decision 16).
+- **A task's text is data**, never instructions (§8.5).
 
 ## 8. Security
 
@@ -306,13 +331,14 @@ There is no PIN, no encryption of the local storage by the app, and no end-to-en
 
 | Stage | What is built | Depends on | Done when |
 |---|---|---|---|
-| **M0. Preconditions** (no code) | The owner confirms sync on .dev: notes in `env/dev/users/{uid}/notes` (SYNC-CHECKLIST item 6), and creates on .dev a test note with a rare word (e.g. «Firebird бекап тест-MCP»); answers §12; names the plans of the assistants (Claude: Free/Pro/Max; ChatGPT: Plus/Pro/Business; dots or not). | sync on .dev | the test note is in the console; §12 answered |
+| **M0. Preconditions** (no code) | The refactoring stage is done (Roadmap item 4) and this plan is revisited for it (§2, §5, §7.5, §10). The owner confirms sync on .dev: notes in `env/dev/users/{uid}/notes` (SYNC-CHECKLIST item 6), and creates on .dev a test note with a rare word (e.g. «Firebird бекап тест-MCP»); answers §12; names the plans of the assistants (Claude: Free/Pro/Max; ChatGPT: Plus/Pro/Business; dots or not). | sync on .dev | the test note is in the console; §12 answered |
 | **M1. The read path with a personal token** (the minimal first stage) | `mcp/` (Worker `baobook-mcp`, .dev only): `createMcpHandler`, `search` and `fetch` with the contracts of §7, the read-only Firestore module (signed JWT, `get`, `runQuery`), `public/notetext.js` shared with the app; the site Worker routes `/mcp` to it through a Service Binding; the service worker leaves `/mcp` alone. Auth: one random 256-bit token whose SHA-256 is a Worker secret, bound to the owner's uid and `dev`, compared in constant time; revoked by deleting the secret. The size limits, errors and logs of §7.3 and §8.4 (the daily counters come with the Durable Object in M2). | M0; the owner creates the service account with `datastore.viewer`, its key as a secret, and Workers Builds for `mcp/` (§11) | in **Claude Code** (`claude mcp add --transport http baobook-dev https://baobook.matamata.dev/mcp --header "Authorization: Bearer …"`), «знайди тестову нотатку про Firebird» lists the test note with its `.dev` link, `fetch` returns its text, the link opens it; the tests of §13 for M1 pass |
 | **M2. OAuth: lasting connections in Claude and ChatGPT** | `workers-oauth-provider` in `baobook-mcp`: metadata, CIMD with the allowlist, consent (`connect.html`, `/oauth/consent`), tokens and refresh, the Durable Object with revocations and counters, the «Асистенти» panel with `/oauth/grants`, `_headers` against framing, the service worker excludes `/oauth/` and `/.well-known/`; the link toast of §9; the M1 token removed; `docs/MCP-CHECKLIST.md`. May split in two PRs: the server, then the app's panel. | M1 | on .dev: the custom connector in **claude.ai** finds and reads the test note on web and on the phone; the same in **ChatGPT** if the plan allows custom MCP servers; Claude Code over OAuth; revoking one connection stops it at the next call while the other works; an unknown client is refused before the consent page; dots checked if the owner has them |
 | **M3. Ready for real notes** | The chosen scope (the «hide» mark if wanted: rules first, then the client), the chosen search store (the mirror of §7.6 or the memory cache), the ranking tested on a set of the owner's real queries (stemming only if it helps), large notes by block, a security review of the deployment (§13); then `baobook-mcp-prod` behind `.app` with its own key, KV and Durable Objects. | M2; **sync released to production** (the `main → prod` PR of sync PR 2–3, the rules published) | the acceptance criteria of §13 on .dev with a copy of the real notes (as for storage changes); then, on the owner's request, the release PR `main → prod`, and the connectors added again for `.app` |
+| **M5. Writes** (§7.7) | The write tools through the sync core as the device «Claude» in a Durable Object, the write credential and scope with their own consent and revocation, limits and logs of writes, the «Історія» marks; detailed in its own design when the stage starts. | M3; to-do T1 ([TODO-PLAN.md](TODO-PLAN.md), PR #84) | on .dev from the phone: a task ticked with a comment, a task added, a comment appended (never replaced, refused over 10 000 characters), a title set; each change on the other devices within seconds and undoable in «Історія»; a connection without `notes:write` refused |
 | M4 (later, its own plan) | Semantic or hybrid search (e.g. Workers AI `bge-m3` + Vectorize, keeping the data at Cloudflare); a Claude plugin with a skill on top of the connector; WebMCP site tools for encrypted notes | M3 | — |
 
-**If the owner wants the very first check in claude.ai or ChatGPT rather than Claude Code,** M1 and M2 merge: the first check then needs OAuth and the consent page, about three times the work of M1. The proposed order validates the risky parts first (the Worker reading Firestore with the key, the text, the search, the CPU budget) and keeps the token code (a few dozen lines) the only throwaway.
+**Phone first (the owner, 2026-10-24):** M1 and M2 go out together as the first stage, so its check is the claude.ai connector on the phone; M1's personal token stays only as an internal check with Claude Code while the OAuth part is built, and is removed with M2. This is about three times the work of M1 alone.
 
 ## 11. What the owner sets up (when a stage needs it, not now)
 
@@ -326,7 +352,7 @@ There is no PIN, no encryption of the local storage by the app, and no end-to-en
 | # | Question | Proposed |
 |---|---|---|
 | 1 | Hosting: A (Worker), B (Cloud Run, Blaze), C (VPS) | **A** (§4.1) |
-| 2 | Which assistant for the first check (M1): Claude Code with a token, or claude.ai/ChatGPT directly (M1 + M2 together) | **Claude Code** first |
+| 2 | Which assistant for the first check (M1): Claude Code with a token, or claude.ai/ChatGPT directly (M1 + M2 together) | **decided (2026-10-24): claude.ai on the phone**, M1 and M2 together (§10) |
 | 3 | Scope: all notes; only marked notes (off by default); all with a «hide» mark | all except the trash, archive included; the «hide» mark in M3 if wanted |
 | 4 | Search store for real notes: a mirror at Cloudflare (a copy of titles and plain text in Durable Object storage), a memory-only cache (one full read per cold start), or Blaze with full reads | the **mirror**, erased on «Відключити всі»; once the project is on Blaze ([STACK-COMPARISON.md](STACK-COMPARISON.md) §8), full reads cost cents a day and the mirror becomes optional |
 | 5 | Notes passing through Cloudflare at all (a change from «Cloudflare never sees a note») | accept, for the tools only |
@@ -338,6 +364,9 @@ There is no PIN, no encryption of the local storage by the app, and no end-to-en
 | 11 | Logs: structured lines, 3–7 days, no text | as written |
 | 12 | Daily limits: 1 000 calls and 5 000 Firestore reads | as written |
 | 13 | Which ChatGPT plan: Plus may not have custom MCP servers; Pro has read/fetch; Business has full MCP | the owner checks the menu on the account |
+| 14 | When M5 comes, the credential for reads too: the write credential (the owner's Firebase refresh token, rules in force) could serve the reads as well and the project-wide `datastore.viewer` key would go, but read-only would then rest on our code, not on IAM | decided when M5 is designed |
+| 15 | The server as a sync device in a Durable Object (the core's own catch-up and totals check) already for the read stages, instead of the hand-made mirror of §7.6 | decided when the stage starts, after the refactoring |
+| 16 | Write tools in Claude: «Always allow» (applied at once, as the owner asked) or a prompt per write | «Always allow» for the non-destructive writes, a prompt for `todo_edit` and `title_set` |
 
 ## 13. Tests and acceptance
 
@@ -388,11 +417,12 @@ There is no PIN, no encryption of the local storage by the app, and no end-to-en
 - Whether Durable Objects with SQLite storage are on the Workers Free plan (the plan assumes Paid in M2 if not).
 - The quality of the new Ukrainian Snowball stemmer.
 - The library is young as a 1.x (1.0 on 2026-09-24) and was written largely with an AI and reviewed by Cloudflare; pinned versions and its advisories page are watched.
+- **The plan predates the refactoring** that comes before it (Roadmap item 4: modules, TypeScript, a build step): the file layout, the no-build loading, `PRECACHE`, the build marker and the integrity hashes it assumes will have changed, and §2 will be stale; M0 revisits them.
 - Sync itself: MCP shows the cloud copy, so a sync bug or a device that has not sent its edits shows up as a stale answer, not as an MCP error.
 
 ## 16. Not in this stage
 
-Writing of any kind (create, edit, delete, restore, the trash, history); a bulk export tool; named versions and conflict copies; other users than the owner; listing in Anthropic's or OpenAI's directories; embeddings and semantic search (M4); Firestore Enterprise text search; a Claude plugin bundle, a Desktop extension and WebMCP site tools (later, M4); end-to-end encryption.
+Writing in M1–M4 (writes are M5, §7.7, and none of them deletes); deleting, restoring, the trash and version history in any stage; a bulk export tool; named versions and conflict copies; other users than the owner; listing in Anthropic's or OpenAI's directories; embeddings and semantic search (M4); Firestore Enterprise text search; a Claude plugin bundle, a Desktop extension and WebMCP site tools (later, M4); end-to-end encryption.
 
 ## 17. Sources (read on 2026-10-20)
 
