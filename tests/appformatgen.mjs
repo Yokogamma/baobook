@@ -33,7 +33,7 @@ const msg=p=>p.locator('#roStrip .rostrip').isVisible().then(v=>v? p.locator('#r
 const waitMsg=(p,re,ms)=>until(async()=>{ const m=await msg(p).catch(()=>''); return re.test(m)? m : null; }, ms);
 const fmt=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('sync','readonly').objectStore('sync').get('format'); g.onsuccess=()=>{ const v=d.version; d.close(); res({version:v, format:g.result? g.result.v : null}); }; }; }));
 const stored=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','versions','sync'],'readonly'); const a=t.objectStore('notes').getAll(), b=t.objectStore('versions').getAll(), c=t.objectStore('sync').getAll();
-  t.oncomplete=()=>{ d.close(); res({notes:JSON.stringify(a.result), versions:b.result.length, jobs:c.result.filter(x=>/^job:|^q:/.test(x.k)).length, sync:JSON.stringify(c.result.filter(x=>x.k!=='format' && !/^quota/.test(x.k)))}); }; }; }));
+  t.oncomplete=()=>{ d.close(); res({notes:JSON.stringify(a.result), versions:b.result.length, sync:JSON.stringify(c.result.filter(x=>x.k!=='format' && !/^quota/.test(x.k)))}); }; }; }));
 const state=p=>p.evaluate(()=>sheetDebug.fmt.state());
 const fbKeys=p=>p.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
 const editable=p=>p.evaluate(()=>!document.getElementById('sheet').inert && document.getElementById('ttl').contentEditable!=='false');
@@ -55,7 +55,7 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   const before=await stored(A); const N=await page(ctx,{body:NEW5}); await A.waitForTimeout(800);
   ok('2 the message was dropped: the older tab is still editable', !(await msg(A)) && await editable(A));
   await typeAt(A,500,420,'після підняття'); const m=await waitMsg(A, UNSAVED, 4000); const st=await state(A);
-  ok('2a its save is refused by the format guard: view-only, «останню правку не вдалося зберегти» ('+JSON.stringify(st)+')', !!m && st.lock==='updated' && st.refused>=1 && !st.db);
+  ok('2a its save is refused by the format guard (refused counts every transaction in flight that met the guard, each writing nothing): view-only, «останню правку не вдалося зберегти» ('+JSON.stringify(st)+')', !!m && st.lock==='updated' && st.refused>=1 && !st.db);
   ok('2b «Експортувати незбережене» is offered', /Експортувати незбережене/.test(await A.locator('#roExport').innerText()));
   const after=await stored(N);
   ok('2c nothing of the refused save is stored: the notes and the sync records are as before, no fallback key', after.notes===before.notes && after.sync===before.sync && !(await fbKeys(A)).length);
