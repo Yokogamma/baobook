@@ -63,6 +63,18 @@ const versions=(pg,id)=>pg.evaluate(id=>window.sheetDebug.vers.list(id), id);
   await B.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await B.waitForTimeout(400);
   ok('13 shown again, B reads the storage and takes it («'+await title(B)+'»)', await title(B)==='Збоку');
 
+  /* ── a read of the storage that fails when the tab is shown changes nothing: it says nothing about what is stored ── */
+  const list14=await items(B);
+  await B.evaluate(()=>{ const orig=IDBDatabase.prototype.transaction; window.__readFail={orig, n:0};   // every read of notes and sync fails until the test lets go
+    IDBDatabase.prototype.transaction=function(stores, mode){ const list=[].concat(stores); if((mode||'readonly')==='readonly' && list.includes('notes') && list.includes('sync')){ window.__readFail.n++; throw new DOMException('test: the read failed','UnknownError'); } return orig.apply(this, arguments); }; });
+  await B.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await B.waitForTimeout(400);
+  const fails14=await B.evaluate(()=>{ IDBDatabase.prototype.transaction=window.__readFail.orig; return window.__readFail.n; }), after=await items(B);
+  ok('14 shown again while the read fails ('+fails14+' refused): B keeps its list and the open note, no empty note appears ('+after.join(', ')+')', fails14>0 && after.join()===list14.join() && await title(B)==='Збоку' && (await stored(B,'s0')).title==='Збоку' && !!(await stored(B,'s1')));
+  await B.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'), st=t.objectStore('notes'); const g=st.get('s0');
+    g.onsuccess=()=>{ const n=g.result; n.title='Ще збоку'; n.updated=Date.now()+2000; st.put(n); }; t.oncomplete=()=>{ d.close(); res(); }; }; }));
+  await B.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await B.waitForTimeout(400);
+  ok('15 the next show reads the storage again and takes the change («'+await title(B)+'»)', await title(B)==='Ще збоку' && (await items(B)).length===list14.length);
+
   console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
   await ctx.close(); }
 

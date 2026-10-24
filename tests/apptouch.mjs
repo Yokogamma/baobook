@@ -9,6 +9,7 @@ const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'s
 const box=async(loc)=>{ const b=await loc.boundingBox(); return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}; };
 const touch=async(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
 const tap=async(x,y)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(60); await touch('touchEnd',[]); };
+const closeSide=async()=>{ const b=await pg.locator('#sideX').boundingBox(); await tap(b.x+b.width/2, b.y+b.height/2); };   // a phone's panel covers the screen: its own «×» closes it
 const hold=async(x,y,ms=650)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(ms); await touch('touchEnd',[]); };
 const swipe=async(x,y,dy)=>{ await touch('touchStart',[{x,y}]); for(let i=1;i<=6;i++){ await pg.waitForTimeout(40); await touch('touchMove',[{x,y:y+dy*i/6}]); } await touch('touchEnd',[]); };
 const focusedTxt=()=>pg.evaluate(()=>!!document.activeElement && document.activeElement.classList.contains('txt'));
@@ -41,7 +42,7 @@ const n5=await nBlocks(); const f=await box(pg.locator('#fab')); await tap(f.x+f
 await pg.keyboard.type('через плюс'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
 // 6 панель відкрита — «+» схований; закрили — знову є
 await pg.locator('#sideBtn').tap(); await pg.waitForTimeout(250); const hiddenWhenOpen=!(await pg.locator('#fab').isVisible());
-await tap(350,600); await pg.waitForTimeout(300);   // дотик по підкладці праворуч від панелі
+await closeSide(); await pg.waitForTimeout(300);
 ok('6 «+» ховається, поки відкрита панель нотаток, і повертається', hiddenWhenOpen && await pg.locator('#fab').isVisible());
 // 7 область: дотик усередині — нічого, утримання — блок
 await pg.locator('#moreBtn').tap(); await pg.waitForTimeout(250); await pg.locator('.amenu.hm .mi').first().tap(); await pg.waitForTimeout(300); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);   // «Нова область» у меню «⋯» шапки

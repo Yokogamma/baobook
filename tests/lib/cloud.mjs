@@ -7,7 +7,7 @@
 // tombstone final, a write equal to the previous document refused. The `hold` fault (with `op`: get or txn, and a `promise` the test resolves)
 // keeps one call in flight: a get returns what it read before the wait, a transaction waits after its callback and reads the document again
 // before committing, as the SDK would on contention, so two runners of one attempt (§4.10) can be interleaved deterministically.
-const LIVE_ALL=['v','rev','op','dev','rcpt','title','blocks','created','updated'], LIVE_ONLY=[...LIVE_ALL,'dn','deleted','archived','revived','tsrv'];
+const LIVE_ALL=['v','rev','op','dev','rcpt','title','blocks','created','updated'], LIVE_ONLY=[...LIVE_ALL,'dn','deleted','archived','pinned','color','revived','tsrv'];
 const TOMB_ALL=['v','rev','op','dev','rcpt','purged'], TOMB_ONLY=[...TOMB_ALL,'dn','auto'];
 const VLIVE_ALL=['v','rev','op','dev','rcpt','note','t','name','title','blocks'], VLIVE_ONLY=[...VLIVE_ALL,'dn'];
 const VTOMB_ALL=['v','rev','op','dev','rcpt','note','deleted'], VTOMB_ONLY=[...VTOMB_ALL,'dn'];
@@ -42,10 +42,15 @@ export class TestCloud{
     const ALL=col==='notes'? (tomb? TOMB_ALL : LIVE_ALL) : (tomb? VTOMB_ALL : VLIVE_ALL), ONLY=col==='notes'? (tomb? TOMB_ONLY : LIVE_ONLY) : (tomb? VTOMB_ONLY : VLIVE_ONLY);
     for(const k of ALL) if(!has(k)) throw err('permission-denied','hasAll: '+k); for(const k of keys) if(!ONLY.includes(k)) throw err('permission-denied','hasOnly: '+k);
     if(col==='notes' && !tomb){ if(typeof w.title!=='string' || w.title.length>2000 || !Array.isArray(w.blocks) || w.blocks.length>5000 || typeof w.created!=='number' || typeof w.updated!=='number') throw err('permission-denied','live shape');
-      if(has('deleted') && typeof w.deleted!=='number' || has('archived') && typeof w.archived!=='number' || has('revived') && (typeof w.revived!=='object' || !w.revived)) throw err('permission-denied','live shape'); }
+      if(has('deleted') && typeof w.deleted!=='number' || has('archived') && typeof w.archived!=='number' || has('pinned') && !(typeof w.pinned==='number' && w.pinned>0) || has('color') && !(typeof w.color==='string' && /^[a-z0-9-]{1,24}$/.test(w.color)) || has('revived') && (typeof w.revived!=='object' || !w.revived)) throw err('permission-denied','live shape'); }
     if(col==='notes' && tomb){ if(typeof w.purged!=='number') throw err('permission-denied','tomb shape'); if(has('auto') && (w.auto!==true || !D || !('deleted' in D))) throw err('permission-denied','auto');
       if(has('auto') && (!D.tsrv || this.t<=D.tsrv.s*1000+Math.floor(D.tsrv.ns/1e6)+TRASH_MS)) throw err('permission-denied','auto: the server clock says the 30 days are not over'); }   // the rules check the age by request.time (§4.8); here by the virtual clock
     if(col==='versions' && !tomb && w.note!==undefined){ const note=this.docs.notes.get(w.note); if(!note || note.purged) throw err('permission-denied','noteAlive'); }
+    if(col==='versions'){   // the rules of the versions match: the shape of a live version (lengths in UTF-16 units, as the rules' size() counts a string), a tombstone only over a document, a rename that changes only the name
+      if(!tomb && (typeof w.note!=='string' || !w.note.length || w.note.length>64 || typeof w.t!=='number' || typeof w.name!=='string' || !w.name.length || w.name.length>80 || typeof w.title!=='string' || w.title.length>2000 || !Array.isArray(w.blocks) || w.blocks.length>5000)) throw err('permission-denied','vlive shape');
+      if(tomb && !D) throw err('permission-denied','a version tombstone needs a document');
+      if(D && w.note!==D.note) throw err('permission-denied','a version keeps its note');
+      if(D && !tomb){ for(const k of new Set([...Object.keys(w), ...Object.keys(D)])){ if(['name','rev','op','srv','dev','dn','rcpt','id','commitAt','seq'].includes(k)) continue; if(JSON.stringify(w[k])!==JSON.stringify(D[k])) throw err('permission-denied','a rename changes only the name: '+k); } } }
     if(D && w.rev===D.rev+1 && bodyJson(w)===bodyJson(D) && !(tomb) && !(D.purged)) throw err('invalid','an empty write'); }
   // the server transaction: fn(D) → the document to write or null; it may run again on contention and with the `tworunners` fault
   async txn(col,id,fn,o={}){ { const f=this.take('fail',o.dev,'txn'); if(f){ if(f.wait) await f.wait; if(typeof f.then==='function') f.then(this); throw err(f.code||'unavailable','injected'); } }   // `wait`: the failure answers only when the test lets it (the device does things meanwhile)
@@ -72,6 +77,8 @@ export class TestCloud{
     const out=list.slice(0,n).map(d=>this.out(d)); const h=this.take('hold',o.dev,'page'); if(h) await h.promise; return out; }   // held after the read, like get
   listen(col, from, onDocs, onErr, o={}){ const f=this.take('fail',o.dev,'listen'); if(f){ queueMicrotask(()=>onErr(err(f.code||'unavailable','injected'))); return ()=>{}; }   // a listener refused or lost: the error comes by the callback, as the SDK's does
     const sub={col, from, onDocs, onErr, dev:o.dev, seen:new Map(), first:true, live:true}; this.subs.push(sub); if(this.auto) queueMicrotask(()=>this.pump()); return ()=>{ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); }; }
+  // the server ends live listeners with an error (a lost stream, a refused query), as the SDK reports it: by the callback, once, after which the listener is gone
+  end(col, o={}){ const ended=this.subs.filter(s=>s.live && s.col===col && (o.dev===undefined || s.dev===o.dev)); for(const sub of ended){ sub.live=false; this.subs=this.subs.filter(s=>s!==sub); queueMicrotask(()=>sub.onErr(err(o.code||'unavailable','the listener ended'))); } return ended.length; }
   // deliver what changed to every listener: the first call is the server snapshot; `dup` repeats the batch, `reorder` shuffles it
   pump(){ for(const sub of this.subs){ if(!sub.live) continue; const docs=this.visible(sub.col).filter(d=>!sub.from || cmpSrv(d.srv,sub.from)>=0).filter(d=>sub.seen.get(d.id)!==d.seq);
       if(!docs.length && !sub.first) continue; for(const d of docs) sub.seen.set(d.id,d.seq); let batch=docs.map(d=>this.out(d)); const dup=this.take('dup',sub.dev), re=this.take('reorder',sub.dev);

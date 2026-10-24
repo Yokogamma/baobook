@@ -17,9 +17,16 @@ const NOTE={title:'Нотатка', created:100, updated:200, blocks:[
 // 1 the canonical form does not depend on the block order or the key order; defaults are dropped
 const reordered={...NOTE, blocks:shuffle(NOTE.blocks,7).map(b=>Object.fromEntries(Object.keys(b).reverse().map(k=>[k,b[k]])))};
 ok('1 shuffled blocks with reversed keys give the same canonical JSON and hash', S.cjson(reordered)===S.cjson(NOTE) && S.hashDoc(reordered)===S.hashDoc(NOTE));
-const withDefaults={...NOTE, deleted:0, archived:null, blocks:NOTE.blocks.map(b=>({...b, wrap:b.wrap||false, html:b.html||'', title:b.title||''}))};
-ok('1b defaults (wrap:false, html:"", title:"", deleted:0, archived:null) do not change the canonical form', S.cjson(withDefaults)===S.cjson(NOTE));
+const withDefaults={...NOTE, deleted:0, archived:null, pinned:0, blocks:NOTE.blocks.map(b=>({...b, wrap:b.wrap||false, html:b.html||'', title:b.title||''}))};
+ok('1b defaults (wrap:false, html:"", title:"", deleted:0, archived:null, pinned:0) do not change the canonical form', S.cjson(withDefaults)===S.cjson(NOTE));
 ok('1c -0 reads as 0 and undefined fields are dropped', S.cjson({title:'',blocks:[{id:'z',row:-0,fx:undefined,text:''}],created:1,updated:1})===S.cjson({title:'',blocks:[{id:'z',row:0,fx:0,text:''}],created:1,updated:1}));
+{ const wire=S.canon(NOTE), kid=wire.blocks.find(b=>b.id==='c1'), back=S.normNote(wire,{cleanRich:clean});
+  ok('1e a block in an area\'s first column loses col 0 in the canonical form, as fx 0 does, and normalizes back with col 0 (found on .dev: 7 notes quarantined)', kid && kid.col===undefined && back.note && back.note.blocks.find(b=>b.id==='c1').col===0 && S.cjson(back.note)===S.cjson(NOTE)); }
+{ const one=(...blocks)=>S.normNote({title:'',created:1,updated:1,blocks},{cleanRich:clean}), AR={id:'ar',row:1,fx:0,kind:'area',cw:3};
+  const miss=one({id:'s',row:1,text:'t'}), nul=one({id:'s',row:1,fx:null,col:2,text:'t'}), str=one({id:'s',row:1,fx:'0.5',text:'t'}), obj=one({id:'s',row:1,fx:{},text:'t'}), nan=one({id:'s',row:1,fx:NaN,text:'t'});
+  ok('1f a block on the sheet: a missing or null fx reads as 0 and a stray col goes; a string, an object or NaN as fx is refused', miss.note && miss.note.blocks[0].fx===0 && nul.note && nul.note.blocks[0].fx===0 && nul.note.blocks[0].col===undefined && str.bad && obj.bad && nan.bad);
+  const kn=one(AR,{id:'k',row:1,parent:'ar',col:null,fx:0.3,text:'t'}), ks=one(AR,{id:'k',row:1,parent:'ar',col:'1',text:'t'});
+  ok('1g a block in an area: a null col reads as 0 and a stray fx goes; a string col is refused', kn.note && kn.note.blocks.find(b=>b.id==='k').col===0 && kn.note.blocks.find(b=>b.id==='k').fx===undefined && ks.bad); }
 ok('1d sameDoc ignores updated only', S.sameDoc(NOTE,{...NOTE,updated:999}) && !S.sameDoc(NOTE,{...NOTE,title:'інша'}));
 
 // 2 the normalizer is idempotent and two devices agree
@@ -39,9 +46,14 @@ ok('3c a parent to a missing area: the block goes to the sheet with fx 0 and no 
 // 4 shape errors
 const bad=[[null,'shape'],[{title:5,blocks:[],created:1,updated:1},'title'],[{title:'',blocks:'no',created:1,updated:1},'blocks'],[{title:'',blocks:[],created:'x',updated:1},'time'],
   [{title:'',blocks:[{id:'',row:1,fx:0}],created:1,updated:1},'blocks'],[{title:'',blocks:[{id:'a',row:'1',fx:0}],created:1,updated:1},'blocks'],[{title:'',blocks:[{id:'a',row:1,fx:0,kind:'table'}],created:1,updated:1},'blocks'],
-  [{title:'',blocks:[],created:1,updated:1,deleted:'yes'},'deleted'],[{title:'',blocks:[],created:1,updated:1,revived:{from:'',dev:'d',at:1}},'revived'],[{title:'x'.repeat(2001),blocks:[],created:1,updated:1},'title']];
+  [{title:'',blocks:[],created:1,updated:1,deleted:'yes'},'deleted'],[{title:'',blocks:[],created:1,updated:1,pinned:-5},'pinned'],[{title:'',blocks:[],created:1,updated:1,revived:{from:'',dev:'d',at:1}},'revived'],[{title:'x'.repeat(2001),blocks:[],created:1,updated:1},'title']];
 ok('4 bad shapes are reported, not repaired: '+bad.map(([d,why])=>S.normNote(d,{cleanRich:clean}).bad).join(','), bad.every(([d,why])=>S.normNote(d,{cleanRich:clean}).bad===why));
 ok('4b a good revived field with dn and title passes', S.normNote({title:'',blocks:[],created:1,updated:1,revived:{from:'n1',dev:'dev1',dn:'Chrome',title:'Стара',at:5}},{cleanRich:clean}).note.revived.title==='Стара');
+ok('4b2 a pinned note keeps its pin time; pinned:0 or null means «not pinned» and is dropped', S.normNote({title:'',blocks:[],created:1,updated:1,pinned:7},{}).note.pinned===7 && !('pinned' in S.normNote({title:'',blocks:[],created:1,updated:1,pinned:0},{}).note) && !('pinned' in S.normNote({title:'',blocks:[],created:1,updated:1,pinned:null},{}).note));
+{ const N0={title:'',blocks:[],created:1,updated:1}, nc=c=>S.normNote({...N0,color:c},{});
+  ok('4b3 a colour is kept: the five names and an unknown name of the same format (a later version\'s)', ['yellow','green','blue','pink','purple','teal','x-2'].every(c=>nc(c).note.color===c));
+  ok('4b4 a bad colour is reported: a number, upper case, a space, 25 characters', [5,'Blue','bl ue','a'.repeat(25),true,{}].every(c=>nc(c).bad==='color'));
+  ok('4b5 an absent, null or empty colour means «Стандартний»: no field, and the canonical form does not change', ['',null,undefined].every(c=>!('color' in nc(c).note)) && S.cjson({...N0,color:''})===S.cjson(N0) && S.cjson({...N0,color:'blue'})!==S.cjson(N0)); }
 ok('4c html goes through cleanRich and an empty result drops the field', S.normNote({title:'',blocks:[{id:'a',row:1,fx:0,text:'t',html:'<i>t</i>'}],created:1,updated:1},{cleanRich:()=>''}).note.blocks[0].html===undefined);
 
 // 5 versions

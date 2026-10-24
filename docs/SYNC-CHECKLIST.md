@@ -19,7 +19,7 @@ The sign-in works, the data does not move yet: the first read is refused by the 
 8. **Offline:** airplane mode → an edit → «Офлайн · 1 зміна чекає»; back online → «Синхронізовано», the edit on the other device.
 9. **Sign-out with an edit waiting:** «Вийти» while the status says «Надсилаю…» → «Завершую надсилання…» for a moment, then «Вийшли · n змін чекає»; the sign-in again sends them.
 10. **Another Google account (not in the rules):** sign out, sign in with a second account → «Синхронізація за запрошеннями», no dialog, the notes stay; sign out, sign in with the owner's account → «Синхронізовано», nothing asked.
-11. **Two tabs:** both show the status; «Вийти» in one signs out both; the sign-in in one shows the account in the other (reload it if its SDK was not loaded).
+11. **Two tabs:** both show the status; «Вийти» in one signs out both; the sign-in in one shows the account in the other (reload it if its SDK was not loaded). A tab left in the background for over five minutes while the other is used: the visible one syncs (an edit reaches the other device within seconds, the status moves there), not the hidden one.
 12. **«Прибрати нотатки з пристрою»:** the dialog says what is not in the cloud and offers the export; «Прибрати» → the page reloads empty, signed out, with the sign-in offered; the cloud keeps everything (item 6); the sign-in brings the notes back.
 13. **Phone, Chrome on Android, in the browser:** the gear → the sign-in → one press: the SDK loads and the page itself goes to Google (no popup, no second press) and comes back signed in, with the status; everything typed before the press is there.
 14. **Installed app (Android):** item 13 inside the app window; the return lands in the app, not in the browser.
@@ -30,6 +30,15 @@ The sign-in works, the data does not move yet: the first read is refused by the 
 ## The cost (SYNC-PLAN §4.17)
 
 18. **Three devices for an hour** with the first load and a few reconnects: the console's usage (Firestore → Usage) against the device's estimate (`sheetDebug.sync.quota()` in the console of the leader tab: `reads`, `writes` for the Pacific day). Criterion: the extrapolated owner's day stays within 25 % of the project limit's share; a refused request (item 10) must not count as a document read in the console.
+
+## The browser storage (docs/IDB-FALLBACK-PLAN.md §10, PR #96)
+
+When IndexedDB does not open, the app no longer switches silently to localStorage: it retries, shows «Сховище браузера відкривається…», then a view-only strip «Сховище браузера не відкрилося…» with «Експорт» and «Оновити», and reloads by itself when the storage comes back. The full list of checks is in the plan's §10; these are the ones on the owner's devices. Items 19 and 20 were done on 2026-10-23 on the owner's Android phone, in the installed app on `.dev` at «Версія 26.10.23.2»: the reinstall with the app's data kept («не удалять»), then a force-stop of Chrome and a start from the home screen, each opened the real notes with the sign-in and no fallback mode; a start with the network off opened from the service worker's set with the notes; the update strip and «Оновити» worked. No storage strip showed.
+
+19. **Android, the installed app on `.dev`:** uninstall and reinstall it, open it; then force-stop Chrome and open the app from the home screen at once. Expected: the real notes (and the sign-in in the menu), or the strip that goes away by itself within seconds; never «Без назви» alone with an editable sheet, never «(резервне сховище)» on a device that has notes. If a strip shows, note its text and how long it stayed.
+20. **Android, offline and with an older build:** the same with Wi-Fi off (a start from the service worker's set) and with «Доступна нова версія» showing: both strips show, «Оновити» on either reloads.
+21. **A database that never opens again.** First the steps that lose nothing: «Оновити»; close the app completely (Android: force-stop Chrome or the installed app; iOS: swipe it away) and open it again; restart the device; on a signed-in device, check on another device or in the Firebase console that the notes are in the cloud.
+22. **Clearing the site data is the destructive last resort.** It deletes the unreadable database with every note that exists nowhere else (notes written offline or before signing in, and the local history of versions), and an empty export from the strip proves nothing about what the database holds. Do it only with a verified copy (an export made while the database still opened, or every note seen on another signed-in device) or with the decision to lose the inaccessible local data. Where: Android Chrome «Налаштування сайту → Сховище → Очистити» (or the installed app's storage info); iOS Settings → Safari → Advanced → Website Data. Afterwards reopen the app and sign in: what the cloud has comes back. Tried once on a test profile, never first on the owner's device.
 
 ## Where the results go
 
