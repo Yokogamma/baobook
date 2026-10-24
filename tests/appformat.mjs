@@ -5,6 +5,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
+import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 srv.override.set('/blank.html','<!doctype html><meta charset="utf-8"><title>blank</title>');   // the same origin without the app, to set up its storage
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -26,6 +27,7 @@ const tryType=async(pg,x,y,t)=>{ await pg.mouse.click(x,y); await pg.keyboard.ty
 const go=async(pg,url)=>{ await pg.bringToFront(); await pg.goto(url); };   // a page left in the background may never finish loading
 const sheetText=pg=>pg.locator('#sheet').innerText();
 const has=(list,re)=>list.some(n=>re.test(JSON.stringify(n)));
+const waitTab=pg=>until(async()=>/не відпускають сховище/.test(await strip(pg)), 10000);   // the start's wait after a lasting `blocked` (IDB-BARRIER-PLAN §3): polled, not a fixed pause
 // a controllable IndexedDB failure: localStorage __fail = 'all' (every write of a note), 'backup' (only a «(резервна копія)» copy)
 // or 'slow' (the write goes through but its transaction stays open for 1.5 s, so a later save can start and end first)
 const FAILS=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototype.put=function(v){ let f=''; try{ f=localStorage.getItem('__fail')||''; }catch(_){}
@@ -184,7 +186,7 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // kept open, deaf to versionchange
-  await go(a,SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await a.waitForTimeout(3800);   // a block that lasts over 3 s
+  await go(a,SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await waitTab(a);   // a block that lasts over 3 s
   const msg=await strip(a);
   ok('4 blocked: the strip says another tab holds the storage and this page will go on by itself ('+msg+')', /не відпускають сховище/.test(msg) && !(await a.locator('#roReload').isVisible()) && !(await a.locator('#roExport').isVisible()));
   await tryType(a,500,400,'заблоковано'); await a.waitForTimeout(600);
@@ -456,7 +458,7 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   await a.waitForTimeout(400);
   ok('9 during the wait «Нова» makes no note, the sheet and the title take no text, a paste makes no block, nothing goes to localStorage', !(await fbKeys(a)).length && !/під час запуску/.test(await sheetText(a)) && !(await a.locator('#sheet .blk').count()) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
   ok('9a a note another tab sent during the wait does not show yet: nothing to open and edit before the start is done', !(await a.locator('#list .item').count()));
-  await a.waitForTimeout(3600);
+  await waitTab(a);
   ok('9b once the block lasts, the start keeps waiting, says why, and still nothing went to the fallback', /не відпускають сховище/.test(await strip(a)) && !(await fbKeys(a)).length && !(await a.locator('#list .item').count()));
   await b.evaluate(()=>window.__hold.close()); await ready(a);
   ok('9c nothing typed during the wait was taken: no text of it on the sheet or in the database', !/під час запуску/.test(await sheetText(a)) && !has((await dump(a)).stores.notes,/під час запуску/) && !(await strip(a)));
@@ -470,7 +472,7 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
     put('x5',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'старий пʼятий'}],created:T-9e5,updated:T-5000});
     put('x5~tabq~7',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'новий пʼятий'}],created:T-9e5,updated:T-100}); }, T);
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));
-  await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await a.waitForTimeout(3800);
+  await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await waitTab(a);
   ok('9f blocked: the start waits and shows no note yet', !(await a.locator('#list .item').count()) && /не відпускають сховище/.test(await strip(a)));
   await b.evaluate(()=>window.__hold.close()); await ready(a); await a.waitForTimeout(800);
   const items=await a.locator('#list .item').allInnerTexts();

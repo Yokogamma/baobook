@@ -54,7 +54,7 @@ async function v3device(ctx){ const O=await oldPage(ctx); await O.goto(SITE); aw
   ok('1 the device has used IndexedDB before (idbOk), so the code before this change would lock it', typeof (await settings(H)).idbOk==='number');
   const t0=Date.now(); await A.goto(SITE); await A.waitForSelector('html[data-ready]',{state:'attached'});
   const m0=await waitMsg(A, /Сховище браузера відкривається/, 2500);
-  const m1=await waitMsg(A, SILENT, 6000); await shot(A,'1-silent');
+  const m1=await waitMsg(A, SILENT, 6000), t1=Date.now(); await shot(A,'1-silent');
   ok('1a the strip says «opening» first, then that another tab seems asleep ('+((Date.now()-t0)/1000).toFixed(1)+' s)', !!m0 && !!m1);
   const b=await btns(A); ok('1b no button on the waiting strip ('+JSON.stringify(b)+')', !b.roRestore && !b.roPurge && !b.roExport && !b.roReload);
   await A.waitForTimeout(Math.max(0, 12000-(Date.now()-t0)));
@@ -67,11 +67,11 @@ async function v3device(ctx){ const O=await oldPage(ctx); await O.goto(SITE); aw
   await A.waitForTimeout(1500);
   ok('1e hidden and shown again: still waiting, no further open', SILENT.test(await msg(A)) && JSON.stringify(await opens(A))==='[0,4]');
   // the long wait: no cause named, «Оновити» shown, the request still alive
-  const m2=await waitMsg(A, LONG, 65000-(Date.now()-t0)); await shot(A,'1-long');
-  ok('1f after 60 s the strip names no cause and offers «Оновити» ('+((Date.now()-t0)/1000).toFixed(0)+' s)', !!m2 && (await btns(A)).roReload && !(await btns(A)).roExport);
+  const m2=await waitMsg(A, LONG, 75000-(Date.now()-t1)); await shot(A,'1-long');   // 60 s after the silent strip showed, with room for a slow runner
+  ok('1f after 60 s the strip names no cause and offers «Оновити» ('+((Date.now()-t1)/1000).toFixed(0)+' s after the silent strip)', !!m2 && (await btns(A)).roReload && !(await btns(A)).roExport);
   const doc=await mark(A);
   await H.evaluate(()=>window.__hold.close());
-  const li=await until(async()=>{ const l=await items(A); return l.some(t=>/нотатка з v3/.test(t))? l : null; }, 5000);
+  const li=await until(async()=>{ try{ const l=await items(A); return l.some(t=>/нотатка з v3/.test(t))? l : null; }catch(_){ return null; } }, 5000);   // a navigation (the code before this change reloads) is a failed check, not an abort
   ok('1g the holder lets go: the start goes on in the same page with the v3 note, no reload, no strip', !!li && await same(A,doc) && !(await msg(A)));
   const st=await dbState(A);
   ok('1h the database is v4 with format 4 ('+JSON.stringify(st)+')', st.version===4 && st.format===4);
@@ -91,7 +91,7 @@ async function v3device(ctx){ const O=await oldPage(ctx); await O.goto(SITE); aw
   ok('2b a second tab queued behind the wait gets the `storage` lock for now (the cross-tab hint comes with PR 2)', !!mc);
   const doc=await mark(A); let navC=0; C.on('framenavigated',f=>{ if(f===C.mainFrame()) navC++; });
   await H.evaluate(()=>window.__hold.close());
-  const li=await until(async()=>{ const l=await items(A); return l.some(t=>/нотатка з v3/.test(t))? l : null; }, 5000);
+  const li=await until(async()=>{ try{ const l=await items(A); return l.some(t=>/нотатка з v3/.test(t))? l : null; }catch(_){ return null; } }, 5000);
   ok('2c the holder lets go: the start goes on in the same page, no reload', !!li && await same(A,doc) && !(await msg(A)));
   const lc=await until(async()=>{ try{ const l=await items(C); return l.some(t=>/нотатка з v3/.test(t)) && !(await msg(C))? l : null; }catch(_){ return null; } }, 15000);
   ok('2d the second tab reloads by itself into a healthy start', !!lc && navC>0 && await editable(C));

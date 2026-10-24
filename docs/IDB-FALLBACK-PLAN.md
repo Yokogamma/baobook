@@ -183,7 +183,7 @@ Style as `tests/appformat.mjs` and `tests/appupdate.mjs`: one static server from
 - **A dead attempt's late events.** Without the dead flag in every handler, a late `VersionError` would start a new open chain, a late `success` on an empty v1 would start an upgrade, and a late `success` reaching `done()` would overwrite `idb.db` of the live attempt and leave a stray connection that blocks a later upgrade by another tab. §4.1 and §6 make the flag the first check in `go()`, `onsuccess`, `onerror` and `onblocked`; a late `success` closes its connection at once.
 - **Automatic reload loops** are bounded by the counter (§4.4); a reload never interrupts a dialog or an export in flight.
 - **`UnknownError` on a transaction instead of the open** (a database that opens but refuses to read) is not covered: `db.all()` then falls back to `fbAll()` as today with `db.backend==='idb'`, and the start shows the copies with the account menu on. Watching for it is a manual check (§10); a fix would be a `storage` lock on a failed first read, out of this PR.
-- **The `blocked` interplay**: a tab blocked by another tab's old connection still becomes `blocked` after 3 s, not `storage`, since `setLock` keeps the first kind and `idbOpenRetry` stops when `LOCK` is set.
+- **The `blocked` interplay**: an open later in the session that another tab's old connection blocks still becomes `blocked` after 3 s, not `storage`, since `setLock` keeps the first kind. At the start the upgrade request no longer locks: silence or a lasting `blocked` is a waiting state with its own strip, and the start goes on when the other connection closes (IDB-BARRIER-PLAN §3).
 
 ## 10. Manual checks on devices
 
