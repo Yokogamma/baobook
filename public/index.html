@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102309">
+<meta name="baobook-build" content="2026102401">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -190,6 +190,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 @media (hover:none){ .srow,.sect-b,.sect-x{min-height:44px} }
 .none{padding:18px 12px;font-size:var(--t-md);color:var(--ink-3);text-align:center}
 /* підвал лежить поверх низу списку, правіше лишає місце повзунку — смуга прокрутки доходить до низу панелі */
+#bootV{white-space:pre-line} .snapit{padding:9px 12px;border-radius:8px;opacity:.5;pointer-events:none;user-select:none} .snapit .it-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .snapcap{font-style:italic}
+@media (max-width:640px){ .app.open.wait #roStrip,.app.open.stlock #roStrip{position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:0;right:0;z-index:25} .app.open.menu #roStrip{display:none} }   /* the settings menu, open in the panel, is not covered by it */   /* the start's strip and the storage lock above the full-width panel on a phone */
 .side-f{position:absolute;left:0;right:8px;bottom:0;z-index:2;padding:14px 14px 8px;font-size:var(--t-xs);color:var(--ink-2);display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .side-f::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--paper) var(--page);-webkit-mask-image:linear-gradient(transparent,#000 12px);mask-image:linear-gradient(transparent,#000 12px)}
 .side-f>*{pointer-events:auto}
@@ -700,6 +702,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="mi" id="installBtn" type="button" hidden data-i18n="install.button"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
         <div class="hint" id="iosHint" hidden data-i18n="install.iosHint"></div>
         <div class="hint" id="buildV"></div>
+        <div class="hint" id="bootV"></div>
       </div>
     </div>
     <label class="search" id="searchBox"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -789,8 +792,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102309" integrity="sha384-V0CwQJ+Knicry7g/TWb3wjdlDxwd/Ikvv3hAmeATnsY1qMNQvLKXbRl1FhqLnj4t"></script>
-<script src="cloud.js?b=2026102309" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102401" integrity="sha384-V0CwQJ+Knicry7g/TWb3wjdlDxwd/Ikvv3hAmeATnsY1qMNQvLKXbRl1FhqLnj4t"></script>
+<script src="cloud.js?b=2026102401" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -801,9 +804,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'locales/en.json':'sha384-Nj4SGTMpliSUZTyA41murM/UgS74dKM2L6B6r3ayyt/Ie6xEetaH4VBywf8CeL13', 'locales/uk.json':'sha384-P6Pnt9yFqxXaxgJn58l0gLtcpRBdp+nDhjGWxGXrwD0bDsjYE8XYikB/fkVyVn+2'};
+const SRI={'locales/en.json':'sha384-KEEbZmKUiw5OBec53TMBqhZeaff6q+i4mYciZ349jG0eg8sslkNgVDTpozzkVdyA', 'locales/uk.json':'sha384-VuqG0q2bNu1DJsaqyms4AiIzXIH5Ok7//ctVF113UeDFUn4hBMyhhC+UX2wjjvqZ'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102309;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102401;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
@@ -840,6 +843,13 @@ const app=$('app'), list=$('list'), q=$('q'), qClear=$('qClear'), searchBox=$('s
       sideBtn=$('sideBtn'), backdrop=$('backdrop'), newBtn=$('newBtn'), spellBtn=$('spellBtn'), gridBtn=$('gridBtn'), themeBtn=$('themeBtn'), clearBtn=$('clearBtn'), installBtn=$('installBtn'), iosHint=$('iosHint');
 const fab=$('fab'), viewBtn=$('viewBtn'), bubble=$('bubble'), bubbleMore=$('bubbleMore'), blockbar=$('blockbar'), dbgGeo=$('dbgGeo'), dbgTop=$('dbgTop'), moreBtn=$('moreBtn'), areaBtn=$('areaBtn'), saveWarn=$('saveWarn'), saveErr=$('saveErr'), saveErrMsg=$('saveErrMsg'), saveRetry=$('saveRetry'), saveExport=$('saveExport'), dbgRow=$('dbgRow'), dbgFail=$('dbgFail');
 const SC=window.BaobookSync, {hashOf, bodyOf, entryOf, manifestOf, sumOf, V_BODY_MAX}=SC;   // the sync core (sync.js): the canonical form, the normalizer, merging and the history manifests it shares with the versions code
+/* the start's journal (localStorage sheet:boot, the last 5 starts): when each step of the start came (ms since the page began), so a slow or a
+   stuck start can be told apart afterwards; the settings menu shows it under the version (bootUI). Steps: main, db? (an open attempt), db!err /
+   db!silent, db (open), lock:<kind>, sync, move, notes, start. While the start waits, w (the latest time seen) moves every 2 s */
+const BOOT={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5), at:Date.now(), build:BUILD, m:[]};
+function bootSave(){ try{ const all=(JSON.parse(localStorage.getItem('sheet:boot')||'[]')||[]).filter(r=>r && r.id!==BOOT.id); all.push(BOOT); localStorage.setItem('sheet:boot', JSON.stringify(all.slice(-5))); }catch(_){} }
+function boot(step){ BOOT.m.push([step, Math.round(performance.now())]); BOOT.w=Math.round(performance.now()); bootSave(); }
+boot('main');
 const DEBUG={failSave:false, relist:()=>renderList()}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
@@ -979,7 +989,7 @@ const IDB_VER=4, IDB_STORES=['notes','versions','blobs','sync'];
 // `storage` lock; RELOADS_MAX, the automatic reloads a tab allows itself in one lock → reload → lock loop (sessionStorage sheet:idb-reloads)
 const OPEN_WAIT=8000, OPEN_RETRY=[300,900], PROBE_WAIT=3000, RELOADS_MAX=3;
 let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
-function setLock(k){ if(LOCK) return; LOCK=k; leadOff(); if(STARTED) lockUI(); }   // a view-only tab never leads the sync (SYNC-PLAN 4.10): the lock goes with the first write it cannot make
+function setLock(k){ if(LOCK) return; LOCK=k; boot('lock:'+k); leadOff(); if(STARTED) lockUI(); else if(!roStrip.hidden) waitUI(); }   // the start's strip, if shown, says the lock at once   // a view-only tab never leads the sync (SYNC-PLAN 4.10): the lock goes with the first write it cannot make
 const idb={ db:null, opening:null, silent:false, want:false, back:false,   // silent: the start's open never answered (IDB-FALLBACK-PLAN §4.1); want: the storage answered again under the `storage` lock, a reload is requested; back: past the reload limit, the strip asks for the tap
   // one open at a time: concurrent callers (saves, the sync engine) share the promise instead of making two connections.
   // o.deadline (the start only): a silence timer per request, cleared by its first event; when it fires the attempt is dead and the promise
@@ -1112,9 +1122,8 @@ const idbWorked=()=>!!(S.idbOk || S.versSwept);   // IndexedDB has opened on thi
 // the attempts: a failure that finished (`error`, a throw out of indexedDB.open) is tried again after OPEN_RETRY waits, unless a lock was set meanwhile
 // (`newer`, `blocked`: decided inside the open) or IndexedDB is not there; silence ends the loop at once (idb.silent). After 1 s of waiting the strip
 // says the storage is opening (every button hidden), so a slow or hanging open does not look like a frozen app; roSync() at the start's end replaces or hides it
-async function idbOpenRetry(){ const waits=[...OPEN_RETRY], st=setTimeout(()=>{ roMsg.textContent=loc('lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; }, 1000);
-  try{ for(;;){ try{ return await idb.open({deadline:OPEN_WAIT}); }catch(e){ if(e && e.silent){ idb.silent=true; throw e; } if(!waits.length || LOCK || !window.indexedDB) throw e; await new Promise(r=>setTimeout(r, waits.shift())); } } }
-  finally{ clearTimeout(st); } }
+async function idbOpenRetry(){ const waits=[...OPEN_RETRY];   // the strip that says the storage is opening is start()'s (waitUI)
+  for(;;){ boot('db?'); try{ const r=await idb.open({deadline:OPEN_WAIT}); boot('db'); return r; }catch(e){ boot(e && e.silent? 'db!silent' : 'db!err'); if(e && e.silent){ idb.silent=true; throw e; } if(!waits.length || LOCK || !window.indexedDB) throw e; await new Promise(r=>setTimeout(r, waits.shift())); } } }
 /* the background probe under the `storage` lock, only after an `error` (the queue is clear): 5 s after the lock, then 10, 20 and every 30 s, while the
    tab is visible; a tab shown again probes at once. A probe is a bare indexedDB.open(IDB_NAME) that never touches idb.db: a success closes its
    connection and reloads the page (idbBack); an error or a throw is «still closed»; silence ends the probing, and the silent probe is the watch
@@ -1395,7 +1404,7 @@ function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=nu
 // the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
 async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
   if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
-  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); }
+  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); if(!o.erase){ snapOff=false; snapSave(); } }
 // the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
 // anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
 async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
@@ -1422,7 +1431,7 @@ async function showOwnerDialog(user, owner, ep0){ ACC.dialog=true; accStatus();
       if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
       const B={uid:user.uid, env:FB.env, email:user.email};
       if(c==='add'){ await bindOwner(B,{expectEpoch:ep0}); connectAccount(user); return; }
-      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
+      DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
   catch(e){ if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
   finally{ ACC.dialog=false; accStatus(); } }
 // a choice dialog: askChoice({title, text, buttons:[{id, label, pri, danger}]}) → Promise<id | 'cancel'>; Esc, a click outside and Back cancel, like ask()
@@ -1481,17 +1490,17 @@ async function removeFromDevice(){ if(DYING || ACC.signingOut) return; setMenu(f
     if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
     const ep=SYNC.epoch; DYING=true; await signOutCore();
     try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && e.code==='epoch')) throw e; say(loc('account.raced')); }
-    tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
+    snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
 // the engine must sign in again (its token is refused): the user is signed out here and told so
 async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ await signOutCore(); ACC.probe='reauth'; accUI(); accStatus(); } finally{ ACC.reauth=false; } }
 // another tab changed the owner (the «owner» message of bindOwner / the dialog): after an erase or a decision made there this tab reloads; after a
 // binding that kept the records (a first sign-in, «Додати до хмари») the engine is replaced by one that knows the new owner, and the tab goes on
-async function ownerMoved(m){ if(DYING) return;
+async function ownerMoved(m){ snapDrop(); if(DYING) return;
   if(db.backend!=='idb'){ STALE=true; setLock('epoch'); accUI(); return; }   // a tab without the store (the `storage` lock, the localStorage mode): the view is the old owner's and stays as it is until the reload (keptView drops every later message); no engine to reload, no SDK to load. The lock lands only on a writing tab of the localStorage mode: a lock already set stays
   if(m.erase || ACC.otherTab) return epochMoved(loc('lock.owner'));   // the records are gone, or the decision was taken in the other tab: this screen is the old owner's
   if(SYNC) SYNC.stop(); await waitFree(10000); leadOff(); detachEngine(); try{ await SYNC.reload(); }catch(_){}
   LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear();
-  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
+  ACC.checked=null; ACC.otherTab=false; accUI(); accStatus(); if(ACC.user && ACC.sdk) accountCheck(ACC.user,{force:true}); else if(!ACC.sdk) sdkLoad(); snapOff=false; snapSave(); }   // the device has an owner now: the SDK loads as it would at start, and Firebase brings the user
 // the «auth» message of another tab: a sign-in there loads the SDK here (Firebase then brings the user); a sign-out there takes this tab's cloud at once
 function authMsg(m){ if(!accOn() || DYING) return; if(m.uid){ if(!ACC.sdk) sdkLoad(); return; } if(ACC.user || CLOUD){ ACC.user=null; dropCloud(); accUI(); } }
 const authGate=()=>!(CLOUD && CLOUD.uid) || (db.settings().fbUser||{}).uid===CLOUD.uid;   // the cloud this tab would lead with belongs to the user still signed in (the mirror is the synchronous truth)
@@ -1575,8 +1584,17 @@ const kbFocus=el=>{ try{ return el.matches(':focus-visible'); }catch(_){ return 
 const listShown=()=>app.classList.contains('open');   // the panel is open (a closed one on a narrow screen is still drawn, off the screen, and slides while it closes)
 const focusSlot=at=>{ const L=list.querySelectorAll('.item'); if(L.length) L[Math.min(at, L.length-1)].focus({preventScroll:true}); };   // the item now in a removed note's place
 function renderList(){ redrawing=true; const off=()=>{ redrawing=false; }; requestAnimationFrame(off); setTimeout(off,100); const a=document.activeElement, it=a && a!==list && list.contains(a) && kbFocus(a)? a.closest('.item') : null, id=it && it.dataset.id, cls=it && a!==it? a.classList[0] : '', at=it? [...list.querySelectorAll('.item')].indexOf(it) : -1;   // a keyboard focus only: a click leaves none behind
-  drawList(); if(actsId!==null && !list.querySelector('.item.amode')){ actsId=null; nav.close('acts'); } if(palOpen) placePal();   // the note left the list: its action mode goes, and its palette (placePal closes it)
+  drawList(); snapSave(); if(LOCK==='storage') snapShow(loc('boot.snapLocked')); if(actsId!==null && !list.querySelector('.item.amode')){ actsId=null; nav.close('acts'); } if(palOpen) placePal();   // the note left the list: its action mode goes, and its palette (placePal closes it)
   if(id && listShown() && !list.contains(document.activeElement) && !focusItem(id, cls, it.dataset.k)) focusSlot(at); }
+// the last list as names only (localStorage sheet:listsnap, at most 60, pinned first): shown greyed while the start waits and under the storage
+// lock, so the notes are seen to exist while they cannot be read; written only by a started tab with the store open, removed with the notes
+const SNAP='sheet:listsnap'; let snapT=0, snapOff=false;   // snapOff: an owner change is under way in this tab; no list is written until it has the new data (or reloads)
+const snapOk=()=>STARTED && !LOCK && !DYING && !snapOff && db.backend==='idb';
+function snapDrop(){ snapOff=true; clearTimeout(snapT); snapT=0; try{ localStorage.removeItem(SNAP); }catch(_){} }   // every erase and every owner change, in this tab and in the tabs told of it: the names go with the notes, and none is written again meanwhile
+function snapSave(){ if(!snapOk()) return; clearTimeout(snapT); snapT=setTimeout(()=>{ if(!snapOk()) return;
+  try{ localStorage.setItem(SNAP, JSON.stringify(notes.filter(listed).sort(listOrder).slice(0,60).map(n=>({t:titleOf(n), p:n.pinned? 1 : 0})))); }catch(_){} }, 1000); }
+function snapShow(cap){ let s=[]; try{ s=JSON.parse(localStorage.getItem(SNAP)||'[]'); }catch(_){} if(!Array.isArray(s) || !s.length) return;
+  el('div','grp snapcap',list).textContent=cap; for(const x of s){ const d=el('div','snapit'+(x && x.p? ' pinned' : ''),list); el('div','it-t',d).textContent=String(x && x.t || ''); } }
 function drawList(){
   const T=terms(), sec=section, pool=notes.filter(sec==='trash'? trashed : sec==='archive'? archived : listed), bin=notes.filter(trashed).length, box=notes.filter(archived).length; searchBox.classList.toggle('has',!!q.value);
   sect.hidden=sec==='notes'; trashEmpty.hidden=sec!=='trash' || !pool.length; trashRow.hidden=sec!=='notes' || !bin; trashN.textContent=bin; archRow.hidden=sec!=='notes' || !box; archN.textContent=box;
@@ -2044,7 +2062,7 @@ trashEmpty.addEventListener('click',async()=>{ if(held()) return; if(db.backend!
 const ro=()=>!!LOCK || !!(cur && cur.deleted);   // view-only (LOCK) or a note in the trash
 /* the strip under the header: a trashed note is read-only, an archived one only says where it is */
 // nothing is editable before the start is done (off), the strip and the classes follow ro()
-function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=r || !STARTED; sheet.inert=off; ttl.contentEditable=off? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L);
+function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=r || !STARTED; sheet.inert=off; ttl.contentEditable=off? 'false' : 'true'; app.classList.toggle('ro', r); app.classList.toggle('arch', a); app.classList.toggle('locked', L); app.classList.toggle('stlock', LOCK==='storage');
   roStrip.hidden=!r && !a; roPurge.hidden=!r || L; roRestore.hidden=L; roExport.hidden=!L; roReload.hidden=!L;
   if(L){ roMsg.textContent=loc(LOCK==='epoch'? 'lock.epoch' : LOCK==='blocked'? 'lock.blocked' : LOCK==='other'? 'lock.other' : LOCK==='nolock'? 'lock.nolock' : LOCK==='storage'? (idb.back? 'lock.storageBack' : 'lock.storage') : unsaved.size? 'lock.unsaved' : LOCK==='newer'? 'lock.newer' : 'lock.updated'); roExport.textContent=loc(unsaved.size? 'lock.exportUnsaved' : 'lock.export'); }
   else if(r){ roMsg.textContent=loc('trash.strip',{n:daysLeft(cur)}); roRestore.textContent=loc('trash.restore'); } else if(a){ roMsg.textContent=loc('archive.strip'); roRestore.textContent=loc('archive.unarchive'); } fabSync(); }
@@ -3176,13 +3194,22 @@ function textStepper(){ const d=document.createElement('div'); d.className='mi-s
     const next=b===plus? FS_STEPS.find(x=>x>t.fs) : [...FS_STEPS].reverse().find(x=>x<t.fs); if(next) setText({...manual(t), textSheet:next}); show(); });
   show(); return d; }
 
+/* the start, seen: after 1 s the strip says what the app waits for (the storage opening, then the notes being read), after 5 s that the storage is
+   slow to answer; on a phone the strip stays above the open panel (.wait); the last list shows greyed in the panel meanwhile (sheet:listsnap) */
+let waitSlow=false;
+function waitUI(){ if(STARTED) return;
+  // a lock found before the start's end (newer data, blocked, the storage): its own message, only «Оновити» (nothing is loaded to export yet)
+  if(LOCK){ roSync(); roExport.hidden=true; roStrip.hidden=false; app.classList.add('wait'); return; }
+  roMsg.textContent=loc(waitSlow? 'boot.slow' : idb.db? 'boot.waiting' : 'lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; app.classList.add('wait'); }
 async function start(){
-  await db.init(); SYNC=makeEngine();
+  const w1=setTimeout(waitUI, 1000), w2=setTimeout(()=>{ waitSlow=true; waitUI(); }, 5000), beat=setInterval(()=>{ BOOT.w=Math.round(performance.now()); bootSave(); }, 2000);
+  if(!list.children.length) snapShow(loc('boot.snapWait'));
+  await db.init(); SYNC=makeEngine(); if(!roStrip.hidden) waitUI();   // the storage is open: the strip, if shown, now says the notes are being read
   if(db.backend==='idb' && !LOCK){   // the sync core first: the device record (written once: every tab of the device writes as it), the engine loaded from the store, the fallback copies moved in through it, then lrev of every note
     try{ await SDB.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','device'))) t.put('sync',{k:'device', id:S.devId, name:S.devName}); }); }catch(_){}
-    try{ await SYNC.reload(); if(SYNC.devId!==S.devId || SYNC.devName!==S.devName) saveS({devId:SYNC.devId, devName:SYNC.devName}); }catch(_){}
-    try{ await db.move(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); }catch(_){} }
-  notes=await db.all(); vstart(); app.classList.toggle('local', db.backend!=='idb');
+    try{ await SYNC.reload(); if(SYNC.devId!==S.devId || SYNC.devName!==S.devName) saveS({devId:SYNC.devId, devName:SYNC.devName}); }catch(_){} boot('sync');
+    try{ await db.move(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); }catch(_){} boot('move'); }
+  notes=await db.all(); boot('notes'); vstart(); app.classList.toggle('local', db.backend!=='idb');
   window.addEventListener('online',()=>{ if(SYNC){ SYNC.online(true); syncWake(); } }); window.addEventListener('offline',()=>{ if(SYNC) SYNC.online(false); }); document.addEventListener('visibilitychange',()=>{ if(!document.hidden && SYNC) syncWake(); });
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
   if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
@@ -3197,7 +3224,8 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload' && !TORN? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins; also on a reload out of the recovery strip (TORN): the app never started on that address
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
-  STARTED=true; roSync(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
+  clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start');
+  STARTED=true; roSync(); snapSave(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
@@ -3212,7 +3240,7 @@ langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</
 langSel.addEventListener('change',()=>{ saveS({lang:langSel.value}); location.reload(); });
 
 /* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
-function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open) closeActs(); setPop.hidden=!open;   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
+function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open){ closeActs(); bootUI(); } setPop.hidden=!open; app.classList.toggle('menu', open);   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
   setBtn.setAttribute('aria-expanded',open?'true':'false');
   if(open){ document.addEventListener('pointerdown',setOut,true); document.addEventListener('keydown',setKey,true); nav.open('settings', ()=>setMenu(false)); if(o.kb) setPop.querySelector('select').focus(); return; }
   document.removeEventListener('pointerdown',setOut,true); document.removeEventListener('keydown',setKey,true); nav.close('settings'); if(setPop.contains(document.activeElement)) setBtn.focus(); }
@@ -3232,6 +3260,21 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator
    installed app kept in memory, a start from the cache while the network was down), so it asks for build.json (never cached by the worker)
    at start, when it is shown again, when the network comes back and every half hour. «Оновити» reloads once nothing is left to save. */
 const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false, updSeen=BUILD; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});   // updSeen: the newest build shown or hidden with ✕; only a newer one shows the strip again
+/* the journal of the last starts (BOOT, sheet:boot) under the version: when, how long, and for a start over 3 s the step that took longest; a
+   start that never finished says what it was waiting for */
+function bootPh(k){ k=String(k); return k==='main'? loc('boot.ph.load') : k==='db?'? loc('boot.ph.retry') : k==='sync'? loc('boot.ph.sync') : k==='move'? loc('boot.ph.move') : k==='notes'? loc('boot.ph.notes') : k==='start'? loc('boot.ph.ui') : loc('boot.ph.db'); }   // db, db!err, db!silent, lock:<kind>: the storage
+const bootNext=k=>({main:'db', 'db?':'db', db:'sync', sync:'move', move:'notes', notes:'start'})[k]||'db';   // the step a stuck start waited for
+function durTxt(ms){ const f=(v,u,d)=>new Intl.NumberFormat(I18N.locale,{style:'unit', unit:u, unitDisplay:'short', maximumFractionDigits:d}).format(v);
+  if(ms<60000) return f(ms/1000,'second', ms<10000? 1 : 0); const m=Math.floor(ms/60000), sec=Math.round(ms%60000/1000); return f(m,'minute',0)+(sec? ' '+f(sec,'second',0) : ''); }
+function bootUI(){ let all=[]; try{ all=JSON.parse(localStorage.getItem('sheet:boot')||'[]'); }catch(_){} if(!Array.isArray(all)) all=[];
+  const fmt=new Intl.DateTimeFormat(I18N.locale,{day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit'});
+  const lines=all.slice(-3).reverse().map(r=>{ const m=Array.isArray(r && r.m)? r.m : [], end=m.find(x=>x[0]==='start'), when=fmt.format(new Date(r.at||0));
+    if(!end){ if(r.id===BOOT.id) return loc('boot.now',{when}); const last=m[m.length-1]||['main',0]; return loc('boot.stuck',{when, total:durTxt(Math.max(r.w||0, last[1])), phase:bootPh(bootNext(last[0]))}); }
+    const total=end[1]; if(total<3000) return loc('boot.line',{when, total:durTxt(total)});
+    let best=null, prev=0; for(const [k,t] of m){ if(!best || t-prev>best.g) best={k, g:t-prev}; prev=t; if(k==='start') break; }
+    const n=m.filter(x=>x[0]==='db?').length, p={when, total:durTxt(total), phase:bootPh(best.k), dur:durTxt(best.g), n};
+    return n>1? loc('boot.slowTries',p) : loc('boot.slowLine',p); });
+  $('bootV').textContent=lines.length? loc('boot.title')+'\n'+lines.join('\n') : ''; }
 async function updCheck(force){ if(!/^https?:/.test(location.protocol) || document.hidden || !navigator.onLine || !updStrip.hidden) return; const t=Date.now(); if(!force && t-updAt<6e4) return; updAt=t; clearTimeout(updT);
   let r; try{ r=await fetch('./build.json',{cache:'no-store', signal:AbortSignal.timeout? AbortSignal.timeout(1e4) : undefined}); }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet, or holds the request over 10 s: again in a while
   let b=0; try{ if(r.ok && /json/.test(r.headers.get('content-type')||'')) b=+(await r.json()).build||0; }catch(_){}   // not our JSON (a captive portal, a fallback page): nothing to compare
