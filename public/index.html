@@ -794,7 +794,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102407" integrity="sha384-UbXIVPTkqshJniuQeK9KkECzE8HrUkPEY2h9QxRO52dMqecjO7gaUCj64kHpMLO2"></script>
+<script src="sync.js?b=2026102407" integrity="sha384-IW3wPSRNJLWtfbzo+plHZn86bmXLZl4sqjUMF3fHz+v4MGshS2P+dkVhwyAip/dJ"></script>
 <script src="cloud.js?b=2026102407" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -806,7 +806,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-XiLt6tNLEyC+2YxH6rxgCXH96hWT2Up/p2FLyltFx3hvnY4rl+sekZ8vB8ix22tw', 'account/panel.js':'sha384-Oe73YRWVIfloa4pI3EjpW0TXNg2ZvrsbzfaJPOnKLhFmPB99XyuS0UUxmyk8TsNM', 'account/view.js':'sha384-4qzV8nVHBIQmbQmn1MNS7YnnQFrCnVZmhOpF9xyoaepQOZ564NPXnmwzMRJsnj8j', 'locales/en.json':'sha384-6qfxEJrlPoN4nY18Hmd6p7rQX5o+tyzKYSQv+oSto7dbRE6n+zBxyhCgNHEOaZGr', 'locales/uk.json':'sha384-u6BqR5kSL7SALsu1mHSlCwWlnty9411lVFkMw2Ik7DgJ493upl95FjkM8WAqRBhY'};
+const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-XiLt6tNLEyC+2YxH6rxgCXH96hWT2Up/p2FLyltFx3hvnY4rl+sekZ8vB8ix22tw', 'account/panel.js':'sha384-kxF/FatwS9nM8ziwt/37fbsLRvcj86ABLDlw7YiWduo8U9Vz/HEosmHnwX+wdu5a', 'account/view.js':'sha384-4qzV8nVHBIQmbQmn1MNS7YnnQFrCnVZmhOpF9xyoaepQOZ564NPXnmwzMRJsnj8j', 'locales/en.json':'sha384-VzjrFhgXwD6b9xAN4cFvG4II39M39Aub7e6oPeamUURDQcxxpwd8VlA8sW0Um2d2', 'locales/uk.json':'sha384-DeH7bofeNbBrA2QF4V2/ZUWe2485sNKhJFDNHERehvi27sE6PBVwAxtiRBllKqhQ'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
 const BUILD=2026102407;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
@@ -1570,22 +1570,29 @@ const authGate=()=>!(CLOUD && CLOUD.uid) || (db.settings().fbUser||{}).uid===CLO
 /* the status (§4.18) and the account panel (§4.11) live in public/account/ (PR 4c); the page mounts it with what it knows (the host) and calls
    ACCT.render() where it called the status before. The leader computes the core's status; the other tabs mirror it («st» message) */
 let ACCT=null;
-function accStatus(){ if(ACCT) ACCT.render(); else { syncBtn.hidden=true; DEBUG.sync.ui=accOn()? {code:'none', text:''} : null; } }   // until the module has loaded: no button, as with no status
+function accStatus(){ if(ACCT) ACCT.render(); else if(ACC_FAIL && accOn()){ const t=loc('account.moduleFailed'); syncBtn.hidden=false; syncBtn.dataset.st='bad'; syncBtn.title=t; syncBtn.setAttribute('aria-label',t); accState.textContent=t; DEBUG.sync.ui={code:'failed', text:t}; }
+  else { syncBtn.hidden=true; DEBUG.sync.ui=accOn()? {code:'none', text:''} : null; }   // until the module has loaded: no button, as with no status
+  histNote(); }
 function accMount(){ import('./account/panel.js').then(m=>{ ACCT=m.mount({doc:document, t:loc, button:syncBtn, line:accState, opener:syncBtn, nav,
     when:ms=>({day:dayOf(ms)===loc('hist.today')? '' : dayOf(ms), time:hm(ms)}),
     account:()=>({on:!!FB && db.backend==='idb', viewOnly:!!LOCK, user:ACC.user, owner:SYNC && SYNC.owner, cloud:!!CLOUD, signingOut:!!ACC.signingOut, loading:!!ACC.loading, signingIn:!!ACC.signingIn, checking:!!ACC.checking, dialog:!!ACC.dialog, probe:ACC.probe||null, otherTab:!!ACC.otherTab}),
     core:()=>!SYNC || !SYNC.owner? null : (!ACC.user || !CLOUD)? {code:'none', n:0, jobs:new Set([...SYNC.jobs(), ...SYNC.tries()]).size+new Set([...SYNC.vjobs(), ...SYNC.vtries()]).size} : LEAD.on? DEBUG.sync.status : (ACC.leadSt||{code:'pending', n:0}),
-    counts:()=>SYNC && SYNC.owner? unsyncedCount() : Promise.resolve(null), used:()=>SYNC && SYNC.owner? SYNC.usedToday() : null, limit:()=>SYNC && SYNC.owner? SYNC.limits() : null,
+    counts:()=>SYNC && SYNC.owner? unsyncedCount() : Promise.resolve(null), used:async()=>!SYNC || !SYNC.owner? null : LEAD.on? SYNC.usedToday() : SYNC.usedStored(), limit:()=>SYNC && SYNC.owner? SYNC.limits() : null,
     devName:()=>S.devName||'', title:id=>{ const n=notes.find(x=>x.id===id); return n? titleOf(n) : ''; },
     attempts:()=>SYNC? SYNC.tries().length+SYNC.vtries().length : 0, leader:()=>LEAD.on, tick:()=>{ if(SYNC) SYNC.status(); },
     report:ui=>{ DEBUG.sync.ui=ui || (accOn()? {code:'none', text:''} : null); },
     actions:{signIn:()=>signIn(), signOut:()=>signOut(), remove:()=>removeFromDevice(), export:async()=>{ await exportAll({hist:true}); say(loc('account.exported')); }, openNote:id=>{ const n=notes.find(x=>x.id===id); if(n) openNote(n); },
       rename:async name=>{ if(!SYNC) return; const r=await SYNC.deviceName(name||uaName()); if(r.ok){ saveS({devName:r.name}); tellTabs({t:'dev', name:r.name}); ACCT.render(); } }}});
-    accStatus(); }).catch(e=>console.error('account: the module did not load', e)); }
-function accUI(){ const on=accOn(), owner=SYNC && SYNC.owner, user=ACC.user; accRow.hidden=!on || !(user || owner); accEmail.textContent=user? (user.email||user.uid) : ownerName(owner);
-  signInBtn.hidden=!on || !!user; signOutBtn.hidden=!on || !user; removeBtn.hidden=!on || !(user || owner); accHr.hidden=!on;
+    accStatus(); }).catch(e=>{ console.error('account: the module did not load', e); ACC_FAIL=true; accStatus(); accFailUI(); }); }
+// the panel's module was refused (a file of another build) or did not come: a module that failed stays failed in this document, so only a reload
+// brings it; the status button stays, says so and offers the update strip's reload (which waits for unsaved text)
+let ACC_FAIL=false;
+function accFailUI(){ if(!accOn()) return; updMsg.textContent=loc('account.moduleFailed'); updStrip.hidden=false; }
+function accUI(){ const on=accOn(), avail=!!FB && db.backend==='idb', owner=SYNC && SYNC.owner, user=ACC.user; accRow.hidden=!avail || !(user || owner);   // a view-only tab keeps the row: it opens the panel read-only
+  accEmail.textContent=user? (user.email||user.uid) : ownerName(owner);
+  signInBtn.hidden=!on || !!user; signOutBtn.hidden=!on || !user; removeBtn.hidden=!on || !(user || owner); accHr.hidden=!avail;
   if(!ACC.loading) signInLbl.textContent=ACC.sdk? loc('account.continue') : loc('account.signIn'); }
-syncBtn.addEventListener('click',()=>{ if(ACCT) ACCT.open(syncBtn); }); accRow.addEventListener('click',()=>{ if(!ACCT) return; setMenu(false); ACCT.open(setBtn); }); accRow.addEventListener('keydown',e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); accRow.click(); } });   // the button and the account row of the menu open the panel
+syncBtn.addEventListener('click',()=>{ if(ACCT) ACCT.open(syncBtn); else if(ACC_FAIL) accFailUI(); }); accRow.addEventListener('click',()=>{ if(!ACCT){ if(ACC_FAIL){ setMenu(false); accFailUI(); } return; } setMenu(false); ACCT.open(setBtn); }); accRow.addEventListener('keydown',e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); accRow.click(); } });   // the button and the account row of the menu open the panel
 signInBtn.addEventListener('click',()=>signIn()); signOutBtn.addEventListener('click',()=>signOut()); removeBtn.addEventListener('click',()=>removeFromDevice());
 // the start of the account (the end of start()): the menu, the status, persistence with an owner, the SDK when the device has an owner, a user or a
 // redirect under way; the tab that comes back from a redirect knows it (sessionStorage); the Home Screen hint once on an iPhone outside the app
@@ -2169,7 +2176,7 @@ function roSync(){ const L=!!LOCK, r=ro(), a=!r && !!(cur && cur.archived), off=
 roRestore.addEventListener('click',()=>{ if(!cur) return; if(cur.deleted) restoreNote(cur, true); else unarchive(cur); }); roPurge.addEventListener('click',()=>{ if(cur) purgeAsk(cur); });
 roExport.addEventListener('click',()=>exportAll({hist:true})); roReload.addEventListener('click',()=>location.reload());   // view-only: everything this tab has, the history as stored
 function held(){ if(!STARTED) return true; if(!LOCK) return false; say(loc('lock.say')); return true; }   // an action that would write before the start is done, or while the data is view-only
-function lockUI(){ roSync(); saveUI(); renderList(); storageUI(); fabSync(); }
+function lockUI(){ roSync(); saveUI(); renderList(); storageUI(); fabSync(); accUI(); accStatus(); }   // an open account panel turns read-only at once
 newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection('notes'); const n=newNote(); q.value=''; renderList(); openNote(n); storageUI(); });
 
 /* ══ other tabs: every tab keeps its notes in memory, so a save or a delete in one tab is sent to the others, and a tab never writes an old copy over a newer one ══
@@ -3180,11 +3187,14 @@ async function openHist(){ if(H.open || !cur || keptView()) return;   // read-on
   await loadHist(); }
 function closeHist(){ if(!H.open) return; clearTimeout(H.t); showNow(); H.open=false; H.list=[]; H.vis=[]; H.bodies=null; H.txt.clear(); hist.hidden=true; app.classList.remove('hist-open'); histBtn.setAttribute('aria-pressed','false'); nav.close('hist'); fabSync(); }
 const histOrder=()=>['now', ...H.vis.map(v=>v.id)];
+// the line under «Зараз» while the first catch-up of versions has not ended; the status calls it too, so the end of the catch-up removes it
+function histNote(){ let e=null; try{ e=H.open && histList.querySelector('.hv-note'); }catch(_){} if(!e) return;   // try: a status may come before the history's part of the page has run
+  const vn=ACCT && ACCT.historyNote(!!(SYNC && SYNC.isOnline())); e.hidden=!vn; e.textContent=vn? loc(vn) : ''; }
 function renderHist(){ histList.innerHTML=''; const row=(id,cls)=>{ const d=el('div','hv'+cls,histList); d.dataset.id=id; d.setAttribute('role','option'); d.setAttribute('aria-selected',String(H.sel===id)); return d; };
   H.vis=H.q? H.list.filter(v=>vtext(v).includes(H.q)) : H.list;
   const now=row('now', H.sel==='now'? ' cur' : ''); now.id='histNow'; now.innerHTML='<span class="hv-t">'+locA('hist.now')+'</span><div class="hv-s">'+escHtml(H.nowSum? sumText(H.nowSum) : '')+'</div>';
   if(H.bodies && !H.vis.length) el('div','none',histList).textContent=loc(H.q? 'search.none' : 'hist.empty');
-  const vn=ACCT && ACCT.historyNote(!!(SYNC && SYNC.isOnline())); if(vn) el('div','hv-note',histList).textContent=loc(vn);   // versions of another device may still come (SYNC-PLAN 4.18)
+  el('div','hv-note',histList).hidden=true; histNote();   // versions of another device may still come (SYNC-PLAN 4.18)
   let day=''; for(const v of H.vis){ const g=dayOf(v.t); if(g!==day){ day=g; el('div','hg',histList).textContent=g; }
     const d=row(v.id, (H.sel===v.id? ' cur' : '')+(v.name? ' named' : '')); d.innerHTML='<span class="hv-t">'+escHtml(hm(v.reason==='copy' && v.updated? v.updated : v.t))+'</span><span class="hv-k">'+escHtml(kindText(v))+'</span>'+stateLine(v)+'<div class="hv-s">'+escHtml(sumText(v.sum))+'</div>'; }
   syncHist(); }

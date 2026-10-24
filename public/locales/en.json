@@ -159,6 +159,7 @@
   "account.raced": "Another tab already decided. The page will reload.",
   "account.unsaved": "Save or export the unsaved notes first.",
   "account.exported": "The export was saved",
+  "account.moduleFailed": "The account panel did not load. Reload the page.",
   "lock.owner": "The notes on this device are being handed to another account. The page will reload now.",
   "sync.button": "Sync",
   "sync.st.synced": "Synced",

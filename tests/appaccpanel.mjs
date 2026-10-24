@@ -31,7 +31,7 @@ const D=await newDevice(br, cloud, SITE, 'D', {ctx:CTX, init:FLAG, connect:false
 await connect(pg); await untilUI(pg, 'synced');
 
 /* ── 1. the panel opens from the button and from the menu; Esc and Back close it ── */
-{ const p=await openBtn(pg);
+{ await openBtn(pg); const p=await until(async()=>{ const x=await panel(pg); return x && x.sub.length>=3? x : null; }, 3000) || await panel(pg);   // the budget comes from the store just after the panel opens
   ok('1 the button opens the panel: the email, «Синхронізовано» with its explanation ('+(p&&p.st)+')', !!p && p.email==='u@test' && p.st===await loc(pg,'sync.st.synced') && p.kind==='synced' && p.why[0]===await loc(pg,'account.why.synced'));
   ok('1a «Перевірено о …» and today\'s budget as two lines ('+(p&&p.sub.join(' | '))+')', !!p && p.sub.some(s=>/^Перевірено о \d/.test(s)) && p.sub.some(s=>/^Читань сьогодні: \d+ із 20000$/.test(s)) && p.sub.some(s=>/^Записів сьогодні: \d+ із 5000$/.test(s)));
   ok('1b signed in: «Вийти», «Експортувати з історією» and «Прибрати»; the device name field', !!p && p.acts.join()==='signOut,export,remove' && p.name==='Device D');
@@ -46,7 +46,9 @@ await connect(pg); await untilUI(pg, 'synced');
 /* ── 2. offline with N, the counts; a held attempt turns «Очікую підтвердження» by itself ── */
 { await pg.evaluate(()=>sheetDebug.sync.online(false)); await typeAt(pg,500,300,'офлайн'); await untilUI(pg,'offline'); await openBtn(pg); const p=await until(async()=>{ const q=await panel(pg); return q && q.counts.length? q : null; }, 3000);
   ok('2 offline with an edit: «Офлайн · 1 зміна чекає» and the count «1 нотатка ще не в хмарі.» ('+(p&&p.st)+' | '+(p&&p.counts.join(' | '))+')', !!p && p.st===await loc(pg,'sync.st.offline',{n:1}) && p.counts.includes(await loc(pg,'account.unsyncedNotes',{n:1})));
-  await pg.keyboard.press('Escape');
+  await pg.evaluate(()=>sheetDebug.sync.online(true)); const SY=await loc(pg,'sync.st.synced'); const pc=await until(async()=>{ const q=await panel(pg); return q && q.st===SY && !q.counts.length? q : null; }, 8000);
+  ok('2c the open panel follows the sending: «Синхронізовано» and no count left ('+JSON.stringify(await panel(pg).then(q=>q&&[q.st,q.counts]))+')', !!pc);
+  await pg.keyboard.press('Escape'); await pg.evaluate(()=>sheetDebug.sync.online(false)); await pg.click('#newBtn'); await pg.waitForTimeout(300); await typeAt(pg,500,300,'ще офлайн'); await untilUI(pg,'offline');
   let rel; const hold=new Promise(r=>rel=r); cloud.fault('hold',{dev:'D', op:'txn', promise:hold}); await pg.evaluate(()=>sheetDebug.sync.online(true));
   await until(()=>pg.evaluate(()=>sheetDebug.sync.tries().length>0), 5000); const s0=(await ui(pg)).code;
   await pg.evaluate(()=>{ sheetDebug.sync.clock=31000; }); const w=await until(async()=>(await ui(pg)).code==='waiting', 5000);
@@ -58,7 +60,9 @@ await connect(pg); await untilUI(pg, 'synced');
   await pg.click('#histBtn'); await pg.locator('#histList .hv[data-id="now"]').waitFor(); await pg.click('#histMore'); await pg.locator('.amenu .mi',{hasText:'Зафіксувати версію…'}).click(); await pg.fill('#histName','Відмовлена'); await pg.keyboard.press('Enter');
   await pg.click('#histBtn'); const e=await until(async()=>{ await settle(pg,100); const u=await ui(pg); return u && u.code==='error'? u : null; }, 8000); const p=await openBtn(pg);
   ok('3 a refused version: «'+(e&&e.text)+'», the panel lists it with «хмара відмовила» ('+(p&&p.errs.join(' | '))+')', !!e && e.text===await loc(pg,'sync.st.error',{n:1}) && !!p && p.errs.length===1 && p.errs[0].includes(await loc(pg,'account.errVersion')) && p.errs[0].includes(await loc(pg,'account.reason.invalid')));
-  await pg.keyboard.press('Escape'); }
+  await pg.keyboard.press('Escape');
+  await pg.click('#histBtn'); await pg.locator('#histList .hv[data-id="now"]').waitFor(); await openBtn(pg); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+  ok('3b Esc over «Історія» closes only the panel: the history stays open', !(await panel(pg)) && await pg.evaluate(()=>!document.getElementById('hist').hidden)); await pg.click('#histBtn'); }
 
 /* ── 4. the device name goes as dn and shows in the second tab; the second tab shows the leader's status ── */
 { const T2=await newTab(D, SITE, {connect:{pace:PACE, user:USER}}); await pg.bringToFront(); await openBtn(pg);
@@ -66,16 +70,31 @@ await connect(pg); await untilUI(pg, 'synced');
   await pg.click('#newBtn'); await pg.waitForTimeout(300); await typeAt(pg,500,300,'з новою назвою'); const id=await curId(pg); const dn=await until(async()=>{ await settle(pg,100); const d=cloud.doc('notes',id); return d && d.dn==='Мій ПК'? d.dn : null; }, 8000);
   ok('4 a new device name goes as dn in the next document', dn==='Мій ПК');
   await T2.bringToFront(); await T2.evaluate(()=>document.getElementById('syncBtn').click()); const q=await until(async()=>{ const x=await panel(T2); return x && x.name==='Мій ПК'? x : null; }, 5000) || await panel(T2); const lead=await ui(pg);   // the «dev» message may come after the panel opened: it draws the name again
-  ok('4a the second tab\'s panel shows the new name and the leader\'s status ('+(q&&q.st)+' / '+(lead&&lead.text)+')', !!q && q.name==='Мій ПК' && q.st===lead.text); await T2.keyboard.press('Escape'); await T2.close(); await pg.bringToFront(); }
+  ok('4a the second tab\'s panel shows the new name and the leader\'s status ('+(q&&q.st)+' / '+(lead&&lead.text)+')', !!q && q.name==='Мій ПК' && q.st===lead.text); const max=(await T2.evaluate(()=>sheetDebug.sync.engine().limits())).reads; let last=null; const lu=await until(async()=>{ const u=await pg.evaluate(()=>sheetDebug.sync.engine().usedToday()), x=await panel(T2); last=x; const want=await loc(T2,'account.reads',{n:u.reads, max}); return u.reads>0 && x && x.sub.includes(want)? want : null; }, 5000);
+  ok('4b the second tab\'s panel shows today\'s use the leader counted, read from the store ('+(last&&last.sub.join(' | '))+')', !!lu);
+  await T2.keyboard.press('Escape'); await T2.close(); await pg.bringToFront(); }
 
 /* ── 5. «Історія» of an account with no versions: done, no «версії ще завантажуються» ── */
 { const E=await newDevice(br, new TestCloud({start:Date.now()}), SITE, 'E', {ctx:CTX, init:FLAG, connect:false}); await E.ctx.route('https://www.gstatic.com/**', r=>r.abort());
   await E.pg.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:{env:'test', uid:'u9', email:'e@test'}, user:{uid:'u9', email:'e@test'}, devId:'E', pace:o}), PACE); await untilUI(E.pg,'synced');
   await typeAt(E.pg,500,300,'без версій'); await settle(E.pg); await E.pg.click('#histBtn'); await E.pg.locator('#histList .hv[data-id="now"]').waitFor(); await E.pg.waitForTimeout(200);
   const done=await E.pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const q=r.result.transaction('sync','readonly').objectStore('sync').get('cursor:versions'); q.onsuccess=()=>{ res(!!(q.result||{}).done); r.result.close(); }; }; }));
-  ok('5 an account with no versions at all reaches cursor:versions.done; «Історія» says nothing of loading', done && !(await E.pg.evaluate(()=>!!document.querySelector('#histList .hv-note'))));
+  ok('5 an account with no versions at all reaches cursor:versions.done; «Історія» says nothing of loading', done && !(await E.pg.evaluate(()=>{ const e=document.querySelector('#histList .hv-note'); return !!e && !e.hidden; })));
   await E.pg.evaluate(()=>sheetDebug.sync.online(false)); await E.pg.evaluate(()=>sheetDebug.sync.online(true)); const seen=[]; for(let i=0;i<10;i++){ seen.push((await ui(E.pg)).code); await E.pg.waitForTimeout(100); }
   ok('5a a reconnect after that never shows «Отримую версії…» ('+[...new Set(seen)].join(',')+')', !seen.includes('versions')); await E.close(); }
+
+/* ── 5b. «Історія» open while the first versions catch-up runs: the line goes by itself when it ends, also with no document ── */
+{ const F=await newDevice(br, new TestCloud({start:Date.now()}), SITE, 'F', {ctx:CTX, init:FLAG, connect:false}); await F.ctx.route('https://www.gstatic.com/**', r=>r.abort());
+  await F.pg.evaluate(()=>{ const c=window.__cloud, pg=c.page.bind(c); window.__vhold=new Promise(r=>{ window.__vrel=r; }); c.page=(col,q,n)=>col==='versions'? window.__vhold.then(()=>pg(col,q,n)) : pg(col,q,n); });
+  await F.pg.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:{env:'test', uid:'u8', email:'f@test'}, user:{uid:'u8', email:'f@test'}, devId:'F', pace:o}), PACE);
+  await typeAt(F.pg,500,300,'чекаю версії'); await F.pg.click('#histBtn'); await F.pg.locator('#histList .hv[data-id="now"]').waitFor();
+  const before=await until(()=>F.pg.evaluate(()=>{ const e=document.querySelector('#histList .hv-note'); return e && !e.hidden? e.textContent : null; }), 5000);
+  await F.pg.evaluate(()=>window.__vrel()); await untilUI(F.pg,'synced'); await F.pg.waitForTimeout(300);
+  const after=await F.pg.evaluate(()=>{ const e=document.querySelector('#histList .hv-note'); return e && !e.hidden? e.textContent : ''; });
+  ok('5b «Історія» open while the versions catch-up runs says «'+before+'», and the line goes by itself when it ends with no document ('+JSON.stringify(after)+')', before===await loc(F.pg,'hist.vLoading') && after==='');
+  await F.pg.click('#histBtn'); const o=await openBtn(F.pg); await F.pg.evaluate(()=>sheetDebug.lock('updated')); const l=await until(async()=>{ const x=await panel(F.pg); return x && x.acts.join()==='export'? x : null; }, 3000);
+  ok('5c the tab is locked while the panel is open: it turns read-only at once, only the export, no name field; the user stays signed in ('+(o&&o.acts.join())+' → '+JSON.stringify(await panel(F.pg).then(x=>x&&x.acts))+')', !!o && o.acts.join()==='signOut,export,remove' && !!l && !l.nameField && await F.pg.evaluate(()=>!!sheetDebug.sync.account().user));
+  await F.close(); }
 
 /* ── 6. signed out: what waits; a view-only tab opens the panel read-only ── */
 { await pg.evaluate(()=>sheetDebug.sync.online(false)); await typeAt(pg,500,600,'чекає'); await pg.evaluate(()=>sheetDebug.sync.signOut()); await untilUI(pg,'signedOut'); const p=await openBtn(pg);
@@ -92,6 +111,18 @@ for(const w of [390,320]){ const c=new TestCloud({start:Date.now()}); const ctx=
   const p=await openBtn(m); const btns=await m.evaluate(()=>[...document.querySelectorAll('#accPanel .accp-b button')].map(b=>b.getBoundingClientRect().toJSON()));
   ok('7 '+w+' wide: the panel is a bottom sheet across the screen, its buttons inside and at least 44 px high ('+JSON.stringify(p&&p.box)+')', !!p && Math.round(p.box.width)===w && Math.round(p.box.bottom)===760 && btns.every(b=>b.left>=0 && b.right<=w && b.height>=44) && !errs.length);
   await ctx.close(); }
+
+/* ── 8. a module of another build is refused: the status button and the update strip say so, the reload brings the panel back ── */
+{ const ctx=await br.newContext({...CTX, serviceWorkers:'block'}); await ctx.addInitScript(FLAG); await ctx.route('https://www.gstatic.com/**', r=>r.abort());
+  let bad=true; await ctx.route(u=>u.pathname==='/account/view.js', async r=>{ if(!bad) return r.continue(); const res=await r.fetch(); r.fulfill({response:res, body:(await res.text())+'\n// another build\n'}); });
+  const m=await ctx.newPage(); await m.goto(SITE); await m.waitForSelector('html[data-ready]',{state:'attached'});
+  const f=await until(()=>m.evaluate(()=>{ const u=sheetDebug.sync.account().ui, s=document.getElementById('updStrip'), b=document.getElementById('syncBtn'); return u && u.code==='failed' && !s.hidden? {msg:document.getElementById('updMsg').textContent, btn:!b.hidden && b.title} : null; }), 5000);
+  const want=await loc(m,'account.moduleFailed');
+  ok('8 a refused module: the status button stays and says «'+(f&&f.btn)+'», the update strip offers the reload', !!f && f.msg===want && f.btn===want);
+  bad=false; await Promise.all([m.waitForNavigation(), m.click('#updGo')]); await m.waitForSelector('html[data-ready]',{state:'attached'});
+  await until(()=>m.evaluate(()=>!!document.getElementById('accPanel')), 5000); await m.evaluate(()=>{ document.getElementById('syncBtn').hidden=false; document.getElementById('syncBtn').click(); });
+  const back=await until(()=>panel(m), 3000);
+  ok('8a after «Оновити» with the right file the panel opens again', !!back); await ctx.close(); }
 
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);
