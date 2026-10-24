@@ -134,16 +134,17 @@ await btn('n3','.it-p'); const a13=await stored('n3'), wa13=await warn(); await 
 ok('13 a failed import of a note that exists (⚠ '+w13+'), then its pin: stored «'+texts(a13)+'», pinned '+!!(a13&&a13.pinned)+', ⚠ '+wa13+'; after a reload «'+texts(b13)+'», pinned '+!!(b13&&b13.pinned),
   w13 && a13 && texts(a13)==='відпустка IMPORTED' && a13.pinned>0 && !wa13 && b13 && texts(b13)==='відпустка IMPORTED' && b13.pinned>0);
 
-// 14 a failed pin of a note that is not open, then three held writes: «Повторити» (fails), the note opened, «Повторити» again; they land as the first fails, the third
-// succeeds and the second succeeds last: the pin is stored and no warning is left, in the panel or in the header
-await fresh(); await open('n1'); await failing(true); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n3"] .it-p').click()); await pg.waitForTimeout(300); await failing(false); await noLS();
-await pg.evaluate(()=>{ window.__q=[]; sheetDebug.saveGate=st=>st.includes('notes')? new Promise((yes,no)=>window.__q.push({yes,no})) : Promise.resolve(); document.getElementById('saveRetry').click(); });
-await pg.waitForFunction(()=>window.__q.length===1); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n3"]').click()); await pg.waitForFunction(()=>window.__q.length===2);
-await retry(); await pg.waitForFunction(()=>window.__q.length===3);
-await pg.evaluate(()=>window.__q[0].no(new DOMException('full','QuotaExceededError'))); await pg.waitForTimeout(200); await pg.evaluate(()=>window.__q[2].yes()); await pg.waitForTimeout(300);
-await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__q[1].yes(); }); await pg.waitForTimeout(500); await healed();
-const a14=await stored('n3'), w14=await warn(), h14=await pg.locator('#saved').getAttribute('class');
-ok('14 held writes out of order after a failed pin: stored pinned '+!!(a14&&a14.pinned)+', ⚠ '+w14+', the header «'+h14+'»', a14 && a14.pinned>0 && !w14 && !/err/.test(h14));
+// 14 a failed pin of a note that is not open, then three held writes: «Повторити» (A), the note opened (B), «Повторити» again (C), all of the same pin. In either order
+// they land (A fails, C and then B succeed; or B and C succeed and A fails last), the pin is stored and no warning is left, in the panel or in the header
+const run14=async steps=>{ await fresh(); await open('n1'); await failing(true); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n3"] .it-p').click()); await pg.waitForTimeout(300); await failing(false); await noLS();
+  await pg.evaluate(()=>{ window.__q=[]; sheetDebug.saveGate=st=>st.includes('notes')? new Promise((yes,no)=>window.__q.push({yes,no})) : Promise.resolve(); document.getElementById('saveRetry').click(); });
+  await pg.waitForFunction(()=>window.__q.length===1); await pg.evaluate(()=>document.querySelector('#list .item[data-id="n3"]').click()); await pg.waitForFunction(()=>window.__q.length===2);
+  await retry(); await pg.waitForFunction(()=>window.__q.length===3);
+  for(const [k, how] of steps){ await pg.evaluate(([k, how])=>{ const q=window.__q[k]; if(how==='no') q.no(new DOMException('full','QuotaExceededError')); else q.yes(); }, [k, how]); await pg.waitForTimeout(300); }
+  await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await pg.waitForTimeout(400); await healed();
+  return {s:await stored('n3'), w:await warn(), h:await pg.locator('#saved').getAttribute('class')}; };
+for(const [name, steps] of [['14', [[0,'no'],[2,'yes'],[1,'yes']]], ['14b', [[1,'yes'],[2,'yes'],[0,'no']]]]){ const r=await run14(steps);
+  ok(name+' held writes after a failed pin, landing '+steps.map(([k,h])=>'ABC'[k]+(h==='no'? '✗' : '✓')).join(' ')+': stored pinned '+!!(r.s&&r.s.pinned)+', ⚠ '+r.w+', the header «'+r.h+'»', r.s && r.s.pinned>0 && !r.w && !/err/.test(r.h)); }
 
 // 15 with an owner, the open note archived here under a held write and in the other tab too, its text untouched: one archive, and no conflict copy
 await fresh(); await pg.evaluate(()=>sheetDebug.sync.connect({owner:{env:'test', uid:'field', email:'field@test'}})); await open('n2'); const B3=await tab(); await pg.bringToFront();

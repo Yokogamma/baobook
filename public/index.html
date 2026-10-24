@@ -2020,16 +2020,17 @@ function savedShow(cls, long, short){ savedL.textContent=long; savedS.textConten
 function markDirty(){ if(H.view || ro() || !STARTED || DYING) return; const first=!dirty; dirty=true; if(cur) EDITS.set(cur.id,(EDITS.get(cur.id)||0)+1); clearTimeout(savedEl._t); savedShow('pend','●','●'); clearTimeout(saveT); saveT=setTimeout(flushSave,300); if(first && cur){ vcapture(cur.id, snapFor(cur.id), 'base'); if(SYNC) SYNC.typed(cur.id); } }   // R1: стан до правки — у версію, ще до автозбереження. The fade timer of an earlier ✓ is cleared: it would take «●» away while this edit still waits
 /* незаписані нотатки: обʼєкт нотатки в памʼяті завжди актуальний (flushSave кладе блоки в нього до запису), тож перехід між нотатками даних не втрачає;
    втрачає лише перезавантаження. unsaved — які нотатки не вдалося записати; помилка видна, поки запис не вдасться; статус у шапці — від останнього запису поточної нотатки */
-let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), STORED=new Map(), LAG=new Map();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
+let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), STORED=new Map(), LAG=new Map(), OKREV=new WeakMap();   // unsaved: id → {reason, since}; inflight: id → ревізія запису, що ще триває; REV: id → остання розпочата ревізія
 // STORED: id → the latest revision that stored the whole note (every change of it made before that write is in the store); LAG: id → {rev, reason} of the latest
 // write that failed after a newer one began, while the newest is on its way: that write decides whether the failure is covered. An unsaved entry carries the revision
-// of its failure (rev; one made outside a write, by an import, is newer than every write begun before it) and the delta that failed (of)
+// of its failure (rev; one made outside a write, by an import, is newer than every write begun before it) and the delta that failed (of). OKREV: delta → the latest
+// revision that stored it, so a failure of the same change that lands later is covered too
 /* єдиний шлях запису нотатки (автозбереження, нова, імпорт, міграція): результат зараховується лише останній розпочатій ревізії —
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands. A field write (fieldWrite) clears the warning
    only when it is the retry of the failed write itself: the warning, and an older write's failure, go only with a write that stored the whole note */
 function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const whole=!(delta && delta.field), snap={...n}, D=noteSnap(n), p=db.save(n, delta && delta.make? delta.make(rev) : delta||editorDelta(n, rev)); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs; whole: it carries the note as it is in memory; make: a delta made for this revision from the note as it is now (a retry makes it again)
-  p.then(r=>{ if(r.ok && (whole || r.whole)) STORED.set(n.id, Math.max(STORED.get(n.id)||0, rev));
+  p.then(r=>{ if(r.ok && (whole || r.whole)) STORED.set(n.id, Math.max(STORED.get(n.id)||0, rev)); if(r.ok && delta) OKREV.set(delta, Math.max(OKREV.get(delta)||0, rev));
     if(REV.get(n.id)!==rev){ if(!r.ok && r.code!=='purged') lagged(n, rev, r.reason, delta); else if(r.ok) covered(n, rev, whole || r.whole, delta); return; }   // a newer write decides the status, but this failure does not vanish, and this success covers an older one
     inflight.delete(n.id); const lag=LAG.get(n.id); LAG.delete(n.id); const left=lag && (STORED.get(n.id)||0)<lag.rev && !sameChange(lag, delta, rev)? lag : null;   // an older write failed and no write begun after it stored the whole note, nor did this one store the same change
     const u0=unsaved.get(n.id), later=!!(u0 && u0.rev!=null && u0.rev>rev);   // an entry made while this write was on its way (an import that failed meanwhile): this write did not carry it
@@ -2045,7 +2046,7 @@ function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'
     saveUI(); storageUI(); chgUI(); if(r.ok && db.backend==='idb'){ vafter(n); if(SYNC) syncWake(); if(!LEAD.on) leadWanted({write:true}); if(PENDING.has(n.id) || (ESNAP.get(n.id)||{}).lrev===null){ if(n===cur) safePoint(n.id); else takeStored(n.id); } } }); return p; }   // R3: a version at most once per V_GAP; its failure leaves the status alone. leadWanted: an edit in a tab waiting for the lock asks for it (a hidden leader hands it over, or the send would wait for its throttled timers)
 // a write a newer one replaced has failed. Covered when a write begun after it stored the whole note; while the newest write is on its way, that one decides
 // (LAG); otherwise the note stays unsaved and «Повторити» writes it whole, unless the newest write failed too and its retry carries the whole note already
-function lagged(n, rev, reason, delta){ if((STORED.get(n.id)||0)>rev || !notes.includes(n)) return;
+function lagged(n, rev, reason, delta){ if((STORED.get(n.id)||0)>rev || (delta && (OKREV.get(delta)||0)>rev) || !notes.includes(n)) return;   // a later write stored the whole note, or the same change again
   if(inflight.has(n.id)){ const l=LAG.get(n.id); if(!l || rev>l.rev) LAG.set(n.id,{rev, reason, of:delta}); return; }
   const u=unsaved.get(n.id); if(u && !(u.delta && u.delta.field)) return;
   unsaved.set(n.id,{reason, since:now(), rev, of:delta}); if(n===cur){ clearTimeout(savedEl._t); savedShow('err', loc('save.failedReason',{reason}), ''); } saveUI(); storageUI(); chgUI(); }
