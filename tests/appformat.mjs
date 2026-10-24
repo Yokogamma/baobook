@@ -179,19 +179,22 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   ok('3i nothing went to the localStorage fallback', !Object.keys((await dump(a)).ls).length);
   ok('3j no page errors', !a.errs.length); await ctx.close(); }
 
-/* ── 4. a blocked setup: another connection holds an empty v1, so the stores cannot be created: view-only until a reload ── */
+/* ── 4. a blocked setup: another connection holds an empty v1, so the stores cannot be created: the start waits and says why (IDB-BARRIER-PLAN §3),
+   then goes on by itself, with no reload, once the other connection closes ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // kept open, deaf to versionchange
-  await go(a,SITE); await ready(a); await a.waitForTimeout(3600);   // a block that lasts over 3 s
+  await go(a,SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await a.waitForTimeout(3800);   // a block that lasts over 3 s
   const msg=await strip(a);
-  ok('4 blocked: the strip asks to close the other tabs ('+msg+')', /Закрийте інші вкладки Baobook/.test(msg));
+  ok('4 blocked: the strip says another tab holds the storage and this page will go on by itself ('+msg+')', /не відпускають сховище/.test(msg) && !(await a.locator('#roReload').isVisible()) && !(await a.locator('#roExport').isVisible()));
   await tryType(a,500,400,'заблоковано'); await a.waitForTimeout(600);
   ok('4b typing changes nothing and nothing goes to the fallback', !/заблоковано/.test(await sheetText(a)) && !(await fbKeys(a)).length);
-  await b.evaluate(()=>window.__hold.close()); await a.reload(); await ready(a);
+  const doc=await a.evaluate(()=>{ window.__doc=1; return performance.timeOrigin; });   // the same document after the wait: no reload
+  await b.evaluate(()=>window.__hold.close()); await ready(a);
+  ok('4c after the other tab lets go the start goes on in the same page, no reload', (await a.evaluate(()=>window.__doc===1 && performance.timeOrigin))===doc && !(await strip(a)));
   await typeAt(a,500,300,'розблоковано'); await a.keyboard.press('Escape'); await a.waitForTimeout(600);
   const d=await dump(a);
-  ok('4c after the other tab lets go, a reload works as usual (v'+d.version+')', !(await strip(a)) && d.version===4 && has(d.stores.notes,/розблоковано/));
+  ok('4e the database is set up and takes the text (v'+d.version+')', d.version===4 && has(d.stores.notes,/розблоковано/));
   ok('4d no page errors', !a.errs.length); await ctx.close(); }
 
 /* ── 5. fallback copies in the usual mode: a copy that differs is kept as a note of its own, an identical one just goes ── */
@@ -454,13 +457,13 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   ok('9 during the wait «Нова» makes no note, the sheet and the title take no text, a paste makes no block, nothing goes to localStorage', !(await fbKeys(a)).length && !/під час запуску/.test(await sheetText(a)) && !(await a.locator('#sheet .blk').count()) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
   ok('9a a note another tab sent during the wait does not show yet: nothing to open and edit before the start is done', !(await a.locator('#list .item').count()));
   await a.waitForTimeout(3600);
-  ok('9b once the block lasts, the tab is view-only and still nothing went to the fallback', /Закрийте інші вкладки Baobook/.test(await strip(a)) && !(await fbKeys(a)).length);
-  ok('9c nothing typed during the wait was taken and lost: nothing waits to be saved (plain «Експорт»)', /^Експорт$/.test((await a.locator('#roExport').innerText()).trim()));
-  ok('9e after the start the other tab\'s note shows (its message was kept and applied), view-only', (await a.locator('#list .item').allInnerTexts()).some(t=>/Від сусіда/.test(t)) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
-  await b.evaluate(()=>window.__hold.close());
+  ok('9b once the block lasts, the start keeps waiting, says why, and still nothing went to the fallback', /не відпускають сховище/.test(await strip(a)) && !(await fbKeys(a)).length && !(await a.locator('#list .item').count()));
+  await b.evaluate(()=>window.__hold.close()); await ready(a);
+  ok('9c nothing typed during the wait was taken: no text of it on the sheet or in the database', !/під час запуску/.test(await sheetText(a)) && !has((await dump(a)).stores.notes,/під час запуску/) && !(await strip(a)));
+  ok('9e after the start the other tab\'s note shows (its message was kept and applied), and the sheet is editable', (await a.locator('#list .item').allInnerTexts()).some(t=>/Від сусіда/.test(t)) && (await a.locator('#ttl').getAttribute('contenteditable'))!=='false');
   ok('9d no page errors', !a.errs.length); await ctx.close(); }
 
-/* ── 9g. a blocked start with two different copies of a note in the fallback keys: one backup copy, not two ── */
+/* ── 9g. a blocked start with two different copies of a note in the fallback keys: once the start goes on, one backup copy, not two ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html'); const T=Date.now();
   await b.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
@@ -468,9 +471,10 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
     put('x5~tabq~7',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'новий пʼятий'}],created:T-9e5,updated:T-100}); }, T);
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));
   await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await a.waitForTimeout(3800);
+  ok('9f blocked: the start waits and shows no note yet', !(await a.locator('#list .item').count()) && /не відпускають сховище/.test(await strip(a)));
+  await b.evaluate(()=>window.__hold.close()); await ready(a); await a.waitForTimeout(800);
   const items=await a.locator('#list .item').allInnerTexts();
-  ok('9g blocked, two copies in the fallback keys: the newer note and exactly one backup copy ('+items.length+' items)', items.length===2 && items.filter(t=>/резервна копія/.test(t)).length===1);
-  await b.evaluate(()=>window.__hold.close());
+  ok('9g two copies in the fallback keys: the newer note and exactly one backup copy ('+items.length+' items)', items.length===2 && items.filter(t=>/резервна копія/.test(t)).length===1 && items.some(t=>/новий пʼятий|Пʼятий/.test(t)));
   ok('9h no page errors', !a.errs.length); await ctx.close(); }
 
 /* ── 10. a record under a note key that is not a note stays where it is ── */

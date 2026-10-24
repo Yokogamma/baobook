@@ -1,6 +1,6 @@
 # A barrier against old tabs that never waits for them
 
-**Status: approved by the owner on 2026-10-24 (the five questions of §8 answered «as recommended»), after two internal review rounds and two independent ones (§10), the last without findings; not implemented yet.** Two PRs into `main`, in this order: **PR 1 (part 2 below, urgent)** — the one-time v3 → v4 upgrade waits for a sleeping tab instead of locking the device; it ships before #100 is released to baobook.matamata.app. **PR 2 (part 1 below)** — old tabs are stopped by a format number checked inside every write, so later format changes never raise the IndexedDB version and never wait for another tab; it ships before the next format change. The sections are numbered by topic; §9 states the order.
+**Status: approved by the owner on 2026-10-24 (the five questions of §8 answered «as recommended»), after two internal review rounds and two independent ones (§10), the last without findings; PR 1 (part 2) is built; PR 2 (part 1) is not implemented yet.** Two PRs into `main`, in this order: **PR 1 (part 2 below, urgent)** — the one-time v3 → v4 upgrade waits for a sleeping tab instead of locking the device; it ships before #100 is released to baobook.matamata.app. **PR 2 (part 1 below)** — old tabs are stopped by a format number checked inside every write, so later format changes never raise the IndexedDB version and never wait for another tab; it ships before the next format change. The sections are numbered by topic; §9 states the order.
 
 ## 1. The incident
 
