@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
+import { ready, armClick, clicked, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const fs=await import('node:fs');
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -11,9 +12,13 @@ const NOTES=[{id:'n1',title:'Ключі',blocks:[{id:'a1',row:2,text:'серве
   {id:'n2',title:'Покупки',blocks:[{id:'b1',row:2,text:'молоко',fx:0.2}],created:1,updated:T0-60000},
   {id:'n3',title:'Komax старий',blocks:[{id:'c1',row:2,text:'старі ключі komax',fx:0.2}],created:1,updated:T0-120000}];
 const file=notes=>({name:'n.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({app:'baobook',format:1,notes}))});
-const fresh=async(pg,notes=NOTES)=>{ await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); sessionStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
-  await pg.setInputFiles('#importFile',file(notes)); await pg.waitForTimeout(800);
-  await pg.evaluate(ids=>document.querySelectorAll('#list .item').forEach(d=>{ if(!ids.includes(d.dataset.id)) d.querySelector('.it-x').click(); }), notes.map(n=>n.id)); await pg.waitForTimeout(500); };   // the empty note of the first start goes for good
+// import a file and wait for its report: the toast says «Імпортовано: …» once the notes are written and read back
+const load=async(pg,notes)=>{ await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await pg.setInputFiles('#importFile',file(notes));
+  await pg.waitForFunction(()=>/Імпортовано/.test(document.getElementById('toast').textContent),null,{timeout:15000}); };
+const fresh=async(pg,notes=NOTES)=>{ await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); sessionStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg);
+  await load(pg,notes); const ids=notes.map(n=>n.id);
+  await pg.evaluate(ids=>document.querySelectorAll('#list .item').forEach(d=>{ if(!ids.includes(d.dataset.id)) d.querySelector('.it-x').click(); }), ids);
+  await until(()=>pg.evaluate(ids=>[...document.querySelectorAll('#list .item')].every(d=>ids.includes(d.dataset.id)), ids)); await pg.waitForTimeout(200); };   // the empty note of the first start goes for good
 const items=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list .item')].map(d=>d.dataset.id));
 const listText=pg=>pg.evaluate(()=>[...document.querySelectorAll('#list > *')].map(d=>d.classList.contains('grp')? '['+d.textContent+']' : d.dataset.id).join(','));
 const stored=(pg,id)=>pg.evaluate(id=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const g=d.transaction('notes','readonly').objectStore('notes').get(id); g.onsuccess=()=>{ d.close(); res(g.result||null); }; }; }), id);
@@ -68,16 +73,16 @@ const btn=async(pg,id,cls)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]
   ok('5b the item\'s «Повернути до нотаток»: toast «'+await pg.locator('#toast').innerText()+'»', !(await stored(pg,'n2')).archived && (await items(pg)).includes('n2') && /повернуто до нотаток/.test(await pg.locator('#toast').innerText()));
 
   // 6 a reload keeps an open archived note open
-  await btn(pg,'n1','.it-r'); await pg.click('#archRow'); await pg.waitForTimeout(250); await open(pg,'n1'); await pg.waitForTimeout(300); await pg.reload(); await pg.waitForTimeout(900);
+  await btn(pg,'n1','.it-r'); await pg.click('#archRow'); await pg.waitForTimeout(250); await open(pg,'n1'); await pg.waitForTimeout(300); await pg.reload(); await ready(pg);
   ok('6 after a reload the archived note is open again, with its strip ('+await cur(pg)+')', await cur(pg)==='n1' && await strip(pg));
 
   // 7 export and import
   const [dl]=await Promise.all([pg.waitForEvent('download'), pg.evaluate(()=>{ document.getElementById('setBtn').click(); document.getElementById('exportBtn').click(); })]);
   const ex=JSON.parse(fs.readFileSync(await dl.path(),'utf8')), x1=ex.notes.find(n=>n.id==='n1'), x2=ex.notes.find(n=>n.id==='n2');
   ok('7a export carries «archived» on the archived note only', x1 && x1.archived>0 && x2 && !('archived' in x2) && !('deleted' in x2));
-  await pg.setInputFiles('#importFile',file([{...NOTES[0], updated:Date.now()+1000}])); await pg.waitForTimeout(800);
+  await load(pg,[{...NOTES[0], updated:Date.now()+1000}]);
   ok('7b a newer copy without «archived» brings it back to the list', (await items(pg)).includes('n1') && !(await stored(pg,'n1')).archived);
-  await pg.setInputFiles('#importFile',file([{...NOTES[1], archived:Date.now(), updated:Date.now()+2000}])); await pg.waitForTimeout(800);
+  await load(pg,[{...NOTES[1], archived:Date.now(), updated:Date.now()+2000}]);
   ok('7c a newer copy with «archived» moves it to the archive', !(await items(pg)).includes('n2') && (await stored(pg,'n2')).archived>0);
   ok('desktop: no native dialogs ('+natives+')', natives===0);
   console.log(errs.length? errs.join('\n') : '✓ desktop: no errors'); if(errs.length) fails++;
@@ -85,11 +90,12 @@ const btn=async(pg,id,cls)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]
 
 /* ── two tabs ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:800}}); const errs=[];
-  const page=async()=>{ const pg=await ctx.newPage(); pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await pg.goto(SITE); await pg.waitForTimeout(600); return pg; };
+  const page=async()=>{ const pg=await ctx.newPage(); pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await pg.goto(SITE); await ready(pg); return pg; };
   const A=await page(); await fresh(A); const B=await page(); await open(A,'n1'); await open(B,'n2'); await B.waitForTimeout(300);
-  await A.bringToFront(); await btn(A,'n2','.it-r'); await B.waitForTimeout(500);
+  // B is in the background, where the message from A may be handled late: wait for it to show up, then check
+  await A.bringToFront(); await btn(A,'n2','.it-r'); await until(()=>strip(B));
   ok('8a a note archived in A shows its strip in B, where it is open', await strip(B) && await B.evaluate(()=>document.getElementById('roMsg').textContent)==='Нотатка в архіві' && /Архів\s*1/.test(await B.locator('#archRow').innerText()));
-  await A.click('#undo .ubtn'); await B.waitForTimeout(500);
+  await A.click('#undo .ubtn'); await until(async()=>!(await strip(B)) && (await items(B)).includes('n2'));
   ok('8b undone in A, B drops the strip and lists it again', !await strip(B) && (await items(B)).includes('n2') && await B.locator('#archRow').isHidden());
   console.log(errs.length? errs.join('\n') : '✓ tabs: no errors'); if(errs.length) fails++;
   await ctx.close(); }
@@ -98,12 +104,13 @@ const btn=async(pg,id,cls)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]
 { const ctx=await br.newContext({...CTX, viewport:{width:390,height:844}, hasTouch:true, isMobile:true}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
   const cdp=await ctx.newCDPSession(pg); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
   const touch=async(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts});
-  const tap=async(x,y)=>{ await touch('touchStart',[{x,y}]); await pg.waitForTimeout(60); await touch('touchEnd',[]); };
+  const tap=async(x,y)=>{ await Promise.all([touch('touchStart',[{x,y}]), touch('touchEnd',[])]); };   // the release right behind the touch: a tap, never a hold
   const tapEl=async(loc)=>{ const b=await box(loc); await tap(b.x+b.w/2, b.y+b.h/2); };
+  const tapBtn=async(loc)=>{ await armClick(loc); await tapEl(loc); await clicked(pg); };   // the click comes a moment after the touch
   await fresh(pg); await open(pg,'n2'); await pg.waitForTimeout(400);
-  await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const mi=pg.locator('.amenu.hm .mi',{hasText:'Перенести в архів'});
+  await tapBtn(pg.locator('#moreBtn')); const mi=pg.locator('.amenu.hm .mi',{hasText:'Перенести в архів'});
   ok('9a the header «⋯» has «Перенести в архів»', (await mi.count())===1);
-  await tapEl(mi); await pg.waitForTimeout(500);
+  await tapBtn(mi); await until(async()=>((await stored(pg,'n2'))||{}).archived>0);
   ok('9b it archives the open note and opens the next one', (await stored(pg,'n2')).archived>0 && await cur(pg)!=='n2');
   await pg.click('#undo .uclose'); await pg.waitForTimeout(300); await pg.click('#sideBtn'); await pg.waitForTimeout(400); await pg.click('#archRow'); await pg.waitForTimeout(300);
   ok('9c the archive section has its own history entry', (await pg.evaluate(()=>history.state&&history.state.nav))==='section' && await pg.locator('#sect').isVisible());
@@ -112,7 +119,7 @@ const btn=async(pg,id,cls)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]
   await pg.evaluate(()=>document.getElementById('moreBtn').click()); await pg.waitForTimeout(250);
   ok('9e the header «⋯» menu opens above the strip', await pg.evaluate(()=>{ const r=document.querySelector('.rostrip').getBoundingClientRect(), e=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2); return !!(e && e.closest('.amenu')); }));
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
-  await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250);
+  await tapBtn(pg.locator('#moreBtn'));
   ok('9f for an archived note the «⋯» offers «Повернути до нотаток»', (await pg.locator('.amenu.hm .mi',{hasText:'Повернути до нотаток'}).count())===1);
   await pg.screenshot({path:OUT+'/apparchive-phone.png'});
   console.log(errs.length? errs.join('\n') : '✓ phone: no errors'); if(errs.length) fails++;

@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
+import { ready, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
@@ -8,7 +9,7 @@ const OUT=(await import('node:path')).join((await import('node:os')).tmpdir(),'s
 const idbAll=()=>pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; try{ const t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); res(t.result); }; t.onerror=()=>{ d.close(); res([]); }; }catch(_){ d.close(); res([]); } }; r.onerror=()=>res([]); }));
 const stored=async re=>{ await pg.waitForTimeout(450); return (await idbAll()).flatMap(n=>n.blocks).find(b=>re.test(b.text||'')); };   // autosave runs 300 ms after a change
 const show=s=>s==null? '—' : String(s).replace(/\n/g,'⏎');
-const reset=async()=>{ await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400); };
+const reset=async()=>{ await pg.goto(SITE); await ready(pg); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg); };
 const listBtns=()=>pg.evaluate(()=>[...document.querySelectorAll('#bubble [data-cmd="ul"],#bubble [data-cmd="ol"]')].filter(b=>!b.hidden).map(b=>b.dataset.cmd+(b.getAttribute('aria-pressed')==='true'? '*' : '')).join(' '));
 const bubbleOn=()=>pg.locator('#bubble').isVisible();
 const items=t=>t.evaluate(e=>[...e.children].map(d=>(d.getAttribute('data-l')||'-')+(d.getAttribute('data-n')||'')).join(' '));
@@ -17,11 +18,12 @@ const selLines=async(a,z)=>{ await pg.keyboard.press('Control+Home'); for(let i=
 const wordAt=(t,w)=>t.evaluate((e,w)=>{ const tw=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while((n=tw.nextNode())){ const i=n.nodeValue.indexOf(w); if(i>=0){ const r=document.createRange(); r.setStart(n,i); r.setEnd(n,i+w.length); const b=r.getBoundingClientRect(); return {x:b.left+b.width/2, y:b.top+b.height/2}; } } return null; },w);
 
 await reset();
-await pg.mouse.click(500,300); await pg.keyboard.type('Покупки'); await pg.keyboard.press('Enter'); await pg.keyboard.type('молоко'); await pg.keyboard.press('Enter'); await pg.keyboard.type('хліб'); await pg.waitForTimeout(150);
+// type once the caret is in the new block
+await pg.mouse.click(500,300); await pg.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest('#sheet .blk')),null,{timeout:5000}); await pg.keyboard.type('Покупки'); await pg.keyboard.press('Enter'); await pg.keyboard.type('молоко'); await pg.keyboard.press('Enter'); await pg.keyboard.type('хліб'); await pg.waitForTimeout(150);
 const T=pg.locator('.blk .txt').filter({hasText:'Покупки'}).first();
 
 // 1 a selection inside one line: the bar has no list buttons; a triple click (it takes the line break too) counts as one line
-await selLines(0,0); ok('1a одна строка: панель є, кнопок списку немає ('+(await listBtns())+')', await bubbleOn() && (await listBtns())==='');
+await selLines(0,0); await until(bubbleOn); ok('1a одна строка: панель є, кнопок списку немає ('+(await listBtns())+')', await bubbleOn() && (await listBtns())==='');
 { const p=await wordAt(T,'молоко'); await pg.mouse.click(p.x,p.y,{clickCount:3}); await pg.waitForTimeout(200);
   ok('1b потрійний клік по рядку: кнопок списку немає ('+(await listBtns())+', виділено «'+show(await pg.evaluate(()=>getSelection().toString()))+'»)', await bubbleOn() && (await listBtns())===''); }
 
@@ -67,7 +69,7 @@ await pg.keyboard.press('Control+a'); await pg.keyboard.press('Control+c'); awai
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 
 // 10 after a reload: the same lines; a long item wraps under its text, not under the marker; the block stays on the grid
-await pg.reload(); await pg.waitForTimeout(500);
+await pg.reload(); await ready(pg);
 { const st=await stored(/Потім/); ok('10a після перезавантаження: '+(await items(T))+' · html без змін', (await items(T))==='- ul ul ul -' && st.html==='Покупки\n<li data-l="ul">молоко</li>\n<li data-l="ul">хліб</li>\n<li data-l="ul">масло</li>\nПотім'); }
 await pg.mouse.click(800,560); await pg.keyboard.type('Взяти:'); await pg.keyboard.press('Enter'); await pg.keyboard.type('- спальник і килимок, краще самонадувний, бо земля холодна вночі навіть улітку'); await pg.keyboard.press('Enter'); await pg.keyboard.type('газ'); await pg.waitForTimeout(150);
 { const L=pg.locator('.blk .txt').filter({hasText:'Взяти:'}).first(); await L.evaluate(e=>{ e.closest('.blk').querySelector('.tcard').style.width='300px'; });   // narrow the card so the item wraps
@@ -106,8 +108,8 @@ await pg.screenshot({path:OUT+'/applist-desktop.png'});
 // 13 touch: the bar gets the list buttons with a selection over two lines; S and </> leave for «⋯» first
 { const tctx=await br.newContext({...CTX, viewport:{width:390,height:844},hasTouch:true,isMobile:true}); const tp=await tctx.newPage(); tp.on('pageerror',e=>errs.push('PAGEERROR touch '+e.message));
   const cdp=await tctx.newCDPSession(tp); await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'hover',value:'none'},{name:'pointer',value:'coarse'}]});
-  await tp.goto(SITE); await tp.waitForTimeout(400); await tp.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await tp.reload(); await tp.waitForTimeout(400);
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:150,y:400}]}); await tp.waitForTimeout(650); await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]}); await tp.waitForTimeout(250);
+  await tp.goto(SITE); await ready(tp); await tp.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await tp.reload(); await ready(tp);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:150,y:400}]}); await tp.waitForTimeout(650); await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]}); await tp.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest('#sheet .blk')),null,{timeout:5000});   // the hold made a block; type once the caret is in it
   await tp.keyboard.type('раз'); await tp.keyboard.press('Enter'); await tp.keyboard.type('два'); await tp.waitForTimeout(200);
   const btns=()=>tp.evaluate(()=>({bar:[...document.querySelectorAll('#bubble button')].filter(b=>!b.hidden && getComputedStyle(b).display!=='none').map(b=>b.dataset.cmd||b.dataset.act).join(' '), more:[...document.querySelectorAll('#bubbleMore button')].filter(b=>!b.hidden).map(b=>b.dataset.cmd||b.dataset.act).join(' ')}));
   const b1=await btns(); ok('13a курсор у звичайному рядку: панель без кнопок списку ('+b1.bar+')', !/\b(ul|ol)\b/.test(b1.bar+' '+b1.more));

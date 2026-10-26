@@ -49,13 +49,14 @@ const bin=async(pg,id)=>{ const it=pg.locator('#list .item[data-id="'+id+'"]'); 
 
   // 3 a trashed note opens read-only
   await pg.click('#trashRow'); await pg.waitForTimeout(250); await open(pg,'n2'); await pg.waitForTimeout(400);
-  const st=await pg.evaluate(()=>({inert:document.getElementById('sheet').inert, ttl:document.getElementById('ttl').contentEditable, strip:document.getElementById('roMsg').textContent, hidden:['clearBtn','areaBtn','histBtn'].filter(id=>getComputedStyle(document.getElementById(id)).display==='none')}));
-  ok('3a read-only: sheet inert '+st.inert+', title editable '+st.ttl+', strip «'+st.strip+'», hidden '+st.hidden.join(','), st.inert && st.ttl==='false' && st.strip==='Нотатка в кошику, ще 30 днів' && st.hidden.length===3);
+  const st=await pg.evaluate(()=>({inert:document.getElementById('sheet').inert, ttl:document.getElementById('ttl').contentEditable, strip:document.getElementById('roMsg').textContent, hidden:['clearBtn','areaBtn'].filter(id=>getComputedStyle(document.getElementById(id)).display==='none')}));
+  ok('3a read-only: sheet inert '+st.inert+', title editable '+st.ttl+', strip «'+st.strip+'», hidden '+st.hidden.join(','), st.inert && st.ttl==='false' && st.strip==='Нотатка в кошику, ще 30 днів' && st.hidden.length===2);
   const sb=await box(pg.locator('.rostrip')), first=await box(pg.locator('#sheet .blk').first());
   ok('3b the strip sits under the header and covers no block (strip '+sb.y+'+'+sb.h+', first block '+first.y+')', sb.y>=44 && sb.y+sb.h<=first.y);
   await pg.screenshot({path:OUT+'/apptrash-readonly.png'});
-  await pg.keyboard.press('Control+Alt+h'); await pg.waitForTimeout(300); await pg.mouse.click(700,500); await pg.keyboard.type('x'); await pg.waitForTimeout(500);
-  ok('3c Ctrl+Alt+H opens no history, a click and typing change nothing', await pg.locator('#hist').isHidden() && (await pg.locator('#sheet .blk').count())===1 && (await stored(pg,'n2')).blocks.length===1);
+  await pg.keyboard.press('Control+Alt+h'); await pg.waitForTimeout(300); const hro=await pg.evaluate(()=>!document.getElementById('hist').hidden && document.getElementById('histRestore').hidden);   // the history opens read-only (SYNC-PLAN 4.19, PR 4b)
+  await pg.click('#histClose'); await pg.waitForTimeout(200); await pg.mouse.click(700,500); await pg.keyboard.type('x'); await pg.waitForTimeout(500);
+  ok('3c Ctrl+Alt+H opens the history read-only (no «Відновити»), a click and typing change nothing', hro && (await pg.locator('#sheet .blk').count())===1 && (await stored(pg,'n2')).blocks.length===1);
 
   // 4 restore from the strip: editable again, back in the list
   await pg.click('#roRestore'); await pg.waitForTimeout(400);
