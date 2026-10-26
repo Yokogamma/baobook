@@ -111,7 +111,7 @@ for(const fs of [16,24]){ const {ctx,pg}=await page(DESK); const g=Math.round(fs
 /* P5 cost: opening a note with N blocks, and one Enter in a text block (relayout → resolve) */
 for(const N of [20,60,120]){ const {ctx,pg}=await page({viewport:{width:1920,height:1080}});
   const blocks=[]; for(let i=0;i<N;i++) blocks.push({id:'b'+i,col:1+(i%7)*9,row:2+Math.floor(i/7)*4,text:'Блок '+i+' короткий текст'});
-  await seed(pg, note('p5',blocks)); const t0=Date.now(); await pg.reload(); await pg.waitForFunction(n=>document.querySelectorAll('.blk').length===n, N, {timeout:300000}); const open=Date.now()-t0;
+  await seed(pg, note('p5',blocks)); const t0=Date.now(); await pg.reload({waitUntil:'commit', timeout:0}); await pg.waitForFunction(n=>document.querySelectorAll('.blk').length===n, N, {timeout:300000}); const open=Date.now()-t0;
   await pg.evaluate(()=>{ window.__t=[]; document.addEventListener('input',()=>{ window.__t0=performance.now(); },true); document.addEventListener('input',()=>{ window.__t.push(performance.now()-window.__t0); }); });
   await pg.locator('#sheet > .blk').first().locator('.txt').click(); await pg.keyboard.press('End'); for(let i=0;i<4;i++){ await pg.keyboard.press('Enter'); await pg.waitForTimeout(100); }
   out('P5 N='+N+': page load until every block is placed ≈ '+open+'ms; the input handler per Enter (ms): '+(await pg.evaluate(()=>window.__t.map(x=>Math.round(x)))).join(' '));

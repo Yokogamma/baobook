@@ -159,4 +159,4 @@ The notes panel is 280px wide (17.5rem at the default text size), so clicks on t
 
 ## Lab scripts
 
-`tests/lab/` holds scripts that measure behaviour without asserting it, so CI does not run them (it runs `tests/*.mjs` only). `node tests/lab/layout-probes.mjs` reproduces the numbers in `docs/LAYOUT-MODEL.md` §6.
+`tests/lab/` holds scripts that measure behaviour without asserting it, so CI does not run them (it runs `tests/*.mjs` only). `node tests/lab/layout-probes.mjs` reproduces the numbers in `docs/LAYOUT-MODEL.md` §8.
