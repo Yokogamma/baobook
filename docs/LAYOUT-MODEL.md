@@ -1,6 +1,6 @@
 # The layout engine: placing and moving blocks
 
-**Status: plan, draft 2 of 2026-10-26. The owner accepted every recommendation of the 2026-10-26 discussion (§2). Nothing is implemented yet.** Code references are to `main` at `a756ce0`. Draft 1 (2026-10-18) described the model and measured the code; this draft adds the decisions, the module and the steps.
+**Status: plan, draft 2 of 2026-10-26. The owner has read the rules of §3 and settled the height rule (§2, H1–H6). The narrow-screen part (§4) and the other questions (P1–P12) are proposals the owner is still reviewing. Nothing is implemented yet.** Code references are to `main` at `a756ce0`. Draft 1 (2026-10-18) described the model and measured the code; this draft adds the decisions, the module and the steps.
 
 The sheet's defining feature is free placement of blocks on a dot grid: blocks never overlap, and areas hold blocks inside them. This plan puts all of it into one module, `public/layout/`, used by every kind of block, written by the modular rule of `CLAUDE.md` (ES modules split by role, rules covered by Node tests, ready for TypeScript).
 
@@ -10,28 +10,35 @@ The owner's guiding rule for it (2026-10-26): keep it as simple as possible, wit
 
 Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375–2400, drag 3038–3110, resize 2423–2448, arrows 2762–2770, areas 2676–2830). It breaks its own rules in eight ways, each reproduced in Chromium on `a756ce0` with `tests/lab/layout-probes.mjs` (§8). Three of them become worse with sync: every push the layout saves lands in `row`, `row` is in the sync «place» group (`PLACE`, `public/sync.js:103`), so a push made by a narrow phone screen travels to every device.
 
-## 2. Decisions
+## 2. Decisions and open questions
+
+**Decided.** On 2026-10-26 the owner read the rules of §3, had questions only on height, and accepted the height rule with every recommendation on it:
 
 | # | Question | Decision |
 |---|---|---|
-| D1 | A block pushed aside, once the cause is gone | It returns to its own place. Pushes are never saved |
-| D2 | A grows and pushes B; C stands under B with a gap | C moves with B and the gap stays: like wagons, or like lines inserted in a document |
-| D3 | An area inside an area | The engine is recursive; the interface keeps one level for now |
-| D4 | Phone and computer | The computer layout is the master. A narrow screen shows a folded view of it (§4) and turns its moves into computer moves. A separate phone memory may come later as an optional field |
-| D5 | Order of the fold | Automatic: pairs side by side (label and value) fold row by row, independent columns fold column by column |
-| D6 | Short blocks that fit side by side on a phone | They stay side by side |
-| D7 | A move made on a phone | Changes the computer layout by the rule «under which block, with which gap» |
-| D8 | Horizontal position | Absolute columns. A wider screen shows more empty room on the right; nothing spreads out |
-| D9 | Minimum text width | 10 cells, about 25 characters. A neighbour closer than that is a collision, not a squeeze |
-| D10 | An area narrowed below its content | Its blocks are pushed left in a chain; the handle stops when they have no room |
-| D11 | A sized block that does not fit at the right edge | It is shifted left until it fits; the ghost shows where |
-| D12 | Release | The rules that stop pushes from being saved (steps 0–3 of §7) reach `.app` before or with the sync release |
-| D13 | Height | One rule for every kind: a height set above the content leaves room below, a height set below it folds the block with «Розгорнути · ще N рядків». Never a scrollbar |
-| D14 | What folds by itself | Only a long paste: a block made by a paste longer than 14 lines starts folded at 12, as code does today. Everything else folds only by the handle |
-| D15 | Is «Розгорнути» saved | No. It holds until the note is closed; only the height set by the handle is saved |
-| D16 | A caret in a folded block | The block unfolds while the caret is in it and folds back when the caret leaves, as code does today |
-| D17 | Areas | Fold to a height like text; folding to the header stays a separate button |
-| D18 | Long blocks on a phone | Also fold to 10 rows, in the view only; the computer does not see it |
+| H1 | Height | One rule for every kind: a height set above the content leaves room below, a height set below it folds the block with «Розгорнути · ще N рядків». Never a scrollbar |
+| H2 | What folds by itself | Only a long paste: a block made by a paste longer than 14 lines starts folded at 12, as code does today. Everything else folds only by the handle |
+| H3 | Is «Розгорнути» saved | No. It holds until the note is closed; only the height set by the handle is saved |
+| H4 | A caret in a folded block | The block unfolds while the caret is in it and folds back when the caret leaves, as code does today |
+| H5 | Areas | Fold to a height like text; folding to the header stays a separate button |
+| H6 | Long blocks on a phone | Also fold to 10 rows, in the view only; the computer does not see it |
+
+**Proposed, waiting for the owner.** The recommendations below are not decided yet: the owner is reading the narrow-screen part (§4) first, then this list. Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
+
+| # | Question | Recommended |
+|---|---|---|
+| P1 | A block pushed aside, once the cause is gone | It returns to its own place. Pushes are never saved |
+| P2 | A grows and pushes B; C stands under B with a gap | C moves with B and the gap stays: like wagons, or like lines inserted in a document |
+| P3 | An area inside an area | The engine is recursive; the interface keeps one level for now |
+| P4 | Phone and computer | The computer layout is the master. A narrow screen shows a folded view of it (§4) and turns its moves into computer moves. A separate phone memory may come later as an optional field |
+| P5 | Order of the fold | Automatic: pairs side by side (label and value) fold row by row, independent columns fold column by column |
+| P6 | Short blocks that fit side by side on a phone | They stay side by side |
+| P7 | A move made on a phone | Changes the computer layout by the rule «under which block, with which gap» |
+| P8 | Horizontal position | Absolute columns. A wider screen shows more empty room on the right; nothing spreads out |
+| P9 | Minimum text width | 10 cells, about 25 characters. A neighbour closer than that is a collision, not a squeeze |
+| P10 | An area narrowed below its content | Its blocks are pushed left in a chain; the handle stops when they have no room |
+| P11 | A sized block that does not fit at the right edge | It is shifted left until it fits; the ghost shows where |
+| P12 | Release | The rules that stop pushes from being saved (steps 0–3 of §7) reach `.app` before or with the sync release |
 
 ## 3. The model, rule by rule
 
@@ -39,7 +46,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 
 The step of the grid is `G = round(1.5 × text size)`: 24 px at 16 px text on a computer, 27 px at 18 px on a phone. Dots sit at `G/2 + k·G` on both axes. A block at `(col, row)` has its text start on dot column `col` and the top of its first line on dot row `row`. The grip, its gap and the text padding sit to the left of the text (`OFF`, 30 px on a computer); the card starts `CL` (24 px) to the right of the block's left edge.
 
-Every size and threshold is in cells: minimum width 10 cells for text (D9) and 12 for code and areas, the text wrap of 26 cells, the margins. A larger text size makes the sheet larger and moves nothing.
+Every size and threshold is in cells: minimum width 10 cells for text (P9) and 12 for code and areas, the text wrap of 26 cells, the margins. A larger text size makes the sheet larger and moves nothing.
 
 An area's body has its own grid, aligned with the sheet so that a child keeps its dots when it enters, leaves or is ungrouped: a child at `(c, r)` of an area at `(A, R)` stands on sheet cell `(A + 1 + c, R + rowOff + r)`, where `rowOff` is the header height in whole rows (the area's top padding `AT` is chosen to make it whole).
 
@@ -69,8 +76,8 @@ Each kind of block describes itself to the engine with data. Text, code and area
 ### 3.4 Width
 
 - A text without a set width takes `min(26 cells, room)`. The room ends one cell before the nearest solid neighbour to the right on the rows the text crosses, and at the container's right margin.
-- The room never goes below 10 cells (D9). A neighbour closer than that is a collision and is handled by §3.7: whoever is lower, or on the same row more to the right, moves down.
-- A set width `cw` is kept as is. If it does not fit, the block moves (D11), it does not shrink.
+- The room never goes below 10 cells (P9). A neighbour closer than that is a collision and is handled by §3.7: whoever is lower, or on the same row more to the right, moves down.
+- A set width `cw` is kept as is. If it does not fit, the block moves (P11), it does not shrink.
 - Code and areas take the room they are given, at least 12 cells.
 
 The width of a text depends on which neighbours cross its rows, and its rows depend on its width. Draft 1 measured the result: two different layouts of one note before and after a reload (F1). The engine breaks the cycle by looking for neighbours on the text's **natural rows**, the rows it takes at its full width, then measuring the height at the width that gives. One pass, one answer.
@@ -86,13 +93,13 @@ The handle sets a height:
 
 Double click on the handle goes back to the content height. Nothing ever scrolls inside a block.
 
-- «Розгорнути» shows the whole block until the note is closed and is not saved (D15); «Згорнути» at the bottom folds it back.
-- A caret in a folded block unfolds it until the caret leaves (D16).
+- «Розгорнути» shows the whole block until the note is closed and is not saved (H3); «Згорнути» at the bottom folds it back.
+- A caret in a folded block unfolds it until the caret leaves (H4).
 - A link to the block, a search hit under the fold, a change lit in «Історія» unfold it. Copying always copies everything.
-- Unfolding a block inside a folded or collapsed area unfolds the area too. Areas fold to a height like text (D17); the header button still collapses an area to its header.
-- Only a long paste folds by itself (D14). On a phone, long blocks also fold at 10 rows in the view (D18).
+- Unfolding a block inside a folded or collapsed area unfolds the area too. Areas fold to a height like text (H5); the header button still collapses an area to its header.
+- Only a long paste folds by itself (H2). On a phone, long blocks also fold at 10 rows in the view (H6).
 
-The engine needs only the **shown height**: folded rows plus one, or the content, or the set room. Unfolding a block changes its shown height, the sweep moves what is below, and folding it back brings everything back (D1). An area grows with its children's shown heights, so it unfolds with them without code of its own. A folded block keeps its height on every screen; on a narrow one only N in «ще N рядків» grows.
+The engine needs only the **shown height**: folded rows plus one, or the content, or the set room. Unfolding a block changes its shown height, the sweep moves what is below, and folding it back brings everything back (P1). An area grows with its children's shown heights, so it unfolds with them without code of its own. A folded block keeps its height on every screen; on a narrow one only N in «ще N рядків» grows.
 
 ### 3.6 Lanes and collisions
 
@@ -105,7 +112,7 @@ For each container, in the canonical order of anchors (row, then column, then id
 ```
 pred(b)  = the blocks before b in that order whose lanes cross b's lane
 d(a)     = y(a) − anchor(a)                       how far a was moved down
-y(b)     = max( anchor(b) + max{ d(a) : a ∈ pred(b) },       wagons: move with what is above (D2)
+y(b)     = max( anchor(b) + max{ d(a) : a ∈ pred(b) },       wagons: move with what is above (P2)
                 max{ y(a) + h(a) : a ∈ pred(b) } )            no overlap: stand under what is above
 ```
 
@@ -114,8 +121,8 @@ This is the «skyline» of rectangle packing, or the earliest start of a task in
 - **no overlap** inside a container;
 - **reading order**: nobody overtakes anybody in a lane;
 - **determinism**: the same anchors and the same width give the same picture on every device, in any order of the stored array;
-- **elasticity** (D1): placements are computed from anchors, so when a cause goes, the blocks are back;
-- **gaps kept** (D2): a block moved down takes the blocks below it in its lane along, by the same amount.
+- **elasticity** (P1): placements are computed from anchors, so when a cause goes, the blocks are back;
+- **gaps kept** (P2): a block moved down takes the blocks below it in its lane along, by the same amount.
 
 There is no «fixed» block. The block being dragged is a ghost with an anchor in the same sweep, and growing text only pushes what is after it in the order.
 
@@ -123,11 +130,11 @@ There is no «fixed» block. The block being dragged is a ghost with an anchor i
 
 ### 3.8 Containers
 
-An area is a sheet inside the sheet: the same rules, recursively (D3). Its width is set by its handle; its height follows its children's shown heights plus its header, or a fold (D17), or a collapse to the header. Its children always stay inside: in the view, a child that would stick out is moved left to the last column where it fits and down if it then collides. Narrowing the area with its handle pushes its children left in a chain and stops when they have no room (D10). A block enters an area when it touches it or the pointer is over it, and leaves when it is pulled out past the edge.
+An area is a sheet inside the sheet: the same rules, recursively (P3). Its width is set by its handle; its height follows its children's shown heights plus its header, or a fold (H5), or a collapse to the header. Its children always stay inside: in the view, a child that would stick out is moved left to the last column where it fits and down if it then collides. Narrowing the area with its handle pushes its children left in a chain and stops when they have no room (P10). A block enters an area when it touches it or the pointer is over it, and leaves when it is pulled out past the edge.
 
 ### 3.9 What writes anchors
 
-Only these, each with its undo entry: a drop, an arrow in position mode, entering or leaving an area, ungrouping, a resize (and the neighbours it pushes sideways, D10 and today's widening chain), a fold set by the handle, creating and deleting a block, a move on a phone translated by §4. Nothing else writes `row`, `col`, `fx`, `parent`, `cw`, `ch` or the fold.
+Only these, each with its undo entry: a drop, an arrow in position mode, entering or leaving an area, ungrouping, a resize (and the neighbours it pushes sideways, P10 and today's widening chain), a fold set by the handle, creating and deleting a block, a move on a phone translated by §4. Nothing else writes `row`, `col`, `fx`, `parent`, `cw`, `ch` or the fold.
 
 ### 3.10 Preview is the result
 
@@ -137,14 +144,16 @@ While a block is dragged, the ghost is measured at the width it will have at the
 
 Only anchors travel. Two devices with the same anchors draw the same layout because the sweep uses the same canonical order as the sync core. A merge of the place group from two devices that produces a collision is resolved by the sweep on every device in the same way, without writing anything.
 
-## 4. Narrow screens
+## 4. Narrow screens (proposal)
 
-The computer layout is the master (D4). A screen shows `C` columns. When every block fits (`col + lane ≤ C`), the screen shows the computer layout as is. When some do not, the screen shows a **folded view**, computed from anchors and never stored:
+This section is the recommended answer to P4–P7 and H6; the owner is reviewing it.
 
-1. **Clamp.** A block that sticks out is moved left to the last column where it fits. Short blocks that then fit side by side stay side by side (D6).
-2. **Fold.** Blocks that still collide fold under each other, inside a horizontal band of rows where they stood side by side. The order inside a band is chosen automatically (D5): if each block on the right starts on the same row as a block on the left, they are pairs and fold row by row; otherwise they are columns and fold column by column, the whole left column first.
+The computer layout is the master (P4). A screen shows `C` columns. When every block fits (`col + lane ≤ C`), the screen shows the computer layout as is. When some do not, the screen shows a **folded view**, computed from anchors and never stored:
+
+1. **Clamp.** A block that sticks out is moved left to the last column where it fits. Short blocks that then fit side by side stay side by side (P6).
+2. **Fold.** Blocks that still collide fold under each other, inside a horizontal band of rows where they stood side by side. The order inside a band is chosen automatically (P5): if each block on the right starts on the same row as a block on the left, they are pairs and fold row by row; otherwise they are columns and fold column by column, the whole left column first.
 3. **Gaps stay.** The empty rows inside a column are kept, so a block can still start lower and leave room above it, which the old phone ribbon could not do.
-4. **Long blocks fold** at 10 rows in this view (D18).
+4. **Long blocks fold** at 10 rows in this view (H6).
 
 ```
 Computer:          Phone, pairs:      Phone, columns:
@@ -154,7 +163,7 @@ Computer:          Phone, pairs:      Phone, columns:
                      D                  D
 ```
 
-A move on a narrow screen is translated to the computer by the block above it in the view and the gap (D7): the block goes into that block's container and lane, the given number of empty rows under it. A block created in an empty spot on the phone is placed the same way, or at the left margin at the top when nothing is above. A note started on a phone looks like a tidy column on the left on a computer.
+A move on a narrow screen is translated to the computer by the block above it in the view and the gap (P7): the block goes into that block's container and lane, the given number of empty rows under it. A block created in an empty spot on the phone is placed the same way, or at the left margin at the top when nothing is above. A note started on a phone looks like a tidy column on the left on a computer.
 
 «Показати як на компʼютері» stays: the computer layout zoomed out, read-only. A tablet usually fits and shows the computer layout.
 
@@ -163,8 +172,8 @@ A move on a narrow screen is translated to the computer by the block above it in
 The stored format does not change its fields' meaning in a way old notes notice, and no migration rewrites them.
 
 - **`row` is the anchor.** Today's stored rows already contain old pushes; they are read as anchors. A row may carry a fraction as an order key (§3.7); old code draws it on the same row, a fraction of a pixel off.
-- **Sheet columns (D8).** A sheet block gets `col`, absolute, like a child of an area. `normBlock` in `public/sync.js` deletes `col` on sheet blocks today and `blockCmp` orders them by `fx`; both change, in `sync.js`, where the format lives. A block without `col` derives it from `fx` with a fixed reference width `W0`, the same on every device: `col = round((fx × W0 − 12) / 24)`. `fx` is still written, as `col`'s position at `W0`, for older versions.
-- **Fold (D13).** Text and areas get an optional `fold`: the rows shown when the user folded the block. It joins the place group (`PLACE`), because it changes the layout. Code keeps its fields: its `ch` already is a fold height, and its `open` means «the user chose the full height». Clicking «Розгорнути» stops writing `open` (D15).
+- **Sheet columns (P8).** A sheet block gets `col`, absolute, like a child of an area. `normBlock` in `public/sync.js` deletes `col` on sheet blocks today and `blockCmp` orders them by `fx`; both change, in `sync.js`, where the format lives. A block without `col` derives it from `fx` with a fixed reference width `W0`, the same on every device: `col = round((fx × W0 − 12) / 24)`. `fx` is still written, as `col`'s position at `W0`, for older versions.
+- **Fold (H1).** Text and areas get an optional `fold`: the rows shown when the user folded the block. It joins the place group (`PLACE`), because it changes the layout. Code keeps its fields: its `ch` already is a fold height, and its `open` means «the user chose the full height». Clicking «Розгорнути» stops writing `open` (H3).
 - **Existing long code blocks** keep their look: a code block without `ch` or `open` and longer than 14 lines is shown folded at 12, as today. A new block made by a long paste stores its fold explicitly. Code typed by hand past 14 lines no longer folds by itself.
 - **Old notes fold nothing by themselves.** A text whose `ch` is now below its content was a minimum height, not a fold, and stays shown in full: only `fold` folds a text.
 - **Unknown fields.** `normBlock` passes unknown fields through, but the editor's `serBlock` (`index.html:2032`) writes only the fields it knows, so an older version that edits a note drops `fold` and the sheet `col`. Step 0 makes the editor keep the fields it does not know, and is released before any new field is written. When the new fields start being written, `FORMAT` is raised (`docs/IDB-BARRIER-PLAN.md`) so older tabs on the same device stop writing.
@@ -186,7 +195,7 @@ The main shapes, described once in `model.js`:
 ```js
 /** @typedef {{id:string, kind?:string, parent?:string, col:number, row:number, cw?:number, minRows?:number, foldRows?:number}} Anchor
  *  @typedef {{col:number, row:number, w:number, h:number, folded:boolean}} Placement
- *  @typedef {{cols:number, narrow:boolean, open:Set<string>}} View    // open: blocks unfolded for reading (D15)
+ *  @typedef {{cols:number, narrow:boolean, open:Set<string>}} View    // open: blocks unfolded for reading (H3)
  *  @typedef {(a:Anchor, widthCells:number)=>number} Measure           // content rows; view.js in the browser, a stub in Node
  */
 export function place(anchors, kinds, view, measure) { /* → Map<id, Placement>, every container, one sweep each */ }
@@ -205,13 +214,13 @@ Each step is one PR with every scenario green.
 | 0 | The editor keeps block fields it does not know | the risk of §5 | none |
 | 1 | `model.js` extracted as it is, called from `index.html`; Node tests pin today's behaviour | nothing yet | none |
 | 2 | The canonical sweep of §3.7, run once after a note loads; widths from natural rows; `G` read once per pass | F1, F4, F8 | none |
-| 3 | Anchors: placements are never written; elasticity, wagons, fractional keys for drops; thresholds in cells (D9); `FORMAT` raised | F3, most of F5 | meaning of `row` |
-| 4 | Absolute sheet columns (D8) in `sync.js` and the editor; the folded view for narrow screens (§4) | the rest of F5 | `col` on the sheet |
+| 3 | Anchors: placements are never written; elasticity, wagons, fractional keys for drops; thresholds in cells (P9); `FORMAT` raised | F3, most of F5 | meaning of `row` |
+| 4 | Absolute sheet columns (P8) in `sync.js` and the editor; the folded view for narrow screens (§4) | the rest of F5 | `col` on the sheet |
 | 5 | The height rule of §3.5 for every kind | | `fold` |
-| 6 | Containment and set widths (D10, D11) | F6, F7 | none |
+| 6 | Containment and set widths (P10, P11) | F6, F7 | none |
 | 7 | `ops.js` and `input.js`: drag, resize, arrows, areas through `ops`; the ghost measured at the target | F2 | none |
 
-Steps 0–3 go out before or with the sync release to `.app` (D12). Steps 4–7 may follow it.
+If P12 is accepted, steps 0–3 go out before or with the sync release to `.app` and steps 4–7 may follow it. Step 4 depends on P4–P8 and changes with them.
 
 ## 8. Today's code against the model
 
@@ -238,7 +247,7 @@ Smaller points: `xConflict` and `colsOverlap` are one predicate twice; a collaps
 
 These are not questions for the owner unless noted; the step that meets them settles them with tests.
 
-- **`W0`** for deriving columns from `fx` (step 4): the sheet width the owner's notes were mostly made at. To ask the owner: the usual computer and whether the panel is open.
+- **`W0`** for deriving columns from `fx` (step 4, only if P8 is accepted): the sheet width the owner's notes were mostly made at. To ask the owner then: the usual computer and whether the panel is open.
 - **Widths in one sweep** (step 2): a text's natural rows may cross a neighbour that is itself pushed down later in the sweep. Either the narrowing uses anchors (deterministic, sometimes narrower than needed) or a second, bounded pass. Both are deterministic; tests decide.
 - **The fold of §4:** how a band is found, the tolerance for «the same row» in pairs, the gap between folded columns.
 - **← and → in position mode on a narrow screen:** what they mean in the folded view.
@@ -253,9 +262,9 @@ From the discussion of 2026-10-18; they explain why §3.7 is exact and why the a
 - **Not a gas, not a liquid.** A gas spreads blocks evenly and forgets where they were put; a liquid lets them settle and closes every gap (Masonry, the compacting mode of react-grid-layout). Both contradict a free sheet.
 - **Rigid bodies.** Physics engines separate overlapping bodies pair by pair, a few iterations at a time. Today's three-pass `resolveIn` is such a solver without a convergence test; F1 and F4 are its typical artefacts.
 - **The skyline and the critical path.** With a fixed reading order, «no overlap» becomes `y(b) ≥ y(a) + h(a)` for every `a` before `b` in its lane. The least solution that is not above the anchors is the longest-path formula of §3.7, which is also the nearest solution to the anchors: no optimisation is needed.
-- **Anchored springs.** A float on a tether returns when released: elasticity (D1). Today's behaviour is plasticine.
-- **Wagons and beads.** Coupled wagons move together and keep their spacing (D2); beads on a thread close the slack first.
-- **A soft cell.** A text keeps its area: `h ≈ ceil(chars × charWidth / width)`. At 6 cells a paragraph can become five times taller, at 10 cells (D9) about twice at most.
+- **Anchored springs.** A float on a tether returns when released: elasticity (P1). Today's behaviour is plasticine.
+- **Wagons and beads.** Coupled wagons move together and keep their spacing (P2); beads on a thread close the slack first.
+- **A soft cell.** A text keeps its area: `h ≈ ceil(chars × charWidth / width)`. At 6 cells a paragraph can become five times taller, at 10 cells (P9) about twice at most.
 - **Text around a float.** CSS computes the width of each line from what crosses that line, top to bottom, with no iteration. It is the exact form of «width to the neighbour»; the natural-rows rule of §3.4 is its block-sized version.
 
 ## 11. Reproducing the measurements
