@@ -28,9 +28,9 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
 
 /* ── 1. a refused read is no access: the first page, a listener; reload() tries again ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); seeded(cloud);
-  const A=device(cloud,'A'); cloud.fault('fail',{dev:'A', op:'page', code:'permission-denied'}); cloud.fault('fail',{dev:'A', op:'listen', n:2, code:'permission-denied'}); await A.sync.setOwner(owner); await note(A,'a1','правка до доступу'); await A.sync.start(); await idle(A);
-  ok('1 the first page and the listeners were refused: denied, status «denied», the edit stays in the queue, nothing written, nothing read', A.sync._S.denied && A.sync.status().code==='denied' && A.status.includes('denied') && logs(A,'denied').length===1 && A.sync.jobs().includes('a1') && !cloud.doc('notes','a1') && !A.db.get('notes','s1'));
-  cloud.advance(1000); await idle(A); ok('1b nothing is tried again while denied (the page was never asked for after the listeners\' refusal: '+cloud.faults.length+' refusal left unused)', !cloud.doc('notes','a1') && A.sync.status().code==='denied' && cloud.faults.length===1);
+  const A=device(cloud,'A'); cloud.fault('fail',{dev:'A', op:'page', code:'permission-denied'}); cloud.fault('fail',{dev:'A', op:'listen', n:1, code:'permission-denied'}); await A.sync.setOwner(owner); await note(A,'a1','правка до доступу'); await A.sync.start(); await idle(A);   // one listener refused: on the first load the versions listener waits for the notes
+  ok('1 the notes listener was refused: denied, status «denied», the edit stays in the queue, nothing written, nothing read', A.sync._S.denied && A.sync.status().code==='denied' && A.status.includes('denied') && logs(A,'denied').length===1 && A.sync.jobs().includes('a1') && !cloud.doc('notes','a1') && !A.db.get('notes','s1'));
+  cloud.advance(1000); await idle(A); ok('1b nothing is tried again while denied (the page was never asked for after the listener\'s refusal: '+cloud.faults.length+' refusal left unused)', !cloud.doc('notes','a1') && A.sync.status().code==='denied' && cloud.faults.length===1);
   cloud.faults.length=0;   // the account is let in
   await A.sync.reload(); await A.sync.start(); await idle(A);
   ok('1c reload() (a new leadership, a new sign-in) clears it: the notes came, the edit went, status not denied ('+A.sync.status().code+')', !A.sync._S.denied && !!A.db.get('notes','s1') && !!cloud.doc('notes','a1') && A.sync.status().code!=='denied');
@@ -271,5 +271,13 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   const db=new MemStore(), real=db.tx.bind(db); let thrown=0; db.tx=(st,mode,fn)=>real(st,mode,async t=>{ const r=await fn(t); if(mode==='readwrite' && Array.isArray(r) && r.length>1 && !thrown){ thrown=1; throw new Error('chunk fault'); } return r; });
   const d=await mk(cloud,'B',{db}); await idle(d);
   ok('23d a chunk that fails is applied again note by note: all 30 notes here ('+thrown+' fault)', thrown===1 && [...Array(30).keys()].every(i=>d.db.get('notes','f'+i)) && logs(d,'page-chunk-error').length===1); }
+
+{ const cloud=new TestCloud({start:1_700_000_000_000}); cloud.write('notes',{id:'vn', title:'', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); for(let i=0;i<5;i++) cloud.write('versions',{id:'vv'+i, note:'vn', t:cloud.now(), name:'x', title:'', blocks:[]},{dev:'phone'});
+  const d=device(cloud,'C'); const order=[]; const ls=d.proxy.listen; d.proxy.listen=(c,...a)=>{ order.push('listen:'+c+':'+(d.sync._S.everCaughtUp? 'after' : 'before')); return ls(c,...a); };
+  await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
+  const vl=order.filter(x=>x.startsWith('listen:versions'));
+  ok('23e on the first load the versions listener starts only after the notes caught up ('+order.join(', ')+'), and the versions came', vl.length>=1 && vl.every(x=>x.endsWith(':after')) && !!d.db.get('versions','vv0'));
+  const o2=order.length; d.sync.online(false); d.sync.online(true); await idle(d);
+  ok('23f once the versions catch-up ended, a reconnect starts both listeners at once ('+order.slice(o2).join(', ')+' '+d.sync.status().code+' done '+!!(d.db.get('sync','cursor:versions')||{}).done+')', order.slice(o2).some(x=>x==='listen:versions:after') && d.sync.status().code==='synced'); }
 
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
