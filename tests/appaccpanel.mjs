@@ -141,7 +141,13 @@ for(const w of [390,320]){ const c=new TestCloud({start:Date.now()}); const ctx=
   await untilUI(G.pg,'synced', 20000); const rec=seen.filter(t=>/^Отримую нотатки · \d+$/.test(t));
   ok('9 a new device shows «Отримую нотатки · N» while the first notes come ('+[...new Set(rec)].join(' | ')+')', rec.length>0);
   ok('9a the panel says the browser storage is slow when a write is over the threshold ('+(sl&&sl.why.find(w=>/повільно/.test(w)))+')', !!sl);
-  ok('9b all 40 notes arrived, and the button ends at «Синхронізовано»', await G.pg.evaluate(()=>document.querySelectorAll('#list .item').length)>=40 && (await ui(G.pg)).code==='synced'); await G.close(); }
+  ok('9b all 40 notes arrived, and the button ends at «Синхронізовано»', await G.pg.evaluate(()=>document.querySelectorAll('#list .item').length)>=40 && (await ui(G.pg)).code==='synced');
+  // 9c: the panel open while another connection holds the sync store for 4 s: the core's transaction waits, and the panel says how long, also while its own reads come and go
+  await G.pg.evaluate(()=>{ window.__held=new Promise(done=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const db=r.result, t=db.transaction('sync','readwrite'), st=t.objectStore('sync'), end=Date.now()+4000; const spin=()=>{ if(Date.now()<end) st.get('x').onsuccess=spin; }; spin(); t.oncomplete=()=>{ db.close(); done(); }; }; }); });
+  await G.pg.evaluate(()=>sheetDebug.sync.wake()); await openBtn(G.pg);
+  const held=await until(async()=>{ const x=await panel(G.pg); const w=x && x.why.find(t=>/повільно/.test(t)); const n=w && +(w.match(/триває (\d+)/)||[])[1]; return n>=2? w : null; }, 3800);
+  await G.pg.evaluate(()=>window.__held); await G.pg.keyboard.press('Escape');
+  ok('9c a held write with the panel open: the panel counts its wait in seconds ('+held+')', !!held); await G.close(); }
 
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);

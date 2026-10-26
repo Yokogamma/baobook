@@ -295,4 +295,14 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,10)); const b=d.sync.busyMs(); if(b>=30){ seenBusy=Math.max(seenBusy,b); seenSlow=Math.max(seenSlow, d.sync.status().slow||0); } } await run; hold=false; await idle(d);
   ok('23h the quota\'s flush held for 120 ms is seen: busyMs '+seenBusy+' ms, slow '+seenSlow+' ms', seenBusy>=30 && seenSlow>=30); }
 
+{ // a write held for 300 ms while quick reads run beside it (the open panel's counts every 2 s): the wait is the write's, from its start, and stays
+  const cloud=new TestCloud({start:1_700_000_000_000}); seeded(cloud);
+  const db=new MemStore(), real=db.tx.bind(db); let hold=false;
+  const d=device(cloud,'I',{db, pace:{slowTx:30}}); await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
+  db.tx=(st,mode,fn)=>real(st,mode,async t=>{ const r=await fn(t); if(hold && mode==='readwrite' && st.includes('notes')) await new Promise(res=>setTimeout(res,300)); return r; });
+  hold=true; const w=note(d,'i1','тримаю запис'); const t0=Date.now(), seen=[];
+  for(let i=0;i<20;i++){ await new Promise(r=>setTimeout(r,10)); d.sync.unsynced().catch(()=>{}); seen.push({at:Date.now()-t0, busy:d.sync.busyMs(), slow:d.sync.status().slow||0}); } hold=false; await w; await idle(d);
+  const late=seen.filter(x=>x.at>=60 && x.at<=280);
+  ok('23i reads beside a held write do not restart its wait: busyMs and slow follow the write ('+late.map(x=>x.busy).join(',')+')', late.length>3 && late.every(x=>x.busy>=x.at-15 && x.slow>=30) && late.every((x,i)=>!i || x.busy>=late[i-1].busy)); }
+
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
