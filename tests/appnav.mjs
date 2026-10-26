@@ -22,8 +22,8 @@ const box=async(loc)=>{ const b=await loc.boundingBox(); return b? {x:Math.round
   await hold(80,300); await pg.waitForTimeout(250); await pg.keyboard.type('Перший блок'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
   // 1 панель нотаток: відкрити → запис в історії; Back закриває; відкрити і закрити з інтерфейсу → запису немає
   { const s0=await st(); await tapEl(pg.locator('#sideBtn')); await pg.waitForTimeout(350); const s1=await st(), open1=await sideOpen(); await back(); const s2=await st(), open2=await sideOpen();
-    await tapEl(pg.locator('#sideBtn')); await pg.waitForTimeout(350); await tap(380,600); await pg.waitForTimeout(400); const s3=await st(), open3=await sideOpen();   // дотик по підкладці праворуч від панелі
-    ok('1 панель: до '+JSON.stringify(s0)+'; відкрито '+open1+' '+JSON.stringify(s1)+'; Back → закрито '+(!open2)+' '+JSON.stringify(s2)+'; закриття підкладкою → '+(!open3)+' '+JSON.stringify(s3), s0.d===0 && open1 && s1.d===1 && s1.top==='side' && s1.h===1 && !open2 && s2.d===0 && s2.h===0 && !open3 && s3.d===0 && s3.h===0); }
+    await tapEl(pg.locator('#sideBtn')); await pg.waitForTimeout(350); await tapEl(pg.locator('#sideX')); await pg.waitForTimeout(400); const s3=await st(), open3=await sideOpen();   // the panel's own «×» (on a phone it covers the backdrop)
+    ok('1 панель: до '+JSON.stringify(s0)+'; відкрито '+open1+' '+JSON.stringify(s1)+'; Back → закрито '+(!open2)+' '+JSON.stringify(s2)+'; закриття «×» → '+(!open3)+' '+JSON.stringify(s3), s0.d===0 && open1 && s1.d===1 && s1.top==='side' && s1.h===1 && !open2 && s2.d===0 && s2.h===0 && !open3 && s3.d===0 && s3.h===0); }
   // 2 меню «⋯» шапки: Back закриває; вибір пункту знімає запис
   { await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); const s1=await st(), m1=await pg.locator('.amenu.hm').count(); await back(); const s2=await st(), m2=await pg.locator('.amenu.hm').count();
     await tapEl(pg.locator('#moreBtn')); await pg.waitForTimeout(250); await tapEl(pg.locator('.amenu.hm .mi').filter({hasText:'Сітка'})); await pg.waitForTimeout(400); const s3=await st(), m3=await pg.locator('.amenu.hm').count();

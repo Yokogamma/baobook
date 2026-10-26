@@ -7,10 +7,13 @@ const SITE=(await serve()).url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const read=p=>fs.readFileSync(new URL('../public/'+p, import.meta.url),'utf8');
-const html=read('index.html'), sw=read('sw.js'), core=read('sync.js');
+const html=read('index.html'), sw=read('sw.js'), core=read('sync.js'), cloud=read('cloud.js');
 const LOCALES=fs.readdirSync(new URL('../public/locales/', import.meta.url)).filter(f=>f.endsWith('.json')).map(f=>f.slice(0,-5));
 const dict=Object.fromEntries(LOCALES.map(l=>[l, JSON.parse(read('locales/'+l+'.json'))]));
 const CYR=/[А-Яа-яІіЇїЄєҐґʼ]/;
+// the page's ES modules (public/<feature>/*.js, CLAUDE.md «Modular»): their keys are written out as string literals (a map of codes to keys, t('key'))
+const MODULES=fs.readdirSync(new URL('../public/', import.meta.url),{withFileTypes:true}).filter(d=>d.isDirectory() && d.name!=='locales').flatMap(d=>fs.readdirSync(new URL('../public/'+d.name+'/', import.meta.url)).filter(f=>f.endsWith('.js')).map(f=>d.name+'/'+f));
+const mods=Object.fromEntries(MODULES.map(f=>[f, read(f)]));
 
 // Tiny JS scanner: yields string, template and regex literals, skipping comments (same heuristic as the review tooling).
 function literals(src){
@@ -36,12 +39,16 @@ ok('1 no Cyrillic string literals in the app code ('+(cyrLits.slice(0,3).join(' 
 ok('1b no Cyrillic in markup and CSS outside comments', !CYR.test(markup));
 ok('1c no Cyrillic literals in the service worker', !literals(sw).some(l=>CYR.test(l.text)));
 ok('1d no Cyrillic literals in the sync core (sync.js)', !literals(core).some(l=>CYR.test(l.text)));
+ok('1e no Cyrillic literals in the cloud adapter (cloud.js)', !literals(cloud).some(l=>CYR.test(l.text)));
+for(const [f,src] of Object.entries(mods)) ok('1f no Cyrillic literals in the module '+f, !literals(src).some(l=>CYR.test(l.text)));
 
 // 2. keys: everything the code and markup ask for exists in every language file, and nothing in the files is unused
 const used=new Set();
 for(const m of script.matchAll(/\bloc(?:A)?\(/g)){ let d=0, j=m.index+m[0].length-1, k=j; for(;k<script.length;k++){ const ch=script[k]; if(ch==="'"){ const e=script.indexOf("'",k+1); const s=script.slice(k+1,e); if(/^[a-z][\w]*(\.[\w]+)+$/.test(s)) used.add(s); k=e; continue; } if(ch==='(') d++; else if(ch===')'){ d--; if(!d) break; } } }
 for(const m of markup.matchAll(/data-i18n(?:-html)?="([^"]+)"/g)) used.add(m[1]);
 for(const m of markup.matchAll(/data-i18n-attr="([^"]+)"/g)) for(const pair of m[1].split(';')) used.add(pair.split(':')[1]);
+const HEADS=new Set(Object.keys(dict.uk).map(k=>k.split('.')[0]));
+for(const src of Object.values(mods)) for(const l of literals(src)){ const k=l.text.slice(1,-1); if(/^[a-z][\w]*(\.[\w]+)+$/.test(k) && HEADS.has(k.split('.')[0]) && !/\.js$/.test(k)) used.add(k); }   // a module's key literals (by the first part of a key, so a mistyped key is missing, not ignored)
 used.add('code.lang.autoMark');   // set as a CSS variable by localize()
 for(const l of LOCALES) used.add('lang.'+l);   // the language switcher names every language
 for(const l of LOCALES){
@@ -94,7 +101,10 @@ const chromeCyr=pg=>pg.evaluate(()=>{ const bad=[], CY=/[\u0400-\u04FF]/; /* the
   await ctx.close(); }
 { const site2=await serve(); site2.override.set('/locales/uk.json', null);
   const ctx=await br.newContext(CTX); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto(site2.url); await pg.waitForTimeout(600);
-  ok('5 without a language file the app still starts and shows keys, not a blank page', await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')) && (await pg.locator('#newBtn').textContent()).trim()==='notes.new' && !errs.length);
+  await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(300);   // the 404 fails its integrity check: one reload, then the other language of the build
+  const t=(await pg.locator('#newBtn').textContent()).trim();
+  ok('5 without the Ukrainian file the app still starts, in English of the same build («'+t+'»), not a blank page', await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')) && t===dict.en['notes.new'] && !errs.length);
+  site2.override.set('/locales/en.json', null); await pg.goto(site2.url); await pg.waitForSelector('#sheet'); await pg.waitForTimeout(300);
+  ok('5b with neither file it shows keys, not a blank page', await pg.evaluate(()=>document.documentElement.hasAttribute('data-ready')) && (await pg.locator('#newBtn').textContent()).trim()==='notes.new' && !errs.length);
   await ctx.close(); await site2.close(); }
 await br.close(); process.exit(fails?1:0);

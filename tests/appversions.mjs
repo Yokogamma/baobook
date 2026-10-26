@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { serve, CTX } from './lib/server.mjs';
+import { ready, until } from './lib/wait.mjs';
 const SITE=(await serve()).url;   // a real origin: the language files load over http, not from file://
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : (await import('node:fs')).existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, timezoneId:'Europe/Kyiv'}); const pg=await ctx.newPage(); const errs=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); pg.on('dialog',d=>d.accept());
@@ -10,17 +11,24 @@ const vers=async id=>(await idbAll('versions')).filter(v=>v.note===id).sort((a,b
 const bodies=async id=>(await idbAll('blobs')).filter(b=>b.note===id);
 const note=async id=>(await idbAll('notes')).find(n=>n.id===id);
 const curId=()=>pg.evaluate(()=>sheetDebug.cur());
-const settle=async()=>{ await pg.waitForTimeout(700); await pg.evaluate(()=>sheetDebug.vers.queue()); await pg.waitForTimeout(100); };
+// the edit is written: the save status leaves «●» once the last write of the open note has landed, and that write has queued its version jobs by then
+const written=()=>until(()=>pg.evaluate(()=>!document.getElementById('saved').classList.contains('pend')),15000);
+// then the version jobs of the note have run
+const settle=async()=>{ await written(); await pg.evaluate(()=>sheetDebug.vers.queue()); };
+// a click on the sheet makes a block; type or paste once the caret is in it (earlier, the input would be lost)
+const caret=()=>pg.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest('#sheet .blk')),null,{timeout:10000});
+// an import is done once its report «Імпортовано: …» is shown
+const imported=async file=>{ await pg.evaluate(()=>{ document.getElementById('toast').textContent=''; }); await pg.setInputFiles('#importFile',file); await until(()=>pg.evaluate(()=>/Імпортовано/.test(document.getElementById('toast').textContent)),15000); };
 const clock=ms=>pg.evaluate(ms=>{ sheetDebug.vers.clock=ms; }, ms);
 const force=(reason,name)=>pg.evaluate(([r,n])=>sheetDebug.vers.force(r,n), [reason,name||null]);
 const paste=(text)=>pg.evaluate(t=>{ const dt=new DataTransfer(); dt.setData('text/plain',t); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); }, text);
-await pg.goto(SITE); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(400);
+await pg.goto(SITE); await ready(pg); await pg.waitForTimeout(400); await pg.evaluate(()=>new Promise(r=>{ (localStorage.clear(),sessionStorage.clear()); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await ready(pg);
 // 0 база версії 2, нова нотатка з блоком: версій ще немає (порожній стан не версія, інтервал не минув)
-await pg.mouse.click(500,300); await pg.keyboard.type('пароль: Qw3rty!'); await pg.keyboard.press('Escape'); await settle();
+await pg.mouse.click(500,300); await caret(); await pg.keyboard.type('пароль: Qw3rty!'); await pg.keyboard.press('Escape'); await settle();
 const id=await curId(); const dbv=await pg.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const names=[...d.objectStoreNames]; const v=d.version; d.close(); res({v,names}); }; }));
-ok('0 база версії '+dbv.v+' зі сховищами '+dbv.names.join(',')+'; після першого блока версій '+(await vers(id)).length, dbv.v===3 && dbv.names.includes('versions') && dbv.names.includes('blobs') && (await vers(id)).length===0);
+ok('0 база версії '+dbv.v+' зі сховищами '+dbv.names.join(',')+'; після першого блока версій '+(await vers(id)).length, dbv.v===4 && dbv.names.includes('versions') && dbv.names.includes('blobs') && (await vers(id)).length===0);
 // 1 нова сесія, перша правка: версія «base» зі станом до правки і часом минулого збереження; тіло — старий текст
-await pg.reload(); await pg.waitForTimeout(500); const before=await note(id);
+await pg.reload(); await ready(pg); const before=await note(id);
 const txt=pg.locator('#sheet .blk .txt').first(); await txt.click(); await pg.keyboard.press('End'); await pg.keyboard.type(' змінено'); await pg.keyboard.press('Escape'); await settle();
 { const v=await vers(id), b=await bodies(id), after=await note(id);
   ok('1 перша правка в новій сесії: версій '+v.length+' ('+(v[0]&&v[0].reason)+'), t = попереднє updated ('+(v[0]&&v[0].t===before.updated)+'), тіло версії «'+(b[0]&&b[0].s)+'», sig відрізняється від поточного ('+(v[0]&&v[0].sig!==(await pg.evaluate(()=>sheetDebug.vers.last().sig))===false)+')', v.length===1 && v[0].reason==='base' && v[0].t===before.updated && b.length===1 && b[0].s==='пароль: Qw3rty!' && /змінено/.test(after.blocks[0].text)); }
@@ -37,12 +45,12 @@ ok('3 правки на +1…+4 хв: версій '+n3+'; на +5,5 хв: '+v3.
   await clock(20*60000); await force('auto'); const v=await vers(id), b1=(await bodies(id)).length; const last=v[v.length-1];
   ok('4 перенос блока: тіл '+b0+' → '+b1+', зведення '+JSON.stringify(last.sum), b1===b0 && last.sum.mv===1 && last.sum.ch===0); }
 // 5 блок коду: вставка — нове тіло; перейменування блока — без нового тіла, у зведенні «змінено 1»
-{ await pg.mouse.click(500,700); await pg.waitForTimeout(50); await paste('function a(){\n  return 1;\n}'); await pg.waitForTimeout(300); await pg.keyboard.press('Escape'); await settle(); await clock(25*60000); await force('auto'); const b0=(await bodies(id)).length;
+{ await pg.mouse.click(500,700); await caret(); await paste('function a(){\n  return 1;\n}'); await until(()=>pg.locator('#sheet .blk.is-code').count()); await pg.keyboard.press('Escape'); await settle(); await clock(25*60000); await force('auto'); const b0=(await bodies(id)).length;
   const t=pg.locator('#sheet .blk.is-code .ctitle').first(); await t.click(); await pg.keyboard.type('Назва'); await pg.keyboard.press('Enter'); await settle(); await clock(30*60000); await force('auto'); const v=await vers(id), b1=(await bodies(id)).length, last=v[v.length-1];
   ok('5 блок коду: тіл після вставки '+b0+', після перейменування '+b1+'; зведення '+JSON.stringify(last.sum)+'; назва в маніфесті «'+(last.blocks.find(e=>e.kind==='code')||{}).title+'»', b0>=2 && b1===b0 && last.sum.ch===1 && (last.blocks.find(e=>e.kind==='code')||{}).title==='Назва'); }
 // 6 імпорт новішої копії: версія «import» зі станом до перезапису (стан після правки ще не версія — інтервал не минув)
 { await txt.click(); await pg.keyboard.press('End'); await pg.keyboard.type('!'); await pg.keyboard.press('Escape'); await settle(); const n=await note(id); const copy={app:'sheet',format:1,notes:[{id:n.id,title:'Імпортована',blocks:n.blocks.map(b=>({...b,text:b.kind? b.text : 'після імпорту'})),created:n.created,updated:n.updated+5000}]};
-  await pg.setInputFiles('#importFile',{name:'imp.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(copy))}); await settle(); const v=await vers(id), imp=v.filter(x=>x.reason==='import');
+  await imported({name:'imp.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(copy))}); await settle(); const v=await vers(id), imp=v.filter(x=>x.reason==='import');
   ok('6 імпорт новішої копії: версій «import» '+imp.length+', її назва «'+(imp[0]&&imp[0].title)+'», нотатка тепер «'+(await note(id)).title+'»', imp.length===1 && imp[0].title===n.title && (await note(id)).title==='Імпортована'); }
 // 7 прорідження: версії з минулого через force при зсунутому годиннику; очікування рахуємо тією ж лестницею
 // Buckets are local hours and days, so the pairs are anchored to local boundaries in the page (the context runs in Europe/Kyiv, UTC+2/+3, so CI in UTC checks local days too): day -20 at 01:00 and 04:00 is one local day but two UTC days; day -3 at :10 and :30 of one hour. Offsets from "now" would split a pair depending on when the run starts
@@ -55,7 +63,7 @@ ok('3 правки на +1…+4 хв: версій '+n3+'; на +5,5 хв: '+v3.
   const has=t=>v.some(x=>Math.abs(x.t-t)<60000), gone100=!v.some(x=>tMax-x.t>=90*D), day20=[at.d20a,at.d20b].filter(has).length, day3=[at.h3a,at.h3b,at.h3c].filter(has).length;
   ok('7 прорідження: лишилось '+v.length+' (лестниця дає '+expect+'), версії старші за 90 днів зникли ('+gone100+'), за день −20 о 01:00 і 04:00 за Києвом (різні доби UTC) лишилась '+day20+' з 2 (новіша: '+has(at.d20b)+'), за день −3 — '+day3+' з 3 (дві в одну годину, лишилась новіша: '+has(at.h3b)+')', v.length===expect && gone100 && day20===1 && has(at.d20b) && day3===2 && has(at.h3b) && has(at.h3c)); }
 // 8 бюджет: квота 20 МБ → бюджет 1 МБ; шість версій блока коду по 200 КБ; sweep лишає найновішу і іменовану
-{ await pg.evaluate(()=>{ sheetDebug.vers.estimate={usage:0,quota:20*1024*1024}; }); const big='x'.repeat(200*1024); await pg.mouse.click(900,300); await pg.waitForTimeout(50); await paste(big+'\n1'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); await settle();
+{ await pg.evaluate(()=>{ sheetDebug.vers.estimate={usage:0,quota:20*1024*1024}; }); const big='x'.repeat(200*1024); await pg.mouse.click(900,300); await caret(); await paste(big+'\n1'); await until(()=>pg.locator('#sheet .blk').filter({hasText:'xxxxxxxx'}).count()); await pg.keyboard.press('Escape'); await settle();
   const bigTxt=pg.locator('#sheet .blk').filter({hasText:'xxxxxxxx'}).locator('.txt').first(); for(let i=0;i<6;i++){ await bigTxt.click(); await pg.keyboard.press('Control+End'); await pg.keyboard.type('z'); await pg.keyboard.press('Escape'); await settle(); await clock((40+i)*60000); await force(i===2? 'manual' : 'auto', i===2? 'Реліз' : null); }
   const before=await vers(id), sizeBefore=await pg.evaluate(()=>sheetDebug.vers.size); await pg.evaluate(()=>sheetDebug.vers.sweep()); const after=await vers(id), sizeAfter=await pg.evaluate(()=>sheetDebug.vers.size), budget=await pg.evaluate(()=>sheetDebug.vers.budget());
   const newest=before[before.length-1]; ok('8 бюджет '+Math.round(budget/1024)+' КБ: до '+before.length+' версій ('+Math.round(sizeBefore/1024)+' КБ), після sweep '+after.length+' ('+Math.round(sizeAfter/1024)+' КБ); найновіша на місці ('+after.some(x=>x.id===newest.id)+'), іменована на місці ('+after.some(x=>x.name==='Реліз')+')', budget===1024*1024 && sizeBefore>budget && sizeAfter<=budget && after.length<before.length && after.some(x=>x.id===newest.id) && after.some(x=>x.name==='Реліз')); }
@@ -64,7 +72,9 @@ ok('3 правки на +1…+4 хв: версій '+n3+'; на +5,5 хв: '+v3.
   await pg.evaluate(()=>{ sheetDebug.vers.fail=false; }); ok('9 відмова версії: статус «'+cls+'», ⚠ немає ('+warn+'), помилок '+e0+' → '+e1, /ok|^saved$/.test(cls) && warn && e1>e0); }
 // 10 the trash keeps a note's versions and bodies; deleting it for good removes them
 { const other=(await idbAll('notes')).length; await pg.locator('#list .item.cur .it-x').click(); await settle(); await pg.waitForTimeout(300); const v1=(await vers(id)).length, b1=(await bodies(id)).length;
-  await pg.click('#trashRow'); await pg.locator('#list .item[data-id="'+id+'"]').hover(); await pg.locator('#list .item[data-id="'+id+'"] .it-x').click(); await pg.click('#askYes'); await settle(); await pg.waitForTimeout(300);
+  await pg.click('#trashRow'); await pg.locator('#list .item[data-id="'+id+'"]').hover(); await pg.locator('#list .item[data-id="'+id+'"] .it-x').click(); await pg.click('#askYes');
+  // the note is no longer open, so its version queue is not the one settle waits for: wait for its records to leave storage
+  await until(async()=>(await vers(id)).length===0 && (await bodies(id)).length===0, 15000);
   ok('10 у кошику версій '+v1+', тіл '+b1+'; після видалення назавжди версій '+(await vers(id)).length+', тіл '+(await bodies(id)).length, v1>0 && b1>0 && (await vers(id)).length===0 && (await bodies(id)).length===0 && other>=1); }
 await pg.screenshot({path:OUT+'/appversions.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); if(errs.length) fails++;

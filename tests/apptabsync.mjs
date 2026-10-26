@@ -26,7 +26,7 @@ const versions=(pg,id)=>pg.evaluate(id=>window.sheetDebug.vers.list(id), id);
   await typeTitle(A,' А');
   ok('1 the title typed in A shows in B without a reload («'+await title(B)+'»)', await title(B)==='Спільна А');
   ok('1b B\'s list shows it too', (await items(B)).includes('s0:Спільна А'));
-  await A.click('#sheet .blk .txt'); await A.keyboard.press('End'); await A.keyboard.type(' з A'); await A.waitForTimeout(700);
+  await A.click('#sheet .blk .txt'); await A.keyboard.press('End'); await A.keyboard.type(' з A'); await A.keyboard.press('Escape'); await A.waitForTimeout(700);   // the caret leaves: a change from the other tab waits while the caret stands in a field (apptablrev)
   ok('2 the block text typed in A is redrawn in B ('+await text(B)+')', await text(B)==='рядок з A');
   await B.bringToFront(); await open(B,'s1'); await open(B,'s0');
   ok('3 B switched to another note and back still shows A\'s copy', await title(B)==='Спільна А' && await text(B)==='рядок з A');
@@ -47,13 +47,14 @@ const versions=(pg,id)=>pg.evaluate(id=>window.sheetDebug.vers.list(id), id);
   await open(A,'s0'); await open(B,'s0');
   await B.evaluate(()=>{ window.sheetDebug.failSave=true; }); await typeTitle(B,' 2');   // B's edit stays unwritten
   ok('8 B\'s edit is not written («'+(await stored(A,'s0')).title+'»)', (await stored(A,'s0')).title==='Спільна А Б');
-  await typeTitle(A,' 1');
-  const toast=await B.evaluate(()=>{ const t=document.getElementById('toast'); return t.classList.contains('show')? t.textContent : ''; });
-  ok('9 B keeps its own copy («'+await title(B)+'») and says why: «'+toast+'»', await title(B)==='Спільна А Б 2' && /іншій вкладці/.test(toast));
-  const conf=(await versions(B,'s0')).filter(v=>v.reason==='conflict');
-  ok('10 A\'s copy goes into the history as «conflict» ('+conf.map(v=>v.title).join(', ')+')', conf.some(v=>v.title==='Спільна А Б 1'));
+  await typeTitle(A,' 1'); await A.keyboard.press('Escape'); await B.waitForTimeout(300);
+  const toast=await B.evaluate(()=>{ const t=document.getElementById('toast'); return t.classList.contains('show')? t.textContent : ''; }), strip=await B.evaluate(()=>document.getElementById('chgStrip').hidden? '' : document.getElementById('chgMsg').textContent);
+  ok('9 B keeps its own copy on the screen («'+await title(B)+'»); the strip says a change waits from another tab («'+strip+'»), no toast (SYNC-PLAN 4.10)', await title(B)==='Спільна А Б 2' && /іншої вкладки/.test(strip) && !toast);
+  ok('10 no «conflict» record: B\'s pending write will merge over A\'s copy instead', !(await versions(B,'s0')).some(v=>v.reason==='conflict'));
   await B.evaluate(()=>{ window.sheetDebug.failSave=false; }); await B.evaluate(()=>window.dispatchEvent(new Event('online'))); await B.waitForTimeout(700);
-  ok('11 once B can write, its copy is stored and A takes it («'+(await stored(A,'s0')).title+'», A «'+await title(A)+'»)', (await stored(A,'s0')).title==='Спільна А Б 2' && await title(A)==='Спільна А Б 2');
+  const copies=(await versions(B,'s0')).filter(v=>v.reason==='copy');
+  ok('11 once B can write, its title wins the merge and A takes it («'+(await stored(A,'s0')).title+'», A «'+await title(A)+'»); A\'s title stays as a conflict copy ('+copies.map(v=>v.title).join(', ')+')', (await stored(A,'s0')).title==='Спільна А Б 2' && await title(A)==='Спільна А Б 2' && copies.some(v=>v.title==='Спільна А Б 1'));
+  await B.keyboard.press('Escape'); await B.waitForTimeout(300);   // the caret leaves the title: with a caret in a field a change waits for the safe point (apptablrev)
 
   /* ── a tab that missed the messages catches up when it is shown ── */
   await B.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'), st=t.objectStore('notes'); const g=st.get('s0');
@@ -61,6 +62,18 @@ const versions=(pg,id)=>pg.evaluate(id=>window.sheetDebug.vers.list(id), id);
   ok('12 a change written behind B\'s back is not shown yet', await title(B)==='Спільна А Б 2');
   await B.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await B.waitForTimeout(400);
   ok('13 shown again, B reads the storage and takes it («'+await title(B)+'»)', await title(B)==='Збоку');
+
+  /* ── a read of the storage that fails when the tab is shown changes nothing: it says nothing about what is stored ── */
+  const list14=await items(B);
+  await B.evaluate(()=>{ const orig=IDBDatabase.prototype.transaction; window.__readFail={orig, n:0};   // every read of notes and sync fails until the test lets go
+    IDBDatabase.prototype.transaction=function(stores, mode){ const list=[].concat(stores); if((mode||'readonly')==='readonly' && list.includes('notes') && list.includes('sync')){ window.__readFail.n++; throw new DOMException('test: the read failed','UnknownError'); } return orig.apply(this, arguments); }; });
+  await B.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await B.waitForTimeout(400);
+  const fails14=await B.evaluate(()=>{ IDBDatabase.prototype.transaction=window.__readFail.orig; return window.__readFail.n; }), after=await items(B);
+  ok('14 shown again while the read fails ('+fails14+' refused): B keeps its list and the open note, no empty note appears ('+after.join(', ')+')', fails14>0 && after.join()===list14.join() && await title(B)==='Збоку' && (await stored(B,'s0')).title==='Збоку' && !!(await stored(B,'s1')));
+  await B.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result; const t=d.transaction('notes','readwrite'), st=t.objectStore('notes'); const g=st.get('s0');
+    g.onsuccess=()=>{ const n=g.result; n.title='Ще збоку'; n.updated=Date.now()+2000; st.put(n); }; t.oncomplete=()=>{ d.close(); res(); }; }; }));
+  await B.evaluate(()=>document.dispatchEvent(new Event('visibilitychange'))); await B.waitForTimeout(400);
+  ok('15 the next show reads the storage again and takes the change («'+await title(B)+'»)', await title(B)==='Ще збоку' && (await items(B)).length===list14.length);
 
   console.log(errs.length? errs.join('\n') : '✓ no errors'); if(errs.length) fails++;
   await ctx.close(); }

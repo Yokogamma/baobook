@@ -37,6 +37,7 @@ ok('0 the notes from the phone are on A', (await notesOf(A)).filter(n=>/^y\d$/.t
 
 /* ── 1. an automatic tombstone in flight, the note restored meanwhile: the attempt completes, the restored note lives on in the list ── */
 await trash(A,'y1'); await trash(A,'y2'); await quiet(A,2);
+cloud.setTsrv('y1', cloud.now()-31*864e5); cloud.setTsrv('y2', cloud.now()-31*864e5);   // old enough in the trash for the server's own age check (§4.8); the engine's candidate rule is apppurge's business
 cloud.fault('fail',{dev:'A', op:'txn', n:4}); await A.pg.evaluate(()=>sheetDebug.sync.tombstone('y1')); await wake(A); await settle(A.pg,50); const s1=await state(A,'y1');
 await restore(A,'y1'); await quiet(A,4); const an1=await notesOf(A), r1=revivedFrom(an1,'y1'), c1=cloud.doc('notes','y1');
 ok('1 the attempt was insured (purged, auto) and kept failing; the restore came in between', !!s1.tr && !!s1.tr.result.purged && s1.tr.result.auto===true && !s1.note.deleted===false);

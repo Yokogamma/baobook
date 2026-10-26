@@ -5,6 +5,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
+import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 srv.override.set('/blank.html','<!doctype html><meta charset="utf-8"><title>blank</title>');   // the same origin without the app, to set up its storage
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -26,6 +27,7 @@ const tryType=async(pg,x,y,t)=>{ await pg.mouse.click(x,y); await pg.keyboard.ty
 const go=async(pg,url)=>{ await pg.bringToFront(); await pg.goto(url); };   // a page left in the background may never finish loading
 const sheetText=pg=>pg.locator('#sheet').innerText();
 const has=(list,re)=>list.some(n=>re.test(JSON.stringify(n)));
+const waitTab=pg=>until(async()=>/не відпускають сховище/.test(await strip(pg)), 10000);   // the start's wait after a lasting `blocked` (IDB-BARRIER-PLAN §3): polled, not a fixed pause
 // a controllable IndexedDB failure: localStorage __fail = 'all' (every write of a note), 'backup' (only a «(резервна копія)» copy)
 // or 'slow' (the write goes through but its transaction stays open for 1.5 s, so a later save can start and end first)
 const FAILS=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototype.put=function(v){ let f=''; try{ f=localStorage.getItem('__fail')||''; }catch(_){}
@@ -36,7 +38,7 @@ const FAILS=()=>{ const put=IDBObjectStore.prototype.put; IDBObjectStore.prototy
 const LSFAIL=()=>{ const set=Storage.prototype.setItem; Storage.prototype.setItem=function(k,v){
   if(String(k).startsWith('sheet:note:') && this.getItem('__lsfail')==='backup' && /резервна копія/.test(String(v))) throw new DOMException('full','QuotaExceededError');
   return set.apply(this, arguments); }; };
-const bigV3=T=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgradeneeded=()=>{ const d=r.result;   // data of a newer app: one version above this code's (v3)
+const bigNewer=T=>new Promise(res=>{ const r=indexedDB.open('sheet',5); r.onupgradeneeded=()=>{ const d=r.result;   // data of a newer app: one version above this code's (v4)
     d.createObjectStore('notes',{keyPath:'id'}); const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t');
     d.createObjectStore('blobs',{keyPath:['note','h']}); d.createObjectStore('sync',{keyPath:'k'}); };
   r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','versions','blobs','sync'],'readwrite');
@@ -44,7 +46,7 @@ const bigV3=T=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgrade
       t.objectStore('notes').put({id:'nOld',title:'Давно в кошику',blocks:[{id:'o1',fx:0.1,row:2,text:'кошик понад 30 днів'}],created:T-90*864e5,updated:T-40*864e5,deleted:T-40*864e5});
       t.objectStore('versions').put({id:'vK',note:'nA',t:T-2000,w:T-2000,reason:'conflict',keep:1,inline:1,title:'Нова версія',sig:'x',size:10,sum:{ch:1,add:0,del:0,mv:0,ttl:0},blocks:[{id:'a1',fx:0.1,row:2,s:'конфліктна копія'}]});
       t.objectStore('blobs').put({note:'nA',h:'h1',s:'тіло',r:0,z:8}); }
-    t.objectStore('sync').put({k:'format',v:4}); t.oncomplete=()=>{ d.close(); res(); }; }; });
+    t.objectStore('sync').put({k:'format',v:5}); t.oncomplete=()=>{ d.close(); res(); }; }; });
 const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); });
 
 /* ── 1. a new device: the database is created as v2 with its stores; an empty v1 left by someone else is completed ── */
@@ -52,27 +54,27 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   await go(pg,SITE); await ready(pg);
   await typeAt(pg,500,300,'нова нотатка'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const d=await dump(pg);
-  ok('1 a new device: database v3 with notes, versions, blobs and sync ('+d.version+': '+Object.keys(d.stores).join(', ')+'), the note is in it, format 3', d.version===3 && ['notes','versions','blobs','sync'].every(s=>s in d.stores) && has(d.stores.notes,/нова нотатка/) && d.stores.sync.some(x=>x.k==='format' && x.v===3));
+  ok('1 a new device: database v4 with notes, versions, blobs and sync ('+d.version+': '+Object.keys(d.stores).join(', ')+'), the note is in it, format 4', d.version===4 && ['notes','versions','blobs','sync'].every(s=>s in d.stores) && has(d.stores.notes,/нова нотатка/) && d.stores.sync.some(x=>x.k==='format' && x.v===4));
   ok('1b no view-only strip on a new device', !(await strip(pg)));
   await go(pg,SITE+'blank.html'); await pg.evaluate(delDb);
   await pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet',1); q.onsuccess=()=>{ q.result.close(); r(); }; }));   // an empty v1, no stores
   await go(pg,SITE); await ready(pg);
   await typeAt(pg,500,300,'після порожньої v1'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const d1=await dump(pg);
-  ok('1c an empty v1 database gets its stores (v'+d1.version+') and the note is saved', d1.version===3 && ['notes','versions','blobs','sync'].every(s=>s in d1.stores) && has(d1.stores.notes,/після порожньої v1/) && !(await strip(pg)));
-  // a v2 (PR 0) that lacks a store is upgraded to v3, which creates everything missing; a v3 lacking a store is opened as it is (mending it would need v4)
+  ok('1c an empty v1 database gets its stores (v'+d1.version+') and the note is saved', d1.version===4 && ['notes','versions','blobs','sync'].every(s=>s in d1.stores) && has(d1.stores.notes,/після порожньої v1/) && !(await strip(pg)));
+  // a v2 (PR 0) that lacks a store is upgraded to v4, which creates everything missing; so is a v3 lacking a store (every database below v4 is upgraded, SYNC-PLAN 4.9)
   await go(pg,SITE+'blank.html'); await pg.evaluate(delDb);
   await pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet',2); q.onupgradeneeded=()=>{ q.result.createObjectStore('notes',{keyPath:'id'}); const v=q.result.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); }; q.onsuccess=()=>{ q.result.close(); r(); }; }));   // no «blobs»
   await go(pg,SITE); await ready(pg);
   await typeAt(pg,500,300,'v2 без blobs'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const d2=await dump(pg);
-  ok('1i a v2 without «blobs» becomes v'+d2.version+' with every store, the app is not view-only and the note is saved', d2.version===3 && ['notes','versions','blobs','sync'].every(s=>s in d2.stores) && !(await strip(pg)) && has(d2.stores.notes,/v2 без blobs/));
+  ok('1i a v2 without «blobs» becomes v'+d2.version+' with every store, the app is not view-only and the note is saved', d2.version===4 && ['notes','versions','blobs','sync'].every(s=>s in d2.stores) && !(await strip(pg)) && has(d2.stores.notes,/v2 без blobs/));
   await go(pg,SITE+'blank.html'); await pg.evaluate(delDb);
   await pg.evaluate(()=>new Promise(r=>{ const q=indexedDB.open('sheet',3); q.onupgradeneeded=()=>{ q.result.createObjectStore('notes',{keyPath:'id'}); const v=q.result.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); q.result.createObjectStore('sync',{keyPath:'k'}); }; q.onsuccess=()=>{ q.result.close(); r(); }; }));   // v3 without «blobs» and without a format record
   await go(pg,SITE); await ready(pg);
   await typeAt(pg,500,300,'v3 без blobs'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600);
   const d3=await dump(pg);
-  ok('1j a v3 without «blobs» stays v'+d3.version+' and is not view-only (no format record reads as the current format); the note is saved', d3.version===3 && !(await strip(pg)) && has(d3.stores.notes,/v3 без blobs/));
+  ok('1j a v3 without «blobs» becomes v'+d3.version+' with every store and is not view-only; the note is saved', d3.version===4 && ['notes','versions','blobs','sync'].every(s=>s in d3.stores) && !(await strip(pg)) && has(d3.stores.notes,/v3 без blobs/));
   ok('1d no page errors', !pg.errs.length); await ctx.close(); }
 
 /* ── 1e. two tabs start together on a new device: both get the v2 stores and both can write ── */
@@ -82,7 +84,7 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   await typeAt(p1,500,300,'перша вкладка'); await p1.keyboard.press('Escape'); await p1.waitForTimeout(600);
   await typeAt(p2,500,420,'друга вкладка'); await p2.keyboard.press('Escape'); await p2.waitForTimeout(600);
   const d=await dump(p1);
-  ok('1e two tabs starting together: no strip in either, v'+d.version+', both texts written', !(await strip(p1)) && !(await strip(p2)) && d.version===3 && has(d.stores.notes,/перша вкладка/) && has(d.stores.notes,/друга вкладка/) && !Object.keys(d.ls).length);
+  ok('1e two tabs starting together: no strip in either, v'+d.version+', both texts written', !(await strip(p1)) && !(await strip(p2)) && d.version===4 && has(d.stores.notes,/перша вкладка/) && has(d.stores.notes,/друга вкладка/) && !Object.keys(d.ls).length);
   ok('1f no page errors', !p1.errs.length && !p2.errs.length); await ctx.close(); }
 
 /* ── 1g. the database is deleted while the app is open (site data cleared): the next save makes a new v2 and goes on ── */
@@ -91,14 +93,14 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   await go(b,SITE+'blank.html'); await b.evaluate(delDb);
   await typeAt(a,500,420,'після видалення бази'); await a.keyboard.press('Escape'); await a.waitForTimeout(800);
   const d=await dump(a);
-  ok('1g after the database was deleted the app writes on into a new v'+d.version+', no strip', d.version===3 && has(d.stores.notes,/після видалення бази/) && !(await strip(a)));
+  ok('1g after the database was deleted the app writes on into a new v'+d.version+', no strip', d.version===4 && has(d.stores.notes,/після видалення бази/) && !(await strip(a)));
   ok('1h no page errors', !a.errs.length); await ctx.close(); }
 
-/* ── 2. rollback: data from a newer app (v4 with `sync`, keep/inline history) opens view-only, nothing at all is written ── */
+/* ── 2. rollback: data from a newer app (v5 with `sync`, keep/inline history) opens view-only, nothing at all is written ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const pg=await fresh(ctx);
   await go(pg,SITE+'blank.html');
   const T=Date.now();
-  await pg.evaluate(bigV3, T);
+  await pg.evaluate(bigNewer, T);
   await pg.evaluate(T=>localStorage.setItem('sheet:note:nA', JSON.stringify({id:'nA',title:'Нова версія',blocks:[{id:'a1',fx:0.1,row:2,text:'старіша резервна копія'}],created:T-5*864e5,updated:T-60000})), T);
   const before=await dump(pg);
   await go(pg,SITE); await ready(pg);
@@ -124,13 +126,24 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   ok('2k still nothing written after the export (only the export time in settings)', JSON.stringify(await dump(pg))===JSON.stringify(before));
   ok('2l no page errors', !pg.errs.length); await ctx.close(); }
 
-/* ── 2m. the connection went away (the database was deleted) and a newer app made v4 meanwhile: the next save reopens, finds v4 and writes nothing ── */
+/* ── 2p. a v3 database with every store and a format of a newer app: the format check comes before the upgrade to v4, nothing is written ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const pg=await fresh(ctx);
+  await go(pg,SITE+'blank.html');
+  await pg.evaluate(T=>new Promise(res=>{ const r=indexedDB.open('sheet',3); r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore('notes',{keyPath:'id'}); const v=d.createObjectStore('versions',{keyPath:'id'}); v.createIndex('note_t',['note','t']); v.createIndex('t','t'); d.createObjectStore('blobs',{keyPath:['note','h']}); d.createObjectStore('sync',{keyPath:'k'}); };
+    r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','sync'],'readwrite'); t.objectStore('notes').put({id:'nF',title:'Формат новіший',blocks:[{id:'f1',fx:0.1,row:2,text:'з новішого формату'}],created:T,updated:T}); t.objectStore('sync').put({k:'format',v:5}); t.oncomplete=()=>{ d.close(); res(); }; }; }), Date.now());
+  const before=await dump(pg);
+  await go(pg,SITE); await ready(pg);
+  const msg=await strip(pg); await tryType(pg,500,400,'спроба писати'); await pg.waitForTimeout(800); const after=await dump(pg);
+  ok('2p a v3 with format 5 opens view-only ('+msg+'), stays v'+after.version+' with format 5, nothing written', /старша за ваші дані/.test(msg) && after.version===3 && after.stores.sync.some(r=>r.k==='format' && r.v===5) && JSON.stringify(after)===JSON.stringify(before));
+  ok('2q no page errors', !pg.errs.length); await ctx.close(); }
+
+/* ── 2m. the connection went away (the database was deleted) and a newer app made v5 meanwhile: the next save reopens, finds v5 and writes nothing ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const a=await fresh(ctx);
   await go(a,SITE); await ready(a); await typeAt(a,500,300,'до підміни'); await a.keyboard.press('Escape'); await a.waitForTimeout(600);
-  await a.evaluate(delDb); await a.evaluate(bigV3, 0);   // from the same page, so the tab stays in front: an empty v4 with notes, versions, blobs, sync
-  await a.mouse.click(500,420); await a.waitForTimeout(800);   // a click makes a block and a save: the save reopens the database and finds v4
+  await a.evaluate(delDb); await a.evaluate(bigNewer, 0);   // from the same page, so the tab stays in front: an empty v5 with notes, versions, blobs, sync
+  await a.mouse.click(500,420); await a.waitForTimeout(800);   // a click makes a block and a save: the save reopens the database and finds v5
   const d=await dump(a), msg=await strip(a);
-  ok('2m the reopened v4 got no write and no fallback key (v'+d.version+', '+d.stores.notes.length+' notes, '+Object.keys(d.ls).length+' keys)', d.version===4 && !d.stores.notes.length && !Object.keys(d.ls).length);
+  ok('2m the reopened v5 got no write and no fallback key (v'+d.version+', '+d.stores.notes.length+' notes, '+Object.keys(d.ls).length+' keys)', d.version===5 && !d.stores.notes.length && !Object.keys(d.ls).length);
   ok('2n the tab turned view-only at once and says the last edit was not saved ('+msg+')', /не вдалося зберегти/.test(msg) && await a.locator('#sheet').evaluate(e=>e.inert));
   const [dl]=await Promise.all([a.waitForEvent('download'), a.locator('#roExport').click()]); const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
   ok('2o «Експортувати незбережене» carries the notes that now live only in memory (the old database is gone)', has(data.notes,/до підміни/));
@@ -141,7 +154,7 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   await go(a,SITE); await ready(a);
   await go(b,SITE+'blank.html');
   await typeAt(a,500,300,'до оновлення');   // no wait: the autosave (300 ms) has not run yet
-  const notes=await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('sync')) r.result.createObjectStore('sync',{keyPath:'k'}); };   // a newer app upgrading the database
+  const notes=await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',5); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('sync')) r.result.createObjectStore('sync',{keyPath:'k'}); };   // a newer app upgrading the database
     r.onsuccess=()=>{ const d=r.result, q=d.transaction('notes','readonly').objectStore('notes').getAll(); q.onsuccess=()=>{ d.close(); res(q.result); }; }; }));
   ok('3 the text typed just before the upgrade was written before the tab let go', has(notes,/до оновлення/));
   await a.waitForTimeout(300);
@@ -158,7 +171,7 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   await go(a,SITE); await ready(a); await a.evaluate(()=>{ window.sheetDebug.failSave=true; });
   await typeAt(a,500,300,'незбережений текст'); await a.waitForTimeout(600);
   await go(b,SITE+'blank.html');
-  await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',4); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('sync')) r.result.createObjectStore('sync',{keyPath:'k'}); }; r.onsuccess=()=>{ r.result.close(); res(); }; }));
+  await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',5); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('sync')) r.result.createObjectStore('sync',{keyPath:'k'}); }; r.onsuccess=()=>{ r.result.close(); res(); }; }));
   await a.waitForTimeout(400);
   const msg=await strip(a);
   ok('3f the strip says the last edit could not be saved ('+msg+')', /не вдалося зберегти/.test(msg));
@@ -168,19 +181,22 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   ok('3i nothing went to the localStorage fallback', !Object.keys((await dump(a)).ls).length);
   ok('3j no page errors', !a.errs.length); await ctx.close(); }
 
-/* ── 4. a blocked setup: another connection holds an empty v1, so the stores cannot be created: view-only until a reload ── */
+/* ── 4. a blocked setup: another connection holds an empty v1, so the stores cannot be created: the start waits and says why (IDB-BARRIER-PLAN §3),
+   then goes on by itself, with no reload, once the other connection closes ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html');
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // kept open, deaf to versionchange
-  await go(a,SITE); await ready(a); await a.waitForTimeout(3600);   // a block that lasts over 3 s
+  await go(a,SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await waitTab(a);   // a block that lasts over 3 s
   const msg=await strip(a);
-  ok('4 blocked: the strip asks to close the other tabs ('+msg+')', /Закрийте інші вкладки Baobook/.test(msg));
+  ok('4 blocked: the strip says another tab holds the storage and this page will go on by itself ('+msg+')', /не відпускають сховище/.test(msg) && !(await a.locator('#roReload').isVisible()) && !(await a.locator('#roExport').isVisible()));
   await tryType(a,500,400,'заблоковано'); await a.waitForTimeout(600);
   ok('4b typing changes nothing and nothing goes to the fallback', !/заблоковано/.test(await sheetText(a)) && !(await fbKeys(a)).length);
-  await b.evaluate(()=>window.__hold.close()); await a.reload(); await ready(a);
+  const doc=await a.evaluate(()=>{ window.__doc=1; return performance.timeOrigin; });   // the same document after the wait: no reload
+  await b.evaluate(()=>window.__hold.close()); await ready(a);
+  ok('4c after the other tab lets go the start goes on in the same page, no reload', (await a.evaluate(()=>window.__doc===1 && performance.timeOrigin))===doc && !(await strip(a)));
   await typeAt(a,500,300,'розблоковано'); await a.keyboard.press('Escape'); await a.waitForTimeout(600);
   const d=await dump(a);
-  ok('4c after the other tab lets go, a reload works as usual (v'+d.version+')', !(await strip(a)) && d.version===3 && has(d.stores.notes,/розблоковано/));
+  ok('4e the database is set up and takes the text (v'+d.version+')', d.version===4 && has(d.stores.notes,/розблоковано/));
   ok('4d no page errors', !a.errs.length); await ctx.close(); }
 
 /* ── 5. fallback copies in the usual mode: a copy that differs is kept as a note of its own, an identical one just goes ── */
@@ -442,24 +458,25 @@ const seedFb=T=>{ const put=n=>localStorage.setItem('sheet:note:'+n.id, JSON.str
   await a.waitForTimeout(400);
   ok('9 during the wait «Нова» makes no note, the sheet and the title take no text, a paste makes no block, nothing goes to localStorage', !(await fbKeys(a)).length && !/під час запуску/.test(await sheetText(a)) && !(await a.locator('#sheet .blk').count()) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
   ok('9a a note another tab sent during the wait does not show yet: nothing to open and edit before the start is done', !(await a.locator('#list .item').count()));
-  await a.waitForTimeout(3600);
-  ok('9b once the block lasts, the tab is view-only and still nothing went to the fallback', /Закрийте інші вкладки Baobook/.test(await strip(a)) && !(await fbKeys(a)).length);
-  ok('9c nothing typed during the wait was taken and lost: nothing waits to be saved (plain «Експорт»)', /^Експорт$/.test((await a.locator('#roExport').innerText()).trim()));
-  ok('9e after the start the other tab\'s note shows (its message was kept and applied), view-only', (await a.locator('#list .item').allInnerTexts()).some(t=>/Від сусіда/.test(t)) && (await a.locator('#ttl').getAttribute('contenteditable'))==='false');
-  await b.evaluate(()=>window.__hold.close());
+  await waitTab(a);
+  ok('9b once the block lasts, the start keeps waiting, says why, and still nothing went to the fallback', /не відпускають сховище/.test(await strip(a)) && !(await fbKeys(a)).length && !(await a.locator('#list .item').count()));
+  await b.evaluate(()=>window.__hold.close()); await ready(a);
+  ok('9c nothing typed during the wait was taken: no text of it on the sheet or in the database', !/під час запуску/.test(await sheetText(a)) && !has((await dump(a)).stores.notes,/під час запуску/) && !(await strip(a)));
+  ok('9e after the start the other tab\'s note shows (its message was kept and applied), and the sheet is editable', (await a.locator('#list .item').allInnerTexts()).some(t=>/Від сусіда/.test(t)) && (await a.locator('#ttl').getAttribute('contenteditable'))!=='false');
   ok('9d no page errors', !a.errs.length); await ctx.close(); }
 
-/* ── 9g. a blocked start with two different copies of a note in the fallback keys: one backup copy, not two ── */
+/* ── 9g. a blocked start with two different copies of a note in the fallback keys: once the start goes on, one backup copy, not two ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(b,SITE+'blank.html'); const T=Date.now();
   await b.evaluate(T=>{ const put=(k,n)=>localStorage.setItem('sheet:note:'+k, JSON.stringify(n));
     put('x5',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'старий пʼятий'}],created:T-9e5,updated:T-5000});
     put('x5~tabq~7',{id:'x5',title:'Пʼятий',blocks:[{id:'a',fx:0.1,row:2,text:'новий пʼятий'}],created:T-9e5,updated:T-100}); }, T);
   await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',1); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));
-  await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await a.waitForTimeout(3800);
+  await a.bringToFront(); await a.goto(SITE); await a.waitForSelector('html[data-ready]',{state:'attached'}); await waitTab(a);
+  ok('9f blocked: the start waits and shows no note yet', !(await a.locator('#list .item').count()) && /не відпускають сховище/.test(await strip(a)));
+  await b.evaluate(()=>window.__hold.close()); await ready(a); await a.waitForTimeout(800);
   const items=await a.locator('#list .item').allInnerTexts();
-  ok('9g blocked, two copies in the fallback keys: the newer note and exactly one backup copy ('+items.length+' items)', items.length===2 && items.filter(t=>/резервна копія/.test(t)).length===1);
-  await b.evaluate(()=>window.__hold.close());
+  ok('9g two copies in the fallback keys: the newer note and exactly one backup copy ('+items.length+' items)', items.length===2 && items.filter(t=>/резервна копія/.test(t)).length===1 && items.some(t=>/новий пʼятий|Пʼятий/.test(t)));
   ok('9h no page errors', !a.errs.length); await ctx.close(); }
 
 /* ── 10. a record under a note key that is not a note stays where it is ── */
