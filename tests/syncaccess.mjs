@@ -273,11 +273,26 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   ok('23d a chunk that fails is applied again note by note: all 30 notes here ('+thrown+' fault)', thrown===1 && [...Array(30).keys()].every(i=>d.db.get('notes','f'+i)) && logs(d,'page-chunk-error').length===1); }
 
 { const cloud=new TestCloud({start:1_700_000_000_000}); cloud.write('notes',{id:'vn', title:'', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); for(let i=0;i<5;i++) cloud.write('versions',{id:'vv'+i, note:'vn', t:cloud.now(), name:'x', title:'', blocks:[]},{dev:'phone'});
-  const d=device(cloud,'C'); const order=[]; const ls=d.proxy.listen; d.proxy.listen=(c,...a)=>{ order.push('listen:'+c+':'+(d.sync._S.everCaughtUp? 'after' : 'before')); return ls(c,...a); };
+  const d=device(cloud,'C'); const order=[]; const ls=d.proxy.listen; d.proxy.listen=(c,...a)=>{ order.push('listen:'+c+':'+(d.sync._S.snapshot.notes? 'after' : 'before')); return ls(c,...a); };
   await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
   const vl=order.filter(x=>x.startsWith('listen:versions'));
-  ok('23e on the first load the versions listener starts only after the notes caught up ('+order.join(', ')+'), and the versions came', vl.length>=1 && vl.every(x=>x.endsWith(':after')) && !!d.db.get('versions','vv0'));
+  ok('23e on the first load the versions listener starts only after the notes listener\'s first snapshot ('+order.join(', ')+'), and the versions came', vl.length>=1 && vl.every(x=>x.endsWith(':after')) && !!d.db.get('versions','vv0'));
   const o2=order.length; d.sync.online(false); d.sync.online(true); await idle(d);
-  ok('23f once the versions catch-up ended, a reconnect starts both listeners at once ('+order.slice(o2).join(', ')+' '+d.sync.status().code+' done '+!!(d.db.get('sync','cursor:versions')||{}).done+')', order.slice(o2).some(x=>x==='listen:versions:after') && d.sync.status().code==='synced'); }
+  ok('23f once the versions catch-up ended, a reconnect starts the versions listener at once, without waiting for the notes\' snapshot ('+order.slice(o2).join(', ')+' '+d.sync.status().code+' done '+!!(d.db.get('sync','cursor:versions')||{}).done+')', order.slice(o2).some(x=>x==='listen:versions:before') && d.sync.status().code==='synced'); }
+
+{ // the day's budget spent by the notes on a first load, several days running: the versions still come the first day (the review of #122)
+  const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<4;i++) cloud.write('notes',{id:'q'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'q'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  cloud.write('versions',{id:'qv', note:'q0', t:cloud.now(), name:'x', title:'', blocks:[]},{dev:'phone'});
+  const d=device(cloud,'Q',{budgets:{reads:8, writes:100}}); await d.sync.setOwner(owner); await d.sync.start(); await idle(d); const days=[];
+  for(let day=0; day<3; day++){ days.push(!!d.db.get('versions','qv')); cloud.advance(864e5); await d.sync.idle(300); await idle(d); }
+  ok('23g a budget of 8 reads, 4 notes and a version: the version is here on the first day ('+days.join(',')+')', days[0]===true); }
+{ // a direct write of the core held over the threshold (the quota's flush at the end of a step): busyMs() and slow show it while it waits
+  const cloud=new TestCloud({start:1_700_000_000_000}); seeded(cloud);
+  const db=new MemStore(), real=db.tx.bind(db); let hold=false, seenBusy=0, seenSlow=0;
+  const d=device(cloud,'H',{db, pace:{slowTx:30}}); await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
+  db.tx=(st,mode,fn)=>real(st,mode,async t=>{ let quota=false; const put=t.put.bind(t); t.put=(store,v)=>{ if(v && v.k==='quota') quota=true; return put(store,v); }; const r=await fn(t); if(hold && quota) await new Promise(res=>setTimeout(res,120)); return r; });
+  hold=true; await note(d,'h1','тримаю квоту'); const run=d.sync.idle(3000);
+  for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,10)); const b=d.sync.busyMs(); if(b>=30){ seenBusy=Math.max(seenBusy,b); seenSlow=Math.max(seenSlow, d.sync.status().slow||0); } } await run; hold=false; await idle(d);
+  ok('23h the quota\'s flush held for 120 ms is seen: busyMs '+seenBusy+' ms, slow '+seenSlow+' ms', seenBusy>=30 && seenSlow>=30); }
 
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
