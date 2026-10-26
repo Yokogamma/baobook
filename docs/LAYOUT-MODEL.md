@@ -22,14 +22,15 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | H4 | A caret in a folded block | The block unfolds while the caret is in it and folds back when the caret leaves, as code does today |
 | H5 | Areas | Fold to a height like text; folding to the header stays a separate button |
 | H6 | Long blocks on a phone | Also fold to 10 rows, in the view only; the computer does not see it |
+| N1 | An area inside an area (P3, decided on 2026-10-26) | Not now. The engine is written recursively, the interface keeps one level, and the plan does not grow with it |
+| W1 | The order of work (the owner's proposal of 2026-10-26) | Two stages. Stage 1 builds and checks the engine on the computer; a narrow screen only shows the note in a phone-friendly way and never changes the computer layout. Stage 2 makes the phone and the computer work together (§4) |
 
-**Proposed, waiting for the owner.** The recommendations below are not decided yet: the owner is reading the narrow-screen part (§4) first, then this list. Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
+**Proposed, waiting for the owner.** The recommendations below are not decided yet. P1 and P2 are being tried in an interactive mockup; P4–P7 belong to stage 2 (W1). Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
 
 | # | Question | Recommended |
 |---|---|---|
 | P1 | A block pushed aside, once the cause is gone | It returns to its own place. Pushes are never saved |
 | P2 | A grows and pushes B; C stands under B with a gap | C moves with B and the gap stays: like wagons, or like lines inserted in a document |
-| P3 | An area inside an area | The engine is recursive; the interface keeps one level for now |
 | P4 | Phone and computer | The computer layout is the master. A narrow screen shows a folded view of it (§4) and turns its moves into computer moves. A separate phone memory may come later as an optional field |
 | P5 | Order of the fold | Automatic: pairs side by side (label and value) fold row by row, independent columns fold column by column |
 | P6 | Short blocks that fit side by side on a phone | They stay side by side |
@@ -144,9 +145,11 @@ While a block is dragged, the ghost is measured at the width it will have at the
 
 Only anchors travel. Two devices with the same anchors draw the same layout because the sweep uses the same canonical order as the sync core. A merge of the place group from two devices that produces a collision is resolved by the sweep on every device in the same way, without writing anything.
 
-## 4. Narrow screens (proposal)
+## 4. Narrow screens
 
-This section is the recommended answer to P4–P7 and H6; the owner is reviewing it.
+**Stage 1 (W1; the details are a proposal).** A narrow screen shows the note as a column in reading order, row by row, one empty row between blocks; an area is a frame with its blocks inside in the same way; long blocks fold at 10 rows (H6). There the user reads, writes and formats text, follows links, copies, unfolds and folds for reading, deletes and creates blocks. Moving, the arrows of position mode, the resize handle and «В область…» / «З області» are not available there, so a narrow screen never writes a place. A block created there goes on the computer right under the block it was created after, in that block's column; «+» puts it at the end, at the left margin. «Показати як на компʼютері» stays. For the time of stage 1 a phone cannot start a block anywhere, the freedom the old ribbon lacked.
+
+**Stage 2 (proposal, P4–P7).** The rest of this section is the recommended way to make the two work together.
 
 The computer layout is the master (P4). A screen shows `C` columns. When every block fits (`col + lane ≤ C`), the screen shows the computer layout as is. When some do not, the screen shows a **folded view**, computed from anchors and never stored:
 
@@ -215,12 +218,12 @@ Each step is one PR with every scenario green.
 | 1 | `model.js` extracted as it is, called from `index.html`; Node tests pin today's behaviour | nothing yet | none |
 | 2 | The canonical sweep of §3.7, run once after a note loads; widths from natural rows; `G` read once per pass | F1, F4, F8 | none |
 | 3 | Anchors: placements are never written; elasticity, wagons, fractional keys for drops; thresholds in cells (P9); `FORMAT` raised | F3, most of F5 | meaning of `row` |
-| 4 | Absolute sheet columns (P8) in `sync.js` and the editor; the folded view for narrow screens (§4) | the rest of F5 | `col` on the sheet |
+| 4 | Absolute sheet columns (P8) in `sync.js` and the editor; the stage 1 column view for narrow screens (§4) | the rest of F5 | `col` on the sheet |
 | 5 | The height rule of §3.5 for every kind | | `fold` |
 | 6 | Containment and set widths (P10, P11) | F6, F7 | none |
 | 7 | `ops.js` and `input.js`: drag, resize, arrows, areas through `ops`; the ghost measured at the target | F2 | none |
 
-If P12 is accepted, steps 0–3 go out before or with the sync release to `.app` and steps 4–7 may follow it. Step 4 depends on P4–P8 and changes with them.
+If P12 is accepted, steps 0–3 go out before or with the sync release to `.app` and steps 4–7 may follow it. Steps 0–7 are stage 1 (W1); the folded view and the translation of phone moves of §4 are stage 2 and get their own steps once P4–P7 are answered.
 
 ## 8. Today's code against the model
 
