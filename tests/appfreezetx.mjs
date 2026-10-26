@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { TestCloud } from './lib/cloud.mjs';
-import { newDevice, newTab, lead } from './lib/cloudpage.mjs';
+import { newDevice, newTab, lead, typeAt, curId } from './lib/cloudpage.mjs';
 import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -18,7 +18,7 @@ const fire=(pg,type)=>pg.evaluate(type=>document.dispatchEvent(new Event(type)),
 const rawWrite=pg=>pg.evaluate(()=>new Promise(res=>{ const t0=Date.now(), r=indexedDB.open('sheet'); r.onsuccess=()=>{ const db=r.result, t=db.transaction('sync','readwrite'); t.objectStore('sync').put({k:'probe-freeze', at:t0}); t.oncomplete=()=>{ db.close(); res(Date.now()-t0); }; t.onerror=t.onabort=()=>{ db.close(); res(-1); }; }; r.onerror=()=>res(-1); }));
 
 const D=await newDevice(br, cloud, SITE, 'D', {ctx:CTX, connect:{pace:PACE}}); const A=D.pg; const B=await newTab(D, SITE, {connect:{pace:PACE}});
-await A.bringToFront();
+await A.bringToFront(); await A.waitForFunction(()=>sheetDebug.life().ready);
 
 /* ── 1. control: a transaction held for 3 s in a tab that is not frozen keeps the other tab's write waiting ── */
 { const held=A.evaluate(()=>sheetDebug.sdbHold(3000)); await A.waitForTimeout(200); const w=await rawWrite(B); const r=await held;
@@ -31,10 +31,23 @@ await A.bringToFront();
   const again=await A.evaluate(()=>sheetDebug.sdbHold(10));
   ok('2a while frozen nothing new starts: a new transaction is refused as «'+again+'»', again==='locked'); }
 
+/* ── 2b. Chrome's guidance: the frozen tab has closed its store connection and its channel, so a message from the other tab cannot start a read there ── */
+{ const l=await A.evaluate(()=>sheetDebug.life());
+  ok('2b frozen: the store connection and the channel to the other tabs are closed ('+JSON.stringify(l)+')', l.ready && !l.db && !l.tabs && l.frozen); }
+
 /* ── 3. after resume the store works again in that tab ── */
 { await fire(A,'resume'); const r=await A.evaluate(()=>sheetDebug.sdbHold(10));
   ok('3 after resume a transaction runs to its end («'+r+'»)', r==='done');
+  const l=await A.evaluate(()=>sheetDebug.life());
+  ok('3b resumed: the channel is open again and the store reopened on its first use ('+JSON.stringify(l)+')', l.tabs && l.db && !l.frozen);
   ok('3a no page errors', !D.errs.length); }
+
+/* ── 3c. an edit made in the other tab while this one was frozen is here after resume (read from the store: the channel was closed) ── */
+{ await A.waitForTimeout(300); const id=await curId(A); await fire(A,'freeze'); await B.bringToFront();
+  await B.evaluate(id=>{ const it=document.querySelector('#list .item[data-id="'+id+'"]'); if(it) it.click(); }, id); await B.waitForTimeout(300); await typeAt(B, 500, 420, 'поки та вкладка спала'); await B.waitForTimeout(800);
+  await A.bringToFront(); await fire(A,'resume'); await A.waitForTimeout(1200);
+  const seen=await A.evaluate(()=>[...document.querySelectorAll('#sheet .txt')].some(e=>/поки та вкладка спала/.test(e.textContent)));
+  ok('3c the edit made in the other tab while this one was frozen is on its screen after resume', seen); }
 
 await D.close();
 

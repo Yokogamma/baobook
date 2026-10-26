@@ -806,7 +806,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-u4DMSDu+IyOE5F5mi9Q2pQVtoB3Huc++IUTc1Suza3N2jEQ5HgtLPcpD97Js6Q39', 'locales/uk.json':'sha384-oS9q5T1O/J3iKbqRPAXq51G5WzlxJYrSycDlXA2wgwHafW8KeP3FERM6nMq8G8lT'};
+const SRI={'lifecycle/model.js':'sha384-P8uFCO7Gebvv6WfL5zutWnWghVP+6GnGUSbGd7HMJiUKnGOfPLHQ2JTBHqu3a0Do', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-u4DMSDu+IyOE5F5mi9Q2pQVtoB3Huc++IUTc1Suza3N2jEQ5HgtLPcpD97Js6Q39', 'locales/uk.json':'sha384-oS9q5T1O/J3iKbqRPAXq51G5WzlxJYrSycDlXA2wgwHafW8KeP3FERM6nMq8G8lT'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
 const BUILD=2026102602;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
@@ -2191,7 +2191,7 @@ newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection
    without lrev on both sides, by `updated`. A note this tab has no unwritten edits of, and no caret in, takes the other tab's copy (the open one is redrawn
    in place, keeping the lrev in its snapshot). Otherwise the copy waits in PENDING behind the strip: this tab's pending write merges over it, and the sheet
    is redrawn at the safe point. A tab that missed messages (hidden, frozen, back from the page cache) compares its notes with the storage when it is shown again. */
-const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
+let TABS=null;   // the channel to the other tabs, closed while the page is frozen (public/lifecycle)
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
 // the leader's status for the other tabs, with whether the leader is hidden: a visible tab waiting for the lock answers a hidden leader with «lead?»
 function stMsg(){ return {t:'st', ...DEBUG.sync.status, hidden:!!document.hidden}; }
@@ -2220,7 +2220,9 @@ function tabMsg(m){ if(keptView() || DYING) return;
   else if(db.backend==='idb' && m.t==='copy'){ copiesEvent(m); copyToast(m); } else if(db.backend==='idb' && m.t==='copies') copiesEvent(m);   // a copy made or removed in another tab: recount that note
   else if(m.t==='ver' || m.t==='vput'){ if(H.open && cur && cur.id===m.note) loadHist(); }   // a version changed in another tab (SYNC-PLAN 4.9): an open «Історія» of that note reloads
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?','format'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
-if(TABS) TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); };
+function openTabs(){ if(TABS || !window.BroadcastChannel) return; TABS=new BroadcastChannel('sheet:notes'); TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); }; }
+function closeTabs(){ const c=TABS; TABS=null; if(c) try{ c.close(); }catch(_){} }
+openTabs();
 async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok}=await storedWithLrev(); if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
@@ -2289,13 +2291,23 @@ window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // bac
 // event also released when hidden. A hidden leader with the freeze event keeps the lock until a visible tab asks for it (lead? in tabMsg); it says it is
 // hidden when it starts leading, when it is hidden and with every status (stMsg), and a visible tab waiting for the lock answers with lead?; a leader
 // that lets go queues again at once, so the lock returns to it when the asker is gone and passes on through hidden tabs queued ahead of the asker
-window.addEventListener('pagehide',()=>leadOff()); document.addEventListener('freeze',()=>{ leadOff(); SDB.frozen=true; SDB.abortAll('freeze'); });   // the lead goes first, so nothing starts a new transaction after the abort; freeze only: on pagehide the last save of the page goes through SDB and must land (a page in the back/forward cache that blocks the store is evicted by the browser)
-window.addEventListener('pageshow',e=>{ if(e.persisted) leadCheck(); }); document.addEventListener('resume',()=>{ SDB.frozen=false; leadCheck(); });
-// on a phone a hidden leader lets the lead go by itself after a while: a tab the browser freezes later cannot answer a request for it, and the
-// installed app and the browser's tabs share one profile there (a forgotten tab of the same site leads as well as the app). Shown again, it asks back
-let hiddenT=0;
-function hiddenOff(){ clearTimeout(hiddenT); if(!TOUCH || !document.hidden) return; hiddenT=setTimeout(()=>{ if(document.hidden && (LEAD.on || LEAD.abort)) leadOff(); }, DEBUG.hiddenLeadMs||15000); }   // the tests shorten the wait
-document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); else { if(LEAD.on) tellTabs(stMsg()); hiddenOff(); } } else { clearTimeout(hiddenT); leadCheck(); } });   // a leader going hidden says so: a visible tab waiting for the lock asks for it
+/* the page's life (SYNC-PLAN 4.10, public/lifecycle/model.js): each event of the page runs the actions the module gives it. Until the module has
+   loaded (the first moments of a start) `freeze` and `pagehide` still let the lead go, and a hidden page without `freeze` does too */
+let LIFE=null, hiddenT=0;
+const lifeState=()=>({touch:TOUCH, freezeEvent:'onfreeze' in document, hidden:document.hidden, leads:!!(LEAD.on || LEAD.abort)});
+const LIFE_DO={ leadOff:()=>leadOff(), blockTx:()=>{ SDB.frozen=true; }, unblockTx:()=>{ SDB.frozen=false; }, abortTx:ev=>SDB.abortAll(ev),
+  closeDb:()=>{ const d=idb.db; if(d && !idb.opening){ idb.db=null; try{ d.close(); }catch(_){} } },   // the next use opens it again (idb.tx, SDB.tx); an open in flight is left alone
+  closeChannel:()=>closeTabs(), openChannel:()=>openTabs(), catchUp:()=>{ syncTabs(); }, leadCheck:()=>leadCheck(), tellHidden:()=>{ if(LEAD.on) tellTabs(stMsg()); },
+  armHidden:()=>hiddenOff(), disarmHidden:()=>clearTimeout(hiddenT) };
+function life(ev, extra){ const st={...lifeState(), ...(extra||{})}; const acts=LIFE? LIFE.actionsFor(ev, st) : ev==='freeze' || ev==='pagehide' || (ev==='hidden' && !st.freezeEvent)? ['leadOff'] : [];
+  for(const a of acts){ try{ LIFE_DO[a](ev); }catch(e){ dbg('life: '+a+' failed', e); } } }
+// a phone's leader that stays hidden lets the lead go by itself (a tab the browser freezes later cannot answer a request for it); it starts too when
+// the lock comes to a tab already hidden
+function hiddenOff(){ clearTimeout(hiddenT); if(!TOUCH || !document.hidden) return; hiddenT=setTimeout(()=>life('hiddenLong'), DEBUG.hiddenLeadMs || (LIFE? LIFE.HIDDEN_LEAD_MS : 15000)); }   // the tests shorten the wait
+window.addEventListener('pagehide',()=>life('pagehide')); document.addEventListener('freeze',()=>life('freeze'));
+window.addEventListener('pageshow',e=>life('pageshow',{persisted:e.persisted})); document.addEventListener('resume',()=>life('resume'));
+document.addEventListener('visibilitychange',()=>life(document.hidden? 'hidden' : 'visible'));
+import('./lifecycle/model.js').then(m=>{ LIFE=m; }).catch(e=>console.error('lifecycle: the module did not load', e));
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 /* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)
@@ -3283,7 +3295,7 @@ histTake.addEventListener('click',()=>takeCopy()); histDrop.addEventListener('cl
    every event of its copies (`copy`, `copies`, from the core or another tab), so a message that came between the read and the subscription cannot make it drift ══ */
 let COPIES=new Map(), ACT=null;   // ACT: the action of the toast in the undo toast's place (a conflict's «Показати»), not on the undo stack
 const copiesN=id=>COPIES.get(id)||0;
-Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld(), lock:k=>setLock(k), sdbHold:ms=>SDB.tx(['sync'],'readwrite',async T=>{ const end=Date.now()+ms; while(Date.now()<end) await T.get('sync','x'); return 'done'; }).catch(e=>e.code||String(e)), sdbOpen:()=>SDB.open.size});   // the tests' hand: the page's map, the 30-day rule now, a lock as another tab's change would set it
+Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld(), lock:k=>setLock(k), sdbHold:ms=>SDB.tx(['sync'],'readwrite',async T=>{ const end=Date.now()+ms; while(Date.now()<end) await T.get('sync','x'); return 'done'; }).catch(e=>e.code||String(e)), sdbOpen:()=>SDB.open.size, life:()=>({ready:!!LIFE, db:!!idb.db, tabs:!!TABS, frozen:SDB.frozen})});   // the tests' hand: the page's map, the 30-day rule now, a lock as another tab's change would set it
 // the read of the whole store waits a moment after the start (the leader's catch-up comes first); a note recounted meanwhile is recounted again after it
 let copiesLoading=null; const copiesLate=new Set();
 function copiesLoad(){ if(!SYNC || db.backend!=='idb') return; copiesLoading=new Promise(res=>setTimeout(res, 1500)).then(()=>SYNC.copiesCount()).then(m=>{ COPIES=m; }, ()=>{}).finally(()=>{ copiesLoading=null; for(const id of copiesLate) copiesRecount(id); copiesLate.clear(); if(STARTED) renderList(); else copiesUI(); }); }
