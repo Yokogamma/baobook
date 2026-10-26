@@ -1394,7 +1394,7 @@ function leadOff(){ LEAD.gen++; const ac=LEAD.abort, rel=LEAD.release; LEAD.abor
 // the engine starts leading: online first (a reconnect after start would read the cloud twice), then the state from the store (reload() refuses a store
 // whose owner changed while this tab waited for the lock: the tab is locked as «epoch» and lets the lock go), then the cloud. After every wait the
 // generation is checked: a pagehide, freeze or LOCK meanwhile has released the lock, and a start that finished anyway is undone
-async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
+async function leadOn(){ hiddenOff(); const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
   try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(over()) return;
     if(!authGate()){ CLOUD=null; ACC.cloud=null; leadOff(); accStatus(); return; }   // the user of this cloud signed out while the tab waited for the lock: the lock goes back, nothing of theirs is sent
     await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; accStatus(); tellTabs(stMsg()); syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile; the other tabs mirror the leader's status from here
@@ -2291,7 +2291,11 @@ window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // bac
 // that lets go queues again at once, so the lock returns to it when the asker is gone and passes on through hidden tabs queued ahead of the asker
 window.addEventListener('pagehide',()=>leadOff()); document.addEventListener('freeze',()=>{ leadOff(); SDB.frozen=true; SDB.abortAll('freeze'); });   // the lead goes first, so nothing starts a new transaction after the abort; freeze only: on pagehide the last save of the page goes through SDB and must land (a page in the back/forward cache that blocks the store is evicted by the browser)
 window.addEventListener('pageshow',e=>{ if(e.persisted) leadCheck(); }); document.addEventListener('resume',()=>{ SDB.frozen=false; leadCheck(); });
-document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); else if(LEAD.on) tellTabs(stMsg()); } else leadCheck(); });   // a leader going hidden says so: a visible tab waiting for the lock asks for it
+// on a phone a hidden leader lets the lead go by itself after a while: a tab the browser freezes later cannot answer a request for it, and the
+// installed app and the browser's tabs share one profile there (a forgotten tab of the same site leads as well as the app). Shown again, it asks back
+let hiddenT=0;
+function hiddenOff(){ clearTimeout(hiddenT); if(!TOUCH || !document.hidden) return; hiddenT=setTimeout(()=>{ if(document.hidden && (LEAD.on || LEAD.abort)) leadOff(); }, DEBUG.hiddenLeadMs||15000); }   // the tests shorten the wait
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); else { if(LEAD.on) tellTabs(stMsg()); hiddenOff(); } } else { clearTimeout(hiddenT); leadCheck(); } });   // a leader going hidden says so: a visible tab waiting for the lock asks for it
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 /* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)

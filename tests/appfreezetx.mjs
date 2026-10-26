@@ -6,7 +6,8 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { TestCloud } from './lib/cloud.mjs';
-import { newDevice, newTab } from './lib/cloudpage.mjs';
+import { newDevice, newTab, lead } from './lib/cloudpage.mjs';
+import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
@@ -35,5 +36,18 @@ await A.bringToFront();
   ok('3 after resume a transaction runs to its end («'+r+'»)', r==='done');
   ok('3a no page errors', !D.errs.length); }
 
-await D.close(); await br.close(); await srv.close();
+await D.close();
+
+/* ── 4. a phone: a hidden leader lets the lead go by itself after a while, with no other tab asking (a forgotten tab, or one frozen later,
+   could never answer a request), and takes it back when shown ── */
+{ const P=await newDevice(br, new TestCloud({start:Date.now()}), SITE, 'P', {ctx:{...CTX, hasTouch:true, isMobile:true}, connect:{pace:PACE}}); const A2=P.pg;
+  await A2.evaluate(()=>{ sheetDebug.hiddenLeadMs=400; }); const on0=await until(async()=>(await lead(A2)).on, 5000);
+  const hide=h=>A2.evaluate(h=>{ Object.defineProperty(document,'hidden',{get:()=>h, configurable:true}); Object.defineProperty(document,'visibilityState',{get:()=>h? 'hidden' : 'visible', configurable:true}); document.dispatchEvent(new Event('visibilitychange')); }, h);
+  await hide(true); await A2.waitForTimeout(150); const still=(await lead(A2)).on; const off=await until(async()=>!(await lead(A2)).on, 3000);
+  ok('4 a hidden leader on a phone keeps the lead through the wait ('+still+'), then lets it go with nobody asking ('+!!off+')', !!on0 && still && !!off);
+  await hide(false); const back=await until(async()=>(await lead(A2)).on, 5000);
+  ok('4a shown again, it leads again', !!back);
+  ok('4b no page errors', !P.errs.length); await P.close(); }
+
+await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);

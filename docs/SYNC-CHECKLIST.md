@@ -54,6 +54,8 @@ Built in `main` (4a #100 and #114, 4b #116, 4c #118); checked on `.dev` before t
 30. **4c, «Очікую підтвердження»:** a slow network (DevTools → Network → a custom profile with a long latency, or a weak mobile signal): an edit says «Надсилаю… · 1», then «Очікую підтвердження» after 30 s with no other action, then «Синхронізовано».
 31. **TalkBack (Android) and VoiceOver (iPhone):** the history button reads «Історія версій · N конфлікт (Ctrl+Alt+H)»; the list mark reads «є конфліктні копії»; the conflict toast is announced and its «Показати» is reachable; the cloud button reads its status; the panel is announced as «Обліковий запис», its rows and buttons read in order, and closing it returns to the button that opened it.
 
+32. **Android: the app and Chrome's tabs are one profile.** With the installed app signed in, open the same site in a Chrome tab: the tab is signed in too (one storage, one sign-in), and signing out in either signs out both. Leave that tab in the background for a few minutes (Chrome freezes it), then force-stop and start the app: it starts at once and syncs, with no strip waiting on the storage. If an app start ever waits on the storage for minutes, look for a forgotten tab of the site in Chrome first: opening it (or closing it) lets the app go on.
+
 ## Where the results go
 
 The PR that asks for the checks lists the items done, with the device and the browser; what fails becomes an issue. The plan's §5 row of PR 3 and CLAUDE.md are updated when 3c is published.
