@@ -434,11 +434,11 @@ function makeSync(deps){
   // transaction, not per document: a new device's first snapshot is every note of the account); a chunk that fails is applied again one document
   // at a time, which keeps every error path of applyIncoming (quarantine, refetch, no space). recv holds the ids taken, so the listener's snapshot and the page that repeats it count a note once
   async function applyNotesPage(docs){
-    for(let i=0;i<docs.length;i+=PAGE_TX){ const chunk=docs.slice(i,i+PAGE_TX); let rs=null;
+    for(let i=0;i<docs.length;i+=PAGE_TX){ if(!S.started) return 'epoch'; const chunk=docs.slice(i,i+PAGE_TX); let rs=null;   // stopped (the lead went, the page froze): the rest waits for the next leader
       try{ rs=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const out=[]; for(const d of chunk){ const r=await applyNote(t, d, 'delivery', after); if(r!=='skipped') await bumpCursor(t,'notes',{srv:d.srv, id:d.id},after); out.push(r); } return out; }); }
       catch(e){ if(e.code==='epoch' || e.code==='locked') return 'epoch'; rs=null; log({t:'page-chunk-error', n:chunk.length, error:String(e)}); }
       if(rs){ chunk.forEach((d,k)=>{ noteApplied(d, rs[k], 'delivery'); if(rs[k]!=='skipped') S.recv.add(d.id); }); status(); if(slowNow() && i+PAGE_TX<docs.length) await new Promise(r=>setTimeout(r,200)); continue; }   // a slow store gets a gap between chunks: another tab, or a page opening the store, is not kept behind a chain of writes
-      for(const d of chunk){ const r=await applyIncoming('notes', d, 'delivery'); if(r==='epoch' || r==='nospace') return r; if(r!=='skipped' && r!=='error') S.recv.add(d.id); } status(); }
+      for(const d of chunk){ if(!S.started) return 'epoch'; const r=await applyIncoming('notes', d, 'delivery'); if(r==='epoch' || r==='nospace') return r; if(r!=='skipped' && r!=='error') S.recv.add(d.id); } status(); }
     return 'ok'; }
   // the first document without space: thin the history once and read the document again later, the page goes on; the second: no space, receiving stops (§4.6)
   // o.send: met on the send path (a merge or a collision in the prepare step): the job retries by itself, so no refetch mark is set
