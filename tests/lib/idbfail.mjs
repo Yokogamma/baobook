@@ -13,10 +13,10 @@ import { ready, until } from './wait.mjs';
    shape, the r.onerror branch of idb.open); 'throw' throws the same out of open() (the catch branch of go()); 'once' is 'error' for one call and then
    clears itself; 'hang' returns a request whose handlers are never called, kept as window.__idbhang so the test can answer it (the deadline code only:
    a fake request is not in the browser's real connection queue, step 18 uses the real one). __idbpass lets that many calls through while a failing
-   mode is set. Every call appends Date.now() to sessionStorage.__idbopens */
+   mode is set. Every call appends Date.now() to sessionStorage.__idbopens. Opens of another database (the diagnosis's baobook-probe) pass through uncounted */
 const WRAP=()=>{ const real=IDBFactory.prototype.open; const S=k=>{ try{ return sessionStorage.getItem(k); }catch(_){ return null; } }, L=k=>{ try{ return localStorage.getItem(k); }catch(_){ return null; } };
   const err=()=>new DOMException('Internal error opening backing store for indexedDB.open.','UnknownError');
-  IDBFactory.prototype.open=function(){
+  IDBFactory.prototype.open=function(name){ if(name!=='sheet') return real.apply(this, arguments);   // only the app's database: the start's diagnosis opens a test database of its own (bootDiag)
     try{ const o=JSON.parse(S('__idbopens')||'[]'); o.push(Date.now()); sessionStorage.setItem('__idbopens', JSON.stringify(o)); }catch(_){}
     let mode=S('__idbfail') || L('__idbfail') || '';
     const pass=+(S('__idbpass')||0); if(mode && pass>0){ sessionStorage.setItem('__idbpass', String(pass-1)); mode=''; }
