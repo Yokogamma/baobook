@@ -205,14 +205,31 @@ for(const mode of ['once','always']){
   await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
     const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
   const D=await page(ctx,{noGo:true}); const t0=Date.now(); await D.goto(SITE);
-  const m=await waitMsg(D, /Сховище зайняте іншим вікном Baobook, яке браузер приспав/, 22000); const at=Date.now()-t0;
-  ok('10h after about 15 s the strip says another Baobook window holds the storage ('+(at/1000).toFixed(1)+' s), with «Оновити» and no other button', !!m && at>=14000 && await D.locator('#roReload').isVisible() && !(await D.locator('#roExport').isVisible()));
+  const m=await waitMsg(D, /Перевірка сховища чекає вже понад 15 с\. Можливо, сховище тримає інше вікно Baobook/, 22000); const at=Date.now()-t0;
+  ok('10h after about 15 s the strip says the check has waited that long and names another window only as a possible cause ('+(at/1000).toFixed(1)+' s), with «Оновити» and no other button; no Android advice on this platform', !!m && at>=14000 && await D.locator('#roReload').isVisible() && !(await D.locator('#roExport').isVisible()) && !/Android/.test(m));
   const steps=((await lastBoot(D))||{m:[]}).m.map(x=>x[0]);
   ok('10i the journal records the held state (db~held) inside the format check ('+steps.join(',')+')', steps.includes('db:open') && steps.includes('db~held') && !steps.includes('db:fmt'));
   const doc=await D.evaluate(()=>{ window.__doc=1; return performance.timeOrigin; });
   await H.evaluate(()=>window.__stop()); await ready(D);
   ok('10j the holder lets go: the start goes on in the same page, the strip gone, the sheet editable', await D.evaluate(t=>window.__doc===1 && performance.timeOrigin===t, doc) && !(await msg(D)) && await editable(D));
   ok('10k no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
+
+/* ── 10m. on Android the held strip adds the way to skip the wait (stop Chrome); elsewhere it does not (10h) ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:412,height:900}, serviceWorkers:'block', userAgent:'Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'});
+  const H=await ctx.newPage(); H.errs=[]; H.on('pageerror',e=>H.errs.push(e.message)); await H.goto(SITE); await ready(H);
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const D=await ctx.newPage(); D.errs=[]; D.on('pageerror',e=>D.errs.push(e.message)); await D.goto(SITE);
+  const m=await waitMsg(D, /Перевірка сховища чекає вже понад/, 22000);
+  ok('10m on Android the held strip adds «зупинити Chrome у налаштуваннях Android» ('+(m||'').slice(-90)+')', !!m && /зупинити Chrome у налаштуваннях Android/.test(m));
+  await H.evaluate(()=>window.__stop()); ok('10n no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
+
+/* ── 10o. a leftover probe database (a start that ended before deleting it) goes after the next start that finishes, also a quick one with no diagnosis ── */
+{ const ctx=await context(); const B=await page(ctx,{noGo:true}); await B.goto(SITE+'blank.html');
+  await B.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('baobook-probe-old-1'); r.onsuccess=()=>{ r.result.close(); res(); }; }));
+  const A=await page(ctx); const gone=await until(()=>A.evaluate(()=>indexedDB.databases().then(l=>!l.some(x=>x.name==='baobook-probe-old-1'))), 8000);
+  ok('10o a quick start with no diagnosis of its own removes a leftover probe database', !!gone && !((await lastBoot(A))||{}).x);
+  ok('10p no page errors', !A.errs.length); await ctx.close(); }
 
 /* ── 10l. the diagnoses of several waiting starts do not queue each other: each opens a test database of its own name, so one tab whose probe stays
         open (its handler held, as in a frozen tab) does not make another tab's probe wait behind a delete ── */

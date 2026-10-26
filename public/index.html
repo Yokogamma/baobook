@@ -806,7 +806,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-j6QXRe2/WeexmL8gRRpv2eFk1kb8u59z01sviPmsuk6PDktFHn5HfKb8ruFJgD0M', 'locales/uk.json':'sha384-/24pnODcW+4RCyZnxZ7trg9EWbV+GlGtA90DBFPYWYn4LBZMplZQSUHoVAZvbR8S'};
+const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
 const BUILD=2026102602;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
@@ -816,6 +816,7 @@ const MODS=Object.keys(SRI).filter(f=>f.endsWith('.js'));
 (()=>{ const m={imports:{}, integrity:{}}; for(const f of MODS){ const u=new URL(f+'?b='+BUILD, location.href).href; m.imports[new URL(f, location.href).href]=u; m.integrity[u]=SRI[f]; }
   const s=document.createElement('script'); s.type='importmap'; s.textContent=JSON.stringify(m); document.head.append(s); })();
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
+const IS_ANDROID=/Android/i.test(navigator.userAgent||'');   // Android only: a hint that names its settings (lock.waitHeldAndroid)
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
 addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); EARLY.install=e; });
@@ -3413,7 +3414,8 @@ function waitUI(){ if(STARTED) return;
   // a lock found before the start's end (newer data, blocked, the storage): its own message, only «Оновити» (nothing is loaded to export yet)
   if(LOCK){ roSync(); roExport.hidden=true; roStrip.hidden=false; app.classList.add('wait'); return; }
   // the start's upgrade request waits for another tab (idbWait, IDB-BARRIER-PLAN §3.1): that says why, before «slow»; «Оновити» only after WAIT_LONG
-  if(idb.waiting){ roMsg.textContent=loc(idb.waiting==='held'? 'lock.waitHeld' : idb.waiting==='long'? 'lock.waitLong' : idb.waiting==='blocked'? 'lock.waitTab' : 'lock.waitSilent'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport]) b.hidden=true; roReload.hidden=idb.waiting!=='long' && idb.waiting!=='held'; app.classList.add('wait'); return; }
+  // held: the fact (the check waits) and a possible cause; the way to skip the wait only where it applies (Android)
+  if(idb.waiting){ roMsg.textContent=idb.waiting==='held'? loc('lock.waitHeld',{wait:durTxt(HELD_WAIT)})+(IS_ANDROID? ' '+loc('lock.waitHeldAndroid') : '') : loc(idb.waiting==='long'? 'lock.waitLong' : idb.waiting==='blocked'? 'lock.waitTab' : 'lock.waitSilent'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport]) b.hidden=true; roReload.hidden=idb.waiting!=='long' && idb.waiting!=='held'; app.classList.add('wait'); return; }
   roMsg.textContent=loc(waitSlow? 'boot.slow' : idb.db? 'boot.waiting' : 'lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; app.classList.add('wait'); }
 async function start(){
   const w1=setTimeout(waitUI, 1000), w2=setTimeout(()=>{ waitSlow=true; waitUI(); }, 5000), beat=setInterval(()=>{ BOOT.w=Math.round(performance.now()); bootSave(); }, 2000);
@@ -3438,7 +3440,7 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload' && !TORN? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins; also on a reload out of the recovery strip (TORN): the app never started on that address
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
-  clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start'); if(BOOT.x) probeSweep();
+  clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start'); setTimeout(probeSweep, 2000);   // after every start that finished: leftovers of starts that ended before their probe was deleted
   STARTED=true; roSync(); snapSave(); copiesLoad(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();

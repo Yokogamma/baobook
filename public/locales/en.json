@@ -116,7 +116,8 @@
   "lock.waitTab": "Another Baobook tab or the installed app is open and holding the storage, so it cannot be updated. Switch to it for a moment or close it, and this page will continue by itself.",
   "lock.waitSilent": "Another Baobook tab or the installed app seems to be open and asleep, so the storage cannot be updated. Switch to it for a moment or close it, and this page will continue by itself.",
   "lock.waitLong": "The storage still could not be opened. Close the other Baobook tabs and the app; if that does not help, close the app completely and open it again.",
-  "lock.waitHeld": "The storage is held by another Baobook window that the browser has put to sleep, such as a tab left open in Chrome. The app will go on by itself as soon as that window wakes up. To skip the wait, stop Chrome in the Android settings («Force stop») and open the app again.",
+  "lock.waitHeld": "The storage check has been waiting for more than {wait}. Another Baobook window that the browser has put to sleep, such as a tab left open, may be holding the storage. The app will go on by itself as soon as the storage is free.",
+  "lock.waitHeldAndroid": "To skip the wait, you can stop Chrome in the Android settings («Force stop») and open the app again.",
 
   "time.justNow": "just now",
   "time.minutesAgo": { "one": "{n} min ago", "other": "{n} min ago" },
