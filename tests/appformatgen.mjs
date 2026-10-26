@@ -35,7 +35,7 @@ const fmt=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); 
 const stored=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','versions','sync'],'readonly'); const a=t.objectStore('notes').getAll(), b=t.objectStore('versions').getAll(), c=t.objectStore('sync').getAll();
   t.oncomplete=()=>{ d.close(); res({notes:JSON.stringify(a.result), versions:b.result.length, sync:JSON.stringify(c.result.filter(x=>x.k!=='format' && !/^quota/.test(x.k)))}); }; }; }));
 const state=p=>p.evaluate(()=>sheetDebug.fmt.state());
-const lastBoot=p=>p.evaluate(()=>{ const all=JSON.parse(localStorage.getItem('sheet:boot')||'[]'); return all[all.length-1]||null; });
+const lastBoot=p=>p.evaluate(()=>sheetDebug.boot? JSON.parse(JSON.stringify(sheetDebug.boot)) : null);   // this tab's own record of its start
 const diagDone=(p,ms,f=x=>x.other!=null)=>until(async()=>{ const r=await lastBoot(p).catch(()=>null); return r && r.x && f(r.x)? r : null; }, ms);   // the diagnosis written, with the answers it waits for
 const fbKeys=p=>p.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
 const editable=p=>p.evaluate(()=>!document.getElementById('sheet').inert && document.getElementById('ttl').contentEditable!=='false');
@@ -171,7 +171,7 @@ for(const mode of ['once','always']){
   ok('10b its diagnosis: the format check waits, one other open tab answered, the read of `notes` and a separate database answered quickly, the storage estimate is there ('+JSON.stringify(rec && rec.x)+')', rec && rec.x && rec.x.stage==='fmt' && rec.x.peers===1 && rec.x.probe>=0 && rec.x.probe<2000 && rec.x.other>=0 && rec.x.other<2000 && Array.isArray(rec.x.locks) && typeof rec.x.usage==='number');
   await H.evaluate(()=>window.__stop()); await ready(D);
   await D.click('#setBtn'); await D.waitForTimeout(200); const txt=await D.locator('#bootV').innerText();
-  ok('10c the settings menu names the step and the diagnosis ('+txt.split('\n').slice(0,2).join(' | ')+')', /читання формату сховища/.test(txt) && /інших відкритих вкладок Baobook — 1/.test(txt));
+  ok('10c the settings menu names the step and the diagnosis ('+txt.split('\n').slice(0,2).join(' | ')+')', /читання формату сховища/.test(txt) && /інших вкладок Baobook, що відповіли, — 1/.test(txt));
   ok('10d no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
 
 /* ── 10e. a start whose open request itself waits (queued behind another page's upgrade that a deaf holder blocks): the diagnosis says so ── */
@@ -197,6 +197,37 @@ for(const mode of ['once','always']){
   ok('10f a late request gets a second diagnosis in its format check, with the probe, and keeps the first ('+JSON.stringify(rec && rec.x)+')', rec && rec.x.stage==='fmt' && rec.x.probe>=0 && rec.x.probe<2000 && rec.x.first && rec.x.first.stage==='open');
   await H.evaluate(()=>window.__stop()); await ready(C);
   ok('10g no page errors', !H.errs.length && !C.errs.length); await ctx.close(); }
+
+/* ── 10h. a format check held for good (another window's transaction on `sync` never finishes, as a frozen tab's on a phone): after 15 s the strip
+        says another Baobook window holds the storage and how to free it, with «Оновити»; the check keeps waiting, and the start goes on by itself
+        when the holder lets go ── */
+{ const ctx=await context(); const H=await page(ctx); await typeAt(H,500,300,'тримає');
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const D=await page(ctx,{noGo:true}); const t0=Date.now(); await D.goto(SITE);
+  const m=await waitMsg(D, /Сховище зайняте іншим вікном Baobook, яке браузер приспав/, 22000); const at=Date.now()-t0;
+  ok('10h after about 15 s the strip says another Baobook window holds the storage ('+(at/1000).toFixed(1)+' s), with «Оновити» and no other button', !!m && at>=14000 && await D.locator('#roReload').isVisible() && !(await D.locator('#roExport').isVisible()));
+  const steps=((await lastBoot(D))||{m:[]}).m.map(x=>x[0]);
+  ok('10i the journal records the held state (db~held) inside the format check ('+steps.join(',')+')', steps.includes('db:open') && steps.includes('db~held') && !steps.includes('db:fmt'));
+  const doc=await D.evaluate(()=>{ window.__doc=1; return performance.timeOrigin; });
+  await H.evaluate(()=>window.__stop()); await ready(D);
+  ok('10j the holder lets go: the start goes on in the same page, the strip gone, the sheet editable', await D.evaluate(t=>window.__doc===1 && performance.timeOrigin===t, doc) && !(await msg(D)) && await editable(D));
+  ok('10k no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
+
+/* ── 10l. the diagnoses of several waiting starts do not queue each other: each opens a test database of its own name, so one tab whose probe stays
+        open (its handler held, as in a frozen tab) does not make another tab's probe wait behind a delete ── */
+{ const ctx=await context(); const S=await page(ctx); await typeAt(S,500,300,'проби');
+  await S.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const H=await page(ctx,{noGo:true});
+  await H.addInitScript(()=>{ const open=IDBFactory.prototype.open; IDBFactory.prototype.open=function(name){ const r=open.apply(this, arguments);   // this tab's probe never closes for 15 s
+    if(String(name).startsWith('baobook-probe')){ let h=null; Object.defineProperty(r,'onsuccess',{configurable:true, get(){ return h; }, set(f){ h=f; r.addEventListener('success',e=>setTimeout(()=>f.call(r,e),15000)); }}); }
+    return r; }; });
+  await H.goto(SITE); await diagDone(H, 10000, x=>x.stage==='fmt');
+  const D1=await page(ctx,{noGo:true}); await D1.goto(SITE); await diagDone(D1, 10000);
+  const D2=await page(ctx,{noGo:true}); await D2.goto(SITE); const r2=await diagDone(D2, 10000);
+  ok('10l with one tab\'s probe held open, the probes of two more waiting starts answer quickly ('+JSON.stringify({d1:((await lastBoot(D1))||{}).x && (await lastBoot(D1)).x.other, d2:r2 && r2.x.other})+')', !!r2 && r2.x.other>=0 && r2.x.other<2000);
+  await S.evaluate(()=>window.__stop()); await ctx.close(); }
 
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);

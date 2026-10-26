@@ -28,9 +28,9 @@ const seeded=cloud=>{ for(const i of [1,2,3]) cloud.write('notes',{id:'s'+i, tit
 
 /* ── 1. a refused read is no access: the first page, a listener; reload() tries again ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); seeded(cloud);
-  const A=device(cloud,'A'); cloud.fault('fail',{dev:'A', op:'page', code:'permission-denied'}); cloud.fault('fail',{dev:'A', op:'listen', n:2, code:'permission-denied'}); await A.sync.setOwner(owner); await note(A,'a1','правка до доступу'); await A.sync.start(); await idle(A);
-  ok('1 the first page and the listeners were refused: denied, status «denied», the edit stays in the queue, nothing written, nothing read', A.sync._S.denied && A.sync.status().code==='denied' && A.status.includes('denied') && logs(A,'denied').length===1 && A.sync.jobs().includes('a1') && !cloud.doc('notes','a1') && !A.db.get('notes','s1'));
-  cloud.advance(1000); await idle(A); ok('1b nothing is tried again while denied (the page was never asked for after the listeners\' refusal: '+cloud.faults.length+' refusal left unused)', !cloud.doc('notes','a1') && A.sync.status().code==='denied' && cloud.faults.length===1);
+  const A=device(cloud,'A'); cloud.fault('fail',{dev:'A', op:'page', code:'permission-denied'}); cloud.fault('fail',{dev:'A', op:'listen', n:1, code:'permission-denied'}); await A.sync.setOwner(owner); await note(A,'a1','правка до доступу'); await A.sync.start(); await idle(A);   // one listener refused: on the first load the versions listener waits for the notes
+  ok('1 the notes listener was refused: denied, status «denied», the edit stays in the queue, nothing written, nothing read', A.sync._S.denied && A.sync.status().code==='denied' && A.status.includes('denied') && logs(A,'denied').length===1 && A.sync.jobs().includes('a1') && !cloud.doc('notes','a1') && !A.db.get('notes','s1'));
+  cloud.advance(1000); await idle(A); ok('1b nothing is tried again while denied (the page was never asked for after the listener\'s refusal: '+cloud.faults.length+' refusal left unused)', !cloud.doc('notes','a1') && A.sync.status().code==='denied' && cloud.faults.length===1);
   cloud.faults.length=0;   // the account is let in
   await A.sync.reload(); await A.sync.start(); await idle(A);
   ok('1c reload() (a new leadership, a new sign-in) clears it: the notes came, the edit went, status not denied ('+A.sync.status().code+')', !A.sync._S.denied && !!A.db.get('notes','s1') && !!cloud.doc('notes','a1') && A.sync.status().code!=='denied');
@@ -255,5 +255,54 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   const r=await A.sync.deviceName('  Мій ноутбук  '); await note(A,'n1','b'); await idle(A);
   ok('22 the name is trimmed, kept in the device record and carried as dn by the next document', r.ok && r.name==='Мій ноутбук' && A.db.get('sync','device').name==='Мій ноутбук' && cloud.doc('notes','n1').dn==='Мій ноутбук' && A.sync.devName==='Мій ноутбук');
   const long='😀'.repeat(45); const r2=await A.sync.deviceName(long); ok('22a a name over 80 UTF-16 units is cut between code points', r2.ok && r2.name.length===80); }
+
+/* ── 23. a slow store: a new device's first notes go many per transaction, the status counts them, and says the store is slow ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<60;i++) cloud.write('notes',{id:'m'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'m'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  const db=new MemStore(), real=db.tx.bind(db); let writes=0, slow=false; db.tx=(st,mode,fn)=>{ if(mode==='readwrite' && st.includes('notes')) writes++; return slow? new Promise(r=>setTimeout(r,40)).then(()=>real(st,mode,fn)) : real(st,mode,fn); };
+  const d=device(cloud,'A',{db, pace:{slowTx:30}}); await d.sync.setOwner(owner); slow=true; const w0=writes, seen=[];
+  await d.sync.start(); const run=d.sync.idle(20000); for(let i=0;i<200 && !(d.sync.status().code==='synced'); i++){ await new Promise(r=>setTimeout(r,20)); const st=d.sync.status(); seen.push(st.code+':'+st.n+(st.slow? ':slow' : '')); } await run; slow=false; await idle(d);
+  const all=[...Array(60).keys()].every(i=>d.db.get('notes','m'+i)), rec=seen.filter(x=>x.startsWith('receiving:')).map(x=>+x.split(':')[1]);
+  ok('23 the 60 notes of the account arrive in a few transactions, not one each ('+(writes-w0)+' writes over notes)', all && writes-w0<=12);
+  ok('23a the status says «receiving» with the count growing ('+[...new Set(rec)].join(',')+')', rec.length>0 && Math.max(...rec)>Math.min(...rec) && Math.max(...rec)<=60);
+  ok('23b a write slower than pace.slowTx shows as slow in the status ('+seen.filter(x=>x.endsWith(':slow')).length+' samples)', seen.some(x=>x.endsWith(':slow')));
+  ok('23c afterwards: synced, nothing waits', d.sync.status().code==='synced'); }
+{ const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<30;i++) cloud.write('notes',{id:'f'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'f'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  // one chunk fails inside its transaction: the chunk is applied again one note at a time, and every note arrives
+  const db=new MemStore(), real=db.tx.bind(db); let thrown=0; db.tx=(st,mode,fn)=>real(st,mode,async t=>{ const r=await fn(t); if(mode==='readwrite' && Array.isArray(r) && r.length>1 && !thrown){ thrown=1; throw new Error('chunk fault'); } return r; });
+  const d=await mk(cloud,'B',{db}); await idle(d);
+  ok('23d a chunk that fails is applied again note by note: all 30 notes here ('+thrown+' fault)', thrown===1 && [...Array(30).keys()].every(i=>d.db.get('notes','f'+i)) && logs(d,'page-chunk-error').length===1); }
+
+{ const cloud=new TestCloud({start:1_700_000_000_000}); cloud.write('notes',{id:'vn', title:'', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); for(let i=0;i<5;i++) cloud.write('versions',{id:'vv'+i, note:'vn', t:cloud.now(), name:'x', title:'', blocks:[]},{dev:'phone'});
+  const d=device(cloud,'C'); const order=[]; const ls=d.proxy.listen; d.proxy.listen=(c,...a)=>{ order.push('listen:'+c+':'+(d.sync._S.snapshot.notes? 'after' : 'before')); return ls(c,...a); };
+  await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
+  const vl=order.filter(x=>x.startsWith('listen:versions'));
+  ok('23e on the first load the versions listener starts only after the notes listener\'s first snapshot ('+order.join(', ')+'), and the versions came', vl.length>=1 && vl.every(x=>x.endsWith(':after')) && !!d.db.get('versions','vv0'));
+  const o2=order.length; d.sync.online(false); d.sync.online(true); await idle(d);
+  ok('23f once the versions catch-up ended, a reconnect starts the versions listener at once, without waiting for the notes\' snapshot ('+order.slice(o2).join(', ')+' '+d.sync.status().code+' done '+!!(d.db.get('sync','cursor:versions')||{}).done+')', order.slice(o2).some(x=>x==='listen:versions:before') && d.sync.status().code==='synced'); }
+
+{ // the day's budget spent by the notes on a first load, several days running: the versions still come the first day (the review of #122)
+  const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<4;i++) cloud.write('notes',{id:'q'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'q'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  cloud.write('versions',{id:'qv', note:'q0', t:cloud.now(), name:'x', title:'', blocks:[]},{dev:'phone'});
+  const d=device(cloud,'Q',{budgets:{reads:8, writes:100}}); await d.sync.setOwner(owner); await d.sync.start(); await idle(d); const days=[];
+  for(let day=0; day<3; day++){ days.push(!!d.db.get('versions','qv')); cloud.advance(864e5); await d.sync.idle(300); await idle(d); }
+  ok('23g a budget of 8 reads, 4 notes and a version: the version is here on the first day ('+days.join(',')+')', days[0]===true); }
+{ // a direct write of the core held over the threshold (the quota's flush at the end of a step): busyMs() and slow show it while it waits
+  const cloud=new TestCloud({start:1_700_000_000_000}); seeded(cloud);
+  const db=new MemStore(), real=db.tx.bind(db); let hold=false, seenBusy=0, seenSlow=0;
+  const d=device(cloud,'H',{db, pace:{slowTx:30}}); await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
+  db.tx=(st,mode,fn)=>real(st,mode,async t=>{ let quota=false; const put=t.put.bind(t); t.put=(store,v)=>{ if(v && v.k==='quota') quota=true; return put(store,v); }; const r=await fn(t); if(hold && quota) await new Promise(res=>setTimeout(res,120)); return r; });
+  hold=true; await note(d,'h1','тримаю квоту'); const run=d.sync.idle(3000);
+  for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,10)); const b=d.sync.busyMs(); if(b>=30){ seenBusy=Math.max(seenBusy,b); seenSlow=Math.max(seenSlow, d.sync.status().slow||0); } } await run; hold=false; await idle(d);
+  ok('23h the quota\'s flush held for 120 ms is seen: busyMs '+seenBusy+' ms, slow '+seenSlow+' ms', seenBusy>=30 && seenSlow>=30); }
+
+{ // a write held for 300 ms while quick reads run beside it (the open panel's counts every 2 s): the wait is the write's, from its start, and stays
+  const cloud=new TestCloud({start:1_700_000_000_000}); seeded(cloud);
+  const db=new MemStore(), real=db.tx.bind(db); let hold=false;
+  const d=device(cloud,'I',{db, pace:{slowTx:30}}); await d.sync.setOwner(owner); await d.sync.start(); await idle(d);
+  db.tx=(st,mode,fn)=>real(st,mode,async t=>{ const r=await fn(t); if(hold && mode==='readwrite' && st.includes('notes')) await new Promise(res=>setTimeout(res,300)); return r; });
+  hold=true; const w=note(d,'i1','тримаю запис'); const t0=Date.now(), seen=[];
+  for(let i=0;i<20;i++){ await new Promise(r=>setTimeout(r,10)); d.sync.unsynced().catch(()=>{}); seen.push({at:Date.now()-t0, busy:d.sync.busyMs(), slow:d.sync.status().slow||0}); } hold=false; await w; await idle(d);
+  const late=seen.filter(x=>x.at>=60 && x.at<=280);
+  ok('23i reads beside a held write do not restart its wait: busyMs and slow follow the write ('+late.map(x=>x.busy).join(',')+')', late.length>3 && late.every(x=>x.busy>=x.at-15 && x.slow>=30) && late.every((x,i)=>!i || x.busy>=late[i-1].busy)); }
 
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

@@ -46,7 +46,8 @@ export function mount(host){ const {doc, t}=host;
   function render(){ const st=statusOf(host.account(), host.core()), text=renderStatus(host.button, host.line, st, st? TEXT[st.code] : null, t);
     host.report(st? {code:st.code, text} : null); draw(); if(dlg.open) auxSoon(); }
   async function open(from){ if(dlg.open) return; counts=null; used=null; drawn=''; opener=from || null; render(); dlg.showModal(); host.nav.open('account', close); draw(); await aux(); }
-  // the status timer (§4.18): a held request ends no step, so while an attempt is unresolved the leader asks the core once a second
+  // the status timer (§4.18): a held request ends no step, so while an attempt is unresolved (or a write waits on a slow store) the leader asks the
+  // core once a second
   const timer=setInterval(()=>{ if(host.leader() && host.attempts()) host.tick(); }, 1000);
   return {open, close, render, isOpen:()=>dlg.open, historyNote:online=>historyNote(host.account(), host.core(), online), stop:()=>clearInterval(timer)};
 }
