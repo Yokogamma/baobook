@@ -62,7 +62,7 @@ await typeAt(B,500,540,'два бігуни'); const trB=await until(async()=>(a
 ok('3b the second tab insured an attempt and is held inside the cloud transaction', !!trB && commits(id)===2);
 await fire(B,'freeze',true); const cl=await until(async()=>(await lead(C)).on, 5000);
 ok('3c a frozen leader lets the lock go: the third tab leads', cl && !(await lead(B)).on && !(await lead(B)).held);
-await settle(C); const stC=await B.evaluate(id=>sheetDebug.sync.state(id), id);
+await settle(C); const stC=await C.evaluate(id=>sheetDebug.sync.state(id), id);   // the store read through C: the frozen tab B starts no transaction until `resume`
 ok('3d the third tab ran the same attempt to its end: one more commit (rev '+cloud.doc('notes',id).rev+'), the attempt is gone', commits(id)===3 && cloud.doc('notes',id).rev===3 && cloud.doc('notes',id).rcpt.A===trB.op && !stC.tr && !stC.job);
 await fire(B,'resume',true); await B.waitForTimeout(300);
 ok('3e the second tab resumed: the owner matches, so it asks again and waits in the queue', !(await lead(B)).on && (await lead(B)).queued && (await lead(C)).on);
