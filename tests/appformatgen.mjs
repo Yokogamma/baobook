@@ -35,6 +35,8 @@ const fmt=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); 
 const stored=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','versions','sync'],'readonly'); const a=t.objectStore('notes').getAll(), b=t.objectStore('versions').getAll(), c=t.objectStore('sync').getAll();
   t.oncomplete=()=>{ d.close(); res({notes:JSON.stringify(a.result), versions:b.result.length, sync:JSON.stringify(c.result.filter(x=>x.k!=='format' && !/^quota/.test(x.k)))}); }; }; }));
 const state=p=>p.evaluate(()=>sheetDebug.fmt.state());
+const lastBoot=p=>p.evaluate(()=>{ const all=JSON.parse(localStorage.getItem('sheet:boot')||'[]'); return all[all.length-1]||null; });
+const diagDone=(p,ms,f=x=>x.other!=null)=>until(async()=>{ const r=await lastBoot(p).catch(()=>null); return r && r.x && f(r.x)? r : null; }, ms);   // the diagnosis written, with the answers it waits for
 const fbKeys=p=>p.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
 const editable=p=>p.evaluate(()=>!document.getElementById('sheet').inert && document.getElementById('ttl').contentEditable!=='false');
 async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.type(text); await p.keyboard.press('Escape'); await p.waitForTimeout(700); }
@@ -109,7 +111,7 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   ok('7a the newer tab waits for the deaf holder', !!mn);
   await H.evaluate(()=>window.__hold.close()); await ready(N);
   ok('7b the holder lets go: the newer tab goes on, the database at v5 with format 5, the note there', JSON.stringify(await fmt(N))==='{"version":5,"format":5}' && (await N.locator('#list .item').allInnerTexts()).some(t=>/перед оновленням/.test(t)));
-  ok('7c no page errors', !A.errs.length && !N.errs.length); await ctx.close(); }
+  ok('7c no page errors ('+A.errs.concat(N.errs).join(' | ')+')', !A.errs.length && !N.errs.length); await ctx.close(); }
 
 /* ── 8. a versionchange while the start's format transaction waits (here a delete; a newer app's upgrade is the same event): the connection closed by
        it is not adopted, so the start opens again and the tab writes into the new database instead of keeping a dead connection ── */
@@ -161,8 +163,9 @@ for(const mode of ['once','always']){
   await C.close();
   await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;   // H's long write on `sync` (a second connection of a started tab)
     const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
-  const D=await page(ctx,{noGo:true}); await D.goto(SITE); await D.waitForTimeout(5500);
-  const rec=await D.evaluate(()=>{ const all=JSON.parse(localStorage.getItem('sheet:boot')||'[]'); return all[all.length-1]; });
+  const D=await page(ctx,{noGo:true}); await D.goto(SITE);
+  const rec=await diagDone(D, 10000, x=>x.other!=null && x.probe!=null && x.usage!=null && x.locks); await D.waitForTimeout(1600);   // past the 1.5 s the answers of the other tabs are counted
+  Object.assign(rec.x, (await lastBoot(D)).x);
   const steps=(rec && rec.m || []).map(x=>x[0]);
   ok('10a the waiting start is past the request (db:open) and inside the format check (no db:fmt yet) ('+steps.join(',')+')', steps.includes('db:open') && !steps.includes('db:fmt'));
   ok('10b its diagnosis: the format check waits, one other open tab answered, the read of `notes` and a separate database answered quickly, the storage estimate is there ('+JSON.stringify(rec && rec.x)+')', rec && rec.x && rec.x.stage==='fmt' && rec.x.peers===1 && rec.x.probe>=0 && rec.x.probe<2000 && rec.x.other>=0 && rec.x.other<2000 && Array.isArray(rec.x.locks) && typeof rec.x.usage==='number');
@@ -175,10 +178,25 @@ for(const mode of ['once','always']){
 { const ctx=await context(); const W=await page(ctx); await typeAt(W,500,300,'черга'); await W.close();
   const H=await page(ctx,{noGo:true}); await H.goto(SITE+'blank.html'); await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // deaf
   const X=await page(ctx,{noGo:true}); await X.goto(SITE+'blank.html'); await X.evaluate(()=>{ indexedDB.open('sheet', 9); });   // a version change H never lets through
-  const C=await page(ctx,{noGo:true}); await C.goto(SITE); await C.waitForTimeout(4500);
-  const rec=await C.evaluate(()=>{ const all=JSON.parse(localStorage.getItem('sheet:boot')||'[]'); return all[all.length-1]; });
+  const C=await page(ctx,{noGo:true}); await C.goto(SITE);
+  await diagDone(C, 10000); await C.waitForTimeout(1600); const rec=await lastBoot(C);
   ok('10e the request has not answered: stage «open», a separate database opens quickly, no other started tab ('+JSON.stringify(rec && rec.x)+')', rec && rec.x && rec.x.stage==='open' && rec.x.probe===undefined && rec.x.other>=0 && rec.x.other<2000 && rec.x.peers===0);
   await ctx.close(); }
+
+/* ── 10f. the request answers late (after the first diagnosis) and the format check then waits behind another tab's write: a second diagnosis, in the
+        format check, with the probe of `notes`; the first one is kept ── */
+{ const ctx=await context(); const H=await page(ctx); await typeAt(H,500,300,'пізно');
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const C=await page(ctx,{noGo:true});
+  await C.addInitScript(()=>{ const open=IDBFactory.prototype.open; IDBFactory.prototype.open=function(name, v){ const r=open.apply(this, arguments);   // the start's first versionless open answers 4 s late
+    if(name==='sheet' && !v && !window.__late){ window.__late=1; let h=null; Object.defineProperty(r,'onsuccess',{configurable:true, get(){ return h; }, set(f){ h=f; r.addEventListener('success',e=>setTimeout(()=>f.call(r,e),4000)); }}); }
+    return r; }; });
+  await C.goto(SITE);
+  const rec=await diagDone(C, 15000, x=>x.stage==='fmt' && x.probe!=null);
+  ok('10f a late request gets a second diagnosis in its format check, with the probe, and keeps the first ('+JSON.stringify(rec && rec.x)+')', rec && rec.x.stage==='fmt' && rec.x.probe>=0 && rec.x.probe<2000 && rec.x.first && rec.x.first.stage==='open');
+  await H.evaluate(()=>window.__stop()); await ready(C);
+  ok('10g no page errors', !H.errs.length && !C.errs.length); await ctx.close(); }
 
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);
