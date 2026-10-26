@@ -132,5 +132,22 @@ for(const w of [390,320]){ const c=new TestCloud({start:Date.now()}); const ctx=
   const back=await until(()=>panel(m), 3000);
   ok('8a after «Оновити» with the right file the panel opens again', !!back); await ctx.close(); }
 
+/* ── 9. a new device's first receiving: «Отримую нотатки · N» on the button, and the slow store in the panel ── */
+{ const c9=new TestCloud({start:Date.now()}); for(let i=0;i<40;i++) c9.write('notes',{id:'r'+i, title:'r'+i, blocks:[{id:'b',row:1,fx:0,text:'r'+i}], created:c9.now(), updated:c9.now()},{dev:'phone'});
+  const G=await newDevice(br, c9, SITE, 'G', {ctx:CTX, init:FLAG, connect:false}); await G.ctx.route('https://www.gstatic.com/**', r=>r.abort());
+  const seen=[]; await G.pg.exposeFunction('__st', t=>seen.push(t)); await G.pg.evaluate(()=>{ const b=document.getElementById('syncBtn'); new MutationObserver(()=>window.__st(b.title)).observe(b,{attributes:true, attributeFilter:['title']}); });
+  await G.pg.evaluate(o=>sheetDebug.sync.connect({cloud:window.__cloud, owner:{env:'test', uid:'u7', email:'g@test'}, user:{uid:'u7', email:'g@test'}, devId:'G', pace:{...o, slowTx:1}}), PACE);
+  await openBtn(G.pg); const sl=await until(async()=>{ const x=await panel(G.pg); return x && x.why.some(w=>/повільно/.test(w))? x : null; }, 8000); await G.pg.keyboard.press('Escape');
+  await untilUI(G.pg,'synced', 20000); const rec=seen.filter(t=>/^Отримую нотатки · \d+$/.test(t));
+  ok('9 a new device shows «Отримую нотатки · N» while the first notes come ('+[...new Set(rec)].join(' | ')+')', rec.length>0);
+  ok('9a the panel says the browser storage is slow when a write is over the threshold ('+(sl&&sl.why.find(w=>/повільно/.test(w)))+')', !!sl);
+  ok('9b all 40 notes arrived, and the button ends at «Синхронізовано»', await G.pg.evaluate(()=>document.querySelectorAll('#list .item').length)>=40 && (await ui(G.pg)).code==='synced');
+  // 9c: the panel open while another connection holds the sync store for 4 s: the core's transaction waits, and the panel says how long, also while its own reads come and go
+  await G.pg.evaluate(()=>{ window.__held=new Promise(done=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const db=r.result, t=db.transaction('sync','readwrite'), st=t.objectStore('sync'), end=Date.now()+4000; const spin=()=>{ if(Date.now()<end) st.get('x').onsuccess=spin; }; spin(); t.oncomplete=()=>{ db.close(); done(); }; }; }); });
+  await G.pg.evaluate(()=>sheetDebug.sync.wake()); await openBtn(G.pg);
+  const held=await until(async()=>{ const x=await panel(G.pg); const w=x && x.why.find(t=>/повільно/.test(t)); const n=w && +(w.match(/триває (\d+)/)||[])[1]; return n>=2? w : null; }, 3800);
+  await G.pg.evaluate(()=>window.__held); await G.pg.keyboard.press('Escape');
+  ok('9c a held write with the panel open: the panel counts its wait in seconds ('+held+')', !!held); await G.close(); }
+
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);

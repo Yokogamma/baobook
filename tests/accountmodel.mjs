@@ -38,6 +38,10 @@ const pv=panelOf({acc:acc({viewOnly:true}), core:core('error',{n:1, errors:[{col
 ok('2g a view-only tab reads the panel with the leader\'s status, its list and only the export: no name field, no account buttons', pv.status.code==='error' && pv.text==='sync.st.error' && pv.errors.length===1 && pv.actions.join()==='export' && !pv.nameField && pv.readOnly && pv.email==='u@test');
 ok('2h no owner and not signed in: only «Увійти»', panelOf({acc:acc({user:null, owner:null}), core:null}).actions.join()==='signIn');
 
+const pr=panelOf({acc:acc(), core:{...core('receiving',{n:7}), slow:31500}});
+ok('2i the first receiving passes through with its count; a slow store shows its seconds', pr.status.code==='receiving' && pr.status.n===7 && pr.text==='sync.st.receiving' && pr.why==='account.why.receiving' && pr.slow===32);
+ok('2j no slow line without a recent slow write, nor without a status', panelOf({acc:acc(), core:core('synced')}).slow===0 && panelOf({acc:acc({on:false}), core:{...core('synced'), slow:5000}}).slow===0);
+
 /* ── 3. «Історія» while versions still come; the device name ── */
 ok('3 online and signed in, the first versions catch-up not done: «версії ще завантажуються»', historyNote(acc(), core('versions',{vdone:false}), true)==='hist.vLoading');
 ok('3a offline or signed out: «версії ще не завантажено»', historyNote(acc(), core('offline',{vdone:false}), false)==='hist.vNotLoaded' && historyNote(acc({user:null}), core('none',{vdone:false}), true)==='hist.vNotLoaded');

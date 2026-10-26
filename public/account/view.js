@@ -23,6 +23,7 @@ export function renderPanel(body, p, t, when){ const doc=body.ownerDocument, kee
   const typing=keep && doc.activeElement===keep? {v:keep.value, a:keep.selectionStart, b:keep.selectionEnd} : null; body.textContent='';
   if(p.email) body.append(el(doc,'div','accp-e',p.email));
   if(p.status){ const s=el(doc,'div','accp-s'); s.dataset.st=p.status.kind; s.append(el(doc,'span','accp-dot'), el(doc,'span','accp-st',t(p.text,{n:p.status.n}))); body.append(s, el(doc,'p','accp-why',t(p.why,{n:p.status.n}))); }
+  if(p.slow) body.append(el(doc,'p','accp-why accp-slow',t('account.slowStore',{s:p.slow})));
   if(p.errors.length){ const ul=el(doc,'ul','accp-err'); for(const e of p.errors){ const li=el(doc,'li');
       if(e.col==='notes'){ const b=el(doc,'button','accp-link',e.title||t('account.errNoteUntitled')); b.type='button'; b.dataset.note=e.id; li.append(b); } else li.append(el(doc,'span','',t('account.errVersion')));
       li.append(el(doc,'span','accp-why',t(e.reason))); ul.append(li); } body.append(ul); }
