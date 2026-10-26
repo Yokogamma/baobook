@@ -4,7 +4,8 @@
 
 /**
  * The core's status, as `SYNC.status()` returns it in the leader and the `st` message carries it to the other tabs.
- * @typedef {{code:string, n:number, jobs?:number, errorN?:number, errors?:SyncError[], checked?:number, vdone?:boolean}} CoreStatus
+ * @typedef {{code:string, n:number, jobs?:number, errorN?:number, errors?:SyncError[], checked?:number, vdone?:boolean, slow?:number}} CoreStatus
+ *   slow: the last store write over the core's threshold, in ms, while it is recent (0 otherwise)
  * @typedef {{col:'notes'|'versions', id:string, reason:'size'|'loop'|'invalid'|'damaged'|'receipts'}} SyncError
  * The account as the page knows it: the signed-in user, the device's owner, and the account's own work in flight.
  * @typedef {{on:boolean, viewOnly:boolean, user:?Person, owner:?Person, cloud:boolean, signingOut:boolean, loading:boolean,
@@ -22,7 +23,7 @@
 export const CODES=Object.freeze({
   signingOut:'busy', loading:'busy', signingIn:'busy', checking:'busy', open:'bad', other:'bad', signedOut:'off',
   denied:'bad', reauth:'bad', nospace:'bad', limit:'off', offline:'off', unverified:'bad', error:'bad', scan:'busy',
-  waiting:'sending', sending:'sending', versions:'busy', synced:'synced', pending:'busy' });
+  waiting:'sending', sending:'sending', receiving:'busy', versions:'busy', synced:'synced', pending:'busy' });
 const PROBE=['denied','reauth','unverified','open'];
 
 /**
@@ -63,6 +64,7 @@ export const TEXT=Object.freeze({
   scan:'sync.st.scan',
   waiting:'sync.st.waiting',
   sending:'sync.st.sending',
+  receiving:'sync.st.receiving',
   versions:'sync.st.versions',
   synced:'sync.st.synced',
   pending:'sync.st.pending' });
@@ -85,6 +87,7 @@ export const EXPLAIN=Object.freeze({
   scan:'account.why.scan',
   waiting:'account.why.waiting',
   sending:'account.why.sending',
+  receiving:'account.why.receiving',
   versions:'account.why.versions',
   synced:'account.why.synced',
   pending:'account.why.pending' });
@@ -111,6 +114,7 @@ export function panelOf(o){ const {acc, core, counts, used, limit}=o, st=statusO
     counts: [['notes','account.unsyncedNotes'], ['versions','account.unsyncedVersions'], ['local','account.onlyHere'], ['copies','account.copies']]
       .filter(([k])=>c[k]>0).map(([k,key])=>({k, key, n:c[k]})),
     checked: core && core.checked? core.checked : 0,
+    slow: shown && core && core.slow? Math.max(1, Math.round(core.slow/1000)) : 0,
     budget: used && limit? {reads:used.reads, writes:used.writes, readsMax:limit.reads, writesMax:limit.writes} : null,
     devName: o.devName||'',
     nameField: !acc.viewOnly,

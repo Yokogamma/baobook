@@ -256,4 +256,20 @@ for(const local of [false, true]){ const cloud=new TestCloud({start:1_700_000_00
   ok('22 the name is trimmed, kept in the device record and carried as dn by the next document', r.ok && r.name==='Мій ноутбук' && A.db.get('sync','device').name==='Мій ноутбук' && cloud.doc('notes','n1').dn==='Мій ноутбук' && A.sync.devName==='Мій ноутбук');
   const long='😀'.repeat(45); const r2=await A.sync.deviceName(long); ok('22a a name over 80 UTF-16 units is cut between code points', r2.ok && r2.name.length===80); }
 
+/* ── 23. a slow store: a new device's first notes go many per transaction, the status counts them, and says the store is slow ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<60;i++) cloud.write('notes',{id:'m'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'m'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  const db=new MemStore(), real=db.tx.bind(db); let writes=0, slow=false; db.tx=(st,mode,fn)=>{ if(mode==='readwrite' && st.includes('notes')) writes++; return slow? new Promise(r=>setTimeout(r,40)).then(()=>real(st,mode,fn)) : real(st,mode,fn); };
+  const d=device(cloud,'A',{db, pace:{slowTx:30}}); await d.sync.setOwner(owner); slow=true; const w0=writes, seen=[];
+  await d.sync.start(); const run=d.sync.idle(20000); for(let i=0;i<200 && !(d.sync.status().code==='synced'); i++){ await new Promise(r=>setTimeout(r,20)); const st=d.sync.status(); seen.push(st.code+':'+st.n+(st.slow? ':slow' : '')); } await run; slow=false; await idle(d);
+  const all=[...Array(60).keys()].every(i=>d.db.get('notes','m'+i)), rec=seen.filter(x=>x.startsWith('receiving:')).map(x=>+x.split(':')[1]);
+  ok('23 the 60 notes of the account arrive in a few transactions, not one each ('+(writes-w0)+' writes over notes)', all && writes-w0<=12);
+  ok('23a the status says «receiving» with the count growing ('+[...new Set(rec)].join(',')+')', rec.length>0 && Math.max(...rec)>Math.min(...rec) && Math.max(...rec)<=60);
+  ok('23b a write slower than pace.slowTx shows as slow in the status ('+seen.filter(x=>x.endsWith(':slow')).length+' samples)', seen.some(x=>x.endsWith(':slow')));
+  ok('23c afterwards: synced, nothing waits', d.sync.status().code==='synced'); }
+{ const cloud=new TestCloud({start:1_700_000_000_000}); for(let i=0;i<30;i++) cloud.write('notes',{id:'f'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'f'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  // one chunk fails inside its transaction: the chunk is applied again one note at a time, and every note arrives
+  const db=new MemStore(), real=db.tx.bind(db); let thrown=0; db.tx=(st,mode,fn)=>real(st,mode,async t=>{ const r=await fn(t); if(mode==='readwrite' && Array.isArray(r) && r.length>1 && !thrown){ thrown=1; throw new Error('chunk fault'); } return r; });
+  const d=await mk(cloud,'B',{db}); await idle(d);
+  ok('23d a chunk that fails is applied again note by note: all 30 notes here ('+thrown+' fault)', thrown===1 && [...Array(30).keys()].every(i=>d.db.get('notes','f'+i)) && logs(d,'page-chunk-error').length===1); }
+
 console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
