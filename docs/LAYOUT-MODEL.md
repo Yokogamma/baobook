@@ -131,7 +131,7 @@ There is no «fixed» block. The block being dragged is a ghost with an anchor i
 
 ### 3.8 Containers
 
-An area is a sheet inside the sheet: the same rules, recursively (P3). Its width is set by its handle; its height follows its children's shown heights plus its header, or a fold (H5), or a collapse to the header. Its children always stay inside: in the view, a child that would stick out is moved left to the last column where it fits and down if it then collides. Narrowing the area with its handle pushes its children left in a chain and stops when they have no room (P10). A block enters an area when it touches it or the pointer is over it, and leaves when it is pulled out past the edge.
+An area is a sheet inside the sheet: the same rules, recursively; the interface keeps one level (N1). Its width is set by its handle; its height follows its children's shown heights plus its header, or a fold (H5), or a collapse to the header. Its children always stay inside: in the view, a child that would stick out is moved left to the last column where it fits and down if it then collides. Narrowing the area with its handle pushes its children left in a chain and stops when they have no room (P10). A block enters an area when it touches it or the pointer is over it, and leaves when it is pulled out past the edge.
 
 ### 3.9 What writes anchors
 
