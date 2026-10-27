@@ -59,17 +59,26 @@ await A.bringToFront(); await A.waitForFunction(()=>sheetDebug.life().ready);
 { await A.bringToFront(); await A.click('#newBtn'); await A.waitForTimeout(300); await typeAt(A, 500, 300, 'перша версія'); await A.waitForTimeout(1500); const id=await curId(A);
   const hold=B.evaluate(()=>new Promise(done=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const db=r.result, t=db.transaction(['notes','sync'],'readwrite'), st=t.objectStore('sync'), end=Date.now()+4000; const spin=()=>{ if(Date.now()<end) st.get('x').onsuccess=spin; }; spin(); t.oncomplete=()=>{ db.close(); done(); }; }; }));
   await A.waitForTimeout(200); await A.click('#sheet .txt'); await A.keyboard.press('End'); await A.keyboard.type(' і правка'); await A.waitForTimeout(100);   // the edit is still in the editor or its save waits on the held store: both must end in a copy
-  await fire(A,'freeze'); const copy=await A.evaluate(id=>{ const keys=Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:'+id+'~')); const k=keys[keys.length-1]; return k? {text:JSON.stringify(JSON.parse(localStorage.getItem(k)).blocks), tag:JSON.parse(localStorage.getItem('sheet:fbe:'+k)||'null'), epoch:sheetDebug.sync.account().epoch} : null; }, id);
-  ok('6 the held edit has its fallback copy at once, with the edit and the owner\'s epoch ('+JSON.stringify(copy&&{tag:copy.tag===copy.epoch, has:/і правка/.test(copy.text)})+')', !!copy && /і правка/.test(copy.text) && copy.tag===copy.epoch);
+  await fire(A,'freeze'); const copy=await A.evaluate(id=>{ const keys=Object.keys(localStorage).filter(k=>k.startsWith('sheet:fbx:'+id+'~')); const k=keys[keys.length-1]; const v=k? JSON.parse(localStorage.getItem(k)) : null;
+    return {v:v && {epoch:v.epoch, text:JSON.stringify(v.note.blocks)}, plain:Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:'+id)).length, epoch:sheetDebug.sync.account().epoch}; }, id);
+  ok('6 the held edit has its fallback copy at once: one record with the edit and the owner\'s epoch, under a prefix older builds never read ('+JSON.stringify(copy&&{epoch:copy.v&&copy.v.epoch===copy.epoch, has:copy.v&&/і правка/.test(copy.v.text), plain:copy.plain})+')', !!copy.v && /і правка/.test(copy.v.text) && copy.v.epoch===copy.epoch && copy.plain===0);
   await hold; await A.close(); await B.waitForTimeout(300); const C=await newTab(D, SITE, {connect:{pace:PACE}}); await C.waitForTimeout(1500);
   const stored=await C.evaluate(async id=>{ const st=await sheetDebug.sync.state(id); return st && st.note? JSON.stringify(st.note.blocks) : ''; }, id);
   ok('6a the tab closed while frozen: the next start moves the copy in, the edit is in the store', /і правка/.test(stored)); await C.close(); }
 
 /* ── 6b. a fallback copy of another epoch (written before a change of owner) neither moves into the store nor shows ── */
-{ await B.evaluate(()=>{ const k='sheet:note:fz-other~T9~1'; localStorage.setItem(k, JSON.stringify({id:'fz-other', title:'Копія іншого власника', blocks:[{id:'b',row:1,fx:0,text:'чуже'}], created:Date.now(), updated:Date.now()})); localStorage.setItem('sheet:fbe:'+k, JSON.stringify('e-before')); });
+{ await B.evaluate(()=>{ localStorage.setItem('sheet:fbx:fz-other~T9~1', JSON.stringify({epoch:'e-before', note:{id:'fz-other', title:'Копія іншого власника', blocks:[{id:'b',row:1,fx:0,text:'чуже'}], created:Date.now(), updated:Date.now()}})); });
   const F=await newTab(D, SITE, {connect:{pace:PACE}}); await F.waitForTimeout(1500);
-  const r=await F.evaluate(async()=>({list:[...document.querySelectorAll('#list .item')].some(i=>/Копія іншого власника/.test(i.textContent)), stored:!!(await sheetDebug.sync.state('fz-other')).note, kept:!!localStorage.getItem('sheet:note:fz-other~T9~1')}));
+  const r=await F.evaluate(async()=>({list:[...document.querySelectorAll('#list .item')].some(i=>/Копія іншого власника/.test(i.textContent)), stored:!!(await sheetDebug.sync.state('fz-other')).note, kept:!!localStorage.getItem('sheet:fbx:fz-other~T9~1')}));
   ok('6b a fallback copy tagged with another epoch: not in the list, not moved into the store, the key kept ('+JSON.stringify(r)+')', !r.list && !r.stored && r.kept); await F.close(); }
+
+/* ── 6c. the copy cannot be written (the storage is full): there is no copy at all, rather than one without its owner, and the edit stays unsaved ── */
+{ const G=await newTab(D, SITE, {connect:{pace:PACE}}); await G.waitForFunction(()=>sheetDebug.life().ready); await G.click('#newBtn'); await G.waitForTimeout(300); await typeAt(G, 500, 300, 'PRIVATE QUOTA COPY'); await G.waitForTimeout(1200); const id=await curId(G);
+  const hold=B.evaluate(()=>new Promise(done=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const db=r.result, t=db.transaction(['notes','sync'],'readwrite'), st=t.objectStore('sync'), end=Date.now()+3000; const spin=()=>{ if(Date.now()<end) st.get('x').onsuccess=spin; }; spin(); t.oncomplete=()=>{ db.close(); done(); }; }; }));
+  await G.waitForTimeout(200); await G.evaluate(()=>{ const set=Storage.prototype.setItem; Storage.prototype.setItem=function(k,v){ if(/^sheet:(fbx|note):/.test(k)) throw new DOMException('full','QuotaExceededError'); return set.call(this,k,v); }; });
+  await G.click('#sheet .txt'); await G.keyboard.press('End'); await G.keyboard.type(' ще'); await G.waitForTimeout(100); await fire(G,'freeze');
+  const r=await G.evaluate(id=>({copies:Object.keys(localStorage).filter(k=>k.includes(id)).length, unsaved:sheetDebug.sync.unsavedCount()}), id);
+  ok('6c the copy cannot be written: no copy at all, no key without its owner ('+JSON.stringify(r)+')', r.copies===0); await hold; await G.close(); }
 
 /* ── 7. a store moved to another owner while the tab was frozen: after resume it shows nothing of that owner and turns view-only ── */
 { const E=await newTab(D, SITE, {connect:{pace:PACE}}); await E.waitForFunction(()=>sheetDebug.life().ready); await fire(E,'freeze');

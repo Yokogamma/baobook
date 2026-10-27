@@ -1131,7 +1131,7 @@ const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
 // before `freeze` aborts the transactions: every note with an edit not yet in the store gets its fallback copy now, synchronously (the abort's own
 // failure runs only after the thaw, which may never come); tagged with the owner's epoch, dropped by the next save that lands
 function freezeCopies(){ if(db.backend!=='idb' || LOCK) return; flushSave(); const ids=new Set([...inflight.keys(), ...unsaved.keys()]);
-  for(const id of ids){ const n=cur && cur.id===id? cur : notes.find(x=>x.id===id); if(!validNote(n)) continue; const g=++GEN, k=NK+id+'~'+TAB+'~'+g; if(!store.put(k,n)){ fbTag(k); FELL.add(id); } } }
+  for(const id of ids){ const n=cur && cur.id===id? cur : notes.find(x=>x.id===id); if(!validNote(n)) continue; const g=++GEN; if(!fbPutCopy(id, g, n)) FELL.add(id); } }
 function frozenErr(){ return Object.assign(new Error('frozen'),{code:'frozen'}); }   // a transaction refused or aborted while the page is frozen (public/lifecycle)
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? loc('save.reason.full') : loc('save.reason.error',{name:n||loc('save.reason.unknown')}); };
 /* a fallback copy (localStorage, written when IndexedDB refused a save) never goes silently: one that differs from the stored note
@@ -1146,15 +1146,18 @@ function fbPut(ex, n){ if(!ex) return [n]; const newer=(n.updated||0)>(ex.update
   if(noteSig(ex)===noteSig(n)) return newer && ((n.pinned||0)!==(ex.pinned||0) || (n.color||'')!==(ex.color||''))? [n] : [];   // the same content: only a newer pin or colour moves in, with no backup
   return newer? [n, backupOf(ex)] : [backupOf(n)]; }   // other content: the newer copy is the note, the older one a backup
 const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
-// a fallback copy written by a device with an owner carries that owner's epoch in a key beside it: a copy from before a change of owner (another
-// tab erased and bound the device meanwhile) neither moves into the new owner's store nor shows in its list; it stays where it is
-const FBE='sheet:fbe:', fbTag=k=>{ if(db.backend==='idb' && SYNC && SYNC.owner && SYNC.epoch) store.put(FBE+k, SYNC.epoch); }, fbMine=k=>{ const e=store.get(FBE+k); return !e || !SYNC || e===SYNC.epoch; }, fbDel=k=>{ store.del(k); store.del(FBE+k); };
-const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
-const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=store.get(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
+// a fallback copy written by a device with an owner is one record {epoch, note} under a prefix of its own (FX), which builds before it never read:
+// the note and the owner it belongs to are written together or not at all, and a copy from before a change of owner (another tab erased and bound
+// the device meanwhile) neither moves into the new owner's store nor shows in its list; it stays where it is. Without an owner the NK keys stay as before
+const FX='sheet:fbx:', fbKeys=()=>[...store.keys(NK), ...store.keys(FX)];
+const fbRead=k=>{ if(!k.startsWith(FX)) return store.get(k); const v=store.get(k); return v && SYNC && SYNC.epoch && v.epoch===SYNC.epoch && validNote(v.note)? v.note : null; };   // another owner's copy reads as nothing
+function fbPutCopy(id, g, n){ const o=db.backend==='idb' && SYNC && SYNC.owner && SYNC.epoch; return o? store.put(FX+id+'~'+TAB+'~'+g, {epoch:SYNC.epoch, note:n}) : store.put(NK+id+'~'+TAB+'~'+g, n); }   // null: written
+const fbOnce=k=>k.startsWith(FX) || k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
+const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=fbRead(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
 const TAB=Math.random().toString(36).slice(2,8), FELL=new Set();   // FELL: notes with fallback keys of this tab
 let GEN=0;   // the generation of every save in this tab, in the order the saves start
-const fbOwn=id=>store.keys(NK+id+'~'+TAB+'~');
-function fbDrop(id, g){ const p=NK+id+'~'+TAB+'~'; for(const k of fbOwn(id)) if(+k.slice(p.length)<g) fbDel(k); if(!fbOwn(id).length) FELL.delete(id); }   // only older generations: a newer one may hold the only copy
+const fbOwn=id=>[...store.keys(NK+id+'~'+TAB+'~'), ...store.keys(FX+id+'~'+TAB+'~')];
+function fbDrop(id, g){ for(const k of fbOwn(id)) if(+k.slice(k.lastIndexOf('~')+1)<g) store.del(k); if(!fbOwn(id).length) FELL.delete(id); }   // only older generations: a newer one may hold the only copy
 /* without IndexedDB the plain keys are the store, and only the tab holding the writer lock writes them: any other tab, and every tab when
    the lock cannot be confirmed, is view-only. So nothing here races with another tab. At start the writing tab joins the fallback keys left
    from a time IndexedDB worked into the plain keys, the backup of the older copy first; a copy that does not fit stays in its key and shows
@@ -1168,7 +1171,7 @@ function writerLock(){ return new Promise(res=>{ let done=false; const end=v=>{ 
 function fbLocal(){ for(const k of store.keys(NK)){ if(!fbOnce(k)) continue; const n=store.get(k); if(!validNote(n)) continue; const ex=store.get(NK+n.id);
   if(![...fbPut(validNote(ex)? ex : null, n)].reverse().some(x=>store.put(NK+x.id,x))) store.del(k); } }
 const MEM=new Set();   // notes that live only in this tab's memory (copies not stored on their own yet, an empty view-only note to show); a tab sync keeps them
-function fbAll(){ const by=new Map(); for(const k of store.keys(NK).filter(fbMine)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push(n); }   // the newest copy of each note, every other different copy as a backup copy in memory
+function fbAll(){ const by=new Map(); for(const k of fbKeys()){ const n=fbRead(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push(n); }   // the newest copy of each note, every other different copy as a backup copy in memory
   const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.updated||0)-(a.updated||0)); const seen=new Set([noteSig(list[0])]); out.push(list[0]);
     for(const x of list.slice(1)) if(!seen.has(noteSig(x))){ seen.add(noteSig(x)); const c=backupOf(x); MEM.add(c.id); out.push(c); } } return out; }
 const db={ backend:'local', inited:false, ready:null,
@@ -1187,10 +1190,10 @@ const db={ backend:'local', inited:false, ready:null,
   // while it holds the lock (or the browser has no Web Locks, and then no tab without IndexedDB writes), and only if the key did not change
   async move(){ if(db.backend!=='idb' || LOCK || !SYNC) return;
     const w=hasLocks() && store.keys(NK).some(k=>!fbOnce(k))? await writerLock() : null, mine=!!w || !hasLocks();
-    try{ for(const k of store.keys(NK)){ if(LOCK) return; if(!fbMine(k)) continue; const raw=store.raw(k), n=store.get(k), once=fbOnce(k); if(!validNote(n)) continue; let r=null;   // another owner's copy stays
+    try{ for(const k of fbKeys()){ if(LOCK) return; const raw=store.raw(k), n=fbRead(k), once=fbOnce(k); if(!validNote(n)) continue; let r=null;   // another owner's copy reads as nothing and stays
       try{ r=await SYNC.importMany(ex=>(!once && !mine && ex && (n.updated||0)<=(ex.updated||0))? [] : fbPut(ex, n), {id:n.id}); }catch(_){ r=null; }   // decided over the stored record inside the move's transaction. A plain key that stays moves in only when it is newer: an older copy waits for a start under the lock, so no start stacks another backup of it
       if(LOCK) return; if(!r || !r.ok) continue;   // not moved: the key stays for the next start
-      if(once || (mine && store.raw(k)===raw)) fbDel(k); }   // a key written once cannot have changed; a plain one stays without the lock, or if it was rewritten meanwhile
+      if(once || (mine && store.raw(k)===raw)) store.del(k); }   // a key written once cannot have changed; a plain one stays without the lock, or if it was rewritten meanwhile
     }finally{ if(w) w(); } },
   async all(){ if(db.backend==='idb'){ try{ return (await idb.all()).filter(validNote); }catch(_){} } return fbAll(); },
   async save(n, delta){ const g=++GEN; if(!db.inited && db.ready) await db.ready;   // a save before the start finished waits for it (no wait once started: idbLost needs the transaction made at once)
@@ -1201,7 +1204,7 @@ const db={ backend:'local', inited:false, ready:null,
         err=r.error||new Error(r.code); }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
     if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2) MEM.delete(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true, whole:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
-    const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; fbTag(NK+n.id+'~'+TAB+'~'+g); FELL.add(n.id); fbDrop(n.id, g); return {ok:true, whole:true}; },   // whole: a localStorage copy is the note as it is in memory
+    const e2=fbPutCopy(n.id, g, n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true, whole:true}; },   // whole: a localStorage copy is the note as it is in memory
   // deleting for good (only with IndexedDB): the note and this tab's own fallback keys of it. Another tab's key is left alone: if it holds a
   // copy not moved in yet, the note comes back at the next start rather than that copy being lost
   async remove(id){ if(!db.inited && db.ready) await db.ready; if(LOCK || db.backend!=='idb') return; fbDrop(id, Infinity); try{ await idb.del(id); }catch(_){} },
@@ -2309,7 +2312,7 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ return (await storedWithLrev()).m; }
 // the stored notes with the lrev of each (the fallback copies have none): records and metadata from one read, so a write between them cannot pair a new lrev with an old body
-async function storedWithLrev(){ const m=fbNewest(store.keys(NK).filter(fbMine)), lrev={}; let ok=true;   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
+async function storedWithLrev(){ const m=fbNewest(fbKeys()), lrev={}; let ok=true;   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
   // the owner and the epoch are read in the same transaction: a store another tab moved to another owner meanwhile (while this one was frozen, say)
   // gives nothing to show, and the tab turns view-only («epoch») instead of drawing that owner's notes
   if(db.backend==='idb'){ try{ const r=await SDB.tx(['notes','sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner');
@@ -3468,7 +3471,7 @@ async function start(){
   notes=await db.all(); boot('notes'); vstart(); app.classList.toggle('local', db.backend!=='idb');
   window.addEventListener('online',()=>{ if(SYNC){ SYNC.online(true); syncWake(); } }); window.addEventListener('offline',()=>{ if(SYNC) SYNC.online(false); }); document.addEventListener('visibilitychange',()=>{ if(!document.hidden && SYNC) syncWake(); });
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-  if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).filter(fbMine).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
+  if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, fbKeys().map(fbRead).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
   if(!notes.length && !LOCK){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
