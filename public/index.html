@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102602">
+<meta name="baobook-build" content="2026102701">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102602" integrity="sha384-m+rcBNEVjPhNWM5cVt7TAx7rFsR4Ozq+oI6cGryNl3+J67+BYs7QA6pz0yP3RtXT"></script>
-<script src="cloud.js?b=2026102602" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102701" integrity="sha384-JxVyHU5zxlFtq4b8EVCVnA8pUqftUL9JSk2Z7qwNht6ieoh+/7/ZPyj7/7pGf42f"></script>
+<script src="cloud.js?b=2026102701" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +806,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
+const SRI={'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102602;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102701;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
 // on every one and the integrity of the SRI table beside it (a browser without import map integrity loads it unchecked; the service worker checks
 // its set against the same table). Written before any module is imported
@@ -1052,7 +1052,8 @@ const idb={ db:null, pend:null, opening:null, silent:false, want:false, back:fal
         try{ r.transaction.objectStore('sync').put({k:'format', v:FORMAT}); }catch(_){} };
       r.onsuccess=()=>{ settled(); const d=r.result; let lost=false; d.onversionchange=()=>{ lost=true; try{ d.close(); }catch(_){} };   // until done() sets idbLost: a newer app's upgrade (or a delete) during the format transaction below is not kept waiting by this connection
         if(dead){ try{ d.close(); }catch(_){} if(LOCK==='storage') idbBack(); return; }   // the hung request answered at last: the storage is back
-        const done=()=>{ if(lost) return res(); idb.db=d; d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };   // a connection closed by that handler is never adopted: idb.db stays null and the next use opens again
+        const done=()=>{ if(lost) return res(); if(SDB.frozen){ try{ d.close(); }catch(_){} return res(); } idb.db=d;   // landed after `freeze`: not adopted, the thaw opens again
+          d.onversionchange=idbLost; d.onclose=()=>{ idb.db=null; }; res(); };   // a connection closed by that handler is never adopted: idb.db stays null and the next use opens again
         if(d.version>IDB_VER){ setLock('newer'); return done(); }   // checked first, before the fallback copies move or anything is cleaned up
         // the second half of the format check, before any upgrade: a `format` record above this code's version marks data of a newer app, which opens
         // view-only as it is (an upgrade would write this code's format over it). Then a new device (an empty v1 from the open without a version) or an
@@ -1087,10 +1088,10 @@ const idb={ db:null, pend:null, opening:null, silent:false, want:false, back:fal
   async run(mode,fn){ return idb.tx(['notes'], mode, t=>fn(t.objectStore('notes')), true); },
   // `one`: idb.run's shape, the result of fn's request or undefined. A write first reads the format (fmtGuard) and calls fn only when it is not newer,
   // inside the same transaction, so a refused write never queued a request; `failed` keeps the refusal over the AbortError and the null t.error that follow
-  async tx(stores,mode,fn,one){ const w=mode==='readwrite'; if(w && LOCK) throw fmtLocked(); if(!idb.db) await idb.open(); if(w && LOCK) throw fmtLocked(); return new Promise((res,rej)=>{ let t,q,failed=null;
+  async tx(stores,mode,fn,one){ const w=mode==='readwrite'; if(SDB.frozen) throw frozenErr(); if(w && LOCK) throw fmtLocked(); if(!idb.db) await idb.open(); if(SDB.frozen) throw frozenErr(); if(w && LOCK) throw fmtLocked(); return new Promise((res,rej)=>{ let t,q,failed=null;   // frozen: as SDB, nothing starts between `freeze` and the thaw
     const call=()=>{ try{ q=fn(t); }catch(e){ failed=failed||e; try{ t.abort(); }catch(_){} } };
-    try{ t=idb.db.transaction(w? fmtScope(idb.db, stores) : stores, mode); if(w) fmtGuard(t, call, e=>{ failed=e; }); else call(); }catch(e){ return rej(e); }
-    t.oncomplete=()=>res(one? (q? q.result : undefined) : (q&&q.result!==undefined? q.result : q)); t.onerror=()=>rej(failed||t.error); t.onabort=()=>rej(failed||t.error||new Error('abort')); }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
+    try{ t=idb.db.transaction(w? fmtScope(idb.db, stores) : stores, mode); SDB.open.add(t); if(w) fmtGuard(t, call, e=>{ failed=e; }); else call(); }catch(e){ return rej(e); }
+    t.oncomplete=()=>{ SDB.open.delete(t); res(one? (q? q.result : undefined) : (q&&q.result!==undefined? q.result : q)); }; t.onerror=()=>{ SDB.open.delete(t); rej(t.frozen? frozenErr() : failed||t.error); }; t.onabort=()=>{ SDB.open.delete(t); rej(t.frozen? frozenErr() : failed||t.error||new Error('abort')); }; }); },   // кілька сховищ в одній транзакції; fn отримує транзакцію і може повернути значення
   all(){ return idb.run('readonly',s=>s.getAll()); }, put(n){ return idb.run('readwrite',s=>s.put(n)); }, del(id){ return idb.run('readwrite',s=>s.delete(id)); } };
 /* the format guard of every write (IDB-BARRIER-PLAN §4.2 item 2): `sync` joins the scope, the transaction's first request reads `format`, and only a
    value at or below FORMAT (or none, or no `sync` store in a damaged database) lets `go` run the write. A newer one records the refusal first (`fail`,
@@ -1112,16 +1113,26 @@ Object.assign(DEBUG.fmt, { state:()=>({lock:LOCK, refused:DEBUG.fmt.refused, db:
     auto:()=>vwrite(cur.id, manifestOf(cur.title, cur.blocks), cur.blocks, {t:Date.now(), w:Date.now(), reason:'auto'}), del:()=>idb.del(cur.id) } });
 /* SDB: the transactional store the sync core runs on (sync.js, docs/SYNC-PLAN.md PR 1). One IndexedDB transaction, created synchronously when the connection is
    open, so a save made in idbLost still lands before close(); inside `fn` only the transaction's own requests may be awaited (a foreign await commits it early) */
-const SDB={ tx(stores, mode, fn){ const locked=()=>Object.assign(new Error('locked'),{code:'locked'}); if(mode==='readwrite' && LOCK) return Promise.reject(locked()); if(!idb.db) return idb.open().then(()=>SDB.tx(stores,mode,fn));
+const SDB={ tx(stores, mode, fn){ const locked=()=>Object.assign(new Error('locked'),{code:'locked'}); if(SDB.frozen) return Promise.reject(frozenErr()); if(mode==='readwrite' && LOCK) return Promise.reject(locked()); if(!idb.db) return idb.open().then(()=>SDB.tx(stores,mode,fn));   // frozen: nothing new starts between `freeze` and the thaw
     if(mode==='readwrite' && DEBUG.saveGate) return Promise.resolve().then(()=>DEBUG.saveGate(stores)).then(()=>SDB.run(stores,mode,fn)); return SDB.run(stores,mode,fn); },   // saveGate: a test's hand on every write (appsave): it waits for the promise, or fails with its error
-  run(stores, mode, fn){ return new Promise((res0,rej)=>{ const res=v=>{ if(mode==='readwrite' && stores.includes('notes') && DEBUG.saveHold) Promise.resolve(DEBUG.saveHold(stores)).then(()=>res0(v), rej); else res0(v); };   /* saveHold: a test's hand after the write landed (appstatus) */ let t; try{ t=idb.db.transaction((mode==='readwrite'? fmtScope(idb.db, stores) : stores).filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); }   // a store a damaged database lacks is left out: only a request to it fails
+  run(stores, mode, fn){ return new Promise((res0,rej)=>{ const res=v=>{ if(mode==='readwrite' && stores.includes('notes') && DEBUG.saveHold) Promise.resolve(DEBUG.saveHold(stores)).then(()=>res0(v), rej); else res0(v); };   /* saveHold: a test's hand after the write landed (appstatus) */ let t; try{ t=idb.db.transaction((mode==='readwrite'? fmtScope(idb.db, stores) : stores).filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); } SDB.open.add(t);   // a store a damaged database lacks is left out: only a request to it fails
     const req=r=>new Promise((ok,ko)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); });
     const T={ get:(st,k)=>req(t.objectStore(st).get(k)), put:(st,v)=>{ t.objectStore(st).put(v); }, del:(st,k)=>{ t.objectStore(st).delete(k); },
       range:(st,a,b)=>req(t.objectStore(st).getAll(IDBKeyRange.bound(a,b))), byNote:(st,n)=>req(t.objectStore(st).index('note_t').getAll(IDBKeyRange.bound([n,-Infinity],[n,Infinity]))), blobs:n=>req(t.objectStore('blobs').getAll(IDBKeyRange.bound([n,''],[n,'￿']))) };
     let v, failed=null; const w=mode==='readwrite', go=()=>Promise.resolve().then(()=>fn(T)).then(x=>{ v=x; }, e=>{ failed=failed||e; try{ t.abort(); }catch(_){} });
     if(w) fmtGuard(t, go, e=>{ failed=e; }); else go();   // a write reads the format first and runs fn only when it is not newer (fmtGuard)
-    t.oncomplete=()=>res(v); t.onerror=()=>rej(failed||t.error); t.onabort=()=>rej(failed||t.error||new Error('abort')); }); } };
+    t.oncomplete=()=>{ SDB.open.delete(t); res(v); }; t.onerror=()=>{ SDB.open.delete(t); rej(t.frozen? frozenErr() : failed||t.error); }; t.onabort=()=>{ SDB.open.delete(t); rej(t.frozen? frozenErr() : failed||t.error||new Error('abort')); }; }); },   // aborted by `freeze`: the core stops quietly, a save fails as any failed save (its fallback copy was written before the abort)
+  // the transactions still open through SDB (the core's, and the page's own saves with an owner): a document frozen inside one would hold the store
+  // for every other document of the origin (another tab, the installed app) until it is thawed, so `freeze` aborts them; each is atomic, the core
+  // does its work again after `resume`, and a save that fails so is kept and retried as any failed save
+  open:new Set(), frozen:false,
+  abortAll(why){ for(const t of [...SDB.open]){ try{ t.frozen=true; t.abort(); }catch(_){} } if(SDB.open.size) dbg('sync: aborted '+SDB.open.size+' transactions on '+why); SDB.open.clear(); } };
 const validNote=n=>!!(n&&n.id&&Array.isArray(n.blocks));
+// before `freeze` aborts the transactions: every note with an edit not yet in the store gets its fallback copy now, synchronously (the abort's own
+// failure runs only after the thaw, which may never come); tagged with the owner's epoch, dropped by the next save that lands
+function freezeCopies(){ if(db.backend!=='idb' || LOCK) return; flushSave(); const ids=new Set([...inflight.keys(), ...unsaved.keys()]);
+  for(const id of ids){ const n=cur && cur.id===id? cur : notes.find(x=>x.id===id); if(!validNote(n)) continue; const g=++GEN; if(!fbPutCopy(id, g, n)) FELL.add(id); } }
+function frozenErr(){ return Object.assign(new Error('frozen'),{code:'frozen'}); }   // a transaction refused or aborted while the page is frozen (public/lifecycle)
 const reasonOf=e=>{ const n=(e&&e.name)||''; return (/Quota/i.test(n)||(e&&e.code===22))? loc('save.reason.full') : loc('save.reason.error',{name:n||loc('save.reason.unknown')}); };
 /* a fallback copy (localStorage, written when IndexedDB refused a save) never goes silently: one that differs from the stored note
    is kept as a note of its own. fbPut → the notes to store for one fallback copy n, given the stored one ex.
@@ -1135,12 +1146,18 @@ function fbPut(ex, n){ if(!ex) return [n]; const newer=(n.updated||0)>(ex.update
   if(noteSig(ex)===noteSig(n)) return newer && ((n.pinned||0)!==(ex.pinned||0) || (n.color||'')!==(ex.color||''))? [n] : [];   // the same content: only a newer pin or colour moves in, with no backup
   return newer? [n, backupOf(ex)] : [backupOf(n)]; }   // other content: the newer copy is the note, the older one a backup
 const fbMerge=(list, fb)=>{ for(const n of fb) for(const x of fbPut(list.find(y=>y.id===n.id), n)){ const i=list.findIndex(y=>y.id===x.id); if(i<0) list.push(x); else list[i]=x; } return list; };   // the same, in memory
-const fbOnce=k=>k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
-const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=store.get(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
+// a fallback copy written by a device with an owner is one record {epoch, note} under a prefix of its own (FX), which builds before it never read:
+// the note and the owner it belongs to are written together or not at all, and a copy from before a change of owner (another tab erased and bound
+// the device meanwhile) neither moves into the new owner's store nor shows in its list; it stays where it is. Without an owner the NK keys stay as before
+const FX='sheet:fbx:', fbKeys=()=>[...store.keys(NK), ...store.keys(FX)];
+const fbRead=k=>{ if(!k.startsWith(FX)) return store.get(k); const v=store.get(k); return v && SYNC && SYNC.epoch && v.epoch===SYNC.epoch && validNote(v.note)? v.note : null; };   // another owner's copy reads as nothing
+function fbPutCopy(id, g, n){ const o=db.backend==='idb' && SYNC && SYNC.owner && SYNC.epoch; return o? store.put(FX+id+'~'+TAB+'~'+g, {epoch:SYNC.epoch, note:n}) : store.put(NK+id+'~'+TAB+'~'+g, n); }   // null: written
+const fbOnce=k=>k.startsWith(FX) || k.slice(NK.length).includes('~');   // a key written once by one save (as opposed to a plain sheet:note:<id>)
+const fbNewest=keys=>{ const m=new Map(); for(const k of keys){ const n=fbRead(k); if(validNote(n) && (!m.has(n.id) || (n.updated||0)>(m.get(n.id).updated||0))) m.set(n.id,n); } return m; };   // one copy per note, the newest; the others stay in storage
 const TAB=Math.random().toString(36).slice(2,8), FELL=new Set();   // FELL: notes with fallback keys of this tab
 let GEN=0;   // the generation of every save in this tab, in the order the saves start
-const fbOwn=id=>store.keys(NK+id+'~'+TAB+'~');
-function fbDrop(id, g){ const p=NK+id+'~'+TAB+'~'; for(const k of fbOwn(id)) if(+k.slice(p.length)<g) store.del(k); if(!fbOwn(id).length) FELL.delete(id); }   // only older generations: a newer one may hold the only copy
+const fbOwn=id=>[...store.keys(NK+id+'~'+TAB+'~'), ...store.keys(FX+id+'~'+TAB+'~')];
+function fbDrop(id, g){ for(const k of fbOwn(id)) if(+k.slice(k.lastIndexOf('~')+1)<g) store.del(k); if(!fbOwn(id).length) FELL.delete(id); }   // only older generations: a newer one may hold the only copy
 /* without IndexedDB the plain keys are the store, and only the tab holding the writer lock writes them: any other tab, and every tab when
    the lock cannot be confirmed, is view-only. So nothing here races with another tab. At start the writing tab joins the fallback keys left
    from a time IndexedDB worked into the plain keys, the backup of the older copy first; a copy that does not fit stays in its key and shows
@@ -1154,7 +1171,7 @@ function writerLock(){ return new Promise(res=>{ let done=false; const end=v=>{ 
 function fbLocal(){ for(const k of store.keys(NK)){ if(!fbOnce(k)) continue; const n=store.get(k); if(!validNote(n)) continue; const ex=store.get(NK+n.id);
   if(![...fbPut(validNote(ex)? ex : null, n)].reverse().some(x=>store.put(NK+x.id,x))) store.del(k); } }
 const MEM=new Set();   // notes that live only in this tab's memory (copies not stored on their own yet, an empty view-only note to show); a tab sync keeps them
-function fbAll(){ const by=new Map(); for(const k of store.keys(NK)){ const n=store.get(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push(n); }   // the newest copy of each note, every other different copy as a backup copy in memory
+function fbAll(){ const by=new Map(); for(const k of fbKeys()){ const n=fbRead(k); if(validNote(n)) (by.get(n.id)||by.set(n.id,[]).get(n.id)).push(n); }   // the newest copy of each note, every other different copy as a backup copy in memory
   const out=[]; for(const list of by.values()){ list.sort((a,b)=>(b.updated||0)-(a.updated||0)); const seen=new Set([noteSig(list[0])]); out.push(list[0]);
     for(const x of list.slice(1)) if(!seen.has(noteSig(x))){ seen.add(noteSig(x)); const c=backupOf(x); MEM.add(c.id); out.push(c); } } return out; }
 const db={ backend:'local', inited:false, ready:null,
@@ -1173,7 +1190,7 @@ const db={ backend:'local', inited:false, ready:null,
   // while it holds the lock (or the browser has no Web Locks, and then no tab without IndexedDB writes), and only if the key did not change
   async move(){ if(db.backend!=='idb' || LOCK || !SYNC) return;
     const w=hasLocks() && store.keys(NK).some(k=>!fbOnce(k))? await writerLock() : null, mine=!!w || !hasLocks();
-    try{ for(const k of store.keys(NK)){ if(LOCK) return; const raw=store.raw(k), n=store.get(k), once=fbOnce(k); if(!validNote(n)) continue; let r=null;
+    try{ for(const k of fbKeys()){ if(LOCK) return; const raw=store.raw(k), n=fbRead(k), once=fbOnce(k); if(!validNote(n)) continue; let r=null;   // another owner's copy reads as nothing and stays
       try{ r=await SYNC.importMany(ex=>(!once && !mine && ex && (n.updated||0)<=(ex.updated||0))? [] : fbPut(ex, n), {id:n.id}); }catch(_){ r=null; }   // decided over the stored record inside the move's transaction. A plain key that stays moves in only when it is newer: an older copy waits for a start under the lock, so no start stacks another backup of it
       if(LOCK) return; if(!r || !r.ok) continue;   // not moved: the key stays for the next start
       if(once || (mine && store.raw(k)===raw)) store.del(k); }   // a key written once cannot have changed; a plain one stays without the lock, or if it was rewritten meanwhile
@@ -1187,7 +1204,7 @@ const db={ backend:'local', inited:false, ready:null,
         err=r.error||new Error(r.code); }catch(e){ err=e; } }   // не вийшло в IndexedDB — хоч у localStorage; при наступному старті переїде
     if(LOCK) return {ok:false,reason:loc('save.reason.locked')};   // the database went away under a newer app: no second copy beside it
     if(db.backend!=='idb' && !store.keys(NK+n.id+'~').length){ const e2=store.put(NK+n.id,n); if(!e2) MEM.delete(n.id); return e2? {ok:false,reason:reasonOf(e2.name? e2 : err||e2)} : {ok:true, whole:true}; }   // no IndexedDB: the plain key, unless copies of the note wait to be joined (fbLocal could not store a backup): then the plain key keeps the older copy
-    const e2=store.put(NK+n.id+'~'+TAB+'~'+g,n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true, whole:true}; },   // whole: a localStorage copy is the note as it is in memory
+    const e2=fbPutCopy(n.id, g, n); if(e2) return {ok:false,reason:reasonOf(e2.name? e2 : err||e2)}; FELL.add(n.id); fbDrop(n.id, g); return {ok:true, whole:true}; },   // whole: a localStorage copy is the note as it is in memory
   // deleting for good (only with IndexedDB): the note and this tab's own fallback keys of it. Another tab's key is left alone: if it holds a
   // copy not moved in yet, the note comes back at the next start rather than that copy being lost
   async remove(id){ if(!db.inited && db.ready) await db.ready; if(LOCK || db.backend!=='idb') return; fbDrop(id, Infinity); try{ await idb.del(id); }catch(_){} },
@@ -1424,7 +1441,7 @@ function leadOff(){ LEAD.gen++; const ac=LEAD.abort, rel=LEAD.release; LEAD.abor
 // the engine starts leading: online first (a reconnect after start would read the cloud twice), then the state from the store (reload() refuses a store
 // whose owner changed while this tab waited for the lock: the tab is locked as «epoch» and lets the lock go), then the cloud. After every wait the
 // generation is checked: a pagehide, freeze or LOCK meanwhile has released the lock, and a start that finished anyway is undone
-async function leadOn(){ const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
+async function leadOn(){ hiddenOff(); const eng=SYNC, gen=LEAD.gen; LEAD.engine=eng; LEAD.cloud=CLOUD; const over=()=>LEAD.gen!==gen || SYNC!==eng || LOCK;
   try{ eng.online(navigator.onLine!==false && !DEBUG.sync.offline); await eng.reload(); if(over()) return;
     if(!authGate()){ CLOUD=null; ACC.cloud=null; leadOff(); accStatus(); return; }   // the user of this cloud signed out while the tab waited for the lock: the lock goes back, nothing of theirs is sent
     await eng.start({cloud:CLOUD}); if(over()) return; LEAD.on=true; accStatus(); tellTabs(stMsg()); syncWake(); }   // a start that is over connected nothing (the engine's run id); stopping the engine here would hit the generation that took over meanwhile; the other tabs mirror the leader's status from here
@@ -2221,7 +2238,7 @@ newBtn.addEventListener('click',()=>{ if(held()) return; flushSave(); setSection
    without lrev on both sides, by `updated`. A note this tab has no unwritten edits of, and no caret in, takes the other tab's copy (the open one is redrawn
    in place, keeping the lrev in its snapshot). Otherwise the copy waits in PENDING behind the strip: this tab's pending write merges over it, and the sheet
    is redrawn at the safe point. A tab that missed messages (hidden, frozen, back from the page cache) compares its notes with the storage when it is shown again. */
-const TABS=window.BroadcastChannel? new BroadcastChannel('sheet:notes') : null;
+let TABS=null;   // the channel to the other tabs, closed while the page is frozen (public/lifecycle)
 function tellTabs(m){ if(TABS) try{ TABS.postMessage(m); }catch(_){} }
 // the leader's status for the other tabs, with whether the leader is hidden: a visible tab waiting for the lock answers a hidden leader with «lead?»
 function stMsg(){ return {t:'st', ...DEBUG.sync.status, hidden:!!document.hidden}; }
@@ -2250,11 +2267,13 @@ function tabMsg(m){ if(keptView() || DYING) return;
   else if(db.backend==='idb' && m.t==='copy'){ copiesEvent(m); copyToast(m); } else if(db.backend==='idb' && m.t==='copies') copiesEvent(m);   // a copy made or removed in another tab: recount that note
   else if(m.t==='ver' || m.t==='vput'){ if(H.open && cur && cur.id===m.note) loadHist(); }   // a version changed in another tab (SYNC-PLAN 4.9): an open «Історія» of that note reloads
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?','format'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
-if(TABS) TABS.onmessage=e=>{ const m=e.data||{};
+function openTabs(){ if(TABS || !window.BroadcastChannel) return; TABS=new BroadcastChannel('sheet:notes'); TABS.onmessage=e=>{ const m=e.data||{};
   if(m.t==='who?'){ if(STARTED) TABS.postMessage({t:'here', to:m.from, hidden:document.hidden, lead:LEAD.on, build:BUILD}); return; }   // a starting tab's diagnosis (bootDiag) counts the started ones
   if(m.t==='here'){ if(PEERS && m.to===BOOT.id){ PEERS.peers++; (PEERS.tabs=PEERS.tabs||[]).push({hidden:!!m.hidden, lead:!!m.lead, build:m.build}); bootSave(); } return; }
-  if(STARTED) tabMsg(m); else TABQ.push(m); };
-async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok}=await storedWithLrev(); if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
+  if(STARTED) tabMsg(m); else TABQ.push(m); }; }   // opened at load, closed while the page is frozen and opened again on the thaw (public/lifecycle)
+function closeTabs(){ const c=TABS; TABS=null; if(c) try{ c.close(); }catch(_){} }
+openTabs();
+async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok, moved}=await storedWithLrev(); if(moved){ setLock('epoch'); return; } if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
 
 /* ══ страховка даних: постійне сховище, експорт/імпорт усіх нотаток файлом JSON ═══════ */
 function ago(t){ const m=Math.round((now()-t)/60000); if(m<1) return loc('time.justNow'); if(m<60) return loc('time.minutesAgo',{n:m}); const h=Math.round(m/60); if(h<24) return loc('time.hoursAgo',{n:h}); const d=Math.round(h/24); return loc('time.daysAgo',{n:d}); }
@@ -2293,8 +2312,13 @@ async function importNotes(list, settings){ flushSave(); let added=0,updated=0,s
   notes.sort((a,b)=>b.updated-a.updated); renderList(); renderBacklinks(); if(!cur && notes.length) openNote(firstNote()); storageUI(); return {added,updated,skipped,failed,settings:applied}; }
 async function storedNotes(){ return (await storedWithLrev()).m; }
 // the stored notes with the lrev of each (the fallback copies have none): records and metadata from one read, so a write between them cannot pair a new lrev with an old body
-async function storedWithLrev(){ const m=fbNewest(store.keys(NK)), lrev={}; let ok=true;   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
-  if(db.backend==='idb'){ try{ const {notes:list, meta}=await SDB.tx(['notes','sync'],'readonly', async t=>({notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')})); for(const n of list) if(validNote(n)) m.set(n.id,n); for(const x of meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){ ok=false; } } return {m, lrev, ok}; }
+async function storedWithLrev(){ const m=fbNewest(fbKeys()), lrev={}; let ok=true;   // localStorage fallback first (its newest copy of each note, as db.all reads it), IndexedDB wins
+  // the owner and the epoch are read in the same transaction: a store another tab moved to another owner meanwhile (while this one was frozen, say)
+  // gives nothing to show, and the tab turns view-only («epoch») instead of drawing that owner's notes
+  if(db.backend==='idb'){ try{ const r=await SDB.tx(['notes','sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner');
+      if(SYNC && ((ep? ep.id : null)!==SYNC.epoch || (ow? ow.uid : null)!==(SYNC.owner? SYNC.owner.uid : null))) return {moved:true};
+      return {notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')}; });
+    if(r.moved) return {m:new Map(), lrev, ok:false, moved:true}; for(const n of r.notes) if(validNote(n)) m.set(n.id,n); for(const x of r.meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){ ok=false; } } return {m, lrev, ok}; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
   if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); }
   if(typeof s.grid==='boolean'){ p.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); }
@@ -2322,9 +2346,28 @@ window.addEventListener('pageshow',e=>{ if(e.persisted) syncTabs(); });   // bac
 // event also released when hidden. A hidden leader with the freeze event keeps the lock until a visible tab asks for it (lead? in tabMsg); it says it is
 // hidden when it starts leading, when it is hidden and with every status (stMsg), and a visible tab waiting for the lock answers with lead?; a leader
 // that lets go queues again at once, so the lock returns to it when the asker is gone and passes on through hidden tabs queued ahead of the asker
-window.addEventListener('pagehide',()=>leadOff()); document.addEventListener('freeze',()=>leadOff());
-window.addEventListener('pageshow',e=>{ if(e.persisted) leadCheck(); }); document.addEventListener('resume',()=>leadCheck());
-document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(!('onfreeze' in document)) leadOff(); else if(LEAD.on) tellTabs(stMsg()); } else leadCheck(); });   // a leader going hidden says so: a visible tab waiting for the lock asks for it
+/* the page's life (SYNC-PLAN 4.10, public/lifecycle/model.js): each event of the page runs the actions the module gives it. Until the module has
+   loaded (the first moments of a start) `freeze` and `pagehide` still let the lead go, and a hidden page without `freeze` does too */
+let LIFE=null, hiddenT=0;
+const lifeState=()=>({touch:TOUCH, freezeEvent:'onfreeze' in document, hidden:document.hidden, leads:!!(LEAD.on || LEAD.abort)});
+const LIFE_DO={ leadOff:()=>leadOff(), saveCopy:()=>freezeCopies(), blockTx:()=>{ SDB.frozen=true; }, unblockTx:()=>{ SDB.frozen=false; }, abortTx:ev=>SDB.abortAll(ev),
+  closeDb:()=>{ const d=idb.db; if(d && !idb.opening){ idb.db=null; try{ d.close(); }catch(_){} } },   // the next use opens it again (idb.tx, SDB.tx); an open in flight is left alone
+  closeChannel:()=>closeTabs(), openChannel:()=>openTabs(), catchUp:()=>{ syncTabs(); }, leadCheck:()=>leadCheck(), tellHidden:()=>{ if(LEAD.on) tellTabs(stMsg()); },
+  armHidden:()=>hiddenOff(), disarmHidden:()=>clearTimeout(hiddenT) };
+// the same rules for the moments before the module has loaded (or if it never does): `freeze` must never skip its clean-up. tests/appfreezetx checks
+// that these answer as the module does
+const LIFE_FALLBACK=(ev, st)=>({ freeze:['leadOff','saveCopy','blockTx','abortTx','closeDb','closeChannel'], resume:['unblockTx','openChannel','catchUp','leadCheck'],
+  pageshow:st.persisted? ['unblockTx','openChannel','catchUp','leadCheck'] : [], pagehide:['leadOff'], hidden:!st.freezeEvent? ['leadOff'] : st.touch? ['tellHidden','armHidden'] : ['tellHidden'],
+  visible:['disarmHidden','leadCheck'], hiddenLong:st.touch && st.hidden && st.leads? ['leadOff'] : [] }[ev] || []);
+function life(ev, extra){ const st={...lifeState(), ...(extra||{})}; const acts=(LIFE? LIFE.actionsFor : LIFE_FALLBACK)(ev, st);
+  for(const a of acts){ try{ LIFE_DO[a](ev); }catch(e){ dbg('life: '+a+' failed', e); } } }
+// a phone's leader that stays hidden lets the lead go by itself (a tab the browser freezes later cannot answer a request for it); it starts too when
+// the lock comes to a tab already hidden
+function hiddenOff(){ clearTimeout(hiddenT); if(!TOUCH || !document.hidden) return; hiddenT=setTimeout(()=>life('hiddenLong'), DEBUG.hiddenLeadMs || (LIFE? LIFE.HIDDEN_LEAD_MS : 15000)); }   // the tests shorten the wait
+window.addEventListener('pagehide',()=>life('pagehide')); document.addEventListener('freeze',()=>life('freeze'));
+window.addEventListener('pageshow',e=>life('pageshow',{persisted:e.persisted})); document.addEventListener('resume',()=>life('resume'));
+document.addEventListener('visibilitychange',()=>life(document.hidden? 'hidden' : 'visible'));
+import('./lifecycle/model.js').then(m=>{ LIFE=m; }).catch(e=>console.error('lifecycle: the module did not load', e));
 
 /* панель: на десктопі стан запамʼятовується, на телефоні — висувна шухляда */
 /* ══ nav: системний Back і накладення (план 3.8). Кожне накладення (панель нотаток на телефоні, меню «⋯», меню мови, обзор «як на компʼютері», режим положення)
@@ -3312,7 +3355,7 @@ histTake.addEventListener('click',()=>takeCopy()); histDrop.addEventListener('cl
    every event of its copies (`copy`, `copies`, from the core or another tab), so a message that came between the read and the subscription cannot make it drift ══ */
 let COPIES=new Map(), ACT=null;   // ACT: the action of the toast in the undo toast's place (a conflict's «Показати»), not on the undo stack
 const copiesN=id=>COPIES.get(id)||0;
-Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld(), lock:k=>setLock(k)});   // the tests' hand: the page's map, the 30-day rule now, a lock as another tab's change would set it
+Object.assign(DEBUG,{copies:()=>Object.fromEntries(COPIES), purgeOld:()=>purgeOld(), lock:k=>setLock(k), sdbHold:ms=>SDB.tx(['sync'],'readwrite',async T=>{ const end=Date.now()+ms; while(Date.now()<end) await T.get('sync','x'); return 'done'; }).catch(e=>e.code||String(e)), sdbOpen:()=>SDB.open.size, life:()=>({ready:!!LIFE, db:!!idb.db, tabs:!!TABS, frozen:SDB.frozen}), idbHold:ms=>idb.tx(['notes'],'readwrite',t=>{ const st=t.objectStore('notes'), end=Date.now()+ms; const spin=()=>{ if(Date.now()<end) st.get('x').onsuccess=spin; }; spin(); }).then(()=>'done', e=>e.code||String(e)), lifeRules:(ev,st)=>({module:LIFE? LIFE.actionsFor(ev,st) : null, fallback:LIFE_FALLBACK(ev,st)})});   // the tests' hand: the page's map, the 30-day rule now, a lock as another tab's change would set it
 // the read of the whole store waits a moment after the start (the leader's catch-up comes first); a note recounted meanwhile is recounted again after it
 let copiesLoading=null; const copiesLate=new Set();
 function copiesLoad(){ if(!SYNC || db.backend!=='idb') return; copiesLoading=new Promise(res=>setTimeout(res, 1500)).then(()=>SYNC.copiesCount()).then(m=>{ COPIES=m; }, ()=>{}).finally(()=>{ copiesLoading=null; for(const id of copiesLate) copiesRecount(id); copiesLate.clear(); if(STARTED) renderList(); else copiesUI(); }); }
@@ -3428,7 +3471,7 @@ async function start(){
   notes=await db.all(); boot('notes'); vstart(); app.classList.toggle('local', db.backend!=='idb');
   window.addEventListener('online',()=>{ if(SYNC){ SYNC.online(true); syncWake(); } }); window.addEventListener('offline',()=>{ if(SYNC) SYNC.online(false); }); document.addEventListener('visibilitychange',()=>{ if(!document.hidden && SYNC) syncWake(); });
   // міграція з одноаркушевого мокапа (той самий origin): його аркуш стає першою нотаткою, старі налаштування — спільними
-  if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, store.keys(NK).map(k=>store.get(k)).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
+  if(LOCK && db.backend==='idb'){ const had=new Set(notes.map(n=>n.id)); fbMerge(notes, fbKeys().map(fbRead).filter(validNote)); notes.forEach(n=>{ if(!had.has(n.id)) MEM.add(n.id); }); }   // view-only: the fallback copies show and export, in memory
   if(!notes.length && !LOCK){ const old=store.get('freeform-editor-v4'); if(Array.isArray(old)&&old.length){ const n=newNote(); n.blocks=old.map(b=>({id:b.id,fx:b.fx,row:b.row,text:b.text||''})); writeNote(n); } }
   if(S.theme===undefined && THEMES.includes(store.raw('freeform-editor-v4:theme'))) saveS({theme:store.raw('freeform-editor-v4:theme')});
   if(S.grid===undefined && store.raw('freeform-editor-v4:grid')==='0') saveS({grid:false});
