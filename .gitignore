@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 .wrangler/
 firebase-debug.log
 firestore-debug.log
