@@ -71,8 +71,8 @@ const T0=Date.now();
   // a write that misses IndexedDB lands in localStorage; at the next start it moves in through the sync core: lrev, the queue, the cloud
   await A.pg.evaluate(()=>{ sheetDebug.saveGate=()=>Promise.reject(new DOMException('full','QuotaExceededError')); });
   await f.click(); await A.pg.keyboard.press('End'); await A.pg.keyboard.type(' FALLBACK'); await A.pg.keyboard.press('Escape'); await A.pg.waitForTimeout(700);
-  const fbKeys=await A.pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:'))), l3=(await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id2], rev3=cloud.doc('notes',id2).rev;
-  ok('2k the write missed IndexedDB and went to localStorage ('+fbKeys.length+' key); the cloud is untouched', fbKeys.length===1 && !JSON.stringify(cloud.doc('notes',id2)).includes('FALLBACK'));
+  const fbKeys=await A.pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:fbx:'))),   /* with an owner the copy is one record {epoch, note} under sheet:fbx: */ l3=(await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id2], rev3=cloud.doc('notes',id2).rev;
+  ok('2k the write missed IndexedDB and went to localStorage as one owner-tagged record ('+fbKeys.length+' key); the cloud is untouched', fbKeys.length===1 && !JSON.stringify(cloud.doc('notes',id2)).includes('FALLBACK'));
   await A.pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await A.pg.reload(); await A.pg.waitForSelector('html[data-ready]',{state:'attached'}); await A.pg.waitForTimeout(800);
   const after=await stored(A.pg,'notes',id2), l4=(await A.pg.evaluate(()=>sheetDebug.sync.lrev()))[id2], job2=(await syncRecs(A.pg,'out:n:')).find(r=>r.k==='out:n:'+id2), keysAfter=await A.pg.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
   ok('2l at the next start the copy moved in through the core: the record has the text, lrev grew ('+l3+' → '+l4+'), a job waits, the key is gone', !!after && after.blocks.some(b=>/FALLBACK$/.test(b.text)) && l4>l3 && !!job2 && !keysAfter.length);
