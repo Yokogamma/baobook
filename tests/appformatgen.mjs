@@ -35,6 +35,8 @@ const fmt=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); 
 const stored=p=>p.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction(['notes','versions','sync'],'readonly'); const a=t.objectStore('notes').getAll(), b=t.objectStore('versions').getAll(), c=t.objectStore('sync').getAll();
   t.oncomplete=()=>{ d.close(); res({notes:JSON.stringify(a.result), versions:b.result.length, sync:JSON.stringify(c.result.filter(x=>x.k!=='format' && !/^quota/.test(x.k)))}); }; }; }));
 const state=p=>p.evaluate(()=>sheetDebug.fmt.state());
+const lastBoot=p=>p.evaluate(()=>sheetDebug.boot? JSON.parse(JSON.stringify(sheetDebug.boot)) : null);   // this tab's own record of its start
+const diagDone=(p,ms,f=x=>x.other!=null)=>until(async()=>{ const r=await lastBoot(p).catch(()=>null); return r && r.x && f(r.x)? r : null; }, ms);   // the diagnosis written, with the answers it waits for
 const fbKeys=p=>p.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('sheet:note:')));
 const editable=p=>p.evaluate(()=>!document.getElementById('sheet').inert && document.getElementById('ttl').contentEditable!=='false');
 async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.type(text); await p.keyboard.press('Escape'); await p.waitForTimeout(700); }
@@ -109,7 +111,7 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   ok('7a the newer tab waits for the deaf holder', !!mn);
   await H.evaluate(()=>window.__hold.close()); await ready(N);
   ok('7b the holder lets go: the newer tab goes on, the database at v5 with format 5, the note there', JSON.stringify(await fmt(N))==='{"version":5,"format":5}' && (await N.locator('#list .item').allInnerTexts()).some(t=>/перед оновленням/.test(t)));
-  ok('7c no page errors', !A.errs.length && !N.errs.length); await ctx.close(); }
+  ok('7c no page errors ('+A.errs.concat(N.errs).join(' | ')+')', !A.errs.length && !N.errs.length); await ctx.close(); }
 
 /* ── 8. a versionchange while the start's format transaction waits (here a delete; a newer app's upgrade is the same event): the connection closed by
        it is not adopted, so the start opens again and the tab writes into the new database instead of keeping a dead connection ── */
@@ -118,7 +120,7 @@ async function typeAt(p,x,y,text){ await p.mouse.click(x,y); await p.keyboard.ty
   await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;   // a long write on `sync`: the start's format transaction queues behind it
     const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); d.onversionchange=()=>{ go=false; d.close(); }; window.__stop=()=>{ go=false; }; res(); }; }));
   const C=await page(ctx,{noGo:true});
-  await C.addInitScript(()=>{ const tx=IDBDatabase.prototype.transaction; IDBDatabase.prototype.transaction=function(st, mode){ const t=tx.apply(this, arguments); if(st==='sync' && mode==='readwrite' && !window.__fmtTx){ window.__fmtTx=1; t.addEventListener('complete',()=>{ window.__fmtTx=2; }); } return t; }; });   // the start's format transaction: created (1), done (2)
+  await C.addInitScript(()=>{ const tx=IDBDatabase.prototype.transaction; IDBDatabase.prototype.transaction=function(st, mode){ const t=tx.apply(this, arguments); if(st==='sync' && !window.__fmtTx){ window.__fmtTx=1; t.addEventListener('complete',()=>{ window.__fmtTx=2; }); } return t; }; });   // the start's format check (its first transaction on `sync` alone): created (1), done (2)
   await C.goto(SITE);
   const queued=await until(()=>C.evaluate(()=>window.__fmtTx===1).catch(()=>false), 5000); await C.waitForTimeout(300);
   ok('8 (setup) C\'s versionless open succeeded and its format transaction waits behind H\'s write', queued && await C.evaluate(()=>window.__fmtTx===1));
@@ -150,6 +152,99 @@ for(const mode of ['once','always']){
     await typeAt(A,500,420,'пише далі'); const f=await fmt(A);
     ok('9c always: the format stays 4 and the older tab writes on', f.format===4 && !(await msg(A))); }
   ok('9d '+mode+': no page errors ('+A.errs.concat(N.errs).join(' | ')+')', !A.errs.length && !N.errs.length); await ctx.close(); }
+
+/* ── 10. the start's format check: an ordinary start reads the format and writes nothing; one that waits behind another tab's long write on `sync`
+        tells so in the journal of starts: the step («читання формату сховища»), the other open tab, and that a read of another store answered ── */
+{ const ctx=await context(); const H=await page(ctx); await typeAt(H,500,300,'журнал');
+  const C=await page(ctx,{noGo:true});
+  await C.addInitScript(()=>{ const tx=IDBDatabase.prototype.transaction; window.__rw=0; IDBDatabase.prototype.transaction=function(st, m){ if(st==='sync' && m==='readwrite') window.__rw++; return tx.apply(this, arguments); }; });
+  await C.goto(SITE); await ready(C);
+  ok('10 an ordinary start (format 4 stored) opens no readwrite transaction on `sync` for the format', await C.evaluate(()=>window.__rw===0));
+  await C.close();
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;   // H's long write on `sync` (a second connection of a started tab)
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const D=await page(ctx,{noGo:true}); await D.goto(SITE);
+  const rec=await diagDone(D, 10000, x=>x.other!=null && x.probe!=null && x.usage!=null && x.locks); await D.waitForTimeout(1600);   // past the 1.5 s the answers of the other tabs are counted
+  Object.assign(rec.x, (await lastBoot(D)).x);
+  const steps=(rec && rec.m || []).map(x=>x[0]);
+  ok('10a the waiting start is past the request (db:open) and inside the format check (no db:fmt yet) ('+steps.join(',')+')', steps.includes('db:open') && !steps.includes('db:fmt'));
+  ok('10b its diagnosis: the format check waits, one other open tab answered, the read of `notes` and a separate database answered quickly, the storage estimate is there ('+JSON.stringify(rec && rec.x)+')', rec && rec.x && rec.x.stage==='fmt' && rec.x.peers===1 && rec.x.probe>=0 && rec.x.probe<2000 && rec.x.other>=0 && rec.x.other<2000 && Array.isArray(rec.x.locks) && typeof rec.x.usage==='number');
+  await H.evaluate(()=>window.__stop()); await ready(D);
+  await D.click('#setBtn'); await D.waitForTimeout(200); const txt=await D.locator('#bootV').innerText();
+  ok('10c the settings menu names the step and the diagnosis ('+txt.split('\n').slice(0,2).join(' | ')+')', /читання формату сховища/.test(txt) && /інших вкладок Baobook, що відповіли, — 1/.test(txt));
+  ok('10d no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
+
+/* ── 10e. a start whose open request itself waits (queued behind another page's upgrade that a deaf holder blocks): the diagnosis says so ── */
+{ const ctx=await context(); const W=await page(ctx); await typeAt(W,500,300,'черга'); await W.close();
+  const H=await page(ctx,{noGo:true}); await H.goto(SITE+'blank.html'); await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ window.__hold=r.result; res(); }; }));   // deaf
+  const X=await page(ctx,{noGo:true}); await X.goto(SITE+'blank.html'); await X.evaluate(()=>{ indexedDB.open('sheet', 9); });   // a version change H never lets through
+  const C=await page(ctx,{noGo:true}); await C.goto(SITE);
+  await diagDone(C, 10000); await C.waitForTimeout(1600); const rec=await lastBoot(C);
+  ok('10e the request has not answered: stage «open», a separate database opens quickly, no other started tab ('+JSON.stringify(rec && rec.x)+')', rec && rec.x && rec.x.stage==='open' && rec.x.probe===undefined && rec.x.other>=0 && rec.x.other<2000 && rec.x.peers===0);
+  await ctx.close(); }
+
+/* ── 10f. the request answers late (after the first diagnosis) and the format check then waits behind another tab's write: a second diagnosis, in the
+        format check, with the probe of `notes`; the first one is kept ── */
+{ const ctx=await context(); const H=await page(ctx); await typeAt(H,500,300,'пізно');
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const C=await page(ctx,{noGo:true});
+  await C.addInitScript(()=>{ const open=IDBFactory.prototype.open; IDBFactory.prototype.open=function(name, v){ const r=open.apply(this, arguments);   // the start's first versionless open answers 4 s late
+    if(name==='sheet' && !v && !window.__late){ window.__late=1; let h=null; Object.defineProperty(r,'onsuccess',{configurable:true, get(){ return h; }, set(f){ h=f; r.addEventListener('success',e=>setTimeout(()=>f.call(r,e),4000)); }}); }
+    return r; }; });
+  await C.goto(SITE);
+  const rec=await diagDone(C, 15000, x=>x.stage==='fmt' && x.probe!=null);
+  ok('10f a late request gets a second diagnosis in its format check, with the probe, and keeps the first ('+JSON.stringify(rec && rec.x)+')', rec && rec.x.stage==='fmt' && rec.x.probe>=0 && rec.x.probe<2000 && rec.x.first && rec.x.first.stage==='open');
+  await H.evaluate(()=>window.__stop()); await ready(C);
+  ok('10g no page errors', !H.errs.length && !C.errs.length); await ctx.close(); }
+
+/* ── 10h. a format check held for good (another window's transaction on `sync` never finishes, as a frozen tab's on a phone): after 15 s the strip
+        says another Baobook window holds the storage and how to free it, with «Оновити»; the check keeps waiting, and the start goes on by itself
+        when the holder lets go ── */
+{ const ctx=await context(); const H=await page(ctx); await typeAt(H,500,300,'тримає');
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const D=await page(ctx,{noGo:true}); const t0=Date.now(); await D.goto(SITE);
+  const m=await waitMsg(D, /Перевірка сховища чекає вже понад 15 с\. Можливо, сховище тримає інше вікно Baobook/, 22000); const at=Date.now()-t0;
+  ok('10h after about 15 s the strip says the check has waited that long and names another window only as a possible cause ('+(at/1000).toFixed(1)+' s), with «Оновити» and no other button; no Android advice on this platform', !!m && at>=14000 && await D.locator('#roReload').isVisible() && !(await D.locator('#roExport').isVisible()) && !/Android/.test(m));
+  const steps=((await lastBoot(D))||{m:[]}).m.map(x=>x[0]);
+  ok('10i the journal records the held state (db~held) inside the format check ('+steps.join(',')+')', steps.includes('db:open') && steps.includes('db~held') && !steps.includes('db:fmt'));
+  const doc=await D.evaluate(()=>{ window.__doc=1; return performance.timeOrigin; });
+  await H.evaluate(()=>window.__stop()); await ready(D);
+  ok('10j the holder lets go: the start goes on in the same page, the strip gone, the sheet editable', await D.evaluate(t=>window.__doc===1 && performance.timeOrigin===t, doc) && !(await msg(D)) && await editable(D));
+  ok('10k no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
+
+/* ── 10m. on Android the held strip adds the way to skip the wait (stop Chrome); elsewhere it does not (10h) ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:412,height:900}, serviceWorkers:'block', userAgent:'Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'});
+  const H=await ctx.newPage(); H.errs=[]; H.on('pageerror',e=>H.errs.push(e.message)); await H.goto(SITE); await ready(H);
+  await H.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const D=await ctx.newPage(); D.errs=[]; D.on('pageerror',e=>D.errs.push(e.message)); await D.goto(SITE);
+  const m=await waitMsg(D, /Перевірка сховища чекає вже понад/, 22000);
+  ok('10m on Android the held strip adds «зупинити Chrome у налаштуваннях Android» ('+(m||'').slice(-90)+')', !!m && /зупинити Chrome у налаштуваннях Android/.test(m));
+  await H.evaluate(()=>window.__stop()); ok('10n no page errors', !H.errs.length && !D.errs.length); await ctx.close(); }
+
+/* ── 10o. a leftover probe database (a start that ended before deleting it) goes after the next start that finishes, also a quick one with no diagnosis ── */
+{ const ctx=await context(); const B=await page(ctx,{noGo:true}); await B.goto(SITE+'blank.html');
+  await B.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('baobook-probe-old-1'); r.onsuccess=()=>{ r.result.close(); res(); }; }));
+  const A=await page(ctx); const gone=await until(()=>A.evaluate(()=>indexedDB.databases().then(l=>!l.some(x=>x.name==='baobook-probe-old-1'))), 8000);
+  ok('10o a quick start with no diagnosis of its own removes a leftover probe database', !!gone && !((await lastBoot(A))||{}).x);
+  ok('10p no page errors', !A.errs.length); await ctx.close(); }
+
+/* ── 10l. the diagnoses of several waiting starts do not queue each other: each opens a test database of its own name, so one tab whose probe stays
+        open (its handler held, as in a frozen tab) does not make another tab's probe wait behind a delete ── */
+{ const ctx=await context(); const S=await page(ctx); await typeAt(S,500,300,'проби');
+  await S.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('sync','readwrite'), s=t.objectStore('sync'); let go=true;
+    const spin=()=>{ if(go) s.get('spin').onsuccess=spin; }; spin(); window.__stop=()=>{ go=false; t.oncomplete=()=>d.close(); }; res(); }; }));
+  const H=await page(ctx,{noGo:true});
+  await H.addInitScript(()=>{ const open=IDBFactory.prototype.open; IDBFactory.prototype.open=function(name){ const r=open.apply(this, arguments);   // this tab's probe never closes for 15 s
+    if(String(name).startsWith('baobook-probe')){ let h=null; Object.defineProperty(r,'onsuccess',{configurable:true, get(){ return h; }, set(f){ h=f; r.addEventListener('success',e=>setTimeout(()=>f.call(r,e),15000)); }}); }
+    return r; }; });
+  await H.goto(SITE); await diagDone(H, 10000, x=>x.stage==='fmt');
+  const D1=await page(ctx,{noGo:true}); await D1.goto(SITE); await diagDone(D1, 10000);
+  const D2=await page(ctx,{noGo:true}); await D2.goto(SITE); const r2=await diagDone(D2, 10000);
+  ok('10l with one tab\'s probe held open, the probes of two more waiting starts answer quickly ('+JSON.stringify({d1:((await lastBoot(D1))||{}).x && (await lastBoot(D1)).x.other, d2:r2 && r2.x.other})+')', !!r2 && r2.x.other>=0 && r2.x.other<2000);
+  await S.evaluate(()=>window.__stop()); await ctx.close(); }
 
 await br.close(); await srv.close();
 console.log(fails? '\n'+fails+' FAILED' : '\n✓ no errors'); process.exit(fails? 1 : 0);

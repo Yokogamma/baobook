@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026102602">
+<meta name="baobook-build" content="2026102701">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026102602" integrity="sha384-JxVyHU5zxlFtq4b8EVCVnA8pUqftUL9JSk2Z7qwNht6ieoh+/7/ZPyj7/7pGf42f"></script>
-<script src="cloud.js?b=2026102602" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026102701" integrity="sha384-JxVyHU5zxlFtq4b8EVCVnA8pUqftUL9JSk2Z7qwNht6ieoh+/7/ZPyj7/7pGf42f"></script>
+<script src="cloud.js?b=2026102701" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +806,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-u4DMSDu+IyOE5F5mi9Q2pQVtoB3Huc++IUTc1Suza3N2jEQ5HgtLPcpD97Js6Q39', 'locales/uk.json':'sha384-oS9q5T1O/J3iKbqRPAXq51G5WzlxJYrSycDlXA2wgwHafW8KeP3FERM6nMq8G8lT'};
+const SRI={'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026102602;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026102701;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
 // on every one and the integrity of the SRI table beside it (a browser without import map integrity loads it unchecked; the service worker checks
 // its set against the same table). Written before any module is imported
@@ -816,6 +816,7 @@ const MODS=Object.keys(SRI).filter(f=>f.endsWith('.js'));
 (()=>{ const m={imports:{}, integrity:{}}; for(const f of MODS){ const u=new URL(f+'?b='+BUILD, location.href).href; m.imports[new URL(f, location.href).href]=u; m.integrity[u]=SRI[f]; }
   const s=document.createElement('script'); s.type='importmap'; s.textContent=JSON.stringify(m); document.head.append(s); })();
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
+const IS_ANDROID=/Android/i.test(navigator.userAgent||'');   // Android only: a hint that names its settings (lock.waitHeldAndroid)
 const IS_DEV=location.hostname==='baobook.matamata.dev'; if(IS_DEV) document.documentElement.classList.add('dev');
 const EARLY={};   // events that may fire while the language file loads
 addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); EARLY.install=e; });
@@ -856,9 +857,28 @@ const SC=window.BaobookSync, {hashOf, bodyOf, entryOf, manifestOf, sumOf, V_BODY
    db!silent, db (open), lock:<kind>, sync, move, notes, start. While the start waits, w (the latest time seen) moves every 2 s */
 const BOOT={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5), at:Date.now(), build:BUILD, m:[]};
 function bootSave(){ try{ const all=(JSON.parse(localStorage.getItem('sheet:boot')||'[]')||[]).filter(r=>r && r.id!==BOOT.id); all.push(BOOT); localStorage.setItem('sheet:boot', JSON.stringify(all.slice(-5))); }catch(_){} }
+/* the diagnosis of a start whose open waits (BOOT.x, shown with the start in the settings menu), to tell another live tab from a slow storage:
+   `stage` 'open' (the request has not answered) or 'fmt' (the format check waits); `peers`, the other started tabs of this app that answer within
+   1.5 s (a frozen one cannot) and `tabs` their state; `probe`, a readonly count of `notes` on the waiting connection (only in 'fmt': fast while
+   `sync` waits means another connection's long write on `sync`); `other`, the time to open an empty database of its own (slow too: the whole
+   storage of the site is slow, not this database); `locks`, the Web Locks held and asked for (another tab leading the sync holds baobook-sync:…);
+   `usage`/`quota`, navigator.storage.estimate() in bytes */
+let PEERS=null, PROBE_N=0; const PROBE_DB='baobook-probe';   // a name of its own per diagnosis (PROBE_DB-<start>-<n>): a probe held or deleted elsewhere never queues this one
+// probe databases left by a start that ended before its probe was deleted (the tab closed or frozen meanwhile) go once a start has finished
+function probeSweep(){ try{ if(indexedDB.databases) indexedDB.databases().then(l=>{ for(const x of l||[]) if(x && x.name && x.name.startsWith(PROBE_DB+'-') && !x.name.startsWith(PROBE_DB+'-'+BOOT.id+'-')) indexedDB.deleteDatabase(x.name); }, ()=>{}); }catch(_){} }
+function bootDiag(){ const d=idb.pend, prev=BOOT.x; if(prev && prev.stage==='fmt' && d) return;   // the format check already diagnosed in this start
+  const x=BOOT.x={at:Math.round(performance.now()), stage:d? 'fmt' : 'open', peers:0}; if(prev) x.first=prev;   // a request that answered after the first diagnosis gets a second one in its format check, the first kept
+  PEERS=x; bootSave(); const t0=performance.now(), put=(k,v)=>{ x[k]=v; bootSave(); };
+  if(d) try{ const q=d.transaction('notes','readonly').objectStore('notes').count(); q.onsuccess=()=>put('probe', Math.round(performance.now()-t0)); q.onerror=()=>put('probe', -1); }catch(_){ x.probe=-1; }
+  const pn=PROBE_DB+'-'+BOOT.id+'-'+(++PROBE_N); try{ const q=indexedDB.open(pn); q.onsuccess=()=>{ put('other', Math.round(performance.now()-t0)); try{ q.result.close(); indexedDB.deleteDatabase(pn); }catch(_){} }; q.onerror=()=>put('other', -1); }catch(_){ x.other=-1; }
+  try{ if(navigator.locks && navigator.locks.query) navigator.locks.query().then(q=>put('locks', [...(q.held||[]).map(l=>l.name), ...(q.pending||[]).map(l=>l.name+'?')]), ()=>{}); }catch(_){}
+  try{ if(navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e=>{ x.usage=e.usage; x.quota=e.quota; bootSave(); }, ()=>{}); }catch(_){}
+  tellTabs({t:'who?', from:BOOT.id});
+  setTimeout(()=>{ if(PEERS===x) PEERS=null; bootSave(); }, 1500); }
 function boot(step){ BOOT.m.push([step, Math.round(performance.now())]); BOOT.w=Math.round(performance.now()); bootSave(); }
 boot('main');
 const DEBUG={failSave:false, relist:()=>renderList(), fmt:{refused:0}}; window.sheetDebug=DEBUG;   // ?debug=1 — перемикач «Імітувати відмову сховища» в панелі; тести ставлять прапорець напряму
+DEBUG.boot=BOOT;   // this tab's own record of its start (the stored list sheet:boot is shared by every tab)
 const storInfo=$('storInfo'), exportBtn=$('exportBtn'), importBtn=$('importBtn'), importFile=$('importFile');
 const side=$('side'), sideFoot=$('sideFoot'), setBtn=$('setBtn'), setPop=$('setPop');
 const sect=$('sect'), sectBack=$('sectBack'), sectName=$('sectName'), sectHint=$('sectHint'), trashEmpty=$('trashEmpty'), trashRow=$('trashRow'), trashN=$('trashN'), archRow=$('archRow'), archN=$('archN'), roStrip=$('roStrip'), roMsg=$('roMsg'), roRestore=$('roRestore'), roPurge=$('roPurge'), roExport=$('roExport'), roReload=$('roReload');
@@ -1003,10 +1023,10 @@ const FORMAT=4, UP_LOCK='baobook:idb-upgrade';   // UP_LOCK: held while the star
 // The start's upgrade request (IDB-BARRIER-PLAN §3) has no silence deadline: it can only wait for another tab's connection, which a frozen tab never
 // closes (Android sends no `blocked` then). UPGRADE_WAIT: no event this long (or a `blocked` that lasts it) and the strip says another tab holds the
 // storage, the request kept alive; WAIT_LONG: the strip adds the full restart and «Оновити»
-const OPEN_WAIT=8000, OPEN_RETRY=[300,900], PROBE_WAIT=3000, RELOADS_MAX=3, UPGRADE_WAIT=3000, WAIT_LONG=60000;
+const OPEN_WAIT=8000, OPEN_RETRY=[300,900], PROBE_WAIT=3000, RELOADS_MAX=3, UPGRADE_WAIT=3000, WAIT_LONG=60000, DIAG_WAIT=3000, HELD_WAIT=15000;   // HELD_WAIT: the start's format check waiting this long shows the strip of a holding window   // DIAG_WAIT: an attempt of the start's open still waiting this long records the diagnosis (bootDiag)
 let LOCK=null, STARTED=false;   // STARTED: start() is done; before it nothing may change (its notes replace whatever was made meanwhile), and a LOCK found later shows at once
 function setLock(k){ if(LOCK) return; LOCK=k; boot('lock:'+k); leadOff(); if(STARTED) lockUI(); else if(!roStrip.hidden) waitUI(); }   // the start's strip, if shown, says the lock at once   // a view-only tab never leads the sync (SYNC-PLAN 4.10): the lock goes with the first write it cannot make
-const idb={ db:null, opening:null, silent:false, want:false, back:false, waiting:null, longT:0,   // waiting: the start's upgrade request waits for another tab ('silent', 'blocked', 'long'; idbWait); silent: the start's open never answered (IDB-FALLBACK-PLAN §4.1); want: the storage answered again under the `storage` lock, a reload is requested; back: past the reload limit, the strip asks for the tap
+const idb={ db:null, pend:null, opening:null, silent:false, want:false, back:false, waiting:null, longT:0,   // waiting: the start's upgrade request waits for another tab ('silent', 'blocked', 'long'; idbWait); silent: the start's open never answered (IDB-FALLBACK-PLAN §4.1); want: the storage answered again under the `storage` lock, a reload is requested; back: past the reload limit, the strip asks for the tap
   // one open at a time: concurrent callers (saves, the sync engine) share the promise instead of making two connections.
   // o.deadline (the start only): a silence timer per request, cleared by its first event; when it fires the attempt is dead and the promise
   // rejects with {silent:true}. A dead attempt's late events start nothing and touch nothing: `go` makes no new request, `onsuccess` closes
@@ -1041,11 +1061,26 @@ const idb={ db:null, opening:null, silent:false, want:false, back:false, waiting
         // IDB_VER is never bumped past it to mend a missing store: that would read as a newer app's data and lock this app out
         const next=()=>{ if(!LOCK && d.version<IDB_VER){ d.close(); return go(IDB_VER); } done(); };
         if(!d.objectStoreNames.contains('sync')) return next();
-        // one readwrite transaction: a format above this code's is a newer app's data (view-only); a lower one or none is raised to FORMAT here, before any
-        // upgrade request, and the other tabs are told at once (§4.2 item 1): those with the guard stop writing even if the upgrade then has to wait
-        try{ const t=d.transaction('sync','readwrite'), g=t.objectStore('sync').get('format'); let raised=false, newer=false;
+        // the format check (§4.2 item 1): a readonly read first, so an ordinary start takes no write lock on `sync` and commits nothing; a format above this
+        // code's is a newer app's data (view-only); a lower one or none is raised in a readwrite transaction of its own (the rare start that needs it),
+        // before any upgrade request, and the other tabs are told at once: those with the guard stop writing even if the upgrade then has to wait.
+        // Not confirmed (a transaction aborted or could not start): a failed open, never a start without the barrier — retried by idbOpenRetry.
+        // The start's journal tells the request from this check (db:open … db:fmt); a start still waiting after DIAG_WAIT records what else is there (bootDiag)
+        // the connection in its format check, for the start's diagnosis: one more after DIAG_WAIT if the check still waits (bootDiag skips it when the
+        // check was diagnosed already), so a request that answered late still gets the probe of `notes` that tells a write elsewhere from a slow storage
+        // a check still waiting after HELD_WAIT is held by another document of the app that does not finish its transaction (a frozen tab or window on a
+        // phone): the strip says so and how to free it, «Оновити» shows, and the check keeps waiting, so the start goes on by itself if the holder lets go
+        let pt=0, ht=0; if(o.deadline){ boot('db:open'); idb.pend=d; pt=setTimeout(()=>{ if(idb.pend===d) bootDiag(); }, DIAG_WAIT); ht=setTimeout(()=>{ if(idb.pend===d) idbWait('held'); }, HELD_WAIT); }
+        const off=()=>{ clearTimeout(pt); clearTimeout(ht); idb.pend=null; if(idb.waiting==='held') idbWaitOff(); };
+        const fail=e=>{ off(); try{ d.close(); }catch(_){} rej(e); }, fin=()=>{ off(); if(o.deadline) boot('db:fmt'); };
+        const raise=()=>{ try{ const t=d.transaction('sync','readwrite'), g=t.objectStore('sync').get('format'); let raised=false, newer=false;
           g.onsuccess=()=>{ const f=g.result? +g.result.v : 0; if(f>FORMAT){ newer=true; return; } if(f<FORMAT && !LOCK){ t.objectStore('sync').put({k:'format', v:FORMAT}); raised=true; } };
-          t.oncomplete=()=>{ if(newer){ setLock('newer'); return done(); } if(raised) tellTabs({t:'format', v:FORMAT}); next(); }; t.onabort=()=>{ if(newer){ setLock('newer'); return done(); } try{ d.close(); }catch(_){} rej(t.error||new Error('format')); }; }catch(e){ try{ d.close(); }catch(_){} rej(e); } };   // the format not confirmed (the transaction aborted or could not start): a failed open, never a start without the barrier — the start retries it (idbOpenRetry) and ends view-only if it keeps failing
+          t.oncomplete=()=>{ fin(); if(newer){ setLock('newer'); return done(); } if(raised) tellTabs({t:'format', v:FORMAT}); next(); };
+          t.onabort=()=>{ if(newer){ fin(); setLock('newer'); return done(); } fail(t.error||new Error('format')); }; }catch(e){ fail(e); } };
+        try{ const t=d.transaction('sync','readonly'), g=t.objectStore('sync').get('format'); let f=0;
+          g.onsuccess=()=>{ f=g.result? +g.result.v : 0; };
+          t.oncomplete=()=>{ if(f>FORMAT){ fin(); setLock('newer'); return done(); } if(f<FORMAT && !LOCK) return raise(); fin(); next(); };
+          t.onabort=()=>fail(t.error||new Error('format')); }catch(e){ fail(e); } };
       r.onerror=()=>{ settled(); if(dead){ if(LOCK==='storage' && idb.silent){ idb.silent=false; idbWatch(); } return; }   // the hung request failed at last: the queue is clear, the probing may start
         if(v && r.error && r.error.name==='VersionError') return go(0); rej(r.error); };   // another tab upgraded it meanwhile: open what is there
       r.onblocked=()=>{ clearTimeout(dt); clearTimeout(bt); clearTimeout(wt); if(dead) return; bt=setTimeout(()=>{ if(up) return idbWait('blocked'); setLock('blocked'); rej(new Error('blocked')); }, 3000); }; };   // two tabs starting together close their v1 at once: only a lasting block waits (the start) or stops the writes (later)
@@ -1188,10 +1223,10 @@ const idbWorked=()=>!!(S.idbOk || S.versSwept);   // IndexedDB has opened on thi
 // (`newer`, decided inside the open; the start's upgrade request waits instead of locking, idbWait) or IndexedDB is not there; silence ends the loop at once (idb.silent). After 1 s of waiting the strip
 // says the storage is opening (every button hidden), so a slow or hanging open does not look like a frozen app; roSync() at the start's end replaces or hides it
 async function idbOpenRetry(){ const waits=[...OPEN_RETRY];   // the strip that says the storage is opening is start()'s (waitUI)
-  for(;;){ boot('db?'); try{ const r=await idb.open({deadline:OPEN_WAIT}); boot('db'); return r; }catch(e){ boot(e && e.silent? 'db!silent' : 'db!err'); if(e && e.silent){ idb.silent=true; throw e; } if(!waits.length || LOCK || !window.indexedDB) throw e; await new Promise(r=>setTimeout(r, waits.shift())); } } }
+  for(;;){ boot('db?'); const dg=setTimeout(bootDiag, DIAG_WAIT); try{ const r=await idb.open({deadline:OPEN_WAIT}); clearTimeout(dg); boot('db'); return r; }catch(e){ clearTimeout(dg); boot(e && e.silent? 'db!silent' : 'db!err'); if(e && e.silent){ idb.silent=true; throw e; } if(!waits.length || LOCK || !window.indexedDB) throw e; await new Promise(r=>setTimeout(r, waits.shift())); } } }
 // the start's upgrade request waits for another tab (IDB-BARRIER-PLAN §3.1): after `blocked` a holder is certain, after silence it is likely (a hung
 // backend looks the same); after WAIT_LONG the text no longer names a cause and «Оновити» shows. waitUI() draws the strip (no other button: no note was read yet)
-function idbWait(kind){ if(idb.waiting==='long') return; if(idb.waiting!==kind) boot('db~'+kind); idb.waiting=kind; waitUI();
+function idbWait(kind){ if(idb.waiting==='long') return; if(idb.waiting!==kind) boot('db~'+kind); idb.waiting=kind; waitUI(); if(kind==='held') return;   // held: «Оновити» at once, no long-wait text
   if(!idb.longT) idb.longT=setTimeout(()=>{ idb.longT=0; if(!idb.waiting) return; idb.waiting='long'; boot('db~long'); waitUI(); }, WAIT_LONG); }
 function idbWaitOff(){ clearTimeout(idb.longT); idb.longT=0; if(!idb.waiting) return; idb.waiting=null; if(!roStrip.hidden) waitUI(); }   // the request answered: «Оновити» goes, so an upgrade that runs now is not interrupted by a reload
 /* the background probe under the `storage` lock, only after an `error` (the queue is clear): 5 s after the lock, then 10, 20 and every 30 s, while the
@@ -2229,7 +2264,10 @@ function tabMsg(m){ if(keptView() || DYING) return;
   else if(db.backend==='idb' && m.t==='copy'){ copiesEvent(m); copyToast(m); } else if(db.backend==='idb' && m.t==='copies') copiesEvent(m);   // a copy made or removed in another tab: recount that note
   else if(m.t==='ver' || m.t==='vput'){ if(H.open && cur && cur.id===m.note) loadHist(); }   // a version changed in another tab (SYNC-PLAN 4.9): an open «Історія» of that note reloads
   if(LEAD.on && SYNC && !['owner','auth','st','st?','lead?','format'].includes(m.t)){ SYNC.nudge(); syncWake(); } }   // the leader reads the queue again at once: a hidden tab's timers are throttled, a message is not
-function openTabs(){ if(TABS || !window.BroadcastChannel) return; TABS=new BroadcastChannel('sheet:notes'); TABS.onmessage=e=>{ const m=e.data||{}; if(STARTED) tabMsg(m); else TABQ.push(m); }; }
+function openTabs(){ if(TABS || !window.BroadcastChannel) return; TABS=new BroadcastChannel('sheet:notes'); TABS.onmessage=e=>{ const m=e.data||{};
+  if(m.t==='who?'){ if(STARTED) TABS.postMessage({t:'here', to:m.from, hidden:document.hidden, lead:LEAD.on, build:BUILD}); return; }   // a starting tab's diagnosis (bootDiag) counts the started ones
+  if(m.t==='here'){ if(PEERS && m.to===BOOT.id){ PEERS.peers++; (PEERS.tabs=PEERS.tabs||[]).push({hidden:!!m.hidden, lead:!!m.lead, build:m.build}); bootSave(); } return; }
+  if(STARTED) tabMsg(m); else TABQ.push(m); }; }   // opened at load, closed while the page is frozen and opened again on the thaw (public/lifecycle)
 function closeTabs(){ const c=TABS; TABS=null; if(c) try{ c.close(); }catch(_){} }
 openTabs();
 async function syncTabs(){ if(!cur || keptView() || DYING) return; const {m, lrev, ok, moved}=await storedWithLrev(); if(moved){ setLock('epoch'); return; } if(!ok || keptView()) return; for(const n of [...notes]) if(!m.has(n.id)) dropNote(n.id); for(const r of m.values()) takeNote(r, lrev[r.id]); }   // a failed read says nothing about what is stored: the list stays as it is until the next look (a message, the next show)
@@ -3416,7 +3454,8 @@ function waitUI(){ if(STARTED) return;
   // a lock found before the start's end (newer data, blocked, the storage): its own message, only «Оновити» (nothing is loaded to export yet)
   if(LOCK){ roSync(); roExport.hidden=true; roStrip.hidden=false; app.classList.add('wait'); return; }
   // the start's upgrade request waits for another tab (idbWait, IDB-BARRIER-PLAN §3.1): that says why, before «slow»; «Оновити» only after WAIT_LONG
-  if(idb.waiting){ roMsg.textContent=loc(idb.waiting==='long'? 'lock.waitLong' : idb.waiting==='blocked'? 'lock.waitTab' : 'lock.waitSilent'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport]) b.hidden=true; roReload.hidden=idb.waiting!=='long'; app.classList.add('wait'); return; }
+  // held: the fact (the check waits) and a possible cause; the way to skip the wait only where it applies (Android)
+  if(idb.waiting){ roMsg.textContent=idb.waiting==='held'? loc('lock.waitHeld',{wait:durTxt(HELD_WAIT)})+(IS_ANDROID? ' '+loc('lock.waitHeldAndroid') : '') : loc(idb.waiting==='long'? 'lock.waitLong' : idb.waiting==='blocked'? 'lock.waitTab' : 'lock.waitSilent'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport]) b.hidden=true; roReload.hidden=idb.waiting!=='long' && idb.waiting!=='held'; app.classList.add('wait'); return; }
   roMsg.textContent=loc(waitSlow? 'boot.slow' : idb.db? 'boot.waiting' : 'lock.opening'); roStrip.hidden=false; for(const b of [roRestore,roPurge,roExport,roReload]) b.hidden=true; app.classList.add('wait'); }
 async function start(){
   const w1=setTimeout(waitUI, 1000), w2=setTimeout(()=>{ waitSlow=true; waitUI(); }, 5000), beat=setInterval(()=>{ BOOT.w=Math.round(performance.now()); bootSave(); }, 2000);
@@ -3441,7 +3480,7 @@ async function start(){
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload' && !TORN? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins; also on a reload out of the recovery strip (TORN): the app never started on that address
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
-  clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start');
+  clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start'); setTimeout(probeSweep, 2000);   // after every start that finished: leftovers of starts that ended before their probe was deleted
   STARTED=true; roSync(); snapSave(); copiesLoad(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
@@ -3479,18 +3518,20 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator
 const updStrip=$('updStrip'), updMsg=$('updMsg'), updGo=$('updGo'); let updAt=0, updT=0, updWant=false, updSeen=BUILD; $('buildV').textContent=loc('settings.build',{build:buildName(BUILD)});   // updSeen: the newest build shown or hidden with ✕; only a newer one shows the strip again
 /* the journal of the last starts (BOOT, sheet:boot) under the version: when, how long, and for a start over 3 s the step that took longest; a
    start that never finished says what it was waiting for */
-function bootPh(k){ k=String(k); return k==='main'? loc('boot.ph.load') : k==='db?'? loc('boot.ph.retry') : k==='sync'? loc('boot.ph.sync') : k==='move'? loc('boot.ph.move') : k==='notes'? loc('boot.ph.notes') : k==='start'? loc('boot.ph.ui') : loc('boot.ph.db'); }   // db, db!err, db!silent, lock:<kind>: the storage
-const bootNext=k=>({main:'db', 'db?':'db', db:'sync', sync:'move', move:'notes', notes:'start'})[k]||'db';   // the step a stuck start waited for
+function bootPh(k){ k=String(k); return k==='main'? loc('boot.ph.load') : k==='db?'? loc('boot.ph.retry') : (k==='db:fmt' || k==='db~held')? loc('boot.ph.fmt') : k==='sync'? loc('boot.ph.sync') : k==='move'? loc('boot.ph.move') : k==='notes'? loc('boot.ph.notes') : k==='start'? loc('boot.ph.ui') : loc('boot.ph.db'); }   // db, db!err, db!silent, lock:<kind>: the storage
+const bootNext=k=>({main:'db', 'db?':'db:open', 'db:open':'db:fmt', 'db~held':'db:fmt', 'db:fmt':'db', db:'sync', sync:'move', move:'notes', notes:'start'})[k]||'db';   // the step a stuck start waited for
 function durTxt(ms){ const f=(v,u,d)=>new Intl.NumberFormat(I18N.locale,{style:'unit', unit:u, unitDisplay:'short', maximumFractionDigits:d}).format(v);
   if(ms<60000) return f(ms/1000,'second', ms<10000? 1 : 0); const m=Math.floor(ms/60000), sec=Math.round(ms%60000/1000); return f(m,'minute',0)+(sec? ' '+f(sec,'second',0) : ''); }
+const bootMs=v=>v==null? loc('boot.noAnswer') : v<0? loc('boot.failed') : v<1000? new Intl.NumberFormat(I18N.locale,{style:'unit', unit:'millisecond', unitDisplay:'short'}).format(v) : durTxt(v);   // not answered (yet), failed, or the time it took
+const bootX=r=>r && r.x? '. '+loc(r.x.stage==='fmt'? 'boot.diag' : 'boot.diagOpen',{peers:r.x.peers||0, probe:bootMs(r.x.probe), other:bootMs(r.x.other)}) : '';   // the diagnosis of a waiting format check, as a sentence of its own
 function bootUI(){ let all=[]; try{ all=JSON.parse(localStorage.getItem('sheet:boot')||'[]'); }catch(_){} if(!Array.isArray(all)) all=[];
   const fmt=new Intl.DateTimeFormat(I18N.locale,{day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit'});
   const lines=all.slice(-3).reverse().map(r=>{ const m=Array.isArray(r && r.m)? r.m : [], end=m.find(x=>x[0]==='start'), when=fmt.format(new Date(r.at||0));
-    if(!end){ if(r.id===BOOT.id) return loc('boot.now',{when}); const last=m[m.length-1]||['main',0]; return loc('boot.stuck',{when, total:durTxt(Math.max(r.w||0, last[1])), phase:bootPh(bootNext(last[0]))}); }
+    if(!end){ if(r.id===BOOT.id) return loc('boot.now',{when}); const last=m[m.length-1]||['main',0]; return loc('boot.stuck',{when, total:durTxt(Math.max(r.w||0, last[1])), phase:bootPh(bootNext(last[0]))})+bootX(r); }
     const total=end[1]; if(total<3000) return loc('boot.line',{when, total:durTxt(total)});
     let best=null, prev=0; for(const [k,t] of m){ if(!best || t-prev>best.g) best={k, g:t-prev}; prev=t; if(k==='start') break; }
     const n=m.filter(x=>x[0]==='db?').length, p={when, total:durTxt(total), phase:bootPh(best.k), dur:durTxt(best.g), n};
-    return n>1? loc('boot.slowTries',p) : loc('boot.slowLine',p); });
+    return (n>1? loc('boot.slowTries',p) : loc('boot.slowLine',p))+bootX(r); });
   $('bootV').textContent=lines.length? loc('boot.title')+'\n'+lines.join('\n') : ''; }
 async function updCheck(force){ if(!/^https?:/.test(location.protocol) || document.hidden || !navigator.onLine || !updStrip.hidden) return; const t=Date.now(); if(!force && t-updAt<6e4) return; updAt=t; clearTimeout(updT);
   let r; try{ r=await fetch('./build.json',{cache:'no-store', signal:AbortSignal.timeout? AbortSignal.timeout(1e4) : undefined}); }catch(_){ updT=setTimeout(()=>updCheck(true),2e4); return; }   // the network is not there yet, or holds the request over 10 s: again in a while
