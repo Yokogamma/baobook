@@ -1,6 +1,6 @@
 # A frozen tab never stops the app
 
-**Status: plan, awaiting the owner's approval (2026-10-26; brought to #126 the same day; the independent review of 7ac632c answered on 2026-10-27, §10).** It follows #123 (the diagnosis of a waiting start and the strip of a held format check), which only says what happens. This plan makes the app work by itself. Three layers, each in its own PRs into `main`:
+**Status: plan (2026-10-26; brought to #126 the same day; merged into `main` by #127 on 2026-10-27; the independent reviews of 7ac632c and a0807cb answered the same day, §10).** It follows #123 (the diagnosis of a waiting start and the strip of a held format check), which only says what happens. This plan makes the app work by itself. Three layers, each in its own PRs into `main`:
 
 1. **Prevention:** a document about to be frozen lets go of the database. The sync session builds it in #126 (open); §4.1 says what that covers and what is left.
 2. **Recovery:** what a waiting tab can make the browser do. Mostly research; the findings are in §3.
@@ -143,22 +143,38 @@ The existing fallback copies cannot carry this. A key `sheet:note:<id>~<tab>~<ge
     - `env` and `uid` are those of the signed-in user whose cloud notes are shown (`fbUser` in `sheet:settings`, the cloud adapter's `env`);
     - `epoch` is the store's epoch as this device last saw it for that same account. It comes from a new optional settings field, `seen: {env, uid, epoch}`, which the page writes every time the engine has loaded or set the owner. It is `null` (unknown) when the field is missing or names another account;
   - `base`: `{rev, note}`, the cloud note exactly as it was shown and edited, with its revision;
+    - `origin` belongs to this snapshot. Every generation of the note in this tab carries the origin of the snapshot it was first edited from, even if the signed-in account changes meanwhile;
   - `note`: the note as edited;
   - `tab`, `gen`, `t`: the tab, the generation of the save, and the time.
 
-**The move: one core call per draft.** A new core function, `SYNC.importDraft(draft)`, lives in `public/sync.js` so that the data format stays there; the sync session reviews it. It runs in one transaction over `notes`, `sync`, `versions` and `blobs`:
-1. It reads the store's `owner` and `epoch` and the stored record of the note.
+**The move: one core call per draft.** A new core function, `SYNC.importDraft(draft)`, lives in `public/sync.js` so that the data format stays there; the sync session reviews it. It runs in one transaction over `notes`, `sync`, `versions` and `blobs`, and returns `{ok, code, note, lrev, copies, gen}`: the stored result, its `lrev`, the copies `merge3` made, and the generation it recorded.
+1. It reads the store's `owner` and `epoch`, the stored record of the note, and the applied record of the note and the draft's tab (below).
 2. It moves the draft automatically only when all of these hold:
    - `v` is a version it knows, and `format` is not above `FORMAT`;
    - `origin.env` and `origin.uid` equal the store's owner;
    - `origin.epoch` equals the store's epoch. An unknown epoch never matches.
 3. Otherwise it refuses with the code `origin`, writes nothing, and leaves the key as it is. The draft shows as a copy for export only («Чернетка, не перенесена: інший обліковий запис або не підтверджено»). Nothing imports it later; the user can only export it.
-4. When accepted, the draft goes in by the core's three-way merge over its base: `merge3(base.note, draft.note, stored)`, as the revival of a note does (`SYNC.writeLocal` with `SC.merge3`).
-   - Independent edits both stay. In the review's case the user changed only the title of `rev` 5, and the store already had a new body from `rev` 6: the note keeps the new title and the body of `rev` 6.
+4. **A generation already applied is never applied again.** If the applied record of the note and the draft's tab has a generation at least the draft's, it refuses with the code `applied` and writes nothing: a repeat or an older generation, whoever holds it. It still returns the stored result and its `lrev`.
+   - Another tab may have read the key into memory before it was removed.
+   - A page may have closed between the commit and the removal of its key.
+5. When accepted, the draft goes in by the core's three-way merge, `merge3(base, draft.note, stored)`, as the revival of a note does (`SYNC.writeLocal` with `SC.merge3`). The base depends on the generation:
+   - **the first generation of a tab** that reaches the store merges over the draft's `base.note`, the cloud snapshot;
+   - **every later generation of the same tab** merges over the note of that tab's latest applied generation, kept in the applied record. So a later generation brings only its own change over what the same tab handed in before, a revert included.
+
+   The cases:
+   - In the first review's case the user changed only the title of `rev` 5, and the store already had a new body from `rev` 6: the note keeps the new title and the body of `rev` 6.
+   - In the second review's case `g1` changed the title from «Original» to «Edited» and was applied, another tab then changed the body, and `g2` set the title back to «Original». Over the cloud base, `g2` equals the base and the merge would keep «Edited» with no conflict copy. Over `g1` it gives «Original» with the other tab's body.
    - Copies that `merge3` returns are kept as the core keeps them.
    - With no stored record, the draft goes in as it is.
-   - A revision number alone would not be enough: the merge needs the base itself, which is why the record keeps `base.note`.
-5. A key goes only after its transaction has completed, and only by the tab that moved it. That tab removes the keys of the same writing tab up to the generation it moved, as `fbDrop` does; a newer key may hold more and stays. A key nobody has moved is never removed.
+   - A revision number alone would not be enough: the merge needs the base itself, which is why the record keeps `base.note` and the applied record keeps the note of the last generation.
+
+   In the same transaction it writes the applied record: `drafted:<note>:<tab>` in `sync` as `{env, uid, epoch, gen, note, t}`.
+   - The identity of a generation is the origin, the note, the tab that wrote it, and its generation.
+   - `note` is the draft's note as that tab handed it in, not the merged result. It is the base of that tab's next generation: the screen that tab keeps editing is that state, so its next change is measured from it. Measured from the merged result, another tab's change that this screen lacks would read as a deletion.
+   - `note` goes when the tab that wrote it finishes its handover: its last handover transaction writes the record without it. A tab closed or frozen in the middle leaves it, one copy of the note per such tab.
+   - A later generation that finds no `note` in the record merges without a base (`merge0`). Where the two sides differ, that keeps a conflict copy instead of choosing silently.
+   - The marker itself, a few dozen bytes per note and tab that ever wrote a draft, stays. A tab that wakes after days with an old draft in its memory is still refused.
+6. **A key goes only on the store's word.** A key is removed when the applied record of its note and tab has a generation at least the key's, read in a transaction of its own. Any tab may remove it then: a key left by a page that closed between the commit and the removal goes at the next start, without being imported again. A key with no such record is never removed.
 
 **Legacy keys.** The fallback keys `sheet:note:…`, which `db.save` writes when IndexedDB refuses a save, keep today's move:
 - `fbPut` over the whole snapshot keeps both versions, the newer as the note and the other as «… (резервна копія)», but it **does not merge** independent edits: there is no base;
@@ -172,15 +188,24 @@ The degraded view ends without losing an edit, including one that was only ever 
    - this tab's memory state, with its latest generation. When localStorage refused, it is the only copy.
 2. **The writes.** Each goes through `SYNC.importDraft` on its own, the oldest first:
    - for each other tab with drafts of the note, only its newest draft. An older generation of the same tab holds nothing the newest lacks, and moving it after the newest would set an older text against a newer one in the merge;
-   - this tab's memory state at its latest generation `g`, as a draft with the same origin and base.
+   - this tab's memory state at its latest generation `g`, as a draft with the same origin. The core takes its base from the applied record (§4.4, step 5).
 
-   The editor stays editable on the degraded state meanwhile, and its saves still go to drafts or memory. A tab that is still open and keeps typing hands over its own newer state the same way; `merge3` over the same base keeps what both wrote.
-3. **Confirmation.** Generation `g` of a note is confirmed when the core's transaction has completed.
-   - Only then do the keys go, by the rule of §4.4, step 5.
+   The editor stays editable on the degraded state meanwhile, and its saves still go to drafts or memory. A tab that is still open and keeps typing hands over its own newer state the same way: its base is its own previous generation, so it brings only its own change.
+3. **Confirmation.** Generation `g` of a note is confirmed when the core's transaction has completed and `importDraft` has returned the stored result and its `lrev`.
+   - A refusal `applied` for this tab's own generation confirms it too: another tab handed it in first.
+   - Only then do the keys go, by the rule of §4.4, step 6.
    - If the user typed meanwhile, so that the memory is at a newer generation, the handover writes that one next. This is the loop the revival of a note already runs (`EDITS` and its generation).
    - Until a note is confirmed at its latest generation, its previous state (memory and keys) stays as it is.
 4. **The switch.** The list and the open note are rebuilt from the store (`db.all()`) only for notes with nothing pending.
-   - The open note keeps its editor: once its latest generation is confirmed, the screen already shows what was written.
+   - The open note keeps its editor, with what this tab wrote.
+   - The stored result may hold more: another tab's draft or edit, merged in. It comes onto the screen the way another tab's change does: by `takeStored`, at a safe point, with «Є зміни» meanwhile.
+   - **The editor's snapshot follows the rule `writeNote` already has** (`setSnap(id, D, same? r.lrev : null)`):
+     - until the screen takes the result, `ESNAP` holds the note this tab handed in;
+     - its `lrev` is the returned one only when `SC.sameDoc(handedIn, result.note)`, otherwise `null`.
+
+     With `null`, the ordinary save of `editorDelta` cannot take its shortcut (`E.lrev === meta.lrev` → the screen as it is). It merges over the snapshot instead (`merge3(E.note, D, C)`), so a save made before the redraw keeps the other tab's change.
+   - The review's case: A hands in a new title, and the merged record also has B's new body. A's caret stays in the editor, so `takeStored` waits. A types more of the title and saves. With the returned `lrev`, the shortcut would write A's old body over B's, with no copy. With `null`, B's body stays.
+   - **When `takeStored` redraws the note** at its safe point, `ESNAP` becomes the accepted record with its `lrev`, as `takeStored` does today (`setSnap(id, n, lrev)`). The handover never puts its own older snapshot back after that.
    - From then on the ordinary save path (`db.save` → `SYNC.writeLocal`) takes over.
 5. **Failures:**
    - A refusal by origin (`origin`) turns the note into a copy for export only, with the strip and «Експортувати незбережене».
@@ -211,7 +236,9 @@ The folders alone do not make the port to TypeScript a file-by-file move; these 
   - The actions: `strip`, `diagnose`, `closePending`, `reopen`, `enterStandby`, `handover`, `journal` (with the step).
   - **The paused start.** A `freeze` in `opening`, `checking` or `held` gives `closePending` and the state `paused`, which keeps the attempt count and the journal. A `resume` gives `reopen`, with a new `HELD_WAIT` clock.
 - **The draft** (`standby/model.js`): the record of §4.4 as `StandbyDraft`, its key as `draftKey(id, tab, gen)`, and its origin as `DraftOrigin`.
-  - `decideDraft(draft, store) → {kind:'merge'|'asIs'|'exportOnly', reason?}`, given `{owner, epoch, format, record}` of the store. It is pure, and `importDraft` applies the same rule inside its transaction.
+  - `decideDraft(draft, store) → {kind:'merge'|'asIs'|'applied'|'exportOnly', base?, reason?}`, given `{owner, epoch, format, record, applied}` of the store. It is pure, and `importDraft` applies the same rule inside its transaction.
+  - The applied record as `DraftApplied`: `{env, uid, epoch, gen, note, t}` under `drafted:<note>:<tab>`, described once in `public/sync.js` with the other `sync` keys (`K`).
+  - `importDraft`'s result as `DraftResult`: `{ok, code, note, lrev, copies, gen}`.
 - **The handover** (`standby/ops.js`): `handover({drafts, memory}) → Promise<{confirmed: Map<id, gen>, exportOnly: id[], failed: Map<id, reason>}>`. `memory` is `Map<id, {note, base, gen}>`.
 - **Between the modules:**
   - `storewait` gives `enterStandby` once the check is `held`, and `handover` once it is `done` after standby;
@@ -220,7 +247,7 @@ The folders alone do not make the port to TypeScript a file-by-file move; these 
 
 ## 6. Data and strings
 
-- **IndexedDB:** no new store, index or field.
+- **IndexedDB:** no new store, index or field. One new kind of record in `sync`, `drafted:<note>:<tab>` (§4.4, step 5), local to the device like the other `sync` records and not in the export.
 - **localStorage:**
   - one new key family, `sheet:draft:<id>~<tab>~<generation>` (§4.4);
   - one new optional field of `sheet:settings`, `seen: {env, uid, epoch}`, which reads as missing (an unknown epoch) on a device that never wrote it.
@@ -241,8 +268,15 @@ The folders alone do not make the port to TypeScript a file-by-file move; these 
      - the same owner and epoch;
      - another uid; another env; another epoch; an unknown epoch;
      - a newer `format`; an unknown `v`;
-     - the review's merge: only the title of `rev` 5 edited, over a stored body of `rev` 6, gives the new title with the body of `rev` 6;
+     - the first review's merge: only the title of `rev` 5 edited, over a stored body of `rev` 6, gives the new title with the body of `rev` 6;
+     - the second review's revert: `g1` «Edited» applied, another tab's body, `g2` back to «Original»: the result is «Original» with that body, so the base is `g1`, not the cloud snapshot;
+     - a generation at or below the applied one gives `applied`;
+     - a later generation whose record has lost its `note` merges without a base and keeps a conflict copy;
      - no stored record;
+   - the core (`tests/sync*.mjs` over `public/sync.js`), `importDraft` in both replay schedules of the second review:
+     - tab B reads A's key of `g1` into memory; A applies `g1`, its key goes, A edits on by the ordinary path and reverts the change; B's import of `g1` is refused with `applied` and changes nothing;
+     - the page closes between the commit of `g1` and the removal of its key: the next start removes the key on the applied record and imports nothing;
+     - an older generation that arrives after a newer one of the same tab is refused;
    - `lifecyclemodel` (#126): the actions of every event and state.
 2. **Browser scenarios:**
    - **Layer 1:** #126's `appfreezetx`: after `freeze` another tab writes in a few milliseconds instead of waiting for the held transaction. For §4.1 item 4: a tab frozen during its format check lets another tab's write on `sync` through. It fails without closing `idb.pend`. Each scenario fails on the code before it.
@@ -250,6 +284,10 @@ The folders alone do not make the port to TypeScript a file-by-file move; these 
      - a held check after 15 s shows the cloud notes of the test cloud (`tests/lib/cloud.mjs`), an edit goes into a draft key, and the holder letting go moves it in by the merge;
      - **the storage frees while localStorage refuses** (every `setItem` throws `QuotaExceededError`) **and the user keeps typing** through the handover: the store ends with the last text, nothing typed is lost, no key goes before its transaction has completed, and the open note's editor is not replaced;
      - an aborted handover transaction leaves the memory state and the keys as they were;
+     - the page closes between a handover's commit and the removal of its key: after a reload the key goes and the note is not imported twice;
+     - the open note's result holds another tab's body while A's caret stays in the editor:
+       - A types more of the title and saves by the ordinary path before the redraw: the stored note has A's title and B's body, with no copy. With the returned `lrev` in `ESNAP` this fails: the shortcut writes A's old body;
+       - after the redraw by `takeStored`, `ESNAP` is the accepted record with its `lrev`, and the next ordinary save goes on from it;
      - a draft of another uid, or with an unknown epoch, is never imported, not after a reload either, and exports;
      - a start of code without `public/standby/` (only the legacy `db.move()`) leaves `sheet:draft:` keys alone.
 3. **A device experiment** (Android, on `.dev`, for §3): a test page in a Chrome tab holds a transaction on a scratch database `baobook-frozen-test` and is left to freeze; the PWA requests a version change on that scratch database. Record whether the Chrome tab is unfrozen, discarded or left as it is, then the same with the tab's transaction on a store the PWA only reads. It never touches `sheet`.
@@ -283,7 +321,7 @@ This session cannot message other sessions; the owner or the session that relays
 - **Receive transactions bounded in time.** With the abort on `freeze`, a long transaction no longer holds a frozen tab's store, but it is redone each time; on a phone that freezes often a long one might never finish. Check how long the longest one takes on a phone.
 - **The read-only cloud query for layer 3:** the budget, and the receipts/conflict state of notes shown from the cloud.
 - **The core's part of layer 3:**
-  - `SYNC.importDraft` (§4.4);
+  - `SYNC.importDraft` (§4.4), with the applied record `drafted:<note>:<tab>` and its result `{note, lrev, copies, gen}`;
   - the settings field `seen`, written wherever the engine loads or sets the owner.
 
 ## 10. Review rounds
@@ -294,3 +332,11 @@ This session cannot message other sessions; the owner or the session that relays
    - **Minor:** the move was called a three-way merge while `fbPut` imports a whole snapshot. Now the draft keeps its base and goes in by `merge3`, and the legacy behaviour is stated as it is (§4.4).
    - **Minor:** the research stopped at the header. Now the implementation's `IsFrozen()` branch with `HoldingBlockingIDBLockHandle` is in, kept apart from what was observed on the phone (§3).
    - **Also:** `fmtScope` widens `idb.tx` writes to `sync`; `idb.pend` exists from #123; a freeze before the lifecycle module loads (§4.1, items 1, 4 and 5); the contracts of §5.1; the SRI and `PRECACHE` step in §9.
+2. **Independent, on a0807cb (2026-10-27, after #127 was merged; answered in a PR of its own):** two major findings, both taken.
+   - **Major:** a later generation merged over the cloud base loses the revert of the tab's own change. The review reproduced this on `merge3`: `g1` «Edited» applied, another tab's body, then `g2` «Original»; the result kept «Edited» with no copy. Now a later generation merges over the same tab's latest applied generation, kept in the store, and `importDraft` returns the result and its `lrev`. The screen takes the merged result by `takeStored` instead of claiming it already shows it (§4.4, step 5; §4.5, steps 3–4).
+   - **Major:** nothing stopped another tab, or a page closed before removing its key, from importing a generation again. Now each applied generation is recorded atomically with its result (`drafted:<note>:<tab>`: origin, note, tab, generation); a repeat or an older generation is refused with `applied`; keys go on that record. §7 covers both schedules.
+   - The earlier findings stay closed: the origin check (with `origin` tied to the snapshot in `base`), the conditional `beforeunload`, the merge over a base for the first generation, Chromium, the contracts and the SRI step.
+3. **Independent, on 2734325 (2026-10-27):** one major finding, taken.
+   - **Major:** §4.5 put the handed-in note into `ESNAP` with the merged result's `lrev`. An ordinary save before the redraw then took `editorDelta`'s shortcut, and A's old body replaced B's with no conflict copy (reproduced on the functions of 142f0cf).
+   - Now the snapshot follows `writeNote`'s rule: the returned `lrev` only when the result equals what was handed in, otherwise `null`; after `takeStored`, the accepted record with its `lrev`. §7 adds the save before the redraw, and editing after it.
+   - The atomic marker and the tab's own previous generation are confirmed by the review (replays after a closed page or a key read by another tab; the revert «Edited» → «Original» on `merge3`).
