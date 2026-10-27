@@ -24,6 +24,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | H6 | Long blocks on a phone | Also fold to 10 rows, in the view only; the computer does not see it |
 | N1 | An area inside an area (P3, decided on 2026-10-26) | Not now. The engine is written recursively, the interface keeps one level, and the plan does not grow with it |
 | W1 | The order of work (the owner's proposal of 2026-10-26) | Two stages. Stage 1 builds and checks the engine on the computer; a narrow screen only shows the note in a phone-friendly way and never changes the computer layout. Stage 2 makes the phone and the computer work together (§4) |
+| L1 | Pinned blocks (the owner, 2026-10-27) | Later, not in this stage. A pinned block, such as a heading, is never moved by other blocks; the user can still move it. Open for then: whether blocks that do not fit above it jump below it or the grown block folds, and what happens while the user types above it |
 
 **Proposed, waiting for the owner.** The recommendations below are not decided yet. P1 and P2 are being tried in an interactive mockup; P4–P7 belong to stage 2 (W1). Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
 
