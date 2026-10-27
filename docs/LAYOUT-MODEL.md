@@ -34,6 +34,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | M1 | What moves while a block is carried in its column (2026-10-27) | Only what it touches. Its place is held until the drop, so nothing rises under it while it is carried; pulling a block up to the one above leaves the block below where it was. Carried to another column or deleted, the blocks under its old place rise (G2) |
 | M2 | Touching a neighbour (2026-10-27) | The leading edge past the neighbour's middle: they swap places, as in a list, and the gaps stay as they were. Not past the middle: the neighbour is pushed. This replaces a speed-based rule the owner first thought of |
 | M3 | Pushing up (2026-10-27) | Allowed: the gaps above the neighbour shrink, then the block above it is pushed too, up to the top of the sheet; when nothing above can give way, the carried block stops |
+| G3 | Where a gap can be (2026-10-27) | Only between two blocks. A block with nothing under it in its columns has no gap, so pulling the last block of a column up, moving it away or deleting the block under it leaves no gap hanging into empty space |
 
 **Proposed, waiting for the owner.** The recommendations below are not decided yet. P1 and P2 are answered by G1; P4–P7 belong to stage 2 (W1). Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
 
