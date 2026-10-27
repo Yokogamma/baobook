@@ -25,13 +25,16 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | N1 | An area inside an area (P3, decided on 2026-10-26) | Not now. The engine is written recursively, the interface keeps one level, and the plan does not grow with it |
 | W1 | The order of work (the owner's proposal of 2026-10-26) | Two stages. Stage 1 builds and checks the engine on the computer; a narrow screen only shows the note in a phone-friendly way and never changes the computer layout. Stage 2 makes the phone and the computer work together (§4) |
 | L1 | Pinned blocks (the owner, 2026-10-27) | Later, not in this stage. A pinned block, such as a heading, is never moved by other blocks; the user can still move it. Open for then: whether blocks that do not fit above it jump below it or the grown block folds, and what happens while the user types above it |
+| C1 | Changing one's mind during a move (2026-10-27) | Esc, the right mouse button, bringing the block back to its place, letting go outside the sheet, or letting go where it does not fit (the red outline) put the whole layout back as it was; nothing is saved |
+| C2 | Undo (2026-10-27) | Ctrl+Z after a move, a creation, a deletion or a size change puts the whole layout back, every block, not only the one that moved |
+| C3 | A block inserted and taken away again (2026-10-27) | Leaves no trace: two blocks that touched before touch again, a gap that was there is there again |
+| G1 | Positions are gaps, not rows (2026-10-27, on trial) | A block keeps the number of empty rows between it and its neighbour, and its row is computed from the blocks above it. Growth, folding and inserting keep the gaps; this answers P1 (a pushed block comes back) and P2 (blocks below move together) by construction, and the absolute anchor of §3.2 with its «your block wins over memory» rule goes. The gap belongs to the upper block, the space under it, like `margin-bottom` in CSS: a block inserted between two others goes after the upper one's gap with no gap of its own, and moving it up or down between the same neighbours changes the upper one's gap. The owner tries this in the mockup and may switch to the gap above the lower block, which the mockup also shows |
+| G2 | A block taken out of its columns (2026-10-27) | The blocks under it rise, whether it was deleted or moved elsewhere, as in a document |
 
-**Proposed, waiting for the owner.** The recommendations below are not decided yet. P1 and P2 are being tried in an interactive mockup; P4–P7 belong to stage 2 (W1). Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
+**Proposed, waiting for the owner.** The recommendations below are not decided yet. P1 and P2 are answered by G1; P4–P7 belong to stage 2 (W1). Where §3–§7 rest on one of them, they name it, and they change if the owner decides otherwise.
 
 | # | Question | Recommended |
 |---|---|---|
-| P1 | A block pushed aside, once the cause is gone | It returns to its own place. Pushes are never saved |
-| P2 | A grows and pushes B; C stands under B with a gap | C moves with B and the gap stays: like wagons, or like lines inserted in a document |
 | P4 | Phone and computer | The computer layout is the master. A narrow screen shows a folded view of it (§4) and turns its moves into computer moves. A separate phone memory may come later as an optional field |
 | P5 | Order of the fold | Automatic: pairs side by side (label and value) fold row by row, independent columns fold column by column |
 | P6 | Short blocks that fit side by side on a phone | They stay side by side |
@@ -43,6 +46,8 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | P12 | Release | The rules that stop pushes from being saved (steps 0–3 of §7) reach `.app` before or with the sync release |
 
 ## 3. The model, rule by rule
+
+**Being revised.** G1 replaces the absolute anchor of §3.2 and the sweep of §3.7 with gaps between neighbours; this section is rewritten once the owner has tried G1 in the mockup. The cells, the lanes, the kind passport, width, height and folding, containers and preview-equals-result stay.
 
 ### 3.1 Cells
 
