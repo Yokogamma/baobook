@@ -426,7 +426,7 @@ function makeSync(deps){
   async function applyIncoming(col, doc, source){ if(col==='versions') return applyVersionDoc(doc, source);
     try{ const r=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyNote(t, doc, source, after); if(source==='delivery' && res!=='skipped') await bumpCursor(t,'notes',{srv:doc.srv, id:doc.id},after); return res; });
       noteApplied(doc, r, source); return r; }
-    catch(e){ if(e.code==='epoch' || e.code==='locked') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
+    catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
   // after a note's document is committed: what the listener compares, and the versions that waited for it
   function noteApplied(doc, r, source){ if(source==='delivery') S.lastDelivered.set(doc.id, doc.rev);
     const w=S.waiting.get(doc.id); if(w && w.length && r!=='skipped'){ S.waiting.delete(doc.id); for(const d of w) S.inbox.unshift({col:'versions', doc:d, source:'wait'}); } }
@@ -436,7 +436,7 @@ function makeSync(deps){
   async function applyNotesPage(docs){
     for(let i=0;i<docs.length;i+=PAGE_TX){ if(!S.started) return 'epoch'; const chunk=docs.slice(i,i+PAGE_TX); let rs=null;   // stopped (the lead went, the page froze): the rest waits for the next leader
       try{ rs=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const out=[]; for(const d of chunk){ const r=await applyNote(t, d, 'delivery', after); if(r!=='skipped') await bumpCursor(t,'notes',{srv:d.srv, id:d.id},after); out.push(r); } return out; }); }
-      catch(e){ if(e.code==='epoch' || e.code==='locked') return 'epoch'; rs=null; log({t:'page-chunk-error', n:chunk.length, error:String(e)}); }
+      catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return 'epoch'; rs=null; log({t:'page-chunk-error', n:chunk.length, error:String(e)}); }
       if(rs){ chunk.forEach((d,k)=>{ noteApplied(d, rs[k], 'delivery'); if(rs[k]!=='skipped') S.recv.add(d.id); }); status(); if(slowNow() && i+PAGE_TX<docs.length) await new Promise(r=>setTimeout(r,200)); continue; }   // a slow store gets a gap between chunks: another tab, or a page opening the store, is not kept behind a chain of writes
       for(const d of chunk){ if(!S.started) return 'epoch'; const r=await applyIncoming('notes', d, 'delivery'); if(r==='epoch' || r==='nospace') return r; if(r!=='skipped' && r!=='error') S.recv.add(d.id); } status(); }
     return 'ok'; }
@@ -461,8 +461,8 @@ function makeSync(deps){
   // a storage or program error inside one send or attempt: logged, the job backs off, the step goes on (§4.5: nothing unsecured reaches the cloud)
   // no space on the send path goes the way receiving does (§4.6): one sweep and one more try, then «no space» for an hour; the job stays
   const isQuota=e=>!!e && (/Quota/i.test(e.name||'') || e.code==='quota');
-  async function vguarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && (e.code==='epoch' || e.code==='locked')) return; log({t:'step-error', kind, col:'v', id, code:e && e.code, error:String(e && e.message || e)}); if(isQuota(e) && await quotaTrouble(id,'v',{send:true})) return; await vbackoff(id, {code:'storage'}); } }
-  async function guarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && (e.code==='epoch' || e.code==='locked')) return; log({t:'step-error', kind, id, code:e && e.code, error:String(e && e.message || e)}); if(isQuota(e) && await quotaTrouble(id,'n',{send:true})) return; await backoff(id, {code:'storage'}); } }
+  async function vguarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && (e.code==='epoch' || e.code==='locked' || e.code==='frozen')) return; log({t:'step-error', kind, col:'v', id, code:e && e.code, error:String(e && e.message || e)}); if(isQuota(e) && await quotaTrouble(id,'v',{send:true})) return; await vbackoff(id, {code:'storage'}); } }
+  async function guarded(kind, id, fn){ try{ await fn(); }catch(e){ if(e && (e.code==='epoch' || e.code==='locked' || e.code==='frozen')) return; log({t:'step-error', kind, id, code:e && e.code, error:String(e && e.message || e)}); if(isQuota(e) && await quotaTrouble(id,'n',{send:true})) return; await backoff(id, {code:'storage'}); } }
   function pickJob(nowT){ if(S.netBusy || S.paused || !S.online || blocked()) return null;
     for(const [id,job] of S.jobs){ if(S.tries.has(id)) continue; if((job.next||0)>nowT+pace.retryMax){ job.next=nowT; } if((job.wait||0)>nowT+pace.purgeWait+pace.retryMax){ job.wait=0; }   // a retry or a wait past its longest span is a clock set back
       if((job.next||0)>nowT || (job.wait||0)>nowT) continue; const err=S.err.get(id); if(err && (!job.tomb || err==='invalid' || err==='receipts')) continue; if(sendDelay(id,nowT)>nowT) continue; return id; } return null; }   // a tombstone still goes over a note too large or looping, not over one the rules or the receipt limit refused
@@ -685,7 +685,7 @@ function makeSync(deps){
     t.put('versions',built); meta.base=storeBase(doc); meta.baseLrev=meta.lrev; for(const k of ['wait','local']) delete meta[k]; putMeta(t,meta,after); changed(); return 'done'; }
   async function applyVersionDoc(doc, source){ try{ const r=await tx(['notes','sync','versions','blobs'], async(t,after)=>{ const res=await applyVersionCore(t, doc, source, after); if(source==='delivery' && res!=='skipped') await bumpCursor(t,'versions',{srv:doc.srv, id:doc.id},after); return res; });
       if(source==='delivery') S.vlastDelivered.set(doc.id, doc.rev); return r; }
-    catch(e){ if(e.code==='epoch' || e.code==='locked') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id,'v'))? 'nospace' : 'error';   // no space: one sweep and one more try, then receiving stops for an hour (§4.6), as for notes
+    catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id,'v'))? 'nospace' : 'error';   // no space: one sweep and one more try, then receiving stops for an hour (§4.6), as for notes
       log({t:'apply-error', col:'v', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>setVRefetch(t,doc.id,after)); }catch(_){} return 'error'; } }
 
   /* ── sending a version (§4.9, the steps of §4.5) ── */
@@ -774,7 +774,7 @@ function makeSync(deps){
     return applyVersionCore(t, {...D, id}, 'server', after); }
   async function doVRefetch(id){ S.netBusy=true; try{ const got=await net(()=>S.cloud.get('versions',id), {read:true, kind:'refetch'}); if(got.error){ S.refetchRetry=now()+backoffMs(1); return; } countRead(1);
       try{ await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropVRefetch(t,id,after); if(got.value) await applyVersionCore(t, {...got.value, id}, 'server', after); }); }
-      catch(e){ if(e.code==='epoch' || e.code==='locked') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id,'v'); return; } log({t:'apply-error', col:'v', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }
+      catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id,'v'); return; } log({t:'apply-error', col:'v', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }
     finally{ S.netBusy=false; } }
 
   /* ── receiving: catch-up, listener, refetch (§4.6) ── */
@@ -784,8 +784,8 @@ function makeSync(deps){
       const docs=res.value||[]; countRead(Math.max(1, docs.length)); let last=null;
       if(col==='notes' && docs.length){ const r=await applyNotesPage(docs); if(r==='epoch') return true; if(r==='nospace'){ c.retryAt=now()+3600000; return true; } const d=docs[docs.length-1]; last={srv:d.srv, id:d.id}; }
       else for(const d of docs){ const r=await applyIncoming(col, d, 'delivery'); if(r==='epoch') return true; if(r==='nospace'){ c.retryAt=now()+3600000; return true; } last={srv:d.srv, id:d.id}; }   // epoch: the owner changed under this page (§4.4 step 1); nothing of it is kept, not even the cursor
-      if(last){ c.after=last; try{ await tx(['sync'], async(t,after)=>bumpCursor(t,col,last,after)); }catch(e){ if(e.code==='epoch' || e.code==='locked') return true; throw e; } }   // with the owner check: a page of the old owner must not leave its cursor to the new one
-      if(docs.length<200 && col==='versions'){ try{ await tx(['sync'], async t=>{ const st=await t.get('sync',K.cursor('versions')); if(!st || !st.done) t.put('sync',{...(st||{}), k:K.cursor('versions'), done:true}); }); S.cursor.versions={...(S.cursor.versions||{}), done:true}; }catch(e){ if(e.code==='epoch' || e.code==='locked') return true; throw e; } }   // the first catch-up of versions has ended, also with no document at all
+      if(last){ c.after=last; try{ await tx(['sync'], async(t,after)=>bumpCursor(t,col,last,after)); }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // with the owner check: a page of the old owner must not leave its cursor to the new one
+      if(docs.length<200 && col==='versions'){ try{ await tx(['sync'], async t=>{ const st=await t.get('sync',K.cursor('versions')); if(!st || !st.done) t.put('sync',{...(st||{}), k:K.cursor('versions'), done:true}); }); S.cursor.versions={...(S.cursor.versions||{}), done:true}; }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // the first catch-up of versions has ended, also with no document at all
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; versionsNow(); if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
   // a listener that ends with an error is not restarted by the SDK: unless refused, the step starts it again after a growing pause (`relisten`), from the
@@ -802,7 +802,7 @@ function makeSync(deps){
   function stopListeners(){ S.versionsLater=false; for(const col of ['notes','versions']){ if(S.listen[col]){ try{ S.listen[col](); }catch(_){} S.listen[col]=null; } S.snapshot[col]=false; S.relisten[col]=null; } S.listenId=null; }
   async function doRefetch(id){ S.netBusy=true; try{ const got=await net(()=>S.cloud.get('notes',id), {read:true, kind:'refetch'}); if(got.error){ log({t:'refetch-error', id, code:got.error.code}); S.refetchRetry=now()+backoffMs(1); return; } countRead(1);
       try{ await tx(['notes','sync','versions','blobs'], async(t,after)=>{ dropRefetch(t,id,after); const R=got.value; if(R) await applyNote(t, {...R, id}, 'server', after); }); }
-      catch(e){ if(e.code==='epoch' || e.code==='locked') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id); return; } log({t:'apply-error', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }   // the record stays for the next try
+      catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return; if(/Quota/i.test(e.name||'') || e.code==='quota'){ await quotaTrouble(id); return; } log({t:'apply-error', id, error:String(e)}); S.refetchRetry=now()+backoffMs(2); } }   // the record stays for the next try
     finally{ S.netBusy=false; } }
 
   /* ── the totals check and the full pass (§4.6) ── */

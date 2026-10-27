@@ -7,7 +7,7 @@ const PHONE={touch:true, freezeEvent:true}, PC={touch:false, freezeEvent:true}, 
 const j=a=>a.join(',');
 
 const fz=actionsFor('freeze', PHONE);
-ok('1 freeze: the lead goes first, then new transactions are refused, the open ones aborted, the store and the channel closed ('+j(fz)+')', j(fz)==='leadOff,blockTx,abortTx,closeDb,closeChannel');
+ok('1 freeze: the lead goes first, the unsaved edits get their copies, then new transactions are refused, the open ones aborted, the store and the channel closed ('+j(fz)+')', j(fz)==='leadOff,saveCopy,blockTx,abortTx,closeDb,closeChannel');
 ok('1a the same on a computer: Chrome\'s guidance does not depend on the device', j(actionsFor('freeze', PC))===j(fz));
 const rs=actionsFor('resume', PHONE);
 ok('2 resume: transactions allowed again, the channel back, what other tabs said read from the store, the lead asked for ('+j(rs)+')', j(rs)==='unblockTx,openChannel,catchUp,leadCheck');

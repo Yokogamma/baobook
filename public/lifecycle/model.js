@@ -10,7 +10,7 @@
  * @typedef {{touch:boolean, freezeEvent:boolean, persisted?:boolean, hidden?:boolean, leads?:boolean}} PageState
  *   touch: a phone or tablet (`hover: none`); freezeEvent: the browser fires `freeze`; persisted: a `pageshow` from the back/forward cache;
  *   leads: the page holds the lead or waits for it
- * @typedef {'leadOff'|'blockTx'|'abortTx'|'closeDb'|'closeChannel'|'unblockTx'|'openChannel'|'catchUp'|'leadCheck'|'tellHidden'|'armHidden'|'disarmHidden'} Action
+ * @typedef {'leadOff'|'saveCopy'|'blockTx'|'abortTx'|'closeDb'|'closeChannel'|'unblockTx'|'openChannel'|'catchUp'|'leadCheck'|'tellHidden'|'armHidden'|'disarmHidden'} Action
  */
 
 // a phone's hidden leader lets the lead go by itself after this long (a tab the browser freezes later could not answer a request for it)
@@ -24,7 +24,8 @@ export function actionsFor(ev, st){
   switch(ev){
     // the lead first, so nothing starts a new transaction after the abort; then the store and the channel close (a page frozen inside a transaction,
     // or one that takes a message while frozen and starts a read, would hold the store for every other page)
-    case 'freeze': return ['leadOff', 'blockTx', 'abortTx', 'closeDb', 'closeChannel'];
+    // saveCopy: every edit not yet in the store gets its fallback copy before the abort (the abort's own failure runs only after the thaw)
+    case 'freeze': return ['leadOff', 'saveCopy', 'blockTx', 'abortTx', 'closeDb', 'closeChannel'];
     // thawed: the store and the channel are back, what other tabs said meanwhile is read from the store, the lead is asked for again
     case 'resume': return ['unblockTx', 'openChannel', 'catchUp', 'leadCheck'];
     // the page's last save goes through the store now and must land: only the lead goes (a page in the back/forward cache that blocks the store is
