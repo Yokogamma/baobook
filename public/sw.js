@@ -11,11 +11,11 @@
    cached. Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
    The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used; a version lives in its path, so a
    cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
-const BUILD=2026102601, PREFIX='baobook-', WAIT=5000;
+const BUILD=2026102701, PREFIX='baobook-', WAIT=5000;
 const SHELL=PREFIX+'shell-'+BUILD, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
 const KEEP=[SHELL, FONTS, SDK];
 const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;
-const PRECACHE=['./','./sync.js'+B,'./cloud.js'+B,'./locales/uk.json'+B,'./locales/en.json'+B,'./account/model.js'+B,'./account/view.js'+B,'./account/input.js'+B,'./account/panel.js'+B,'./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
+const PRECACHE=['./','./sync.js'+B,'./cloud.js'+B,'./locales/uk.json'+B,'./locales/en.json'+B,'./account/model.js'+B,'./account/view.js'+B,'./account/input.js'+B,'./account/panel.js'+B,'./lifecycle/model.js'+B,'./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 
 // The set is checked before anything is stored: the page must be of this build; every file of the build (?b=) must have the bytes the
 // page was built with, by the integrity hashes the page carries (the browser checks them as the file comes; a deploy in between, or a CDN
