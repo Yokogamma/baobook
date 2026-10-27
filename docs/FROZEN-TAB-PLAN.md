@@ -199,7 +199,13 @@ The degraded view ends without losing an edit, including one that was only ever 
 4. **The switch.** The list and the open note are rebuilt from the store (`db.all()`) only for notes with nothing pending.
    - The open note keeps its editor, with what this tab wrote.
    - The stored result may hold more: another tab's draft or edit, merged in. It comes onto the screen the way another tab's change does: by `takeStored`, at a safe point, with «Є зміни» meanwhile.
-   - The editor's snapshot of the note (`ESNAP`) becomes the state this tab handed in last, with the returned `lrev`, so the ordinary delta writes go on from it.
+   - **The editor's snapshot follows the rule `writeNote` already has** (`setSnap(id, D, same? r.lrev : null)`):
+     - until the screen takes the result, `ESNAP` holds the note this tab handed in;
+     - its `lrev` is the returned one only when `SC.sameDoc(handedIn, result.note)`, otherwise `null`.
+
+     With `null`, the ordinary save of `editorDelta` cannot take its shortcut (`E.lrev === meta.lrev` → the screen as it is). It merges over the snapshot instead (`merge3(E.note, D, C)`), so a save made before the redraw keeps the other tab's change.
+   - The review's case: A hands in a new title, and the merged record also has B's new body. A's caret stays in the editor, so `takeStored` waits. A types more of the title and saves. With the returned `lrev`, the shortcut would write A's old body over B's, with no copy. With `null`, B's body stays.
+   - **When `takeStored` redraws the note** at its safe point, `ESNAP` becomes the accepted record with its `lrev`, as `takeStored` does today (`setSnap(id, n, lrev)`). The handover never puts its own older snapshot back after that.
    - From then on the ordinary save path (`db.save` → `SYNC.writeLocal`) takes over.
 5. **Failures:**
    - A refusal by origin (`origin`) turns the note into a copy for export only, with the strip and «Експортувати незбережене».
@@ -279,7 +285,9 @@ The folders alone do not make the port to TypeScript a file-by-file move; these 
      - **the storage frees while localStorage refuses** (every `setItem` throws `QuotaExceededError`) **and the user keeps typing** through the handover: the store ends with the last text, nothing typed is lost, no key goes before its transaction has completed, and the open note's editor is not replaced;
      - an aborted handover transaction leaves the memory state and the keys as they were;
      - the page closes between a handover's commit and the removal of its key: after a reload the key goes and the note is not imported twice;
-     - the open note's result holds another tab's change: it comes by `takeStored` at a safe point, and the next ordinary save is a delta over what this tab handed in;
+     - the open note's result holds another tab's body while A's caret stays in the editor:
+       - A types more of the title and saves by the ordinary path before the redraw: the stored note has A's title and B's body, with no copy. With the returned `lrev` in `ESNAP` this fails: the shortcut writes A's old body;
+       - after the redraw by `takeStored`, `ESNAP` is the accepted record with its `lrev`, and the next ordinary save goes on from it;
      - a draft of another uid, or with an unknown epoch, is never imported, not after a reload either, and exports;
      - a start of code without `public/standby/` (only the legacy `db.move()`) leaves `sheet:draft:` keys alone.
 3. **A device experiment** (Android, on `.dev`, for §3): a test page in a Chrome tab holds a transaction on a scratch database `baobook-frozen-test` and is left to freeze; the PWA requests a version change on that scratch database. Record whether the Chrome tab is unfrozen, discarded or left as it is, then the same with the tab's transaction on a store the PWA only reads. It never touches `sheet`.
@@ -328,3 +336,7 @@ This session cannot message other sessions; the owner or the session that relays
    - **Major:** a later generation merged over the cloud base loses the revert of the tab's own change. The review reproduced this on `merge3`: `g1` «Edited» applied, another tab's body, then `g2` «Original»; the result kept «Edited» with no copy. Now a later generation merges over the same tab's latest applied generation, kept in the store, and `importDraft` returns the result and its `lrev`. The screen takes the merged result by `takeStored` instead of claiming it already shows it (§4.4, step 5; §4.5, steps 3–4).
    - **Major:** nothing stopped another tab, or a page closed before removing its key, from importing a generation again. Now each applied generation is recorded atomically with its result (`drafted:<note>:<tab>`: origin, note, tab, generation); a repeat or an older generation is refused with `applied`; keys go on that record. §7 covers both schedules.
    - The earlier findings stay closed: the origin check (with `origin` tied to the snapshot in `base`), the conditional `beforeunload`, the merge over a base for the first generation, Chromium, the contracts and the SRI step.
+3. **Independent, on 2734325 (2026-10-27):** one major finding, taken.
+   - **Major:** §4.5 put the handed-in note into `ESNAP` with the merged result's `lrev`. An ordinary save before the redraw then took `editorDelta`'s shortcut, and A's old body replaced B's with no conflict copy (reproduced on the functions of 142f0cf).
+   - Now the snapshot follows `writeNote`'s rule: the returned `lrev` only when the result equals what was handed in, otherwise `null`; after `takeStored`, the accepted record with its `lrev`. §7 adds the save before the redraw, and editing after it.
+   - The atomic marker and the tab's own previous generation are confirmed by the review (replays after a closed page or a key read by another tab; the revert «Edited» → «Original» on `merge3`).
