@@ -24,6 +24,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | H6 | Long blocks on a phone | Also fold to 10 rows, in the view only; the computer does not see it |
 | N1 | An area inside an area (P3, decided on 2026-10-26) | Not now. The engine is written recursively, the interface keeps one level, and the plan does not grow with it |
 | W1 | The order of work (the owner's proposal of 2026-10-26) | Two stages. Stage 1 builds and checks the engine on the computer; a narrow screen only shows the note in a phone-friendly way and never changes the computer layout. Stage 2 makes the phone and the computer work together (§4) |
+| W2 | The horizontal place and a window narrower than the note (the owner, 2026-10-29, after trying four ways in the mockup) | A block keeps its column, as it keeps its row; the window only changes how the note is shown, and nothing shown is stored. A window wider than the note shows it as it is, with room on the right. A narrower one shows the whole sheet scaled down to fit, no smaller than a minimum scale, a setting with 70% by default. Narrower still, the narrow view: the blocks one under another in reading order, row by row and left to right, an empty row between them; blocks cannot be moved there, text can be written and blocks deleted, and a block that grows moves the blocks under it on the computer as usual. Widened again, the note is as it was. The width that counts is the note's own, up to the right edge of its rightmost card, not a fixed number of pixels. This replaces P8 (absolute columns) and keeping a block's place as a share of the width, which made one note look different on two computers |
 | L1 | Pinned blocks (the owner, 2026-10-27) | Later, not in this stage. A pinned block, such as a heading, is never moved by other blocks; the user can still move it. Open for then: whether blocks that do not fit above it jump below it or the grown block folds, and what happens while the user types above it |
 | C1 | Changing one's mind during a move (2026-10-27) | Esc, the right mouse button, bringing the block back to its place, letting go outside the sheet, or letting go where it does not fit (the red outline) put the whole layout back as it was; nothing is saved |
 | C2 | Undo (2026-10-27) | Ctrl+Z after a move, a creation, a deletion or a size change puts the whole layout back, every block, not only the one that moved |
@@ -49,7 +50,6 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | P5 | Order of the fold | Automatic: pairs side by side (label and value) fold row by row, independent columns fold column by column |
 | P6 | Short blocks that fit side by side on a phone | They stay side by side |
 | P7 | A move made on a phone | Changes the computer layout by the rule «under which block, with which gap» |
-| P8 | Horizontal position | Absolute columns. A wider screen shows more empty room on the right; nothing spreads out |
 | P9 | Minimum text width | 10 cells, about 25 characters. A neighbour closer than that is a collision, not a squeeze |
 | P10 | An area narrowed below its content | Its blocks are pushed left in a chain; the handle stops when they have no room |
 | P11 | A sized block that does not fit at the right edge | It is shifted left until it fits; the ghost shows where |
@@ -164,7 +164,7 @@ Only anchors travel. Two devices with the same anchors draw the same layout beca
 
 ## 4. Narrow screens
 
-**Stage 1 (W1; the details are a proposal).** A narrow screen shows the note as a column in reading order, row by row, one empty row between blocks; an area is a frame with its blocks inside in the same way; long blocks fold at 10 rows (H6). There the user reads, writes and formats text, follows links, copies, unfolds and folds for reading, deletes and creates blocks. Moving, the arrows of position mode, the resize handle and «В область…» / «З області» are not available there, so a narrow screen never writes a place. A block created there goes on the computer right under the block it was created after, in that block's column; «+» puts it at the end, at the left margin. «Показати як на компʼютері» stays. For the time of stage 1 a phone cannot start a block anywhere, the freedom the old ribbon lacked.
+**Stage 1 (W1, W2; the details are a proposal).** A screen narrower than the note shows it scaled down while the scale stays at or above the minimum (W2); below that, it shows the note as a column in reading order, row by row, one empty row between blocks; an area is a frame with its blocks inside in the same way; long blocks fold at 10 rows (H6). There the user reads, writes and formats text, follows links, copies, unfolds and folds for reading, deletes and creates blocks. Moving, the arrows of position mode, the resize handle and «В область…» / «З області» are not available there, so a narrow screen never writes a place. A block created there goes on the computer right under the block it was created after, in that block's column; «+» puts it at the end, at the left margin. «Показати як на компʼютері» stays. For the time of stage 1 a phone cannot start a block anywhere, the freedom the old ribbon lacked.
 
 **Stage 2 (proposal, P4–P7).** The rest of this section is the recommended way to make the two work together.
 
@@ -192,7 +192,7 @@ A move on a narrow screen is translated to the computer by the block above it in
 The stored format does not change its fields' meaning in a way old notes notice, and no migration rewrites them.
 
 - **`row` is the anchor.** Today's stored rows already contain old pushes; they are read as anchors. A row may carry a fraction as an order key (§3.7); old code draws it on the same row, a fraction of a pixel off.
-- **Sheet columns (P8).** A sheet block gets `col`, absolute, like a child of an area. `normBlock` in `public/sync.js` deletes `col` on sheet blocks today and `blockCmp` orders them by `fx`; both change, in `sync.js`, where the format lives. A block without `col` derives it from `fx` with a fixed reference width `W0`, the same on every device: `col = round((fx × W0 − 12) / 24)`. `fx` is still written, as `col`'s position at `W0`, for older versions.
+- **Sheet columns (W2).** A sheet block gets `col`, absolute, like a child of an area. `normBlock` in `public/sync.js` deletes `col` on sheet blocks today and `blockCmp` orders them by `fx`; both change, in `sync.js`, where the format lives. A block without `col` derives it from `fx` with a fixed reference width `W0`, the same on every device: `col = round((fx × W0 − 12) / 24)`. `fx` is still written, as `col`'s position at `W0`, for older versions.
 - **Fold (H1).** Text and areas get an optional `fold`: the rows shown when the user folded the block. It joins the place group (`PLACE`), because it changes the layout. Code keeps its fields: its `ch` already is a fold height, and its `open` means «the user chose the full height». Clicking «Розгорнути» stops writing `open` (H3).
 - **Existing long code blocks** keep their look: a code block without `ch` or `open` and longer than 14 lines is shown folded at 12, as today. A new block made by a long paste stores its fold explicitly. Code typed by hand past 14 lines no longer folds by itself.
 - **Old notes fold nothing by themselves.** A text whose `ch` is now below its content was a minimum height, not a fold, and stays shown in full: only `fold` folds a text.
@@ -235,7 +235,7 @@ Each step is one PR with every scenario green.
 | 1 | `model.js` extracted as it is, called from `index.html`; Node tests pin today's behaviour | nothing yet | none |
 | 2 | The canonical sweep of §3.7, run once after a note loads; widths from natural rows; `G` read once per pass | F1, F4, F8 | none |
 | 3 | Anchors: placements are never written; elasticity, wagons, fractional keys for drops; thresholds in cells (P9); `FORMAT` raised | F3, most of F5 | meaning of `row` |
-| 4 | Absolute sheet columns (P8) in `sync.js` and the editor; the stage 1 column view for narrow screens (§4) | the rest of F5 | `col` on the sheet |
+| 4 | Sheet columns (W2) in `sync.js` and the editor; the scaled view and the stage 1 column view for narrow screens (§4, W2), the minimum scale in the settings | the rest of F5 | `col` on the sheet |
 | 5 | The height rule of §3.5 for every kind | | `fold` |
 | 6 | Containment and set widths (P10, P11) | F6, F7 | none |
 | 7 | `ops.js` and `input.js`: drag, resize, arrows, areas through `ops`; the ghost measured at the target | F2 | none |
@@ -267,7 +267,7 @@ Smaller points: `xConflict` and `colsOverlap` are one predicate twice; a collaps
 
 These are not questions for the owner unless noted; the step that meets them settles them with tests.
 
-- **`W0`** for deriving columns from `fx` (step 4, only if P8 is accepted): the sheet width the owner's notes were mostly made at. To ask the owner then: the usual computer and whether the panel is open.
+- **`W0`** for deriving columns from `fx` (step 4, W2): the sheet width the owner's notes were mostly made at. To ask the owner then: the usual computer and whether the panel is open.
 - **Widths in one sweep** (step 2): a text's natural rows may cross a neighbour that is itself pushed down later in the sweep. Either the narrowing uses anchors (deterministic, sometimes narrower than needed) or a second, bounded pass. Both are deterministic; tests decide.
 - **The fold of §4:** how a band is found, the tolerance for «the same row» in pairs, the gap between folded columns.
 - **← and → in position mode on a narrow screen:** what they mean in the folded view.
