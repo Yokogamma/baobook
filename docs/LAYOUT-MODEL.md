@@ -64,7 +64,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 
 The step of the grid is `G = round(1.5 × text size)`: 24 px at 16 px text on a computer, 27 px at 18 px on a phone. Dots sit at `G/2 + k·G` on both axes. A block at `(col, row)` has its text start on dot column `col` and the top of its first line on dot row `row`. The grip, its gap and the text padding sit to the left of the text (`OFF`, 30 px on a computer); the card starts `CL` (24 px) to the right of the block's left edge.
 
-Every size and threshold is in cells: minimum width 10 cells for text (P9) and 12 for code and areas, the text wrap of 26 cells, the margins. A larger text size makes the sheet larger and moves nothing.
+Every size and threshold is in cells: the minimum width of an elastic text (W3) and 12 for code and areas, the text wrap of 26 cells, the margins. A larger text size makes the sheet larger and moves nothing.
 
 An area's body has its own grid, aligned with the sheet so that a child keeps its dots when it enters, leaves or is ungrouped: a child at `(c, r)` of an area at `(A, R)` stands on sheet cell `(A + 1 + c, R + rowOff + r)`, where `rowOff` is the header height in whole rows (the area's top padding `AT` is chosen to make it whole).
 
@@ -94,7 +94,7 @@ Each kind of block describes itself to the engine with data. Text, code and area
 ### 3.4 Width
 
 - A text without a set width takes `min(26 cells, room)`. The room ends one cell before the nearest solid neighbour to the right on the rows the text crosses, and at the container's right margin.
-- The room never goes below 10 cells (P9). A neighbour closer than that is a collision and is handled by §3.7: whoever is lower, or on the same row more to the right, moves down.
+- The room never goes below the minimum of W3. A neighbour closer than that is a collision and is handled by §3.7: whoever is lower, or on the same row more to the right, moves down.
 - A set width `cw` is kept as is. If it does not fit, the block moves (P11), it does not shrink.
 - Code and areas take the room they are given, at least 12 cells.
 
@@ -234,7 +234,7 @@ Each step is one PR with every scenario green.
 | 0 | The editor keeps block fields it does not know | the risk of §5 | none |
 | 1 | `model.js` extracted as it is, called from `index.html`; Node tests pin today's behaviour | nothing yet | none |
 | 2 | The canonical sweep of §3.7, run once after a note loads; widths from natural rows; `G` read once per pass | F1, F4, F8 | none |
-| 3 | Anchors: placements are never written; elasticity, wagons, fractional keys for drops; thresholds in cells (P9); `FORMAT` raised | F3, most of F5 | meaning of `row` |
+| 3 | Anchors: placements are never written; elasticity, wagons, fractional keys for drops; thresholds in cells (W3); `FORMAT` raised | F3, most of F5 | meaning of `row` |
 | 4 | Sheet columns (W2) in `sync.js` and the editor; the scaled view and the stage 1 column view for narrow screens (§4, W2), the minimum scale in the settings | the rest of F5 | `col` on the sheet |
 | 5 | The height rule of §3.5 for every kind | | `fold` |
 | 6 | Containment and set widths (P10, P11) | F6, F7 | none |
