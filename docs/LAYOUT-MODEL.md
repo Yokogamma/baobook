@@ -284,7 +284,7 @@ From the discussion of 2026-10-18; they explain why §3.7 is exact and why the a
 - **The skyline and the critical path.** With a fixed reading order, «no overlap» becomes `y(b) ≥ y(a) + h(a)` for every `a` before `b` in its lane. The least solution that is not above the anchors is the longest-path formula of §3.7, which is also the nearest solution to the anchors: no optimisation is needed.
 - **Anchored springs.** A float on a tether returns when released: elasticity (P1). Today's behaviour is plasticine.
 - **Wagons and beads.** Coupled wagons move together and keep their spacing (P2); beads on a thread close the slack first.
-- **A soft cell.** A text keeps its area: `h ≈ ceil(chars × charWidth / width)`. At 6 cells a paragraph can become five times taller, at 10 cells (P9) about twice at most.
+- **A soft cell.** A text keeps its area: `h ≈ ceil(chars × charWidth / width)`. At 6 cells a paragraph can become five times taller, at 10 cells, the minimum first proposed, about twice at most.
 - **Text around a float.** CSS computes the width of each line from what crosses that line, top to bottom, with no iteration. It is the exact form of «width to the neighbour»; the natural-rows rule of §3.4 is its block-sized version.
 
 ## 11. Reproducing the measurements
