@@ -55,6 +55,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | P10 | An area narrowed below its content | Its blocks are pushed left in a chain; the handle stops when they have no room |
 | P12 | Release | The rules that stop pushes from being saved (steps 0–3 of §7) reach `.app` before or with the sync release |
 | P14 | The first block of a column moved up by hand (the mockup, 2026-10-27) | The empty rows it leaves above the next block become its own gap, shown with its letter; before, they were rows of nobody. Moved down, it uses that gap up first, as any block does |
+| P16 | A block carried along one axis drifts to the next cell (raised by the owner, 2026-10-30) | Three aids, to be tried in the mockup. Guides shown only while a block is carried: a line along its column and one along its row across the sheet, marked where they meet its starting place or the edge of another block. Sticking: carried mostly up or down, the block keeps its column until the pointer is a whole cell away sideways, not half a cell, and the same for its row when carried sideways. A key that keeps the move strictly on one axis: Shift by the convention of design tools, which M6 now gives to letting a neighbour through, so either M6 moves to another key or the lock takes one (Alt). Arrow keys keep moving a selected block by one cell, as today |
 
 ## 3. The model, rule by rule
 
