@@ -58,6 +58,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | P7 | A move made on a phone | Changes the computer layout by the rule «under which block, with which gap» |
 | P12 | Release | The rules that stop pushes from being saved (steps 0–3 of §7) reach `.app` before or with the sync release |
 | P14 | The first block of a column moved up by hand (the mockup, 2026-10-27) | The empty rows it leaves above the next block become its own gap, shown with its letter; before, they were rows of nobody. Moved down, it uses that gap up first, as any block does |
+| P18 | Where the text stands in its cells, and the field round it (raised by the owner, 2026-11-01) | Being tried in the mockup («Текст в блоке»): the first letter on a line of dots or at the middle of a cell, each line midway between two rows of dots; a narrow field (4 px at the sides, the lines' own height) or a wide one (half a cell at the sides, 8 px above and below); with a background or without. With wide fields every block keeps one row under it for its field, so blocks come no closer than one empty row and their backgrounds never meet |
 
 ## 3. The model, rule by rule
 
