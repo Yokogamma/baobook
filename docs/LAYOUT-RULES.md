@@ -97,7 +97,7 @@ Inputs: a block's content, its set sizes, its container's columns, the blocks on
 - **SIZE.1 Rest width.** An elastic text is as wide as its natural width, at most `TEXTW`, and no wider than the room it has: the room ends at its container's right edge and at the handle cell of the nearest block to its right on the rows it takes at that width. It is never narrower than `min(natural width, MINC)`. When room frees up, it widens again by itself [W3]. (`autoCard`)
 - **SIZE.2 Giving way.** Pressed from either side, an elastic block gives way the same way, by `ORDER`: it moves aside as a whole while there is room and narrows where it meets the edge of its container or a block that cannot move; or it narrows first and then moves; or it never narrows. It narrows on the side it is pressed from, down to `min(natural width, MINC)` [W3]. What a block that can neither move nor narrow does is SETTLE's (P-ASIDE, phase 9). (`elastic.min`, `elastic.first`, `shove`)
 - **SIZE.3 Set width.** A block with `cw` keeps it and is only moved, never narrowed [W3, W4]. A double click on the width handle removes `cw` (RESIZE.2).
-- **SIZE.4 «Never narrow» at rest (proposed).** With `ORDER` «never narrow», an elastic block's rest width is capped by its container's right edge only, not by its neighbours, as in the mockup (O-10).
+- **SIZE.4 «Never narrow» at rest.** The rest width is the same under every `ORDER`: with «never narrow» too, a close neighbour on the right caps it (SIZE.1). «Never narrow» only changes SIZE.2, how the block gives way when pressed [W9].
 - **SIZE.5 «Narrow first» at rest (proposed).** A block narrowed from its left by «narrow first» gets its rest width back on its right in phase 9 when it has room there, so after the gesture it looks as if it had been pushed. Whether it should keep the narrowed width is O-12.
 - **SIZE.6 Height.** The shown height as in §1.2; nothing ever scrolls inside a block; a text's lines are one cell tall, so a fold always falls between two lines [H1–H6]. `ch` below the content is ignored: a block whose content outgrows its `ch` grows (RESIZE.3).
 - **SIZE.7 Hidden empty lines.** An elastic text with no size set by hand may hide the empty lines at the start and at the end of its text; the lines between paragraphs never hide. Only an area's top or bottom handle hides them (P-SQUEEZE); the count is stored, the text never changes. The end lines hide first. They come back when the caret is put in the block (EDIT.5) or when the area grows again (AREA.5) [W5].
@@ -341,6 +341,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **D-9** Its choice of the neighbour that lets the block through depends on the order of storage, and the Shift path and the hold path choose differently; the engine follows phase 11.
 - **D-10** Its separation after a size change keeps the block more to the left (or, in one column, the upper one) and moves the other aside or down, and an elastic block at its minimum pushes its neighbour; the engine follows P-SEP and P-REST.
 - **D-11** Its RELINK compares with the start of the carry, so a block carried away and brought back touching its old upper neighbour loses that neighbour's row, and a second carry away does not give it back; the engine compares with `base` (phase 1).
+- **D-13** With «never narrow» its text ignores the neighbours at rest and pushes them aside; the engine caps it by its room (SIZE.4, W9).
 - **D-12** It recomputes rows only at the end of a carry step, so a block that grows during SETTLE can close the gap under it; the engine runs FOLLOW where sizes change (PR-6).
 
 ## 15. Open questions and engineering points
@@ -356,7 +357,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-7 (L1)** Pinned blocks: later.
 - **O-8** Decided as W7 (2026-11-02): a sheet width per note.
 - **O-9** Decided as W8 (2026-11-02): the width handle presses its neighbours aside, with a retrace, like a carry.
-- **O-10** «Never narrow»: may an elastic block's neighbours cap its rest width (it never narrows when pressed, but is no wider than its room), or does it keep its natural width (SIZE.4)?
+- **O-10** Decided as W9 (2026-11-02): at rest the neighbours cap the width under every order.
 - **O-11** Keyboard focus in the app look: with the focus ring hidden (V1), how a keyboard user sees which block has the focus.
 - **O-13** Decided (W7, 2026-11-02): narrowing the sheet works as an area's side handle.
 - **O-14** Decided (W7, 2026-11-02): no stretching past the edge of the screen.
