@@ -157,7 +157,7 @@ Each phase reads only what the phases before it produced, and visits several blo
 | A pointer move while carrying, or the hold running out, or Shift pressed | the carried block at the target | DRAG.B2, B3 | pushed up or down by its side (DRAG.B5) | clamped at the sides and top (DRAG.A3); an area grows at its bottom | the carry memory, §6.D |
 | An arrow in position mode | the selected block one cell over | DRAG.B2, B3 | as a carry | as a carry | empty |
 | A click on the empty sheet, «+», a block made on a narrow screen | the new empty block at its cell, away from the start | DRAG.B2 with «away», and B3 | as a carry | as a carry | empty |
-| The width handle (proposed) | the widened block itself, at its new width; no above or below is needed | every block it hits on its right is met from the side, pressed right | P-SINK, in phase 6 after P-DOWN | the width clamped at the container's edge; an area grows | the gesture's start, RESIZE.1 |
+| The width handle | the widened block itself, at its new width; no above or below is needed | every block it hits on its right is met from the side, pressed right | P-SINK, in phase 6 after P-DOWN | the width clamped at the container's edge; an area grows | the gesture's start, RESIZE.1 |
 | The right edge of the sheet, carried outwards | none | — | — | the sheet grows, up to the edge of the screen | the gesture's start |
 | The right edge of the sheet, carried inwards | none: the edge is a wall, as an area's side handle | as an area's side handle | P-SINK | refused: the edge stops (§5.4) | the gesture's start |
 | A side handle of an area | none: the moving edge is a wall (§5.3) | every child sticking out past it is pressed inwards by the wall | P-SINK, in phase 6 after P-DOWN | refused: the handle stops (§5.4) | the gesture's start, AREA.6 |
@@ -219,7 +219,7 @@ Kept for one carry only and cleared at «home» and at the drop: the start place
 
 ## 7. Module RESIZE: the handles of a block
 
-- **RESIZE.1 The width handle (proposed).** Carrying the handle at the card's right edge sets `cw`, from three cells to the container's right edge. Every move of the handle is a SETTLE from the layout the gesture started from (its memory), so carrying the handle back retraces the way; letting go stores one undo entry [W3, C2]. The mockup separates the blocks after each change of the width instead (§14, D-7); O-9 asks the owner.
+- **RESIZE.1 The width handle.** Carrying the handle at the card's right edge sets `cw`, from three cells to the container's right edge. The blocks it reaches are pressed aside by P-ASIDE, an elastic one giving way by `ORDER`, one with no room going down by P-SINK. Every move of the handle is a SETTLE from the layout the gesture started from (its memory), so carrying the handle back retraces the way; letting go stores one undo entry [W8, W3, C2].
 - **RESIZE.2 Back to elastic.** A double click on the width handle removes `cw` [W3].
 - **RESIZE.3 The height handle.** Released above the content, it writes `ch` and clears `fold`; released below it, it writes `fold` and clears `ch`; a double click clears both. `ch` below the content is ignored [H1].
 - **RESIZE.4 A long paste.** A block made by a paste longer than 14 lines starts with `fold` 12 (`PASTEFOLD`); nothing else folds by itself [H2].
@@ -336,7 +336,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **D-4** Its sheet's columns are the window's when the window is wider than the note, so rest widths depend on the window; the engine uses `SHEETW` [W7].
 - **D-5** It draws a fresh block's placeholder «Пишите…» and counts its width; the engine never measures a placeholder (§1.1).
 - **D-6** Its rows are stored for every block, and its temporary heights move the blocks under them in the stored state; the engine derives the rows of blocks with upper neighbours (§2.1).
-- **D-7** Its width handle separates the blocks after each change of the width, with no retrace; RESIZE.1 proposes the retrace through SETTLE (O-9).
+- **D-7** Its width handle starts every move from the gesture's start, as RESIZE.1 says, but separates the blocks by its own rule (the block more to the left stays, the other moves aside or down); the engine follows P-ASIDE and P-SINK [W8].
 - **D-8** Its carried elastic block keeps the width it had at rest, and an area's pushed-down child takes its width back only after the release; the engine follows DRAG.A5 and phase 9 (INV-8).
 - **D-9** Its choice of the neighbour that lets the block through depends on the order of storage, and the Shift path and the hold path choose differently; the engine follows phase 11.
 - **D-10** Its separation after a size change keeps the block more to the left (or, in one column, the upper one) and moves the other aside or down, and an elastic block at its minimum pushes its neighbour; the engine follows P-SEP and P-REST.
@@ -355,7 +355,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-6** Entering and leaving an area by carrying (AREA.7), and folding an area [H5] in the new model.
 - **O-7 (L1)** Pinned blocks: later.
 - **O-8** Decided as W7 (2026-11-02): a sheet width per note.
-- **O-9** The width handle: does widening a block press its neighbours aside with a retrace, like a carry (RESIZE.1)?
+- **O-9** Decided as W8 (2026-11-02): the width handle presses its neighbours aside, with a retrace, like a carry.
 - **O-10** «Never narrow»: may an elastic block's neighbours cap its rest width (it never narrows when pressed, but is no wider than its room), or does it keep its natural width (SIZE.4)?
 - **O-11** Keyboard focus in the app look: with the focus ring hidden (V1), how a keyboard user sees which block has the focus.
 - **O-13** Decided (W7, 2026-11-02): narrowing the sheet works as an area's side handle.
