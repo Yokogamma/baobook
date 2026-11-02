@@ -323,7 +323,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - At the edge of the sheet: «возвращается», «упирается» (W4 chose «упругий сужается»).
 - An area narrowed below its content: «ручка упирается», «до содержимого» (W5 chose «блоки уходят вниз»).
 - Writing next to a block: «как сейчас» (M8 chose «с подсказками»).
-- Swapping: «по середине» (M6 chose «подержать или Shift»; whether to keep the middle rule as a setting is O-4).
+- Swapping: «по середине» (M6 chose «подержать или Shift»; the middle rule is dropped, O-4).
 - How an elastic block gives way: «сначала сужаться» (dropped, W10).
 - Text in its cells, fields, background (P18, open, O-2).
 
@@ -352,7 +352,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-1** Decided as G6 (2026-11-02): the rows a head block moved up by hand leaves become its own.
 - **O-2 (P18)** Where the text stands in its cells, which field, which background; with wide fields, one row under every block keeps blocks apart.
 - **O-3 (P12)** The release order of the rules against the sync release.
-- **O-4** Keep «по середине» as a setting next to M6, or drop it.
+- **O-4** Decided (M6, 2026-11-02): «по середине» is dropped; one way to swap.
 - **O-5 (P4–P7)** The phone and the computer working together: stage 2 [W1].
 - **O-6** Entering and leaving an area by carrying (AREA.7), and folding an area [H5] in the new model.
 - **O-7 (L1)** Pinned blocks: later.
