@@ -261,7 +261,7 @@ Inputs: the stored layout, the window width, the settings, and during a gesture 
 - **VIEW.4 A block made on a narrow screen.** Made after block X, it goes under X on the computer, in X's column, one empty row under X's bottom, as a change of §5.2 like EDIT.4. «+» puts one under every block at the left margin. In the narrow view it shows by reading order, so it can appear after a block that stands beside X [W6].
 - **VIEW.5 «Показати як на компʼютері».** The computer layout scaled to the screen, only to look at [W6].
 - **VIEW.6 The look during a gesture.** Every block shows its real size as a thin frame, its empty part included; the carried block gets a background; a selected block shows its frame only. Guides follow the carried block: a hairline along the left edge of its card and one along its top, across the sheet, solid where they meet the starting place or the left or top edge of another block, the row one paler than the column. A neighbour pressed for `HOLD` lights its outline while the time runs and keeps it lit while it lets the block through. The width handle shows only under the pointer [V1, M6, M7].
-- **VIEW.7 Two looks.** The app look shows only what VIEW.6 lists. The testing look («dev») adds what the rules work with: the gap runs with their owners and sizes, the blocks' letters, sizes in cells, row numbers, the outline of the place a block was taken from, the focus ring. Both looks are kept in the app; the testing look is switched on to track down a bug [V1]. Keyboard focus in the app look is O-11.
+- **VIEW.7 Two looks.** The app look shows only what VIEW.6 lists. The testing look («dev») adds what the rules work with: the gap runs with their owners and sizes, the blocks' letters, sizes in cells, row numbers, the outline of the place a block was taken from, the focus ring. Both looks are kept in the app; the testing look is switched on to track down a bug [V1]. A block selected with the keyboard shows its frame solid instead of dashed: that is the focus in the app look [V1].
 
 ## 11. Precedence
 
@@ -359,7 +359,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-8** Decided as W7 (2026-11-02): a sheet width per note.
 - **O-9** Decided as W8 (2026-11-02): the width handle presses its neighbours aside, with a retrace, like a carry.
 - **O-10** Decided as W9 (2026-11-02): at rest the neighbours cap the width under every order.
-- **O-11** Keyboard focus in the app look: with the focus ring hidden (V1), how a keyboard user sees which block has the focus.
+- **O-11** Decided (V1, 2026-11-02): keyboard focus is the selected block's frame, solid.
 - **O-13** Decided (W7, 2026-11-02): narrowing the sheet works as an area's side handle.
 - **O-14** Decided (W7, 2026-11-02): no stretching past the edge of the screen.
 - **O-15** Decided (W7, 2026-11-02): a note begun on a phone fits the phone until a computer first opens it and gives it that computer's width (VIEW.1c).
