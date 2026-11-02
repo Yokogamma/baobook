@@ -57,7 +57,7 @@ Rules marked **(proposed)** rest on no decision of the owner yet; they say what 
 | `DESKW` | (proposed) 40 cells of visible area with the list open | A device that shows at least this much counts as a computer: it shows notes in the normal layout and gives a note without a width its own | W7 |
 | `TEXTW` | 26 cells (16 in the mockup) | The widest an elastic text gets by itself | W3 |
 | `MINC` | 6 cells, a setting | The narrowest a long elastic text gets when pressed | W3 |
-| `ORDER` | «push first, then narrow» (default), «narrow first, then push», «never narrow»; a setting | How an elastic block gives way | W3 |
+| `ORDER` | «push first, then narrow» (default) or «never narrow»; a setting | How an elastic block gives way | W3 |
 | `HOLD` | 0.7 s | Pressing still against a neighbour that long lets the block through | M6 |
 | `STILL` | 8 px | A pointer that stays within this radius counts as still | M6 |
 | `STICK` | ¾ cell | How far the pointer goes before the block leaves the column or row it was taken from | M7 |
@@ -95,10 +95,10 @@ The engine keeps these after every SETTLE; each module's tests check them.
 Inputs: a block's content, its set sizes, its container's columns, the blocks on its rows to its right, `ORDER`, `MINC`, `TEXTW`. Outputs, as answers to three questions: the block's rows at a given width; the narrowest it may get (none for a block that never narrows); the empty lines at the start and end of its text that may hide. And the rest width of every elastic block. SIZE owns the hidden-lines count; other modules change it only through a change of §5.2. SIZE knows nothing about gestures.
 
 - **SIZE.1 Rest width.** An elastic text is as wide as its natural width, at most `TEXTW`, and no wider than the room it has: the room ends at its container's right edge and at the handle cell of the nearest block to its right on the rows it takes at that width. It is never narrower than `min(natural width, MINC)`. When room frees up, it widens again by itself [W3]. (`autoCard`)
-- **SIZE.2 Giving way.** Pressed from either side, an elastic block gives way the same way, by `ORDER`: it moves aside as a whole while there is room and narrows where it meets the edge of its container or a block that cannot move; or it narrows first and then moves; or it never narrows. It narrows on the side it is pressed from, down to `min(natural width, MINC)` [W3]. What a block that can neither move nor narrow does is SETTLE's (P-ASIDE, phase 9). (`elastic.min`, `elastic.first`, `shove`)
+- **SIZE.2 Giving way.** Pressed from either side, an elastic block gives way the same way, by `ORDER`: it moves aside as a whole while there is room and narrows where it meets the edge of its container or a block that cannot move; or it never narrows. It narrows on the side it is pressed from, down to `min(natural width, MINC)` [W3, W10]. What a block that can neither move nor narrow does is SETTLE's (P-ASIDE, phase 9). (`elastic.min`, `elastic.first`, `shove`)
 - **SIZE.3 Set width.** A block with `cw` keeps it and is only moved, never narrowed [W3, W4]. A double click on the width handle removes `cw` (RESIZE.2).
 - **SIZE.4 «Never narrow» at rest.** The rest width is the same under every `ORDER`: with «never narrow» too, a close neighbour on the right caps it (SIZE.1). «Never narrow» only changes SIZE.2, how the block gives way when pressed [W9].
-- **SIZE.5 «Narrow first» at rest (proposed).** A block narrowed from its left by «narrow first» gets its rest width back on its right in phase 9 when it has room there, so after the gesture it looks as if it had been pushed. Whether it should keep the narrowed width is O-12.
+- **SIZE.5 (dropped).** «Narrow first» is no longer an order [W10].
 - **SIZE.6 Height.** The shown height as in §1.2; nothing ever scrolls inside a block; a text's lines are one cell tall, so a fold always falls between two lines [H1–H6]. `ch` below the content is ignored: a block whose content outgrows its `ch` grows (RESIZE.3).
 - **SIZE.7 Hidden empty lines.** An elastic text with no size set by hand may hide the empty lines at the start and at the end of its text; the lines between paragraphs never hide. Only an area's top or bottom handle hides them (P-SQUEEZE); the count is stored, the text never changes. The end lines hide first. They come back when the caret is put in the block (EDIT.5) or when the area grows again (AREA.5) [W5].
 - **SIZE.8 Width and height decide each other.** A text's rest width depends on which neighbours cross its rows, and its rows depend on its width. SIZE settles this in reading order, each block once per pass, in `RESTPASSES` passes, the same on every device (E-2).
@@ -324,6 +324,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - An area narrowed below its content: «ручка упирается», «до содержимого» (W5 chose «блоки уходят вниз»).
 - Writing next to a block: «как сейчас» (M8 chose «с подсказками»).
 - Swapping: «по середине» (M6 chose «подержать или Shift»; whether to keep the middle rule as a setting is O-4).
+- How an elastic block gives way: «сначала сужаться» (dropped, W10).
 - Text in its cells, fields, background (P18, open, O-2).
 
 `ORDER` is a real setting [W3]; the dev look is a real feature [V1].
@@ -363,7 +364,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-14** Decided (W7, 2026-11-02): no stretching past the edge of the screen.
 - **O-15** Decided (W7, 2026-11-02): a note begun on a phone fits the phone until a computer first opens it and gives it that computer's width (VIEW.1c).
 - **O-16** Decided (W7, 2026-11-02): the narrow view, and the user can zoom in from it to the real layout with the scrollbar and the hand (VIEW.1).
-- **O-12** «Narrow first»: a block narrowed from its left gets its width back on its right once nothing presses it (SIZE.5). Should it keep the narrowed width instead, and how would that be stored?
+- **O-12** Decided as W10 (2026-11-02): «narrow first» is dropped.
 
 ### 15.2 For the engine's design
 
