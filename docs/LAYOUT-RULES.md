@@ -157,7 +157,8 @@ Each phase reads only what the phases before it produced, and visits several blo
 | An arrow in position mode | the selected block one cell over | DRAG.B2, B3 | as a carry | as a carry | empty |
 | A click on the empty sheet, «+», a block made on a narrow screen | the new empty block at its cell, away from the start | DRAG.B2 with «away», and B3 | as a carry | as a carry | empty |
 | The width handle (proposed) | the widened block itself, at its new width; no above or below is needed | every block it hits on its right is met from the side, pressed right | P-SINK, in phase 6 after P-DOWN | the width clamped at the container's edge; an area grows | the gesture's start, RESIZE.1 |
-| The right edge of the sheet, carried outwards | none | — | — | the sheet only grows here; carrying it inwards is O-13 | the gesture's start |
+| The right edge of the sheet, carried outwards | none | — | — | the sheet grows, up to the edge of the screen | the gesture's start |
+| The right edge of the sheet, carried inwards | none: the edge is a wall, as an area's side handle | as an area's side handle | P-SINK | refused: the edge stops (§5.4) | the gesture's start |
 | A side handle of an area | none: the moving edge is a wall (§5.3) | every child sticking out past it is pressed inwards by the wall | P-SINK, in phase 6 after P-DOWN | refused: the handle stops (§5.4) | the gesture's start, AREA.6 |
 | The top or bottom handle of an area | none: P-SQUEEZE replaces phases 2–7 | — | — | refused: the handle stops (§5.4) | the gesture's start, AREA.6 |
 | The height handle, a double click on a handle | none | — | — | an area grows | none |
@@ -233,7 +234,7 @@ An area is a container inside the sheet: inside it, every rule of SIZE, GAP, SET
 - **AREA.5 A handle carried outwards.** The children keep their places on the sheet; hidden empty lines come back while there is room, the ones nearest the moving edge first [W5]. (`unsqueeze`)
 - **AREA.6 One gesture, one entry.** The handle's memory is the layout and the rectangle at the start of the gesture, nothing else; every move of the handle is a SETTLE from it, so carrying it back retraces the way; letting go stores the area and its children as one undo entry [W5].
 - **AREA.7 Entering and leaving.** How a block enters or leaves an area by carrying is not yet tried in the mockup (O-6).
-- **AREA.8 The sheet's right edge.** The sheet is a container too, and its right edge is a handle: carried outwards into the white room of a wider window, it widens `SHEETW`, and letting go stores it with one undo entry; nothing moves. Carrying it inwards (O-13) and past the edge of the screen (O-14) are open [W7].
+- **AREA.8 The sheet's right edge.** The sheet is a container too, and its right edge is a handle. Carried outwards into the white room of a wider window, it widens `SHEETW`, up to the edge of the screen and no further; nothing moves. Carried inwards, it narrows `SHEETW` as an area's side handle narrows an area (AREA.3), except that the sheet has no bottom edge to stop at. Letting go stores it with one undo entry [W7].
 
 ## 9. Module EDIT: clicks, the caret and new blocks
 
@@ -355,8 +356,8 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-9** The width handle: does widening a block press its neighbours aside with a retrace, like a carry (RESIZE.1)?
 - **O-10** «Never narrow»: may an elastic block's neighbours cap its rest width (it never narrows when pressed, but is no wider than its room), or does it keep its natural width (SIZE.4)?
 - **O-11** Keyboard focus in the app look: with the focus ring hidden (V1), how a keyboard user sees which block has the focus.
-- **O-13** Narrowing the sheet by its right edge: does the edge stop at the rightmost block, or press the blocks inwards and down as an area's side handle does (W5)? Recommended: as an area, one rule for both.
-- **O-14** Stretching the sheet past the edge of the screen while the handle is held, with the view scrolling, or only up to the edge? Recommended: up to the edge.
+- **O-13** Decided (W7, 2026-11-02): narrowing the sheet works as an area's side handle.
+- **O-14** Decided (W7, 2026-11-02): no stretching past the edge of the screen.
 - **O-15** The width of a note begun on a phone: the phone's own, or at least a laptop's (for example 40 cells), so that it is not a narrow strip on a computer? Recommended: at least a laptop's.
 - **O-16** A note too wide for the visible area even at `MINSCALE`: the narrow view as W2 says, or may the user zoom in and work in the real layout with the scrollbar and the hand?
 - **O-12** «Narrow first»: a block narrowed from its left gets its width back on its right once nothing presses it (SIZE.5). Should it keep the narrowed width instead, and how would that be stored?
