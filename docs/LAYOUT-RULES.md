@@ -18,7 +18,7 @@ Rules marked **(proposed)** rest on no decision of the owner yet; they say what 
 ### 1.1 Space
 
 - **Cell.** The grid step `G`, 24 px at 16 px text. Dots of the grid sit on cell corners. Every size and threshold is counted in cells; a larger text size scales the sheet and moves nothing.
-- **Container.** The sheet, or an area. Each has its own columns `0 … cols−1` and rows `0, 1, …`. An area's `cols` is its width; the sheet's is `SHEETW` (§1.5), the same on every device, never the window's width (O-8).
+- **Container.** The sheet, or an area. Each has its own columns `0 … cols−1` and rows `0, 1, …`. An area's `cols` is its width; the sheet's is `SHEETW` (§1.5), stored with the note, the same on every device, never the window's width [W7].
 - **Block.** A rectangle of cells in one container: column `col`, row `y`, width `w` in cells, height `h` in rows. Every block's card is at least one cell wide: an empty text's natural width is one cell, and a placeholder is drawn but never measured (PR-8).
 - **Handle cell.** The first cell of a block, column `col`, holds the grip ⋮⋮. It is not part of the block for collisions [M4].
 - **Card.** The rest of the block: columns `col+1 … col+w−1`, rows `y … y+h−1`. The card holds the content.
@@ -53,7 +53,7 @@ Rules marked **(proposed)** rest on no decision of the owner yet; they say what 
 
 | Name | Value | Meaning | Decision |
 |---|---|---|---|
-| `SHEETW` | (proposed) a width per note, the same on every device | The sheet's columns: its right edge for rest widths and for carrying | O-8 |
+| `SHEETW` | per note, stored; a new note gets the width its device shows with the list of notes open | The sheet's columns: its right edge for rest widths and for carrying | W7 |
 | `TEXTW` | 26 cells (16 in the mockup) | The widest an elastic text gets by itself | W3 |
 | `MINC` | 6 cells, a setting | The narrowest a long elastic text gets when pressed | W3 |
 | `ORDER` | «push first, then narrow» (default), «narrow first, then push», «never narrow»; a setting | How an elastic block gives way | W3 |
@@ -157,6 +157,7 @@ Each phase reads only what the phases before it produced, and visits several blo
 | An arrow in position mode | the selected block one cell over | DRAG.B2, B3 | as a carry | as a carry | empty |
 | A click on the empty sheet, «+», a block made on a narrow screen | the new empty block at its cell, away from the start | DRAG.B2 with «away», and B3 | as a carry | as a carry | empty |
 | The width handle (proposed) | the widened block itself, at its new width; no above or below is needed | every block it hits on its right is met from the side, pressed right | P-SINK, in phase 6 after P-DOWN | the width clamped at the container's edge; an area grows | the gesture's start, RESIZE.1 |
+| The right edge of the sheet, carried outwards | none | — | — | the sheet only grows here; carrying it inwards is O-13 | the gesture's start |
 | A side handle of an area | none: the moving edge is a wall (§5.3) | every child sticking out past it is pressed inwards by the wall | P-SINK, in phase 6 after P-DOWN | refused: the handle stops (§5.4) | the gesture's start, AREA.6 |
 | The top or bottom handle of an area | none: P-SQUEEZE replaces phases 2–7 | — | — | refused: the handle stops (§5.4) | the gesture's start, AREA.6 |
 | The height handle, a double click on a handle | none | — | — | an area grows | none |
@@ -232,12 +233,13 @@ An area is a container inside the sheet: inside it, every rule of SIZE, GAP, SET
 - **AREA.5 A handle carried outwards.** The children keep their places on the sheet; hidden empty lines come back while there is room, the ones nearest the moving edge first [W5]. (`unsqueeze`)
 - **AREA.6 One gesture, one entry.** The handle's memory is the layout and the rectangle at the start of the gesture, nothing else; every move of the handle is a SETTLE from it, so carrying it back retraces the way; letting go stores the area and its children as one undo entry [W5].
 - **AREA.7 Entering and leaving.** How a block enters or leaves an area by carrying is not yet tried in the mockup (O-6).
+- **AREA.8 The sheet's right edge.** The sheet is a container too, and its right edge is a handle: carried outwards into the white room of a wider window, it widens `SHEETW`, and letting go stores it with one undo entry; nothing moves. Carrying it inwards (O-13) and past the edge of the screen (O-14) are open [W7].
 
 ## 9. Module EDIT: clicks, the caret and new blocks
 
 Inputs: a click or a hover on the sheet, the blocks' rectangles. Outputs: where the caret goes, or a change for SETTLE.
 
-- **EDIT.1 What a point belongs to.** A point belongs to a block when it lies on its card, the spare room of a set size included, or within `NEAR` to the right of the card or under it. A point on a card belongs to that card even when it is within `NEAR` of another; a point within `NEAR` of two cards belongs to the first in reading order. Any other point of a container is empty sheet [M8].
+- **EDIT.1 What a point belongs to.** A point belongs to a block when it lies on its card, the spare room of a set size included, or within `NEAR` to the right of the card or under it. A point on a card belongs to that card even when it is within `NEAR` of another; a point within `NEAR` of two cards belongs to the first in reading order. Any other point of a container is empty sheet [M8]. A point in the white room beyond `SHEETW` is no part of the sheet: a click there does nothing [W7].
 - **EDIT.2 Before the click.** Over a block, its whole frame shows and the cursor is a text cursor; over the empty sheet, the cursor is a cell and nothing else shows [M8].
 - **EDIT.3 A click on a block.** On its text, the caret goes there. To the right of a line, it goes to the end of that line. Below the text, in the spare room or within `NEAR` under the card, it goes to the first empty line after the text, made if there is none: a provisional line, a temporary height (§1.2), which becomes text only when something is written on it and is taken back when the caret leaves without it. Clicking below again finds the same line; only Enter adds lines. A block with spare room keeps its height; one without grows by a row, as with Enter [M8].
 - **EDIT.4 A click on the empty sheet.** A single click starts a new empty elastic text there, its card on the clicked cell: a change for SETTLE (§5.2). Left empty, it is removed as a delete (GAP.6); if nothing else has changed since the click, the layout before the click is restored instead, and the click and the removal together make no undo entry [M8, C3].
@@ -248,7 +250,9 @@ Inputs: a click or a hover on the sheet, the blocks' rectangles. Outputs: where 
 
 Inputs: the stored layout, the window width, the settings, and during a gesture the note's width frozen in its memory. Outputs: what is drawn. VIEW never writes the layout (INV-6), and nothing it hides or shows changes how anything is measured (PR-8).
 
-- **VIEW.1 Window and scale.** The width that counts is the note's own, up to the right edge of its rightmost card. A window wider than the note shows it as it is, with room on the right. A narrower one shows the whole sheet scaled down to fit, no smaller than `MINSCALE`. Narrower still, the narrow view (VIEW.2). Widened again, the note is as it was. During a gesture the note's width is the frozen one [W2].
+- **VIEW.1 Window and scale.** The width that counts is the sheet's, `SHEETW`. The visible area is the window less the list of notes when the list is docked. A visible area wider than the sheet shows the sheet with its dot grid and plain white room to its right, where nothing can be placed. A narrower one shows the whole sheet scaled down to fit, no smaller than `MINSCALE`; narrower still, the narrow view (VIEW.2), unless O-16 decides otherwise. The user can zoom in from the fitted scale (the scale is a setting of the device, never stored in the note), and a horizontal scrollbar appears. Widened again, the note is as it was. During a gesture the visible area and the scale are frozen [W2, W7].
+- **VIEW.1a The list of notes.** Hiding it only widens the visible area; it never changes a note. Opened, it pushes the note aside when the note still fits beside it at its current scale, and otherwise opens over the note like a drawer, so that opening it never rescales the note [W7].
+- **VIEW.1b The hand.** In the hand mode a drag moves the sheet in any direction and does nothing else: no click, no carry, no new block. It is on while Space or the middle mouse button is held, or while the hand button is pressed (proposed); two fingers on a touchpad or a touch screen scroll the sheet as always [W7].
 - **VIEW.2 The narrow view.** The blocks one under another in reading order, an empty row between them, none wider than the screen; an area as a frame with its children inside in the same way; long blocks folded at `FOLDPHONE` rows, a temporary height. The stored layout under it keeps `SHEETW`: nothing measured for the narrow view feeds back into it [W2, W6, H6].
 - **VIEW.3 What the narrow view allows.** Reading, writing and formatting text, following links, copying, unfolding and folding for reading, deleting and creating blocks. Not carrying, the arrows, the handles, «В область…» and «З області» [W6].
 - **VIEW.4 A block made on a narrow screen.** Made after block X, it goes under X on the computer, in X's column, one empty row under X's bottom, as a change of §5.2 like EDIT.4. «+» puts one under every block at the left margin. In the narrow view it shows by reading order, so it can appear after a block that stands beside X [W6].
@@ -326,7 +330,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **D-1** One area per example, standing for the sheet; areas inside the sheet, entering and leaving, folding an area are not in it.
 - **D-2** It measures text in the page; the engine asks a measuring function (E-3).
 - **D-3** Its elastic maximum is 16 cells; the app's is 26 [W3].
-- **D-4** Its sheet's columns are the window's when the window is wider than the note, so rest widths depend on the window; the engine uses `SHEETW` (O-8).
+- **D-4** Its sheet's columns are the window's when the window is wider than the note, so rest widths depend on the window; the engine uses `SHEETW` [W7].
 - **D-5** It draws a fresh block's placeholder «Пишите…» and counts its width; the engine never measures a placeholder (§1.1).
 - **D-6** Its rows are stored for every block, and its temporary heights move the blocks under them in the stored state; the engine derives the rows of blocks with upper neighbours (§2.1).
 - **D-7** Its width handle separates the blocks after each change of the width, with no retrace; RESIZE.1 proposes the retrace through SETTLE (O-9).
@@ -347,10 +351,14 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-5 (P4–P7)** The phone and the computer working together: stage 2 [W1].
 - **O-6** Entering and leaving an area by carrying (AREA.7), and folding an area [H5] in the new model.
 - **O-7 (L1)** Pinned blocks: later.
-- **O-8** The sheet's width: what is the right edge of the sheet for rest widths (SIZE.1) and for carrying past it (W4)? Recommended: a width per note, `SHEETW`, the same on every device, so that a monitor and a laptop never rewrite each other's layout; a wider window shows room beyond it.
+- **O-8** Decided as W7 (2026-11-02): a sheet width per note.
 - **O-9** The width handle: does widening a block press its neighbours aside with a retrace, like a carry (RESIZE.1)?
 - **O-10** «Never narrow»: may an elastic block's neighbours cap its rest width (it never narrows when pressed, but is no wider than its room), or does it keep its natural width (SIZE.4)?
 - **O-11** Keyboard focus in the app look: with the focus ring hidden (V1), how a keyboard user sees which block has the focus.
+- **O-13** Narrowing the sheet by its right edge: does the edge stop at the rightmost block, or press the blocks inwards and down as an area's side handle does (W5)? Recommended: as an area, one rule for both.
+- **O-14** Stretching the sheet past the edge of the screen while the handle is held, with the view scrolling, or only up to the edge? Recommended: up to the edge.
+- **O-15** The width of a note begun on a phone: the phone's own, or at least a laptop's (for example 40 cells), so that it is not a narrow strip on a computer? Recommended: at least a laptop's.
+- **O-16** A note too wide for the visible area even at `MINSCALE`: the narrow view as W2 says, or may the user zoom in and work in the real layout with the scrollbar and the hand?
 - **O-12** «Narrow first»: a block narrowed from its left gets its width back on its right once nothing presses it (SIZE.5). Should it keep the narrowed width instead, and how would that be stored?
 
 ### 15.2 For the engine's design
@@ -371,3 +379,4 @@ This document replaces §3 of `LAYOUT-MODEL.md` (the model rule by rule) and sta
 - **Round 1 → 2** (11 findings). FOLLOW and RELINK as named steps at fixed points (PR-6); RELINK compares with `base`, the layout after phase 1 with an away block's column closed (D-11); phase 9 bounded and relinked, containment last; the let-through chosen after the result (phase 11), the ghost pinned against it, the swap geometry, restarts bounded; a table of changes with the moved block, the sides, the lack of room and the containment of each; P-SQUEEZE for an area's top and bottom handles, the stopped handle found by a search in space; P-ASIDE, P-UP and P-SEP made single-valued, P-REST for an elastic block at its minimum; «narrow first» at rest as O-12; the stored pairs and lends, neighbour order for FOLLOW; the hidden-lines count owned by SIZE; EDIT's memory; DRAG.A5 marked proposed.
 - **Round 2 → 3** (10 findings). The neighbour letting the block through leaves the memory when the target passes its pinned row, and after a swap the memory holds the swapped neighbour; the blocks under a pinned neighbour follow it; a lower block left with no upper neighbour takes the row of the taken block's top plus its lend and the rows not its own (GAP.6); P-SINK for a block with no room aside under a handle; phase 1a recomputes only widths whose content changed; SETTLE returns `start`, the memory and `pressed`, and DRAG runs the hold timer on `pressed`; GAP.5 rule 1 by facing edges, rule 2 for any block gone from between a pair; both judgements in phase 2; a temporary height's result is never stored; P-SEP between uncarried blocks and P-REST marked proposed.
 - **Round 3 → 4** (7 findings; none of the earlier fixes found wrong). The released let-through neighbour keeps its phase 2 judgements; the wall of an area's side handle defined, not a block; the width-handle row names its moved block; phase 11 for a carry only; an empty text is one cell wide and a placeholder is never measured; P-SINK's column under a wall and under the width handle; an area's growth handed to its container's SETTLE; EDIT.4 restores the layout before the click when nothing else changed; a pair new at rest gets no rows.
+- **After round 4.** The owner answered O-8 (W7, 2026-11-02): the sheet's width per note, the white room beyond it, stretching it by its right edge (AREA.8), zoom and scroll, the hand (VIEW.1b), the list of notes (VIEW.1a); O-13 to O-16 opened.
