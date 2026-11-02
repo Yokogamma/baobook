@@ -261,7 +261,8 @@ Inputs: the stored layout, the window width, the settings, and during a gesture 
 - **VIEW.4 A block made on a narrow screen.** Made after block X, it goes under X on the computer, in X's column, one empty row under X's bottom, as a change of §5.2 like EDIT.4. «+» puts one under every block at the left margin. In the narrow view it shows by reading order, so it can appear after a block that stands beside X [W6].
 - **VIEW.5 «Показати як на компʼютері».** The computer layout scaled to the screen, only to look at [W6].
 - **VIEW.6 The look during a gesture.** Every block shows its real size as a thin frame, its empty part included; the carried block gets a background; a selected block shows its frame only. Guides follow the carried block: a hairline along the left edge of its card and one along its top, across the sheet, solid where they meet the starting place or the left or top edge of another block, the row one paler than the column. A neighbour pressed for `HOLD` lights its outline while the time runs and keeps it lit while it lets the block through. The width handle shows only under the pointer [V1, M6, M7].
-- **VIEW.7 Two looks.** The app look shows only what VIEW.6 lists. The testing look («dev») adds what the rules work with: the gap runs with their owners and sizes, the blocks' letters, sizes in cells, row numbers, the outline of the place a block was taken from, the focus ring. Both looks are kept in the app; the testing look is switched on to track down a bug [V1]. A block selected with the keyboard shows its frame solid instead of dashed: that is the focus in the app look [V1].
+- **VIEW.6a The note's view settings.** Where the text stands and which field (P18) are a setting of the app, synced, which a note may override with its own, stored and synced; changing either is a change for SETTLE (a re-layout with its undo). A note's view switch chooses between borders always visible and the reading mode: at rest only text on a clean sheet; the borders of all blocks show while a block is carried (VIEW.6), while the pointer is held still on the empty sheet for a moment (they go when it is let go, and nothing is created), and, being tried, while a new block is started (O-17). A new block starts with no frame, only the caret. Borders show as a thin frame or with a background, chosen in the same view settings [V2].
+- **VIEW.7 Two looks.** The app look shows only what VIEW.6 lists. The testing look («dev») adds what the rules work with: the gap runs with their owners and sizes, the blocks' letters, sizes in cells, row numbers, the outline of the place a block was taken from, the focus ring. Both looks are kept in the app; the testing look is switched on, deep in the app's settings, to track down a bug [V1, V2]. A block selected with the keyboard shows its frame solid instead of dashed: that is the focus in the app look [V1].
 
 ## 11. Precedence
 
@@ -350,7 +351,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 ### 15.1 For the owner
 
 - **O-1** Decided as G6 (2026-11-02): the rows a head block moved up by hand leaves become its own.
-- **O-2 (P18)** Where the text stands in its cells, which field, which background; with wide fields, one row under every block keeps blocks apart.
+- **O-2 (P18)** The four combinations stay as settings (V2); which one is the default is open.
 - **O-3 (P12)** The release order of the rules against the sync release.
 - **O-4** Decided (M6, 2026-11-02): «по середине» is dropped; one way to swap.
 - **O-5 (P4–P7)** The phone and the computer working together: stage 2 [W1].
@@ -364,6 +365,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-14** Decided (W7, 2026-11-02): no stretching past the edge of the screen.
 - **O-15** Decided (W7, 2026-11-02): a note begun on a phone fits the phone until a computer first opens it and gives it that computer's width (VIEW.1c).
 - **O-16** Decided (W7, 2026-11-02): the narrow view, and the user can zoom in from it to the real layout with the scrollbar and the hand (VIEW.1).
+- **O-17** In the reading mode, while a new block is started: the borders of the other blocks show, to see where it goes, or nothing shows? Being tried in the mockup.
 - **O-12** Decided as W10 (2026-11-02): «narrow first» is dropped.
 
 ### 15.2 For the engine's design
