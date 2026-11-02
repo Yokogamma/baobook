@@ -112,7 +112,7 @@ Inputs: the layout a SETTLE compares with (`base`, §5.1) and the layout after i
 - **GAP.3 Only between blocks.** A gap exists only for a pair of neighbours; pulling the last block of a column up, moving it away or deleting the block under it leaves no gap hanging [G3].
 - **GAP.4 FOLLOW.** The derived rows are recomputed by INV-2 in neighbour order: the blocks under a block whose shown height changed follow with their gaps and come back when it shrinks. A head block keeps its row. No pair and no gap changes [H1, G1]. (`reflow`)
 - **GAP.5 RELINK.** The pairs are found again from the places, and every pair's runs are set by comparing with `base`, in reading order of the lower block:
-  1. A pair that was a pair in `base` keeps its runs, changed by how far each of the two facing edges went (the upper block's bottom, the lower block's top), after the part both went together is taken out: the upper block's bottom went down, so rows go from the top of the gap, its own first; it went up, so the rows it left come under it with their owners, and with nothing above it its own rows (GAP.8) — G5 decided this for a block moved up by hand; for a block pushed up or shortened it is proposed, with O-1; the lower block went up, so rows go from the bottom; the lower block went down, and it is the carried block, so the gap grows by rows owned by the upper block; a lower block pushed down by any other block keeps its runs [G5, G1]. (`adjust`, `left`)
+  1. A pair that was a pair in `base` keeps its runs, changed by how far each of the two facing edges went (the upper block's bottom, the lower block's top), after the part both went together is taken out: the upper block's bottom went down, so rows go from the top of the gap, its own first; it went up, so the rows it left come under it with their owners, and with nothing above it its own rows (GAP.8) — G5 and G6 decided this for a block moved up by hand; for a head block pushed up it follows G6 (proposed); the lower block went up, so rows go from the bottom; the lower block went down, and it is the carried block, so the gap grows by rows owned by the upper block; a lower block pushed down by any other block keeps its runs [G5, G1]. (`adjust`, `left`)
   2. A new pair whose blocks were, in `base`, the upper and the lower neighbour of one block that is gone from between them (deleted, away, or the carried block now elsewhere) gets the runs above that block, then its lend, then the runs under it that were not its own [G2, C3]. (`fresh`)
   3. A new pair formed by the carried block put into a gap of `base`: the gap keeps its owners and is split around the block, the runs above it and the runs under it; the rows its body covers become its lend [G4]. Put above a head block that had free room above it, the block gets the rows between them as unowned runs, and its lend is unowned too, so taking it away gives the head block its row back [C3]. (`fresh`, `gapUnder`, `gapOver`)
   4. Any other new pair: the rows belong to the block above; a pair that is new in phase 9's RELINK only because a block changed width at rest gets no rows, so its lower block stays held by its binding gap (rule 5) and still follows when that one moves (proposed) [H1].
@@ -120,7 +120,7 @@ Inputs: the layout a SETTLE compares with (`base`, §5.1) and the layout after i
   (`relink`)
 - **GAP.6 A block taken away.** Deleted, or carried away (DRAG.B1): its pairs are replaced by pairs across it, by GAP.5 rule 2; its own rows, wherever they lie in any gap, go; unowned rows stay; then FOLLOW: the blocks under it rise into its place. A lower block left with no upper neighbour takes the row of the taken block's top plus its lend plus the runs under it that were not its own, and that row is its stored row from then on [G2, C3]. (`removed`)
 - **GAP.7 Gaps live in their columns.** A block carried to other columns never brings its rows along; in the new columns it gets no rows of its own, so gaps never add up [G4].
-- **GAP.8 A head block moved up by hand (pending O-1).** The empty rows it leaves above the block under it become its own rows (GAP.5 rule 1, «with nothing above it»), as the mockup does until the owner decides P14. (`left` with nothing above)
+- **GAP.8 A head block moved up by hand.** The empty rows it leaves above the block under it become its own rows (GAP.5 rule 1, «with nothing above it»): every empty row under a head block is its own, so deleted or carried away it takes them along and the block under it rises to its place [G6]. (`left` with nothing above)
 
 ## 5. Module SETTLE: the one solver
 
@@ -347,7 +347,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 
 ### 15.1 For the owner
 
-- **O-1 (P14)** A head block moved up by hand: do the rows it leaves become its own gap (GAP.8)?
+- **O-1** Decided as G6 (2026-11-02): the rows a head block moved up by hand leaves become its own.
 - **O-2 (P18)** Where the text stands in its cells, which field, which background; with wide fields, one row under every block keeps blocks apart.
 - **O-3 (P12)** The release order of the rules against the sync release.
 - **O-4** Keep «по середине» as a setting next to M6, or drop it.
