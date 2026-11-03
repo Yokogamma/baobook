@@ -1,6 +1,6 @@
 # The layout engine: implementation plan
 
-**Status: draft after review round 1, 2026-11-03.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
+**Status: draft after review round 2, 2026-11-03.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
 
 Rules are cited by their ids in `LAYOUT-RULES.md` (`SIZE.1`, `P-ASIDE`, `INV-8`…); decisions by their ids in the table of `LAYOUT-MODEL.md` §2 (`W3`, `G6`…). **(proposed)** marks what rests on no decision of the owner yet.
 
@@ -44,6 +44,8 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **New for 0.1: `W0`**, the sheet width in pixels that the owner's notes are read at (§3.1).
 - **New for 0.1: the arrows of position mode.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.
 - **New for 0.1: the code block's width** (§4.4) and **a collapsed area met by a carried block** (§3.2): both keep today's behaviour as far as the rules allow, marked proposed.
+- **New for 0.1: who edits the scaled layout.** `DESKW` is in the batch of small proposals; until it is confirmed, 0.1 does not apply it: any device that shows the note at or above `MINSCALE` edits it, as the mockup does, and below it shows the narrow view.
+- **New for 0.1: the text size.** Today's code writes `fx` with the cell of the current text size (`G = round(1.5 × size)`, `applyText`, `index.html` 3340); notes edited at a larger text size read to other columns at `G = 24` (§3.1). Has the owner used a larger text size on the device where most notes were made?
 
 ## 2. The modules
 
@@ -75,7 +77,7 @@ These stay open while the engine is built; the plan follows the rule as written 
  * @typedef {{type:string, id?:string, at?:{col:number,y:number,frow:number,w:number}, size?:object}} Change
  */
 export function settle(start, change, memory, kinds, measure)   // → {layout, start, memory, pressed}   (LAYOUT-RULES §5)
-export function open(stored, kinds, measure)                     // a note's stored places → a Layout, every pair new (§3.3); writes nothing
+export function open(stored, kinds, measure)                     // a note's stored places → {layout, normalised}: §3.5; writes nothing
 export function diff(before, after)                              // the stored fields that changed, per block id, for the bridge to write
 ```
 
@@ -92,9 +94,10 @@ The engine's `col` is the handle cell; the card starts at `col + 1` (`LAYOUT-RUL
 
 In 0.1 nothing new is stored. The sheet is read at one fixed pixel width `W0px` instead of the window's:
 
-- **Read:** `c = round((fx × W0px − G/2) / G)`, clamped as today's `colOfX` clamps it, with `G = 24` whatever the text size; the engine's `col = c − 1`. `SHEETW` is the number of columns today's dot grid shows at that width, `floor((W0px − 2.5 × 24) / 24) + 1` (`field()`, 2398), the same for every note in 0.1.
+- **Read:** `c = round((fx × W0px − G/2) / G)` with `G = 24` whatever the text size, and no clamp here (today's `colOfX` clamps by pixels, `maxColFor`; §3.5 is the engine's only edge); the engine's `col = c − 1`. `SHEETW` is the number of columns today's dot grid shows at that width, `floor((W0px − 2.5 × 24) / 24) + 1` (`field()`, 2398), the same for every note in 0.1.
 - **Write:** a sheet block that a user action moved gets `fx = (G/2 + c × G) / W0px` with `c = col + 1` and `G = 24`. Reading that back gives the same `c`, so the mapping is exact both ways; a block that no action moved keeps its stored `fx` untouched. Step 1 pins both with a round-trip test through `serBlock` and step 5 with a scenario that saves an unmoved note and compares the bytes.
 - **The current version** reads the same `fx` at its own `W()` and clamps it to its `maxColFor`, on every resize of its window (`applyMode`, 3125), as it does today.
+- **Exact at the default text size only.** Today's code writes and reads `fx` with the cell of the current text size, so a note edited at a larger text size reads to other columns at `G = 24`, and a current-version tab at a larger text size reads the engine's `fx` to other columns (§1.3, §7).
 - **`W0px`** is a question for the owner (`LAYOUT-MODEL.md` §9): the width in pixels of their sheet (`sheet.clientWidth`) on their usual computer, with the list of notes open, at the default text size; most of their `fx` were written at it, and an error of half a cell moves a block on the right by a column. Until answered, 1000 px (`LAYOUT-MODEL.md` §8 measured that width with the list open on a 1280 px window).
 
 A note is shown at `SHEETW` columns on every device: wider windows show white room to the right, narrower ones scale down to `MINSCALE`, narrower still the narrow view (VIEW.1, VIEW.2).
@@ -110,21 +113,25 @@ A note is shown at `SHEETW` columns on every device: wider windows show white ro
 
 0.1 stores no pairs, gaps or lends. `open()` finds every pair from the places with every pair new (GAP.5 rule 4: the rows belong to the block above) and the engine keeps them in memory with the open note; every rule runs on them as written, and every user action writes the places that result (§3.4).
 
-The memory lasts while the note is open in the tab and nothing replaces its stored places from outside. It is found again by `open()`, with every gap belonging to the block above it, after a reload, after a change from another tab or device (`safePoint`, `takeStored`, `takeNote`), after an import and after restoring a version. An undo keeps it: each engine undo entry carries the pairs before its action, and the undo puts them back with the fields (§6.4). Leaving the view of an old version («Історія») puts back the pairs the note had before. So INV-7 holds within one open note between such events, and across them a gap is never lost, it only changes hands; 0.2 stores the pairs and lifts this.
+The memory lasts while the note is open in the tab and nothing replaces its stored places from outside. It is found again by `open()`, with every gap belonging to the block above it, after a reload, after a change from another tab or device (`safePoint`, `takeStored`, `takeNote`), after an import and after restoring a version. An undo keeps it (§6.4). Leaving the view of an old version («Історія») puts back the layout and pairs the bridge kept aside (§6.1). So INV-7 holds within one open note between such events, and across them a gap is never lost, it only changes hands; 0.2 stores the pairs and lifts this.
 
 ### 3.4 Rows and what a user action writes
 
-A user action writes, through the bridge, only the stored fields of the blocks that the action itself moved or resized compared with the layout it started from: rows and columns that it changed, `cw`, `ch`. A block whose shown row differs from its stored row for another reason (the normalisation of §3.5, a font that wraps differently on this device, a temporary height) is not written by an action that did not move it. The derived rows of the blocks it did move are written as caches (`LAYOUT-RULES.md` §2.1); `open()` trusts only the rows of head blocks. A temporary height is shown and never written. Applying a change that came from another tab or device writes nothing.
+A user action writes, through the bridge, the stored fields of the blocks whose place or set size differs between the layout the action started from (`start`, the layout of §3.5 or of the last action) and its result: rows and columns, `cw`, `ch`. That includes the blocks FOLLOW moved under a text that grew or shrank, as today's `relayout` does, and their derived rows are written as caches (`LAYOUT-RULES.md` §2.1); `open()` trusts only the rows of head blocks. A block whose shown place differs from its stored one only because this device measures differently is not written by an action that did not move it. A temporary height is shown and never written. Applying a change that came from another tab or device writes nothing.
 
-This keeps two devices that measure differently from rewriting each other's rows on every keystroke: `row` is in the sync «place» group (`sync.js` 103), and a place group changed on both sides makes a conflict copy.
+One addition: the first user action in a container also writes the places that `open()` changed there by clamping and separating (§3.5), and only those; the user has seen them since the note opened, and writing them keeps the layout the same after a reload and for the current version.
+
+What this saves against today: a keystroke that changes no height writes no row, and opening a note writes nothing; devices that measure differently do not rewrite each other's rows until an action moves those blocks. `row` is in the sync «place» group (`sync.js` 103), and a place group changed on two devices makes a conflict copy.
 
 ### 3.5 Opening a note
 
 Every note on `.app` was laid out by today's `resolveIn`, whose result depends on the window's width and the order of the stored array (`LAYOUT-MODEL.md` F1, F4–F6). Read at `W0px`, its places may break the invariants: two cards overlap, a block lies past `SHEETW`, a child lies outside its area, a block stands in the free cell round an area (AREA.7a). `open()` makes a valid layout of them, shown and not written:
 
 1. **Clamp.** A card past its container's right edge moves left to the last column where it fits; an elastic block narrows first, as at the edge (DRAG.A3). A child below its area's set height makes the area taller in the layout (AREA.2).
-2. **Separate.** In reading order, any two blocks that still hit, or a block in the free cell round an area, are separated by P-SEP for two uncarried blocks: the lower one, or on the same row the right one, goes down to the other's bottom with the blocks under it. (P-SEP between uncarried blocks is proposed in `LAYOUT-RULES.md`; 0.1 needs it here.)
+2. **Separate.** Visit the blocks in reading order; a block that hits an earlier one, or stands in the free cell round an area, goes down alone to the bottom of the block it hits (or below the area's free cell); repeat until no two blocks hit. Rows only grow and an earlier block never moves, so this ends. It is P-SEP between two uncarried blocks, done before any pair exists (P-SEP for uncarried blocks is proposed in `LAYOUT-RULES.md`; 0.1 needs it here).
 3. **Pairs.** RELINK with every pair new (§3.3).
+
+`open()` records which blocks steps 1 and 2 moved, for §3.4.
 
 The result is the layout the next action starts from; by §3.4 a block's normalised place is written only when an action moves it. `open()` is deterministic: the same stored note gives the same layout on every device that measures the same. The current version keeps writing its own pushes until 0.1 reaches every device (§7); `open()` reads them as places like any other.
 
@@ -143,7 +150,7 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 ### 4.3 Measuring (E-3)
 
 ```js
-/** @typedef {{rows(box:Box, cells:number):number, natural(box:Box):number}} Measure */
+/** @typedef {{rows(id:string, cells:number):number, natural(id:string):number}} Measure   // by block id: the browser's measure reads the content through the bridge, the Node stub from a map id → text */
 ```
 
 - **Browser:** one hidden measuring element per kind, styled with the block's own classes, in the sheet so that the text size and the font are the page's; results cached by the content's hash, the width and the text size; the cache is cleared when the text size changes. A placeholder is never measured (PR-8): an empty text's natural width is one cell.
@@ -158,7 +165,7 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 | Kind | Elastic | Width | Shown height | Container |
 |---|---|---|---|---|
 | text | yes, unless `cw` | SIZE.1, `TEXTW`, `MINC` | content rows, or `ch` when larger | no |
-| code | yes unless `cw`, with no `TEXTW` cap (proposed, as today) | without `cw`, all the room to its right neighbour or the container's edge, as today's `rawWidth` gives it (`index.html` 2362); never below `MINW_CODE`; gives way by SIZE.2 | as today: folded at `ch` unless `open` | no |
+| code | «fill» unless `cw` (proposed, as today) | without `cw`, the room at its place: up to the nearest block on its rows to its right or the container's edge (today's `rawWidth`, `index.html` 2351–2362), at least `MINW_CODE`; it never presses aside by itself; carried, its width is the room at the target before anything is pressed, so the drop gives the same width (INV-8), and DRAG.A5 does not apply to it; pressed from the side, it gives way by SIZE.2 down to `MINW_CODE` | as today: folded at `ch` unless `open` | no |
 | area | no | `cw`, at least 12 cells as today | header plus its children's rows, or `ch` when larger; the header only when collapsed | yes: its header's rows |
 
 A text's measured width and the cell size follow the text size: a larger text size makes `G` larger (`--g`, as `applyText` does today), so the sheet scales and no column or row changes; the measuring cache is cleared. A new kind (a checklist, an image) adds a passport and nothing else in the engine.
@@ -173,8 +180,8 @@ Each step is one PR into `main` with every test green, the build marker raised a
 
 | Step | What | Tests | Effect on the app |
 |---|---|---|---|
-| 1 | `shapes.js`, `size.js`, `gap.js`, `kinds.js`, the Node measuring stub; `open()` | `tests/layoutsize.mjs`, `tests/layoutgap.mjs`: SIZE and GAP rules, INV-2, INV-3, INV-7 b, determinism under shuffled storage | none |
-| 2 | `settle.js`: the phases, the primitives, containment, the change table | `tests/layoutsettle.mjs`: each primitive alone, the phase order, INV-1 to INV-5 after every SETTLE, the review's regression cases, bounds (§4.2) | none |
+| 1 | `shapes.js`, `size.js`, `gap.js` (with RELINK from places), `kinds.js`, the Node measuring stub | `tests/layoutsize.mjs`, `tests/layoutgap.mjs`: SIZE and GAP rules, INV-2, INV-3, INV-7 b, determinism under shuffled storage | none |
+| 2 | `settle.js`: the phases, the primitives, containment, the change table; `open()` with its normalisation (§3.5) | `tests/layoutsettle.mjs`: each primitive alone, the phase order, INV-1 to INV-5 after every SETTLE, the review's regression cases, bounds (§4.2) | none |
 | 3 | `drag.js` and `ops.js`: targets, the carry memory, letting through, entering and leaving areas, every action of §5.2 in 0.1 with its undo | `tests/layoutdrag.mjs`, `tests/layoutops.mjs`: the mockup's scenarios as cases, INV-7 a, INV-8 (the last preview equals the drop) | none |
 | 4 | `measure.js`, `view.js`, `input.js` | `tests/layoutview.mjs` in Chromium on a page of the engine alone, kept in `tests/lib/` (never in `public/`) and served by `tests/lib/server.mjs` from a second root next to `public/`: carry, hold, Shift, Esc, arrows, handles, areas, drawing, the narrow view, the reading mode | none |
 | 5 | `bridge.js` and the switch: with the switch on, `index.html` calls the engine where it calls today's layout (§6); the dev look shows INV violations | the existing browser scenarios with the switch off as today; with it on, by the table of §5.1; the round trip of an unmoved note (§3.1) | only with the switch on |
@@ -200,9 +207,9 @@ Commands that are not placement keep their code and, where they change the layou
 |---|---|
 | Delete a block (menu, Backspace in an empty block, clearing the sheet) | `remove` (GAP.6); an empty block left on blur as EDIT.4 says; an area's children are taken away with it in the same change |
 | Paste a block on the sheet, `+`, «блок після», a new area by its button | `create` at its cell (§5.2, EDIT.4, VIEW.4) |
-| Convert to code or to text | a size change (phase 1a) with the new passport |
+| Convert to code or to text (`toCode`, `toText`, 2509–2510, which remove the block and make it again) | a size change (phase 1a) with the new passport: the bridge keeps the block's `Box` by its id across the rebuild |
 | «В область…» and «З області» | `enter` and `leave` (AREA.7) |
-| Ungroup an area | `leave` for each child, in reading order, then `remove` for the area |
+| Ungroup an area | `ungroup`: the area is taken away and each child is put on the sheet on the very cells it stood on inside, as today (`index.html` 2676–2677), in reading order, through SETTLE; one undo entry |
 | Typing, Enter, a paste into a block, a code or area title, code wrap and numbers | a size change (phase 1a) |
 | «Розгорнути» and «Згорнути» of a text | a temporary height, written never (H3) |
 | The code block's own «more» (`open`) | a size change, written, as today (§3.2) |
@@ -221,7 +228,7 @@ Line numbers are in `public/index.html` at `0178041`; step 5 re-checks them.
 | `make` → `resolve(b); update()` | 2401–2416 (fx → col at 2408) | the bridge builds the block's `Box`; the caller's action decides the change: `create` for a new block, nothing for `makeAll` |
 | `makeAll` from `drawBlocks` | `openNote` 2090 → `drawNote` 2096 → 2098 | `open()` once for the note |
 | `redrawCur`, `takeStored`, `takeNote`, `tabMsg`, `safePoint`, `flushPending`, the conflict copies | 1328–1355, 2202, 2213, 3293, 3296 | `open()`; the block being started (EDIT.4a) is kept as it is now (1342) |
-| `showVersion`, `showNow` | 3218, 3232 | `open()` read-only for the version shown; `open()` again on leaving |
+| `showVersion`, `showNow` | 3218, 3232 | `open()` read-only for the version shown, the note's layout and pairs kept aside by the bridge; on leaving they are put back, or found by `open()` if the note changed from outside meanwhile |
 | `putState` (restore) | 3233 | stored fields put back, `open()`, then the save as today |
 | Import | 2244–2255 | `open()` through `redrawCur` / `openNote` |
 | `createAt`, `createIn`, `createNext`, `createAfter`, `areaBtn`, paste on the sheet | 2740, 2694, 2749, 2845, 3024, 3025–3030 | `ops.create` |
@@ -256,7 +263,7 @@ Every item comes from a decision; the ones that touch the phone are listed so th
 - **The sheet has a width.** A note is shown at `SHEETW` columns on every device, with white room to the right on a wide window and scaled down on a narrow one (W2, W7, §3.1). Today a sheet block's place is a share of the window's width.
 - **Old notes may shift once.** A note whose stored places overlap or stick out at `W0px` is shown separated and clamped (§3.5); nothing is written until the user moves those blocks.
 - **The phone.** At any phone width the note is below the minimum scale, so the phone always shows the narrow view: one column in reading order, where blocks are read, written, created and deleted, but not carried, not resized and not moved by position mode (W6, VIEW.2–VIEW.5). Today the phone shows the same free sheet, with position mode on a hold.
-- **Touch on the empty sheet of a computer layout** (a tablet held wide; proposed for touch). A tap starts a new block (EDIT.4), which goes away if nothing is written; a hold shows the borders while it is held (VIEW.6a). Today a hold creates a block. A hold on a block's text starts position mode where position mode exists.
+- **Touch on the empty sheet of the scaled layout** (a tablet held wide; proposed for touch). A tap starts a new block (EDIT.4), which goes away if nothing is written; a hold shows the borders while it is held (VIEW.6a). Today a hold creates a block. A hold on a block's text starts position mode where position mode exists.
 - **Position mode on a computer** moves by one cell per arrow, buttons and keys (DRAG.C4), unless the owner keeps today's snapping (§1.3).
 - **Hover on the empty sheet** shows the cell cursor only, no ghost of a block (EDIT.2).
 - **Pushes are not permanent.** A block that grows and shrinks back leaves its neighbours where they were (H1, G1); today they stay pushed (`LAYOUT-MODEL.md` F3).
@@ -264,11 +271,13 @@ Every item comes from a decision; the ones that touch the phone are listed so th
 
 ### 6.4 Undo
 
-An engine action returns an undo entry with the stored fields it changed, before and after, and the in-memory pairs before it (§3.3); the bridge pushes it onto the existing structural undo stack as one entry (C2), with the toast the action has today.
+Today's structural undo is one stack per note (`offerUndo`, `index.html` 2618): the toast's button, Ctrl+Z outside the fields and the header's «Скасувати» all undo the top entry (`doUndo`, 2632); a newer entry replaces the toast; there is no structural redo; a change from outside drops every entry that is not marked `safe` (`undoStale`, 2616). The engine fits into it as follows.
 
-- **Undo when nothing changed since.** If the stored fields the entry changed still hold its «after» values, the undo puts back its «before» values and its pairs, with no SETTLE: the layout is exactly the one before the action.
-- **Undo after other changes.** A toast can undo an action after other actions (a deletion with content keeps its toast). Then an undo of a deletion makes the block again as `create` at its stored cell, in reading order, an area first and its children then entering it; an undo of a move carries the block back as a drop at its old cell. Both run SETTLE, so nothing overlaps. This is the rule EDIT.4 states for a new block taken away.
-- **Redo** is the same in the other direction.
+- **An entry.** An engine action pushes one entry (C2) with the toast it has today. It carries the stored fields the action wrote, before and after, the layout and pairs before the action (the shown layout, which after §3.5 may differ from the stored fields), and the layout's generation: a counter the bridge raises on every change applied to the layout, an action, a size change from typing or a re-open.
+- **Undo with nothing applied since** (the generation unchanged): the fields' «before» values, the layout and the pairs are put back, with no SETTLE; the layout is exactly the one before the action.
+- **Undo after changes applied since.** Only changes with no entry of their own can come between, since a structural action pushes a new top entry: typing that changed heights, a fold. Then the undo runs SETTLE so that nothing overlaps: an undone deletion makes the block again as `create` at its stored cell, in reading order, an area first and its children then entering it; an undone move carries the block back as a drop at its old cell; an undone resize sets the old size; an undone creation removes the block. This is the rule EDIT.4 states for a new block taken away.
+- **No redo**, as today.
+- **Changes from outside.** Engine entries are not `safe`: a change from another tab or device drops them, as it drops today's entries, since their layouts are stale.
 - `placeUndo` snapshots `collapsed` too, which it misses today.
 
 ## 7. Risks
@@ -276,7 +285,8 @@ An engine action returns an undo entry with the stored fields it changed, before
 - **Notes made at another width.** Reading `fx` at `W0` moves sheet blocks of notes made on a much wider or narrower sheet. Mitigation: `W0` chosen from the owner's notes; the switch lets the owner compare before step 6; the engine writes nothing until the user acts.
 - **Two layouts in one tab.** Between steps 5 and 6 both exist; the switch is read once when the tab starts (§1), so a tab runs one of them only.
 - **The current version keeps writing pushes.** Today's `resolveIn` writes pushed rows (`index.html` 2379) and saves them with the next edit; `relayout` does so on every keystroke. Every edit on a device or in a tab without 0.1 (the switch off, or `.app` before the release) keeps sending permanent pushes into notes that 0.1 reads as places. So G1 and INV-7 hold only among devices and tabs that run 0.1. This belongs to the release order (O-3), and the owner is told before using the switch on `.dev` with notes edited elsewhere.
-- **Rows of different fonts.** §3.4 writes only what an action moved, so devices that measure differently do not rewrite each other's rows on every keystroke; a conflict copy is still possible when both move the same block, as today.
+- **Rows of different fonts.** §3.4 writes only what an action moved, so a keystroke that changes no height writes no row; a keystroke that changes a height writes the rows of the blocks under it, as today, and two devices editing the same note can then make a conflict copy, as today.
+- **A larger text size.** `fx` written at a larger text size reads to other columns (§3.1); a current-version tab at a larger text size reads the engine's `fx` to other columns. The owner's answer (§1.3) says whether this touches real notes.
 - **The structural undo stack and history.** An engine entry must restore exactly the stored fields it changed; tests undo every action and compare the stored blocks.
 - **Unknown fields.** 0.1 writes only today's fields, so an older version that edits a note drops nothing of 0.1's. Step 0 of `LAYOUT-MODEL.md` §7 (the editor keeps fields it does not know) moves to 0.2, before the first new field.
 
@@ -289,4 +299,5 @@ An engine action returns an undo entry with the stored fields it changed, before
 
 ## Review log
 
+- **Round 1 → 2** (11 findings). The code block is a «fill» kind whose carried width is the room at the target, so INV-8 holds and DRAG.A5 does not apply (§4.4); the first action in a container writes the places `open()` normalised there (§3.4); the normalisation separates before any pair exists, and `open()` moves to step 2 (§3.5, §5); undo fitted to today's stack: a generation counter, the layout kept apart from the stored fields, only content edits between an entry and its undo, no redo, entries not `safe` (§6.4); ungroup keeps the children on their cells (§6); history keeps the layout aside (§6.1, §3.3); no `colOfX` clamp, the text size as a limit and a question (§3.1, §1.3); §3.4 no longer overstates; `DESKW` not applied in 0.1 (§1.3); `Measure` by block id; `toCode`/`toText` as a size change.
 - **Round 0 → 1** (15 findings). `open()` normalises stored places that break the invariants, shown and not written (§3.5); undo after other changes re-creates or carries back through SETTLE (§6.4); the column convention per container and `W0` as a width in pixels tied to today's `colOfX` and `field()` (§3.1); an action writes only what it moved, so devices with different fonts do not rewrite each other's rows (§3.4); the current version's pushes named as a risk, the switch read once per tab; the code block elastic with no cap, as today (§4.4); position mode gone on the phone, the arrows' snapping a question for the owner (§1.3, §6.3); the engine's test page under `tests/lib/`; a table for the browser scenarios with the switch on (§5.1); the events that reset the in-memory pairs (§3.3); missing call sites (`field()`, the started block, the slide, `touchmove`, `placeBacklinks`' helpers, an area's children on delete, the text size); the height handle's wording; performance with the measuring counted; strings and settings deferred to 0.2 stated; a collapsed area is not entered.
