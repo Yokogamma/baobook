@@ -383,7 +383,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 
 ## 16. Relation to `LAYOUT-MODEL.md`
 
-This document replaces §3 of `LAYOUT-MODEL.md` (the model rule by rule) and states §4 «Stage 1» as rules (VIEW). The decisions table of its §2 stays the record of what the owner decided and when; every rule here points to it. Its §5 (data), §6 (the module), §7 (steps), §8 (today's code), §9–§11 stay as they are until the engine's design (E-1, E-5) revises them.
+This document replaces §3 of `LAYOUT-MODEL.md` (the model rule by rule) and states §4 «Stage 1» as rules (VIEW). The decisions table of its §2 stays the record of what the owner decided and when; every rule here points to it. Its §5 (data), §6 (the module) and §7 (steps) are replaced by [`LAYOUT-ENGINE-PLAN.md`](LAYOUT-ENGINE-PLAN.md), which settles E-1 to E-5 for version 0.1; its §8 (today's code) and §9–§11 stay.
 
 ## Review log
 

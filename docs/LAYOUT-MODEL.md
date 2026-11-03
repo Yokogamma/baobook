@@ -199,6 +199,8 @@ A move on a narrow screen is translated to the computer by the block above it in
 
 ## 5. Data
 
+**Replaced by [`LAYOUT-ENGINE-PLAN.md`](LAYOUT-ENGINE-PLAN.md) §3** for the decided model of `LAYOUT-RULES.md`; kept as the record of the earlier plan.
+
 The stored format does not change its fields' meaning in a way old notes notice, and no migration rewrites them.
 
 - **`row` is the anchor.** Today's stored rows already contain old pushes; they are read as anchors. A row may carry a fraction as an order key (§3.7); old code draws it on the same row, a fraction of a pixel off.
@@ -209,6 +211,8 @@ The stored format does not change its fields' meaning in a way old notes notice,
 - **Unknown fields.** `normBlock` passes unknown fields through, but the editor's `serBlock` (`index.html:2032`) writes only the fields it knows, so an older version that edits a note drops `fold` and the sheet `col`. Step 0 makes the editor keep the fields it does not know, and is released before any new field is written. When the new fields start being written, `FORMAT` is raised (`docs/IDB-BARRIER-PLAN.md`) so older tabs on the same device stop writing.
 
 ## 6. The module
+
+**Replaced by [`LAYOUT-ENGINE-PLAN.md`](LAYOUT-ENGINE-PLAN.md) §2** for the decided model of `LAYOUT-RULES.md`; kept as the record of the earlier plan.
 
 `public/layout/`, wired like `public/account/`: loaded through the import map with its SRI hashes, precached by the service worker, listed in `build.json`.
 
@@ -236,6 +240,8 @@ export function place(anchors, kinds, view, measure) { /* → Map<id, Placement>
 - **Tests.** `tests/layout*.mjs` run `model.js` and `ops.js` in Node, as `tests/sync*.mjs` run the sync core: every rule of §3 and §4 has cases, and every departure of §8 has a regression case. The browser scenarios (`appdrop`, `appswap`, `appresize`, `appdragcancel`, `apparea`, `appflow`, `appwidth`, `appslide`, `apptouch`, `appsel`) keep the interface and get one new scenario per decision they touch. `tests/lab/` stays out of CI.
 
 ## 7. Steps
+
+**Replaced by [`LAYOUT-ENGINE-PLAN.md`](LAYOUT-ENGINE-PLAN.md) §5** for the decided model of `LAYOUT-RULES.md`; kept as the record of the earlier plan.
 
 Each step is one PR with every scenario green.
 
