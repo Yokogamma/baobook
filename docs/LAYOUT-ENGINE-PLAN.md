@@ -1,6 +1,6 @@
 # The layout engine: implementation plan
 
-**Status: draft after review round 3, 2026-11-03.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
+**Status: after review round 4, 2026-11-03: ready to start step 1.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
 
 Rules are cited by their ids in `LAYOUT-RULES.md` (`SIZE.1`, `P-ASIDE`, `INV-8`…); decisions by their ids in the table of `LAYOUT-MODEL.md` §2 (`W3`, `G6`…). **(proposed)** marks what rests on no decision of the owner yet.
 
@@ -101,7 +101,7 @@ In 0.1 nothing new is stored. The sheet is read at one fixed pixel width `W0px` 
 - **Exact at the default text size only.** Today's code writes and reads `fx` with the cell of the current text size, so a note edited at a larger text size reads to other columns at `G = 24`, and a current-version tab at a larger text size reads the engine's `fx` to other columns (§1.3, §7).
 - **`W0px`** is a question for the owner (`LAYOUT-MODEL.md` §9): the width in pixels of their sheet (`sheet.clientWidth`) on their usual computer, with the list of notes open, at the default text size; most of their `fx` were written at it, and an error of half a cell moves a block on the right by a column. Until answered, 1000 px (`LAYOUT-MODEL.md` §8 measured that width with the list open on a 1280 px window).
 
-**Children and the sheet.** An area is a Box at sheet `(a, y)` with `H` header rows (`container.headerRows`); its child at `(c, r)` stands on sheet cell `(a + 1 + c, y + H + r)`, its handle on the area's column `c`. This is `LAYOUT-MODEL.md` §3.1's mapping in the engine's columns. `enter`, `leave`, `ungroup` and «З області» that keeps the cell use it; `ops.js` works in cells only.
+**Children and the sheet.** An area is a Box at sheet `(a, y)` with `H` header rows (`container.headerRows`); its child at `(c, r)` stands on sheet cell `(a + 1 + c, y + H + r)`, its handle on the area's column `c`. This is `LAYOUT-MODEL.md` §3.1's mapping in the engine's columns. `enter` and `ungroup` use it, and «З області» (`leave`) its column part, since AREA.7 puts the block under the area in the column it had inside; `ops.js` works in cells only.
 
 A note is shown at `SHEETW` columns on every device: wider windows show white room to the right, narrower ones scale down to `MINSCALE`, narrower still the narrow view (VIEW.1, VIEW.2).
 
@@ -134,8 +134,9 @@ Every note on `.app` was laid out by today's `resolveIn`, whose result depends o
 1. **Clamp.** A card past its container's right edge moves left to the last column where it fits; an elastic block narrows first, as at the edge (DRAG.A3). A child below its area's set height makes the area taller in the layout (AREA.2).
 2. **Separate.** As today's `resolveIn` does: keep a list of placed blocks, empty at first; visit the blocks in reading order of the layout as it stands, ties by id; a block that hits a placed one, or stands in the free cell round an area, goes down alone to the bottom of the block it hits (or below the area's free cell), and is placed; when a pass moved a block, visit again from the start in the updated reading order; stop after a pass that moves nothing. Rows only grow and a placed block never moves, so this ends. It is P-SEP between two uncarried blocks, done before any pair exists (P-SEP for uncarried blocks is proposed in `LAYOUT-RULES.md`; 0.1 needs it here).
 3. **Pairs.** RELINK with every pair new (§3.3).
+4. **Rest.** Phase 9 of SETTLE at rest: `RESTPASSES` passes of SIZE.8 on the separated places, so a text that a moved neighbour no longer presses widens again and a block that came down beside a text narrows it; FOLLOW; P-REST and P-SEP for any hit this leaves; RELINK. This is what `resolveIn` does today by measuring again between its passes.
 
-`open()` records which blocks steps 1 and 2 moved, for §3.4.
+`open()` records which blocks steps 1, 2 and 4 moved or resized, for §3.4, so the first action's writes and its own are told apart.
 
 The result is the layout the next action starts from; by §3.4 a block's normalised place is written only when an action moves it. `open()` is deterministic: the same stored note gives the same layout on every device that measures the same. The current version keeps writing its own pushes until 0.1 reaches every device (§7); `open()` reads them as places like any other.
 
@@ -143,7 +144,7 @@ The result is the layout the next action starts from; by §3.4 a block's normali
 
 ### 4.1 Determinism (INV-5)
 
-Every visit is in reading order of the layout its phase starts from, ties by id; nothing depends on the order of the stored array (`LAYOUT-MODEL.md` F4). Measured sizes may differ between devices with different fonts; the stored rows are then each device's own result of a user action, and `open()` derives the rest from the head rows, so devices that measure differently show slightly different rows and write nothing until the user acts.
+Every visit is in reading order of the layout its phase starts from, ties by id; nothing depends on the order of the stored array (`LAYOUT-MODEL.md` F4). Measured sizes may differ between devices with different fonts; the stored rows are each device's own result of a user action, every stored row is a place for `open()` in 0.1, and what a device separates or re-rests because it measures differently is written only as §3.4 says.
 
 ### 4.2 Bounds (E-2)
 
@@ -154,17 +155,19 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 ### 4.3 Measuring (E-3)
 
 ```js
-/** @typedef {{rows(id:string, cells:number):number, natural(id:string):number}} Measure   // by block id: the browser's measure reads the content through the bridge, the Node stub from a map id → {kind, text} */
+/** @typedef {{rows(id:string, cells:number):number, natural(id:string):number}} Measure   // by block id: the browser's measure reads the content through the bridge, the Node stub from a map id → {kind, text, wrap} */
 ```
 
 - **Browser:** one hidden measuring element per kind, styled with the block's own classes, in the sheet so that the text size and the font are the page's; results cached by the content's hash, the width and the text size; the cache is cleared when the text size changes. A placeholder is never measured (PR-8): an empty text's natural width is one cell.
-- **Node:** a stub: a text of `n` characters is `ceil(n / (cells × 3))` rows and `ceil(n_longest_line / 3)` cells wide; code is one row per line and never wraps unless its `wrap` is set; so tests state their expectations in cells.
+- **Node:** a stub: a text of `n` characters is `ceil(n / (cells × 3))` rows and `ceil(n_longest_line / 3)` cells wide; code is one row per line and never wraps unless its `wrap` is set; an area's header is one row unless a test says otherwise; so tests state their expectations in cells.
 
 ### 4.4 Passports (E-4)
 
 ```js
-/** @typedef {{width:'text'|'fill'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):number, container:null|{headerRows(box:Box):number}}} Kind
- *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'fill', the room at its place unless `cw` (below); 'set', `cw` always */
+/** @typedef {{width:'text'|'fill'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):number, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
+ *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'fill', the room at its place unless `cw` (below); 'set', `cw` always.
+ *  rows: a leaf's rows at a width; for an area the passport gives only its header (`headerRows`, measured: today's header wraps on a narrow
+ *  area, `areaMeasure`) and its `ch`; the area's height is its children's layout plus the header, from the engine's recursion (LAYOUT-RULES §5.4) */
 ```
 
 | Kind | Elastic | Width | Shown height | Container |
@@ -173,7 +176,7 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 | code | `fill` unless `cw` (proposed, as today) | the fill rule below; at least `MINW_CODE` | as today: folded at `ch` unless `open` | no |
 | area | `set` | `cw`, at least 12 cells as today | header plus its children's rows, or `ch` when larger; the header only when collapsed | yes: its header's rows |
 
-**The fill rule (0.1, proposed: today's code width in the terms of the rules).** A fill block without `cw` is as wide as its room at its place: up to the handle cell of the nearest block on its rows to its right, or the container's edge (today's `rawWidth`, `index.html` 2351–2362), at least `MINW_CODE`. Its width is recomputed with the rest widths, in every pass of SIZE.8 in phase 9 and in `open()`; it never presses anything by itself. Pressed from the left (P-ASIDE), its `col` moves right and its width becomes its room again, down to `MINW_CODE`; then it presses the block on its right as a chain, as a set width does. Carried, phase 1c gives it the room at the target and phase 9 recomputes it in the result; INV-8 holds because the preview is SETTLE's whole result (DRAG.C1), as for any block. DRAG.A5 is for texts.
+**The fill rule (0.1, proposed: today's code width in the terms of the rules).** A fill block without `cw` is as wide as its room at its place: up to the handle cell of the nearest block on its rows to its right, or the container's edge (today's `rawWidth`, `index.html` 2351–2362), at least `MINW_CODE`. Its width is recomputed with the rest widths, in every pass of SIZE.8 in phase 9 and in `open()`; it never presses anything by itself. Pressed from the left (P-ASIDE, or an area's left side handle as a wall), its `col` moves right and its width becomes its room again, down to `MINW_CODE`; then it presses the block on its right as a chain, as a set width does. Pressed from the right, its room ends at the pressing block, so it narrows, down to `MINW_CODE`, and then moves left as a set width does. Carried past the right edge (DRAG.A3), it narrows to the room down to `MINW_CODE` and then stops, as an elastic text does (W4). Carried, phase 1c gives it the room at the target and phase 9 recomputes it in the result; INV-8 holds because the preview is SETTLE's whole result (DRAG.C1), as for any block. DRAG.A5 is for texts.
 
 A text's measured width and the cell size follow the text size: a larger text size makes `G` larger (`--g`, as `applyText` does today), so the sheet scales and no column or row changes; the measuring cache is cleared. A new kind (a checklist, an image) adds a passport and nothing else in the engine.
 
@@ -307,6 +310,7 @@ Today's structural undo is one stack per note (`offerUndo`, `index.html` 2618): 
 
 ## Review log
 
+- **Round 3 → 4** (6 findings, no blocker; the round-3 answers verified, the children's mapping checked against `ungroup` and `pullOut`). `open()` re-rests after separating, as `resolveIn` re-measures between passes, and records those moves too (§3.5); §4.1 brought in line with §3.4; «З області» uses the column part of the mapping; the fill rule pressed from the right and at the right edge; the header measured; the stub knows `wrap`. Verdict: ready to start step 1.
 - **Round 2 → 3** (10 findings, no blocker). The passport's `width` is `text`, `fill` or `set`, with the fill rule written out and INV-8 argued by DRAG.C1 (§4.4); the first action's writes include separations caused by measurement, said plainly, and the risk named (§3.4, §7); a sizes step before the clamp (§3.5); `Box`, `Change`, `Kind` and the Node stub completed, `open()`'s input stated (§2.1, §4.3); «the first action» defined and re-armed by an undo; the separation's visit order as today's `resolveIn`; the children's cells on the sheet in the engine's columns (§3.1); the phone's 18 px text in the owner's question (§1.3); the reverse of `enter`, `leave` and `ungroup` under a changed generation, and the entry's `size` (§6.4); every stored row is a place for `open()` in 0.1.
 - **Round 1 → 2** (11 findings). The code block is a «fill» kind whose carried width is the room at the target, so INV-8 holds and DRAG.A5 does not apply (§4.4); the first action in a container writes the places `open()` normalised there (§3.4); the normalisation separates before any pair exists, and `open()` moves to step 2 (§3.5, §5); undo fitted to today's stack: a generation counter, the layout kept apart from the stored fields, only content edits between an entry and its undo, no redo, entries not `safe` (§6.4); ungroup keeps the children on their cells (§6); history keeps the layout aside (§6.1, §3.3); no `colOfX` clamp, the text size as a limit and a question (§3.1, §1.3); §3.4 no longer overstates; `DESKW` not applied in 0.1 (§1.3); `Measure` by block id; `toCode`/`toText` as a size change.
 - **Round 0 → 1** (15 findings). `open()` normalises stored places that break the invariants, shown and not written (§3.5); undo after other changes re-creates or carries back through SETTLE (§6.4); the column convention per container and `W0` as a width in pixels tied to today's `colOfX` and `field()` (§3.1); an action writes only what it moved, so devices with different fonts do not rewrite each other's rows (§3.4); the current version's pushes named as a risk, the switch read once per tab; the code block elastic with no cap, as today (§4.4); position mode gone on the phone, the arrows' snapping a question for the owner (§1.3, §6.3); the engine's test page under `tests/lib/`; a table for the browser scenarios with the switch on (§5.1); the events that reset the in-memory pairs (§3.3); missing call sites (`field()`, the started block, the slide, `touchmove`, `placeBacklinks`' helpers, an area's children on delete, the text size); the height handle's wording; performance with the measuring counted; strings and settings deferred to 0.2 stated; a collapsed area is not entered.
