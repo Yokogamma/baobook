@@ -78,7 +78,7 @@ Today the layout lives in `public/index.html` (geometry 2328–2361, sweep 2375�
 | P6 | Short blocks that fit side by side on a phone | They stay side by side |
 | P7 | A move made on a phone | Changes the computer layout by the rule «under which block, with which gap» |
 | P12 | Release | The rules that stop pushes from being saved (steps 0–3 of §7) reach `.app` before or with the sync release |
-| P18 | Where the text stands in its cells, and the field round it (raised by the owner, 2026-11-02; partly decided, see V2) | The four combinations stay as settings: the first letter on a line of dots or at the middle of a cell, a narrow field or a wide one (with wide fields every block keeps one row under it, so blocks come no closer than one empty row). Which combination is the default is open |
+| P18 | Where the text stands in its cells, and the field round it (raised by the owner, 2026-11-02; partly decided, see V2) | The four combinations stay as settings: the first letter on a line of dots or at the middle of a cell, a narrow field or a wide one (with wide fields every block keeps one row under it, so blocks come no closer than one empty row). Which combination is the default is open. For the first release (the owner, 2026-11-04): the default is today's look, and the settings menu offers every variant of the mockup (today's, the letter at the dots, the letter in the middle of a cell; narrow or wide fields) as a setting of the device, so that the owner tries them on real notes and chooses the default for the next release, which also makes the setting synced and lets a note override it (V2) |
 
 ## 3. The model, rule by rule
 
