@@ -121,6 +121,25 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([a.rows().C, a.stack('C', 7)], [0, 'top | · |'], 'GAP.9 off: A\'s rows over C go with A, C rises to the top');
 }
 
+// ---- an anchor carried down past the gap under it, into a standing block's pad, and back: nothing else moves (INV-7 c)
+{
+  const m = createModel().open([blk('A', 1, 3, 0), blk('B', 7, 9, 0), blk('L', 1, 9, 7)]).height('B', 4);
+  m.insert(blk('X', 1, 3, 8));
+  const was = m.rows();
+  m.carry('A', 7);
+  eq(m.rows().X, was.X, 'pad: A carried down into X\'s pad does not move X');
+  m.carry('A', -7);
+  eq(m.rows(), was, 'pad: A back, every block where it was');
+}
+// ---- G8 with slack: an anchor narrowed off a column where its stack did not hold it
+{
+  const start = () => createModel().open([blk('A', 1, 9, 0), blk('B', 1, 4, 2, 5), blk('X', 1, 9, 8), blk('C', 6, 9, 12)]).height('B', 6);
+  const m = start(); const c = m.rows().C;
+  m.width('X', 1, 4);
+  eq(m.rows().C, c, 'G8 slack: C stays where it is when X narrows off its columns');
+  eq(start().remove('X').rows().C < c, true, 'G8 slack: deleting X instead lets C rise');
+}
+
 // ---- determinism: the order the blocks come in changes nothing
 {
   const bs = [blk('A', 1, 3, 0), blk('B', 7, 9, 0, 4), blk('L', 1, 9, 10), blk('K', 4, 5, 2, 2)];

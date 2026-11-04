@@ -121,7 +121,8 @@ export function createModel(opts = {}) {
     let lowerKey = null; for (const [k, st] of S) if (+k.split('|')[1] === c && st.u === x.id) { lowerKey = k; break; }
     if (lowerKey) {   // join: the stack above x and the stack under it become one; x's own rows go wherever they lie (G2)
       const L = S.get(lowerKey), up = mine.parts.slice(), last = up.pop(); heir = mine.u == null ? '' : mine.u;
-      const body = dropOwn ? [] : Array(x.h).fill(heir);   // narrowed off and its rows stay: the rows its body stood on stay too
+      const slack = x.y - spans(mine)[mine.parts.length - 1][1];   // the rows by which its stack there did not hold it
+      const body = dropOwn ? [] : Array(x.h + slack).fill(heir);   // narrowed off: its body's rows and its slack there stay too (G8)
       const joined = [...up, [...last, ...body, ...L.parts[0]], ...L.parts.slice(1)];
       L.u = mine.u;
       L.parts = joined.map((p, j) => (j % 2 === 0 ? strip(p) : { id: p.id, pad: p.pad, lend: strip(p.lend) }));
@@ -161,7 +162,8 @@ export function createModel(opts = {}) {
     if (d > 0) {   // its bottom went down into the gap under it: rows go from the top, its own first
       const seg = lower.parts[0].slice(); let k = d;
       for (let j = 0; j < seg.length && k > 0; j++) if (seg[j] === x.id) { seg.splice(j, 1); j--; k--; }
-      lower.parts[0] = seg.slice(Math.min(k, seg.length));
+      lower.parts[0] = seg.slice(Math.min(k, seg.length)); k -= Math.min(k, seg.length);
+      if (k > 0 && lower.parts[1]) { const t = Math.min(k, lower.parts[1].pad); lower.parts[1].pad -= t; }   // then from the pad of the block standing first: it is never moved
     } else if (d < 0) {   // its bottom went up: the rows it left come under it with their owners; free room becomes its own (G5, G6)
       const pad = Array(Math.max(0, -d - left.length)).fill(x.id);   // what the slack gave: rows under it, its own
       lower.parts[0] = [...pad, ...left.map((o) => (o === '' ? x.id : o)), ...lower.parts[0]];
