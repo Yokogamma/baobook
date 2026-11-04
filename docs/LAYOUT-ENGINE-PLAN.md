@@ -150,7 +150,7 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 
 - `RESTPASSES` is 2 (proposed): two passes of SIZE.8 in phase 9. Tests compare with a run to a fixed point on the mockup's scenarios and on generated sheets; if two passes ever differ from the fixed point on a case, the case is a regression test and the number is raised.
 - Restarts: phase 3 restarts at most once for every neighbour passed in the carry; phase 11 at most once per pointer move. `settle` asserts both bounds and returns the last valid layout if one is exceeded (a bug, reported in the dev look).
-- P-REST only moves blocks down, P-SEP likewise between uncarried blocks; phase 9 ends.
+- P-REST moves blocks right, within the container, or down (S5), and P-SEP down; a block's place only grows, so phase 9 ends; a test checks the bound on generated sheets.
 
 ### 4.3 Measuring (E-3)
 
