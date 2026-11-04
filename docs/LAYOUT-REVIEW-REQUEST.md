@@ -41,7 +41,7 @@ Thank you for round 1. This round asks you to look again at both documents, whic
    - the split of the property test between Node (INV-1 to INV-5) and the browser (INV-6, INV-8).
 6. **Anything else** that is missing or risky. Then a verdict: can step 1 start?
 
-**Out of scope**, as in round 1: the owner's product decisions, unless one conflicts with another or cannot be built; the mockup's code; features after 0.1, except where 0.1 would block them.
+**Out of scope**, as in round 1: the owner's product decisions, unless one conflicts with another or cannot be built; the mockup's code; features after 0.1, except where 0.1 would block them. Variants of a rule beyond on and off are one of those features: 0.1 keeps switches binary, and the next release chooses which rules get variants (`LAYOUT-RULES.md` O-20).
 
 **Suggested order:**
 1. The two review logs (the newest entries) and §1.6 of the rules.

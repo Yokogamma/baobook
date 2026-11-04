@@ -490,6 +490,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-17** Decided (V2, 2026-11-02, after trying both in the mockup): while a new block is started in the reading mode, nothing shows but the caret (VIEW.6a).
 - **O-18** Decided as W12 (2026-11-04, after trying it in the mockup): a narrower window scales the note by the width it uses, up to its rightmost block, not by the whole `SHEETW` (VIEW.1).
 - **O-19** Decided as W13 (2026-11-04): the first release places blocks on a computer only; touch devices, phones and tablets, read, write, delete and create, and move nothing.
+- **O-20** Variants of a rule beyond on and off. Decided for 0.1 (the owner, 2026-11-04): none; a switch is on or off, and P18 and `ORDER` stay settings of their own. The next release chooses which of the mockup's comparison options (§14.1) and which settings become variants of the «Правила» list (VIEW.8) and which do not; the mockup keeps them all to try.
 
 ### 15.2 For the engine's design
 
