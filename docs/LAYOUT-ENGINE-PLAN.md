@@ -44,7 +44,7 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **Rules that switch** (R1, 2026-11-04, the owner's addition to the architecture review): every rule of `LAYOUT-RULES.md` §1.6 that is not core can be turned off, the engine taking the set of rules as an input; 0.1 has the «Правила» list in the testing look's settings on `.dev` (VIEW.8). Which rules are core, each switch's fallback and the rules it needs are §1.6's; a need found while a rule is built goes into §1.6 and into `rules.js` together, and the closure test of `resolve` (§5) checks that they agree.
 - **O-2 (P18)** answered for 0.1: today's look by default, and every variant in the settings menu as a device setting, for the owner to try on real notes (P18).
 - **O-3 (P12)** moot: sync is in production since #130 (2026-10-27), so 0.1 follows it.
-- **`W0`** answered: 1458 px, 59 columns (§3.1, W11).
+- **`W0px`** (`W0` of `LAYOUT-MODEL.md` §9) answered: 1458 px, 59 columns (§3.1, W11).
 - **What a narrower window scales by** answered: the note's used width, up to its rightmost block (W12).
 - **The arrows of position mode** answered (W15): they jump, as today (`snapBlock`, `index.html` 2763–2768): to the left edge, to the last column, under the nearest block above, over the nearest block below; each jump is a carry dropped at once (DRAG.C4). On a computer position mode stays in 0.1, entered from the block's menu by the right button on ⋮⋮ («Виділити», 2412, 2810); on touch it waits for the touch stage (W13).
 - **The code block's width** answered (W14): elastic as a text, its natural width its longest line; widened by hand when needed. **A collapsed area met by a carried block** (§3.2) keeps today's behaviour as far as the rules allow, marked proposed.
