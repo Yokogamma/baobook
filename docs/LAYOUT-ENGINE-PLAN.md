@@ -43,9 +43,9 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **O-3 (P12)** the release order against the sync release.
 - **`W0`** answered: 1458 px, 59 columns (§3.1, W11).
 - **What a narrower window scales by** answered: the note's used width, up to its rightmost block (W12).
-- **New for 0.1: the arrows of position mode.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.
+- **Answered, W13: the arrows of position mode wait for the touch stage.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.
 - **New for 0.1: the code block's width** (§4.4) and **a collapsed area met by a carried block** (§3.2): both keep today's behaviour as far as the rules allow, marked proposed.
-- **Who edits the scaled layout** (S3, 2026-11-04): any device that shows the note at or above `MINSCALE` edits it, as the mockup does, and below it shows the narrow view; `DESKW` only decides who gives a phone note its width, in 0.2.
+- **Who edits the layout** (S3 and W13, 2026-11-04): in 0.1 only a computer, a device whose primary pointer is fine and hovers (CSS `(pointer: fine)` and `(hover: hover)`), at `MINSCALE` or more; a phone or a tablet reads, writes, deletes and creates by «+», as VIEW.3 allows, and moves nothing, showing the real layout when it fits at `MINSCALE` and the narrow view below; `DESKW` only decides who gives a phone note its width, in 0.2.
 - **The text size and the phone** answered (2026-11-04, W11): both computers use the default 16 px text, so their `fx` read at `G = 24` give the columns they show today; notes arranged on a phone are shown by 0.1 as the computer shows them today, by the same shares, so nothing more is needed.
 
 ## 2. The modules
@@ -249,7 +249,7 @@ Line numbers are in `public/index.html` at `0178041`; step 5 re-checks them.
 | `moveInto`, `pullOut`, `ungroup`, `restoreArea` | 2825, 2827, 2676, 2670 | `ops.enter`, `ops.leave`; `restoreArea` is an undo (put back and `open()`) |
 | `relayout(b)` | 2449, from typing 2462–2483, code 2555–2602, titles 2531–2532 and 2691–2692 | `ops.grow` (a size change) |
 | `placeUndo` | 2820–2824 | the engine's undo entries; it also snapshots `collapsed`, which it misses today |
-| `snapBlock` and the arrow bar | 2763–2772 | `ops.arrow` (DRAG.C4); `selBlk`, `enterSel`, `exitSel`, `selHoldOn` stay in `index.html` |
+| `snapBlock` and the arrow bar | 2763–2772 | off in 0.1 with the engine: position mode exists only on touch, which moves nothing until its stage (W13); `selBlk`, `enterSel`, `exitSel`, `selHoldOn` stay in `index.html` for that stage |
 | `drag(b, grip, o)` on the grip and the card bar | 3038–3118, attached at 2411 and 2413 | `input.js` carries by the grip and by a code or area header; a grip tapped without a move calls back into `index.html` (copy, position mode on touch, focus for code) as 3115 does |
 | `resizer` and `sizeMenu` | 2423–2448, set up at 2503, 2591, 2730; 2830 | `input.js` handles (RESIZE, AREA.3); the size menu calls `ops.width` / `ops.height` |
 | Area collapse `.fold` | 2704 | `ops.grow` for the area |
@@ -275,9 +275,8 @@ Every item comes from a decision; the ones that touch the phone are listed so th
 
 - **The sheet has a width.** A note's sheet is `SHEETW` columns on every device, with white room to the right on a wide window; a narrow window scales the note by the width it uses, up to its rightmost block, so a note on the left of the sheet stays at full size in a half-screen window (W2, W7, W12, §3.1). Today a sheet block's place is a share of the window's width.
 - **Old notes may shift once.** A note whose stored places overlap or stick out at `W0px` is shown separated and clamped (§3.5); nothing is written until the user moves those blocks.
-- **The phone.** At any phone width the note is below the minimum scale, so the phone always shows the narrow view: one column in reading order, where blocks are read, written, created and deleted, but not carried, not resized and not moved by position mode (W6, VIEW.2–VIEW.5). Today the phone shows the same free sheet, with position mode on a hold.
-- **Touch on the empty sheet of the scaled layout** (a tablet held wide; proposed for touch). A tap starts a new block (EDIT.4), which goes away if nothing is written; a hold shows the borders while it is held (VIEW.6a). Today a hold creates a block. A hold on a block's text starts position mode where position mode exists.
-- **Position mode on a computer** moves by one cell per arrow, buttons and keys (DRAG.C4), unless the owner keeps today's snapping (§1.3).
+- **The phone and the tablet move nothing** (W13). They read, write, delete and create blocks by «+»; nothing is carried, resized or moved by position mode, which goes away on touch until the touch stage. The phone, always below the minimum scale, shows the narrow view (W6, VIEW.2–VIEW.5); a tablet shows the real layout when it fits at the minimum scale. Today both show the free sheet, with position mode on a hold.
+- **Touch on the empty sheet** makes no block (W13): a hold shows the borders while it is held (VIEW.6a); a new block comes from «+». Today a hold creates one.
 - **Hover on the empty sheet** shows the cell cursor only, no ghost of a block (EDIT.2).
 - **Pushes are not permanent.** A block that grows and shrinks back leaves its neighbours where they were (H1, G1); today they stay pushed (`LAYOUT-MODEL.md` F3).
 - **The rest of `LAYOUT-RULES.md`:** letting through by holding or Shift, elastic widths, guides and sticking, the reading mode, areas entered by the pointer and stopping a block at their frame (A1, A2), both side handles of an area, drawing an area with at least 4 × 2 cells, then widened to the area's minimum width (12 cells, as today) (proposed).
