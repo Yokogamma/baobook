@@ -40,7 +40,7 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **Areas:** settled as A1, A2 and A3 (AREA.7–AREA.9, 2026-11-04): 0.1 folds nothing new, an area follows its blocks, its collapse to the header stays.
 - **The batch of small proposals:** `DESKW` 40 cells, the hand button (VIEW.1b), the carried block's width (DRAG.A5), P-REST, P-SEP between two uncarried blocks, the handle always shown with borders always visible (VIEW.6a). The owner confirms or corrects them in one list.
 - **O-2 (P18)** the default text placement and field: 0.1 keeps today's («як зараз»).
-- **O-3 (P12)** the release order against the sync release.
+- **O-3 (P12)** moot: sync is in production since #130 (2026-10-27), so 0.1 follows it.
 - **`W0`** answered: 1458 px, 59 columns (§3.1, W11).
 - **What a narrower window scales by** answered: the note's used width, up to its rightmost block (W12).
 - **Answered, W13: the arrows of position mode wait for the touch stage.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.

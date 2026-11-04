@@ -363,7 +363,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 
 - **O-1** Decided as G6 (2026-11-02): the rows a head block moved up by hand leaves become its own.
 - **O-2 (P18)** The four combinations stay as settings (V2); which one is the default is open.
-- **O-3 (P12)** The release order of the rules against the sync release.
+- **O-3 (P12)** Moot: sync was released to production by #130 on 2026-10-27, so the engine comes after it.
 - **O-4** Decided (M6, 2026-11-02): «по середине» is dropped; one way to swap.
 - **O-5 (P4–P7)** The phone and the computer working together: stage 2 [W1].
 - **O-6** Decided: entering and leaving as A1 (2026-11-02), the rest of the areas as A2, long content as A3 (2026-11-04, AREA.7–AREA.9). Folding, for every kind and one stored field, is the next release's (A3).
