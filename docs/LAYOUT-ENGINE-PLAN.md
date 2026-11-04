@@ -25,11 +25,11 @@ Three properties make 0.1 a safe first release:
 | RESIZE | 1, 2, 3 for `ch` only | the height handle of a text writes `ch` when released above the content and clears it when released below, as today; for code it sets its fold (`ch`, `open`) as today; `fold` for texts is 0.2 |
 | AREA | 1, 2, 3, 5 (no hidden lines to bring back), 6, 7, 7a, 7b | both side handles (today the area has a right handle only); 7a and 7b as the mockup does them (A2); the app's area header and collapse (§3.2) |
 | EDIT | 1–4, 4a, 6 | EDIT.5 comes with hidden lines in 0.2 |
-| VIEW | 1 without zooming in (with `SHEETW` fixed, §3.1), 2–7 | the scale fits the note and stops at `MINSCALE`; the list of notes keeps today's behaviour; the reading mode and the frame or background look as app settings; the dev look |
+| VIEW | 1, 1b (with `SHEETW` fixed, §3.1), 2–7 | the scale fits the width the note uses and stops at `MINSCALE` (W12); «+», «−» and «По ширині» with the sideways scroll, and the hand with its button, Space and the middle button (S2), their strings in `uk.json` and `en.json`; the list of notes keeps today's behaviour; the reading mode and the frame or background look as app settings; the dev look |
 
 ### 1.2 Later
 
-- **0.2:** pairs and gaps stored and merged by sync (E-1 in full); `SHEETW` per note with the sheet's right edge (AREA.8) and a note without a width (VIEW.1c); folding as one function with one standard stored field for every kind that folds, text, area, code and to-do lists, code moved onto it from its `ch` and `open`, and with it the area's own ways (AREA.9, H5) (A3); hidden empty lines (SIZE.7, P-SQUEEZE, AREA.4, EDIT.5); the note's own view settings (VIEW.6a, per-note override); P18 text placement and fields as settings (O-2). Each of these changes the stored format and goes with a `FORMAT` raise, after step 0 of `LAYOUT-MODEL.md` §7 (the editor keeps fields it does not know) is released. Also in 0.2, with no format change: zooming in from the fitted scale and from the narrow view, the scrollbar and the hand (VIEW.1, VIEW.1b), the list of notes pushing or covering the note (VIEW.1a), and the settings for `ORDER`, `MINC` and `MINSCALE`.
+- **0.2:** pairs and gaps stored and merged by sync (E-1 in full); `SHEETW` per note with the sheet's right edge (AREA.8) and a note without a width (VIEW.1c); folding as one function with one standard stored field for every kind that folds, text, area, code and to-do lists, code moved onto it from its `ch` and `open`, and with it the area's own ways (AREA.9, H5) (A3); hidden empty lines (SIZE.7, P-SQUEEZE, AREA.4, EDIT.5); the note's own view settings (VIEW.6a, per-note override); P18 text placement and fields as settings (O-2). Each of these changes the stored format and goes with a `FORMAT` raise, after step 0 of `LAYOUT-MODEL.md` §7 (the editor keeps fields it does not know) is released. Also in 0.2, with no format change: the list of notes pushing or covering the note (VIEW.1a), and the settings for `ORDER`, `MINC` and `MINSCALE`.
 - **Stage 2:** the phone and the computer working together (O-5).
 - **Later:** pinned blocks (O-7), block properties, kinds and commands as modules (`docs/BLOCKS-PLAN.md`, to be written).
 
@@ -42,7 +42,7 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **O-2 (P18)** the default text placement and field: 0.1 keeps today's («як зараз»).
 - **O-3 (P12)** the release order against the sync release.
 - **`W0`** answered: 1458 px, 59 columns (§3.1, W11).
-- **What a narrower window scales by** (O-18): the note's used width or the whole `SHEETW`; being tried in the mockup. 0.1 needs the answer for VIEW.1, since the owner's 59 columns put any note below `MINSCALE` in a half-screen window if the whole sheet counts.
+- **What a narrower window scales by** answered: the note's used width, up to its rightmost block (W12).
 - **New for 0.1: the arrows of position mode.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.
 - **New for 0.1: the code block's width** (§4.4) and **a collapsed area met by a carried block** (§3.2): both keep today's behaviour as far as the rules allow, marked proposed.
 - **Who edits the scaled layout** (S3, 2026-11-04): any device that shows the note at or above `MINSCALE` edits it, as the mockup does, and below it shows the narrow view; `DESKW` only decides who gives a phone note its width, in 0.2.
@@ -104,7 +104,7 @@ In 0.1 nothing new is stored. The sheet is read at one fixed pixel width `W0px` 
 
 **Children and the sheet.** An area is a Box at sheet `(a, y)` with `H` header rows (`container.headerRows`); its child at `(c, r)` stands on sheet cell `(a + 1 + c, y + H + r)`, its handle on the area's column `c`. This is `LAYOUT-MODEL.md` §3.1's mapping in the engine's columns. `enter` and `ungroup` use it, and «З області» (`leave`) its column part, since AREA.7 puts the block under the area in the column it had inside; `ops.js` works in cells only.
 
-A note is shown at `SHEETW` columns on every device: wider windows show white room to the right, narrower ones scale down to `MINSCALE`, narrower still the narrow view (VIEW.1, VIEW.2).
+A note's sheet is `SHEETW` columns on every device. Its scale is fitted to the width the note uses, up to its rightmost block (W12): a window at least that wide shows it at full size, white room to the right when it is wider than the sheet, the rest of the sheet reached by the sideways scroll when it is narrower; a narrower window scales the note down to `MINSCALE`, narrower still the narrow view (VIEW.1, VIEW.2). The user may zoom in with «+» and move with the hand.
 
 ### 3.2 Sizes
 
@@ -273,7 +273,7 @@ Line numbers are in `public/index.html` at `0178041`; step 5 re-checks them.
 
 Every item comes from a decision; the ones that touch the phone are listed so that the owner checks them on a device before step 6.
 
-- **The sheet has a width.** A note is shown at `SHEETW` columns on every device, with white room to the right on a wide window and scaled down on a narrow one (W2, W7, §3.1). Today a sheet block's place is a share of the window's width.
+- **The sheet has a width.** A note's sheet is `SHEETW` columns on every device, with white room to the right on a wide window; a narrow window scales the note by the width it uses, up to its rightmost block, so a note on the left of the sheet stays at full size in a half-screen window (W2, W7, W12, §3.1). Today a sheet block's place is a share of the window's width.
 - **Old notes may shift once.** A note whose stored places overlap or stick out at `W0px` is shown separated and clamped (§3.5); nothing is written until the user moves those blocks.
 - **The phone.** At any phone width the note is below the minimum scale, so the phone always shows the narrow view: one column in reading order, where blocks are read, written, created and deleted, but not carried, not resized and not moved by position mode (W6, VIEW.2–VIEW.5). Today the phone shows the same free sheet, with position mode on a hold.
 - **Touch on the empty sheet of the scaled layout** (a tablet held wide; proposed for touch). A tap starts a new block (EDIT.4), which goes away if nothing is written; a hold shows the borders while it is held (VIEW.6a). Today a hold creates a block. A hold on a block's text starts position mode where position mode exists.
