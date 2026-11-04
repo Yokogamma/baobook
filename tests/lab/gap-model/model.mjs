@@ -1,245 +1,295 @@
-// An executable model of the gaps of Baobook's layout engine, «stacks» (docs/LAYOUT-RULES.md GAP, decisions G1–G7, S8 in
+// An executable model of the gaps of Baobook's layout engine, «stacks» (docs/LAYOUT-RULES.md GAP, decisions G1–G8, S8 in
 // docs/LAYOUT-MODEL.md §2). It is a lab model, not the engine: one container, blocks as card columns and rows, no handles, no
 // SETTLE. Its job is to show, by running, that the representation keeps every gap whole through insertions, removals, growth,
-// widening and carries, so that the specification can be written from it.
+// widening, carries, moves of several blocks at once and temporary heights, so that the specification can be written from it.
 //
-// The state. A block: {id, c0, c1, y, h}: its card columns c0…c1 (inclusive), its top row y and its height h.
-// For every block l and every column c of its card where l is an «anchor», a stack: {u, parts}. u is the anchor above l in that
-// column, or null for the top of the container. parts = [seg0, s1, seg1, s2, …, segk]: a seg is the gap's rows in order, one owner
-// id per row ('' for an unowned row of free room); an s is a block standing in the gap, {id, pad, lend}: lend the rows of the gap its
-// body covers, pad the empty rows above it that are not the gap's (it was put lower than the gap reaches, where the block under
-// it is held lower by another column), which go with it. In a column, the blocks from top to bottom are a chain of anchors, each with the blocks standing between it and the
-// anchor above. Every row is derived: FOLLOW walks each column's chain with a cursor.
+// The state. A block: {id, c0, c1, y, h, e}: its card columns c0…c1 (inclusive), its row y in the displayed layout, its height h
+// (the canonical one, stored) and e, the rows a temporary height adds to it while it lasts (§2.1 of the rules: «Розгорнути», the
+// unfolding with the caret, EDIT.3's provisional line, P18's row; a temporary height in a view where blocks are placed only adds
+// rows). For every block l and every column c of its card where l is an «anchor», a stack: {u, parts}. u is the anchor above l in
+// that column, or null for the top of the container. parts = [seg0, s1, seg1, s2, …, segk]: a seg is the gap's rows in order, one
+// owner id per row ('' for an unowned row of free room); an s is a block standing in the gap, {id, lend, tlend}: lend the rows of
+// the gap its body covers (at most its height, G7), tlend the rows its temporary rows covered when it was put there (in the
+// canonical layout they are rows of the gap under it; in the displayed one its temporary rows lie over them). Rows a block owns
+// may lie above it: the room above a block put lower than the gap reaches (the block under it held lower by another column) is
+// its own rows, so it goes with it. In a column, the blocks from top to bottom are a chain of anchors, each with the blocks
+// standing between it and the anchor above. Every row is derived: FOLLOW walks each column's chain with a cursor, in either
+// measure: the displayed one (with the temporary heights), which every operation works on, and the canonical one, which is
+// stored.
 //
 // The operations are the events the engine's RELINK sees, column by column: a block comes into a column (it stands in the gap it
 // lands in, or anchors a new stack when nothing is below it), leaves a column (a standing block gives its lend back; an anchor's
-// stack is joined into the stack under it), changes height (G7 caps a standing block's lend at its height), or is carried by hand
-// within its columns (rule 1 for an anchor's edges, the lend found again for a standing block).
+// stack is joined into the stack under it; under the last anchor, the lowest block standing in its stack takes its place), changes its real height (G7 cuts a
+// standing block's lend at its height), gets or loses a temporary height (no stack changes), or moves, alone or with others in
+// one step (the rows change only at the edges of each run of blocks that moved together).
 
-const own = (b) => b.id;
 const len = (seg) => seg.length;
 
 export function createModel(opts = {}) {
-  const O = { ownRowsGoOnNarrow: false, ...opts };   // opts: ownRowsGoOnNarrow, true is the switch GAP.9 off (G8)
+  const O = { gap8: true, gap9: true, ...opts };   // the switches GAP.8 (G6) and GAP.9 (G8), on by default
   const B = new Map();   // id → block
   const S = new Map();   // `${l}|${c}` → stack
   const key = (l, c) => l + '|' + c;
   const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
   const covers = (b, c) => b.c0 <= c && c <= b.c1;
-  const bottom = (id) => (id == null ? 0 : B.get(id).y + B.get(id).h);
+  const shownH = (b) => b.h + b.e;
+  const stackCol = (k) => +k.split('|')[1];
+  const heirOf = (st) => (st.u == null ? '' : st.u);
 
-  // ---- the chain of one column: anchors from the top, each with the blocks standing in its stack
+  // ---- the chain of one column: anchors from the top; and every element of it, anchors and standing blocks, in order
   function chain(c) {
     const out = []; let u = null;
     for (let guard = 0; guard < 100000; guard++) {
       let next = null;
-      for (const [k, st] of S) { const [l, cc] = k.split('|'); if (+cc === c && st.u === u) { next = l; break; } }
+      for (const [k, st] of S) if (stackCol(k) === c && st.u === u) { next = k.split('|')[0]; break; }
       if (next == null) break;
       out.push(next); u = next;
     }
     return out;
   }
-  function standingAt(c, id) {   // the stack of column c in which id stands, and its index in parts
-    for (const [k, st] of S) { if (+k.split('|')[1] !== c) continue; const i = st.parts.findIndex((p, j) => j % 2 === 1 && p.id === id); if (i >= 0) return { l: k.split('|')[0], st, i }; }
-    return null;
+  function seq(c) {   // [{id, st, i}] : i the index in st.parts for a standing block, -1 for the anchor of st
+    const out = [];
+    for (const l of chain(c)) { const st = S.get(key(l, c)); st.parts.forEach((p, i) => { if (i % 2) out.push({ id: p.id, st, i }); }); out.push({ id: l, st, i: -1 }); }
+    return out;
   }
+  const lowerOf = (x, c) => { for (const [k, st] of S) if (stackCol(k) === c && st.u === x) return st; return null; };
 
-  // ---- FOLLOW: every block's row is the highest the stacks of all its columns allow (the least fixed point)
-  function follow() {
-    const n = B.size;
-    for (const b of B.values()) b.y = 0;
-    for (let it = 0; it <= n + 2; it++) {
+  // ---- FOLLOW: every block's row is the highest the stacks of all its columns allow (the least fixed point), in a measure
+  function rowsIn(measure) {
+    const shown = measure === 'shown', y = new Map([...B.keys()].map((id) => [id, 0]));
+    const cs = new Set(); for (const b of B.values()) for (const c of cols(b)) cs.add(c);
+    const order = [...cs].sort((a, b) => a - b);
+    for (let it = 0; it <= B.size + 2; it++) {
       const want = new Map([...B.keys()].map((id) => [id, 0]));
-      const cs = new Set(); for (const b of B.values()) for (const c of cols(b)) cs.add(c);
-      for (const c of [...cs].sort((a, b) => a - b)) {
+      for (const c of order) {
         let cur = 0;
         for (const l of chain(c)) {
-          const st = S.get(key(l, c));
-          st.parts.forEach((p, i) => {
+          S.get(key(l, c)).parts.forEach((p, i) => {
             if (i % 2 === 0) { cur += len(p); return; }
-            cur += p.pad; want.set(p.id, Math.max(want.get(p.id), cur)); const s = B.get(p.id); cur = Math.max(cur, s.y) + s.h;
+            const s = B.get(p.id); want.set(s.id, Math.max(want.get(s.id), cur));
+            cur = Math.max(cur, y.get(s.id)) + s.h + (shown ? Math.max(s.e, len(p.tlend)) : len(p.tlend));
           });
-          want.set(l, Math.max(want.get(l), cur)); const lb = B.get(l); cur = Math.max(cur, lb.y) + lb.h;
+          const lb = B.get(l); want.set(l, Math.max(want.get(l), cur)); cur = Math.max(cur, y.get(l)) + lb.h + (shown ? lb.e : 0);
         }
       }
       let changed = false;
-      for (const b of B.values()) if (b.y !== want.get(b.id)) { b.y = want.get(b.id); changed = true; }
-      if (!changed) return;
+      for (const id of B.keys()) if (y.get(id) !== want.get(id)) { y.set(id, want.get(id)); changed = true; }
+      if (!changed) return y;
     }
     throw new Error('FOLLOW did not settle');
   }
+  function follow() { const y = rowsIn('shown'); for (const b of B.values()) b.y = y.get(b.id); }
 
-  // the actual start row of each part of a stack (segs start where the part above ends, standing blocks where they stand)
+  // the actual start and end rows of each part of a stack in the displayed layout
   function spans(st) {
-    let cur = bottom(st.u); const out = [];
+    let cur = st.u == null ? 0 : B.get(st.u).y + shownH(B.get(st.u)); const out = [];
     st.parts.forEach((p, i) => {
       if (i % 2 === 0) { out.push([cur, cur + len(p)]); cur += len(p); return; }
-      const s = B.get(p.id), top = Math.max(cur + p.pad, s.y); out.push([top, top + s.h]); cur = top + s.h;
+      const s = B.get(p.id), top = Math.max(cur, s.y), end = top + s.h + Math.max(s.e, len(p.tlend)); out.push([top, end]); cur = end;
     });
     return out;
   }
 
-  // ---- a block comes into column c, at its present row
+  // ---- a block comes into column c, at its present row (rules 3 and 4)
   function enter(x, c) {
     const others = [...B.values()].filter((b) => b.id !== x.id && covers(b, c)).sort((a, b) => a.y - b.y || (a.id < b.id ? -1 : 1));
-    const below = others.find((b) => b.y >= x.y + x.h);
-    if (!below) return anchorNew(x, c, others);
-    // the stack that holds `below`: its own (below is an anchor) or the one it stands in; x lands in the seg just above `below`
+    const below = others.find((b) => b.y >= x.y + shownH(x));
+    if (!below) {   // fresh: x anchors a stack of its own, rows of the anchor above (unowned under the top)
+      const above = others.filter((b) => b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
+      S.set(key(x.id, c), { u, parts: [Array(Math.max(0, x.y - (above ? above.y + shownH(above) : 0))).fill(u == null ? '' : u)] });
+      return;
+    }
+    // stand: in the stack that holds `below` (its own, or the one it stands in), in the seg just above it
     let st = S.get(key(below.id, c)), i;
-    if (st) i = st.parts.length - 1; else { const f = standingAt(c, below.id); st = f.st; i = f.i - 1; }
-    const sp = spans(st);
-    st.parts.splice(i, 1, ...place(st.parts[i], x.y - sp[i][0], x));
+    if (st) i = st.parts.length - 1; else { const f = seq(c).find((el) => el.id === below.id); st = f.st; i = f.i - 1; }
+    st.parts.splice(i, 1, ...place(st.parts[i], x.y - spans(st)[i][0], x));
   }
   // a standing block put at offset off from the start of the rows `rows`: the rows before it, its entry, the rows after it
   function place(rows, off, x) {
     if (off < 0) throw new Error('collision above ' + x.id);
-    if (off >= len(rows)) return [rows.slice(), { id: x.id, pad: off - len(rows), lend: [] }, []];
-    return [rows.slice(0, off), { id: x.id, pad: 0, lend: rows.slice(off, off + x.h) }, rows.slice(off + x.h)];
-  }
-  function anchorNew(x, c, others) {   // nothing below x in c: x anchors a stack of its own, fresh rows of the block above (rule 4)
-    const above = [...others].filter((b) => b.y + b.h <= x.y).pop();
-    const u = above ? above.id : null, n = Math.max(0, x.y - bottom(u));
-    S.set(key(x.id, c), { u, parts: [Array(n).fill(u == null ? '' : u)] });
+    if (off >= len(rows)) return [[...rows, ...Array(off - len(rows)).fill(x.id)], { id: x.id, lend: [], tlend: [] }, []];   // the room above it is its own
+    return [rows.slice(0, off), { id: x.id, lend: rows.slice(off, off + x.h), tlend: rows.slice(off + x.h, off + x.h + x.e) }, rows.slice(off + x.h + x.e)];
   }
 
-  // ---- a block leaves column c (deleted, carried away, narrowed off it)
+  // ---- x's rows in column c, wherever they lie (G2): those above it (the room it was put with) go; those under it go too, or,
+  // narrowed off with GAP.9 on (G8), become rows of the stack they lie in, that stack's u's (unowned under the top); in the stack
+  // whose u x is, the u that stack is about to get, x's own
+  function release(x, c, keep, heir) {
+    let past = false;
+    for (const l of chain(c)) {
+      const st = S.get(key(l, c)), to = st.u === x.id ? heir : heirOf(st);
+      const f = (seg) => seg.flatMap((o) => (o !== x.id ? [o] : past && keep ? [to] : []));
+      st.parts = st.parts.map((p, j) => {
+        if (j % 2 === 0) return f(p);
+        const q = { id: p.id, lend: f(p.lend), tlend: f(p.tlend) }; if (p.id === x.id) past = true; return q;
+      });
+      if (l === x.id) past = true;
+    }
+  }
+
+  // ---- a block leaves column c (deleted, carried away, narrowed or pressed off it): rule 2
   function leave(x, c, why) {
-    // its own rows go (G2) when it is deleted or carried away; narrowed off a column, by the switch: they go too (the rules as
-    // written), or they stay as free room of the gap that takes them (ownRowsGoOnNarrow false)
-    const dropOwn = why !== 'narrow' || O.ownRowsGoOnNarrow;
-    let heir = '';
-    const strip = (seg) => (dropOwn ? seg.filter((o) => o !== x.id) : seg.map((o) => (o === x.id ? heir : o)));
-    const f = standingAt(c, x.id);
-    if (f) {   // standing: its lend goes back between the segs round it
+    const f = seq(c).find((el) => el.id === x.id); if (!f) return;
+    const keep = why === 'narrow' && O.gap9;   // G8: narrowing is not deleting
+    release(x, c, keep, heirOf(f.st));
+    if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8)
       const { st, i } = f;
-      const merged = [...st.parts[i - 1], ...st.parts[i].lend, ...st.parts[i + 1]];   // its pad goes with it
-      st.parts.splice(i - 1, 3, strip(merged));
+      st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...st.parts[i].lend, ...st.parts[i].tlend, ...st.parts[i + 1]]);
       return;
     }
-    const mine = S.get(key(x.id, c)); if (!mine) return;
-    S.delete(key(x.id, c));
-    let lowerKey = null; for (const [k, st] of S) if (+k.split('|')[1] === c && st.u === x.id) { lowerKey = k; break; }
-    if (lowerKey) {   // join: the stack above x and the stack under it become one; x's own rows go wherever they lie (G2)
-      const L = S.get(lowerKey), up = mine.parts.slice(), last = up.pop(); heir = mine.u == null ? '' : mine.u;
+    const mine = f.st; S.delete(key(x.id, c));
+    const L = lowerOf(x.id, c);
+    if (L) {          // join: the stack above x and the stack under it become one
       const slack = x.y - spans(mine)[mine.parts.length - 1][1];   // the rows by which its stack there did not hold it
-      const body = dropOwn ? [] : Array(x.h + slack).fill(heir);   // narrowed off: its body's rows and its slack there stay too (G8)
-      const joined = [...up, [...last, ...body, ...L.parts[0]], ...L.parts.slice(1)];
-      L.u = mine.u;
-      L.parts = joined.map((p, j) => (j % 2 === 0 ? strip(p) : { id: p.id, pad: p.pad, lend: strip(p.lend) }));
-    } else {          // x was the last anchor: the blocks standing in its stack become anchors, each over the seg above it
-      let u = mine.u;
-      for (let j = 1; j < mine.parts.length; j += 2) {
-        const s = mine.parts[j]; S.set(key(s.id, c), { u, parts: [strip(mine.parts[j - 1])] }); u = s.id;
-      }
+      const up = mine.parts.slice(), last = up.pop();
+      const body = keep ? Array(shownH(x) + slack).fill(heirOf(mine)) : [];   // narrowed off: what its body stood on and its slack stay
+      L.u = mine.u; L.parts = [...up, [...last, ...body, ...L.parts[0]], ...L.parts.slice(1)];
+    } else if (mine.parts.length > 1) {   // the last anchor: the lowest block standing in its stack becomes the stack's anchor, the
+      // others stand on in it; its lend and the rows under it go (GAP.3), and the room above it that was its own becomes the gap's
+      const k = mine.parts.length - 2, s = mine.parts[k], to = heirOf(mine), f = (seg) => seg.map((o) => (o === s.id ? to : o));
+      S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (j % 2 === 0 ? f(p) : { id: p.id, lend: f(p.lend), tlend: f(p.tlend) })) });
     }
   }
 
-  // ---- G7: what a standing block covers is never more than its height
+  // ---- G7: a real shrink; what a standing block covers is never more than its height
   function capLends(x) {
-    for (const st of S.values()) st.parts.forEach((p, j) => { if (j % 2 === 1 && p.id === x.id && len(p.lend) > x.h) p.lend = p.lend.slice(0, x.h); });   // the rows it no longer covers leave the gap
+    for (const st of S.values()) st.parts.forEach((p, j) => { if (j % 2 === 1 && p.id === x.id && len(p.lend) > x.h) p.lend = p.lend.slice(0, x.h); });
   }
 
-  // ---- a block carried by hand by d rows within column c (rule 1 for an anchor, the lend found again for a standing block)
-  function carryIn(x, c, d) {
-    const f = standingAt(c, x.id);
-    if (f) {
-      const { st, i } = f, sp = spans(st);
-      const rows = [...st.parts[i - 1], ...st.parts[i].lend, ...st.parts[i + 1]];   // the rows round it keep their owners
-      st.parts.splice(i - 1, 3, ...place(rows, x.y + d - sp[i - 1][0], x));         // past the end: empty rows above it, its pad
-      return;
+  // ---- blocks moved by d rows in one step (a carry by hand, or a primitive moving several blocks with their gaps): rule 1.
+  // Per column, each run of chain blocks that moved together keeps everything inside it; only the gap above the run and the gap
+  // under it change. Moving down, the gap under the run loses rows, the run's own first, then from the top, and the gap above it
+  // grows where it holds the run's top: by rows of its stack's u (unowned under the top), and, when both gaps are of one stack (the
+  // run stands in it), by as many as went below, the rest as room of the run's top, its own. Moving up, the slack of the gap above
+  // goes first, then rows from its bottom; those rows come under the run with their owners (G5); free room left by the first block
+  // of the column becomes its own (G6, GAP.8), and the slack used becomes the run's top's own rows (S7); with nothing under the run
+  // they go (G5).
+  function moveIn(c, ids, d) {
+    const q = seq(c), moved = q.map((el) => ids.has(el.id)), runs = [];
+    for (let a = 0; a < q.length; a++) {   // every run, with its two gaps and its slack, read before anything changes
+      if (!moved[a] || (a > 0 && moved[a - 1])) continue;
+      let z = a; while (z + 1 < q.length && moved[z + 1]) z++;
+      const top = q[a], bot = q[z], ust = top.st, ui = top.i >= 0 ? top.i - 1 : ust.parts.length - 1;
+      const [lst, li] = bot.i >= 0 ? [bot.st, bot.i + 1] : [lowerOf(bot.id, c), 0];
+      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, slack: B.get(top.id).y - spans(ust)[ui][1] });
+      a = z;
     }
-    const mine = S.get(key(x.id, c));
-    let lower = null; for (const [k, st] of S) if (st.u === x.id && +k.split('|')[1] === c) { lower = st; break; }
-    const last = mine.parts.length - 1, u = mine.u == null ? '' : mine.u;
-    const sp = spans(mine), slack = x.y - sp[last][1];   // how much lower x stands than this gap holds it (another column binds it)
-    let left = [];
-    // the carried lower block went down: a gap that holds it grows by rows of its owner (G1); one with slack keeps its rows
-    if (d > 0 && slack === 0) mine.parts[last] = [...mine.parts[last], ...Array(d).fill(u)];
-    // it went up: the slack goes first, then rows from the bottom; those rows are the ones it leaves
-    if (d < 0) { const k = Math.min(len(mine.parts[last]), Math.max(0, -d - slack));
-      left = mine.parts[last].slice(len(mine.parts[last]) - k); mine.parts[last] = mine.parts[last].slice(0, len(mine.parts[last]) - k); }
-    if (!lower) return;
-    if (d > 0) {   // its bottom went down into the gap under it: rows go from the top, its own first
-      const seg = lower.parts[0].slice(); let k = d;
-      for (let j = 0; j < seg.length && k > 0; j++) if (seg[j] === x.id) { seg.splice(j, 1); j--; k--; }
-      lower.parts[0] = seg.slice(Math.min(k, seg.length)); k -= Math.min(k, seg.length);
-      if (k > 0 && lower.parts[1]) { const t = Math.min(k, lower.parts[1].pad); lower.parts[1].pad -= t; }   // then from the pad of the block standing first: it is never moved
-    } else if (d < 0) {   // its bottom went up: the rows it left come under it with their owners; free room becomes its own (G5, G6)
-      const pad = Array(Math.max(0, -d - left.length)).fill(x.id);   // what the slack gave: rows under it, its own
-      lower.parts[0] = [...pad, ...left.map((o) => (o === '' ? x.id : o)), ...lower.parts[0]];
+    for (const { r, head, run, ust, ui, lst, li, sameStack, slack } of runs) {
+      if (d > 0) {
+        let k = d, got = 0;
+        if (lst) {
+          const seg = lst.parts[li].slice();
+          for (let j = 0; j < seg.length && k > 0; j++) if (run.has(seg[j])) { seg.splice(j, 1); j--; k--; got++; }
+          const t = Math.min(k, seg.length); lst.parts[li] = seg.slice(t); got += t;
+        }
+        // where the gap above holds the run it grows; a run standing in one stack keeps that stack's rows, whatever its slack
+        const grow = sameStack ? [...Array(got).fill(heirOf(ust)), ...Array(slack === 0 ? d - got : 0).fill(r)] : Array(slack === 0 ? d : 0).fill(heirOf(ust));
+        ust.parts[ui] = [...ust.parts[ui], ...grow];
+      } else {
+        const k = -d, used = Math.min(k, slack), n = Math.min(len(ust.parts[ui]), k - used);
+        const left = ust.parts[ui].slice(len(ust.parts[ui]) - n); ust.parts[ui] = ust.parts[ui].slice(0, len(ust.parts[ui]) - n);
+        if (lst) lst.parts[li] = [...Array(used).fill(r), ...left.map((o) => (o === '' && head && O.gap8 ? r : o)), ...lst.parts[li]];
+      }
     }
   }
 
   // every operation is all or nothing: a refused one leaves the state as it was
-  const atomic = (fn) => (...a) => {
-    const b0 = new Map([...B].map(([k, b]) => [k, { ...b }])), s0 = new Map([...S].map(([k, st]) => [k, { u: st.u, parts: st.parts.map((p, i) => (i % 2 ? { ...p, lend: p.lend.slice() } : p.slice())) }]));
-    try { return fn(...a); } catch (e) { B.clear(); for (const [k, b] of b0) B.set(k, b); S.clear(); for (const [k, s] of s0) S.set(k, s); throw e; }
-  };
+  const copy = () => ({ B: new Map([...B].map(([k, b]) => [k, { ...b }])), S: new Map([...S].map(([k, st]) => [k, { u: st.u, parts: st.parts.map((p, i) => (i % 2 ? { id: p.id, lend: p.lend.slice(), tlend: p.tlend.slice() } : p.slice())) }])) });
+  const put = (s) => { B.clear(); for (const [k, b] of s.B) B.set(k, { ...b }); S.clear(); for (const [k, st] of s.S) S.set(k, st); };
+  const atomic = (fn) => (...a) => { const s0 = copy(); try { return fn(...a); } catch (e) { put(s0); throw e; } };
   const api = {
     B, S,
-    open(blocks) {   // from places only: every gap fresh, owned by the block above, free room unowned
+    open(blocks) {   // from places only (GAP.1): every gap fresh, owned by the block above, free room unowned; no temporary height
       B.clear(); S.clear();
-      for (const b of blocks) B.set(b.id, { ...b });
+      for (const b of blocks) B.set(b.id, { ...b, e: 0 });
       const cs = new Set(); for (const b of B.values()) for (const c of cols(b)) cs.add(c);
       for (const c of [...cs].sort((a, b) => a - b)) {
         const col = [...B.values()].filter((b) => covers(b, c)).sort((a, b) => a.y - b.y || (a.id < b.id ? -1 : 1));
         let u = null;
-        for (const b of col) { const n = b.y - bottom(u); if (n < 0) throw new Error('overlap at open'); S.set(key(b.id, c), { u, parts: [Array(n).fill(u == null ? '' : u)] }); u = b.id; }
+        for (const b of col) { const n = b.y - (u == null ? 0 : B.get(u).y + B.get(u).h); if (n < 0) throw new Error('overlap at open'); S.set(key(b.id, c), { u, parts: [Array(n).fill(u == null ? '' : u)] }); u = b.id; }
       }
       follow(); return api;
     },
-    _insert(b) { const x = { ...b }; if (overlaps(x)) throw new Error('insert overlaps'); B.set(x.id, x); for (const c of cols(x)) enter(x, c); follow(); return api; },
-    _remove(id, why = 'delete') { const x = B.get(id); for (const c of cols(x)) leave(x, c, why); B.delete(id); follow(); return api; },
-    _height(id, h) { const x = B.get(id); x.h = h; capLends(x); follow(); return api; },
+    _insert(b) { const x = { e: 0, ...b }; if (B.has(x.id) || overlaps(x)) throw new Error('insert overlaps'); B.set(x.id, x); for (const c of cols(x)) enter(x, c); follow(); return api; },
+    _remove(id) { const x = B.get(id); for (const c of cols(x)) leave(x, c, 'delete'); B.delete(id); follow(); return api; },
+    _height(id, h) { const x = B.get(id); if (!(h >= 1)) throw new Error('height'); x.h = h; capLends(x); follow(); return api; },   // a real change
+    _show(id, e) { const x = B.get(id); if (!(e >= 0)) throw new Error('temporary'); x.e = e; follow(); return api; },             // a temporary one
     _width(id, c0, c1) {
       const x = B.get(id), was = cols(x);
       if (!(c0 <= c1)) throw new Error('no columns');
-      const probe = { ...x, c0, c1 }; if (overlaps(probe, id)) throw new Error('width overlaps');
+      if (overlaps({ ...x, c0, c1 }, id)) throw new Error('width overlaps');
       for (const c of was) if (c < c0 || c > c1) leave(x, c, 'narrow');
       x.c0 = c0; x.c1 = c1;
       for (const c of cols(x)) if (!was.includes(c)) enter(x, c);
       follow(); return api;
     },
-    _carry(id, d) {   // by hand, within its columns
-      const x = B.get(id), probe = { ...x, y: x.y + d }; if (overlaps(probe, id)) throw new Error('carry overlaps');
-      for (const c of cols(x)) carryIn(x, c, d);
-      x.y += d; follow();
-      if (B.get(id).y !== probe.y) throw new Error('carry: the stacks do not put ' + id + ' at its row');
+    _move(list, d) {   // one step: every block of `list` moved by d rows, within its columns
+      const ids = new Set(list); if (!ids.size || !d) return api;
+      for (const id of ids) if (overlaps({ ...B.get(id), y: B.get(id).y + d }, id, ids)) throw new Error('move overlaps');
+      const want = new Map([...B.values()].map((b) => [b.id, ids.has(b.id) ? b.y + d : b.y]));
+      const cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c);
+      for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d);
+      follow();
+      for (const id of ids) if (B.get(id).y !== want.get(id)) throw new Error('move: the stacks do not put ' + id + ' at its row');
       return api;
     },
-    rows() { return Object.fromEntries([...B.values()].sort((a, b) => (a.id < b.id ? -1 : 1)).map((b) => [b.id, b.y])); },
+    carry(id, d) { return api.move([id], d); },
+    _carryTo(id, c0, c1, y) {   // carried away to other columns (DRAG.B1, GAP.7): rule 2 where it was, rule 3 or 4 where it lands
+      const x = B.get(id); if (!(c0 <= c1)) throw new Error('no columns');
+      if (overlaps({ ...x, c0, c1, y }, id)) throw new Error('carry overlaps');
+      for (const c of cols(x)) leave(x, c, 'away');
+      x.c0 = c0; x.c1 = c1; follow();   // the blocks under it rise into its place (G2); it is in no chain yet
+      x.y = y; if (overlaps(x, id)) throw new Error('carry overlaps');
+      for (const c of cols(x)) enter(x, c);
+      follow(); if (x.y !== y) throw new Error('carryTo: the stacks do not put ' + id + ' at its row'); return api;
+    },
+    rows(measure = 'shown') { const y = measure === 'shown' ? new Map([...B.values()].map((b) => [b.id, b.y])) : rowsIn('canonical'); return Object.fromEntries([...B.keys()].sort().map((id) => [id, y.get(id)])); },
     stack(l, c) { const st = S.get(key(l, c)); return st ? show(st) : null; },
+    save() { return copy(); },                                   // the whole state, temporaries included
+    load(s) { put(s); follow(); return api; },
+    stored() { const s = copy(); for (const b of s.B.values()) b.e = 0; return s; },   // what 0.2 stores: places, sizes and stacks, no temporary
+    places() { const y = rowsIn('canonical'); return [...B.values()].map((b) => ({ id: b.id, c0: b.c0, c1: b.c1, y: y.get(b.id), h: b.h })); },   // what 0.1 stores
     snapshot() {
-      const bs = [...B.values()].map((b) => [b.id, b.c0, b.c1, b.y, b.h]).sort();
+      const yc = rowsIn('canonical');
+      const bs = [...B.values()].map((b) => [b.id, b.c0, b.c1, b.y, yc.get(b.id), b.h, b.e]).sort();
       const ss = [...S.entries()].map(([k, st]) => [k, show(st)]).sort();
       return JSON.stringify([bs, ss]);
     },
     check() { return invariants(); },
   };
+  for (const name of ['insert', 'remove', 'height', 'show', 'width', 'move', 'carryTo']) { api[name] = atomic(api['_' + name]); delete api['_' + name]; }
 
-  for (const name of ['insert', 'remove', 'height', 'width', 'carry']) { api[name] = atomic(api['_' + name]); delete api['_' + name]; }
-
-  function overlaps(x, except) {
-    for (const b of B.values()) if (b.id !== x.id && b.id !== except && b.c0 <= x.c1 && x.c0 <= b.c1 && b.y < x.y + x.h && x.y < b.y + b.h) return true;
+  function overlaps(x, except, moving) {   // in the displayed layout; blocks moving in the same step keep their places to one another
+    for (const b of B.values()) {
+      if (b.id === x.id || b.id === except || (moving && moving.has(b.id))) continue;
+      if (b.c0 <= x.c1 && x.c0 <= b.c1 && b.y < x.y + shownH(x) && x.y < b.y + shownH(b)) return true;
+    }
     return false;
   }
   function show(st) {
     const runs = (seg) => { const o = []; for (const r of seg) { const p = o[o.length - 1]; if (p && p[0] === r) p[1]++; else o.push([r, 1]); } return o.map(([r, n]) => (r || '_') + n).join('+') || '·'; };
-    return (st.u || 'top') + ' | ' + st.parts.map((p, i) => (i % 2 === 0 ? runs(p) : `[${p.pad ? '+' + p.pad + ' ' : ''}${p.id}:${runs(p.lend)}]`)).join(' ') + ' |';
+    return (st.u || 'top') + ' | ' + st.parts.map((p, i) => (i % 2 === 0 ? runs(p) : `[${p.id}:${runs(p.lend)}${len(p.tlend) ? ' ^' + runs(p.tlend) : ''}]`)).join(' ') + ' |';
   }
   function invariants() {
-    const errs = [];
-    // INV-1: no two blocks share a column and a row
-    const bs = [...B.values()];
-    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const a = bs[i], b = bs[j];
-      if (a.c0 <= b.c1 && b.c0 <= a.c1 && a.y < b.y + b.h && b.y < a.y + a.h) errs.push('overlap ' + a.id + ' ' + b.id); }
-    // every column: the chain covers exactly the blocks of that column, in row order
+    const errs = [], bs = [...B.values()], yc = rowsIn('canonical');
+    // INV-1 in both measures: no two blocks share a column and a row
+    for (const [name, y, hh] of [['shown', (b) => b.y, shownH], ['canonical', (b) => yc.get(b.id), (b) => b.h]])
+      for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const a = bs[i], b = bs[j];
+        if (a.c0 <= b.c1 && b.c0 <= a.c1 && y(a) < y(b) + hh(b) && y(b) < y(a) + hh(a)) errs.push(`overlap ${a.id} ${b.id} (${name})`); }
+    // taking the temporary heights out moves blocks only up (§2.1)
+    for (const b of bs) if (yc.get(b.id) > b.y) errs.push(`canonical row of ${b.id} below its displayed row`);
     const cs = new Set(); for (const b of bs) for (const c of cols(b)) cs.add(c);
     for (const c of cs) {
-      const seq = []; for (const l of chain(c)) { const st = S.get(key(l, c)); st.parts.forEach((p, i) => { if (i % 2 === 1) seq.push(p.id); }); seq.push(l); }
-      const want = bs.filter((b) => covers(b, c)).sort((a, b) => a.y - b.y).map(own);
-      if (seq.join() !== want.join()) errs.push(`column ${c}: chain ${seq.join()} ≠ blocks ${want.join()}`);
-      for (const st of S.values()) st.parts.forEach((p, i) => { if (i % 2 === 1 && len(p.lend) > B.get(p.id).h) errs.push('lend over height ' + p.id); });
+      // INV-3: the chain covers exactly the blocks of that column, in row order
+      const got = seq(c).map((el) => el.id), want = bs.filter((b) => covers(b, c)).sort((a, b) => a.y - b.y).map((b) => b.id);
+      if (got.join() !== want.join()) errs.push(`column ${c}: chain ${got.join()} ≠ blocks ${want.join()}`);
+    }
+    for (const [k, st] of S) {
+      const c = stackCol(k);
+      // every owned row's owner is a block that covers the column (a deleted or departed owner leaves no rows behind)
+      const rows = st.parts.flatMap((p, i) => (i % 2 === 0 ? p : [...p.lend, ...p.tlend]));
+      for (const o of new Set(rows)) if (o !== '' && !(B.has(o) && covers(B.get(o), c))) errs.push(`stack ${k}: rows of ${o}, which is not in column ${c}`);
+      st.parts.forEach((p, i) => { if (i % 2 === 1 && len(p.lend) > B.get(p.id).h) errs.push('lend over height ' + p.id); });   // G7
     }
     return errs;
   }

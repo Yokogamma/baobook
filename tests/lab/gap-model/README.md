@@ -1,12 +1,31 @@
 # The gap model (lab)
 
-An executable model of the gaps of the layout engine: the empty rows between blocks, kept as «stacks» (decisions G1–G7, S8 in `docs/LAYOUT-MODEL.md` §2; the specification `docs/LAYOUT-RULES.md` GAP is rewritten from this model). It is not the engine: one container, blocks as card columns and rows, no handles, no SETTLE, no pushes aside. Its job is to show, by running, that the representation keeps every gap whole.
+An executable model of the gaps of the layout engine: the empty rows between blocks, kept as «stacks» (decisions G1–G8, S8 in `docs/LAYOUT-MODEL.md` §2; the specification `docs/LAYOUT-RULES.md` §1.3 and GAP is written from this model). It is not the engine: one container, blocks as card columns and rows, no handles, no SETTLE, no pushes aside. Its job is to show, by running, that the representation keeps every gap whole.
 
 ```
 node tests/lab/gap-model/test.mjs [number of random sequences, 2000 by default]
 ```
 
-- `model.mjs`: the state (blocks; for every block and every column where it is an anchor, a stack: the anchor above or the top, the gap's rows with their owners, and the blocks standing in it with the rows they cover), FOLLOW, and the events RELINK sees column by column: a block comes into a column, leaves it, changes height, is carried by hand.
-- `test.mjs`: the examples of the three rounds of the independent review (PR #124), G5–G7 and lesson 18 as named cases asserting rows and owners; random sequences of inserts, growth, widening, narrowing, carries and deletions compared with the same history without the inserted blocks (the oracle of C3 and S8); the same history from storage in another order; carries there and back; deletions that never move a block down.
+- `model.mjs`: the state and the events RELINK sees column by column.
+  - **The state.** The blocks, each with its canonical height `h` and the rows `e` a temporary height adds while it lasts. For every block and every column where it is an anchor, a stack: the anchor above or the top, the gap's rows with their owners, and the blocks standing in it. Each standing block has its lend (the rows its body covers, at most `h`) and its temporary lend (the rows its temporary rows covered when it was put there). A block put lower than the gap reaches has the room above it as its own rows.
+  - **FOLLOW.** It runs in both measures: displayed, which every operation works on, and canonical, which is stored.
+  - **The events.** A block comes into a column, leaves it, changes its real height, or gets or ends a temporary height. One block or several move in one step (`move`, `carry`), or a block is carried away to other columns (`carryTo`).
+  - **Switches.** `gap8` and `gap9` are the switches `GAP.8` and `GAP.9`.
+  - **Storage.** `save`/`load` keep the whole state; `stored` is what 0.2 stores, `places` what 0.1 stores.
+- `test.mjs` has named cases and random sequences.
+  - **Named cases**, asserting rows and owners:
+    - the examples of the four rounds of the independent review (PR #124);
+    - G5–G8 and lesson 18;
+    - both states of the switches.
+  - **Random sequences.**
+    - Inserts, growth, temporary heights, widening, narrowing and deletions, with base blocks changing height and width. The result is compared with the same history without the inserted blocks (the oracle of C3 and S8).
+      - It is exact unless a base block came in from the side or narrowed. Then the displayed rows must agree, and the owners or a stack's length may differ for the two reasons the test names (G4's order of arrival, G8's slack).
+      - The same history is replayed from storage in another order.
+      - Carries of the inserted blocks are left out: by G5 and G6 a move by hand changes the gaps on purpose.
+    - Carries and moves of several blocks there and back.
+    - Deletions that never move a block down, in either measure.
+    - The two measures:
+      - ending every temporary height gives the canonical rows;
+      - reloading what 0.2 and 0.1 store gives the same canonical layout.
 
 It is not run by CI (only `tests/*.mjs` are); step 1 of `docs/LAYOUT-ENGINE-PLAN.md` turns its cases into `tests/layoutgap-*.mjs`.

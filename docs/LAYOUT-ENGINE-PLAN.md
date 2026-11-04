@@ -1,6 +1,6 @@
 # The layout engine: implementation plan
 
-**Status: after review round 4 (2026-11-03), two checks of the owner's decisions of 2026-11-04, the independent review of 2026-11-04 (1 blocker and 6 major findings, all fixed the same day, with S8's way chosen by the owner in the mockup), and the architecture review of 2026-11-04 (14 findings, accepted in full by the owner with R1, rules that switch), after which the plan was restructured (review log): ready to start step 1.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
+**Status: after review round 4 (2026-11-03), two checks of the owner's decisions of 2026-11-04, the independent review of 2026-11-04 (1 blocker and 6 major findings, all fixed the same day, with S8's way chosen by the owner in the mockup), and the architecture review of 2026-11-04 (14 findings, accepted in full by the owner with R1, rules that switch), after which the plan was restructured, then rounds 3 and 4 of the independent review on the gaps, which became stacks, written first as the lab model `tests/lab/gap-model` (review log): step 1 waits for round 5 of that review.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
 
 Rules are cited by their ids in `LAYOUT-RULES.md` (`SIZE.1`, `P-ASIDE`, `INV-8`…), the switches by the ids of its §1.6 (`GAP.5.1`, `THROUGH`…); decisions by their ids in the table of `LAYOUT-MODEL.md` §2 (`W3`, `G6`…). **(proposed)** marks what rests on no decision of the owner yet.
 
@@ -83,8 +83,10 @@ These stay open while the engine is built; the plan follows the rule as written 
  * @typedef {{id:string, kind:string, col:number, y:number, w?:number, h?:number, cw?:number, ch?:number, open?:boolean, collapsed?:boolean,
  *            above?:{c0:number, c1:number, stack:Stack}[]}} Box
  *   // above: this block's stacks, by stretches of equal columns of its card (in the columns where it stands in another block's stack, none)
- * @typedef {{u:?string, segs:Run[][], stands:{id:string, pad:number, lend:Run[]}[]}} Stack   // LAYOUT-RULES §1.3: u the anchor above
+ * @typedef {{u:?string, segs:Run[][], stands:{id:string, lend:Run[], tlend:Run[]}[]}} Stack   // LAYOUT-RULES §1.3: u the anchor above
  *   // (null: the top); segs.length === stands.length + 1, the gap's rows between them in order; a stand's lend the rows its body covers
+ *   // by its canonical height, its tlend the rows its temporary rows covered when it was put there (§2.1); the room above a block put
+ *   // lower than the gap reaches is rows it owns, in the seg above it
  * @typedef {{o:?string, n:number}} Run                      // n rows owned by block o, or unowned (o null)
  * @typedef {{cols:number, boxes:Map<string,Box>, areas:Map<string,Layout>}} Layout   // its gaps are its boxes' `above`; column chains are an index built from them
  * @typedef {{col:number, y:number, frow:number, w:number}} Target   // a moved block's cell, its unrounded row and its width at the target
@@ -109,7 +111,8 @@ export function resolve(partial)   // {[RuleId]: boolean}, ids left out on → R
  *  accumulates them per block id for the RELINK they are handed to («Inside `settle`», below). A block that follows a step with its gaps
  *  is moved by that step. A row FOLLOW changed after a height and a bottom that the block's own height changed are never in it.
  * @typedef {{step:number, by:'change'|'swap'|'aside'|'up'|'down'|'sink'|'sep'|'rest', rows:number}} Step   // step: a counter, one per call of a primitive in this SETTLE; rows: down positive
- * @typedef {{top:Step[], bottom:Step[]}} Moved   // every step that moved the block's top and its bottom, in order; rule 1 takes out the rows both edges of a stack were moved by the same `step`
+ * @typedef {{top:Step[], bottom:Step[]}} Moved   // every step that moved the block's top and its bottom, in order; for each step, rule 1 groups the blocks
+ *   // it moved that are next to one another in a column's chain into runs and changes only the gap above each run and the gap under it
  */
 
 /** One per row of LAYOUT-RULES §5.2 «Change kinds», as data in changes.js, keyed by Change.type; settle.js reads it.
@@ -153,7 +156,8 @@ export function resolve(partial)   // {[RuleId]: boolean}, ids left out on → R
 /** What a block cannot pass, for P-ASIDE, `sink` and P-UP: a wall, a container's edge, a block that cannot move.
  * @typedef {{cols:[number,number], rows:[number,number], pushes:'left'|'right'|'none'}} Obstacle   // its first and last column and row; pushes: the side a wall presses to
  */
-export function isHead(box)                                // every stack of it starts at the top (u === null); its row comes from its stacks like any other (gap.js); every primitive asks it
+export function isHead(layout, box)                        // the first block of the chain in every column of its card: an anchor whose stack starts at the top
+                                                           //   with nothing standing in it, or the first block standing in such a stack; its row comes from its stacks like any other (gap.js); every primitive asks it
 export function canMove(box, dir)                          // 'left'|'right'|'up'|'down'; in 0.1 every block can, within its container (primitives.js)
 
 /** The carry memory (LAYOUT-RULES §6.D): only what SETTLE reads, with `start`, which `settle` takes and returns beside it.
@@ -180,7 +184,7 @@ export function diff(stored, after)                        // the stored fields 
 
 **The `rules` input.** The bridge resolves the device setting of VIEW.8 when a note opens and passes the same `Rules` in `ctx` to every call until the setting changes; on `.app`, with no list, they are `DEFAULT`. Every module that owns a switch reads it from `ctx.rules` and nothing else reads a switch: a phase whose rule is off is skipped or runs the branch its fallback names, and each GAP operation reads the one switch it owns (§1.6). `Settings` are the parameters of their rules, at the defaults of §1.5 in 0.1.
 
-**Where the gaps live.** Every stack is kept on its block (`above`, by stretches of equal columns), the blocks standing in it with their lends and pads inside it, so everything about the rows above a block belongs to that block, as sync merges a note by block and by group of fields. `Layout` holds no pairs and no column chains; a module that walks a column builds the chain from the boxes, never kept. 0.1 stores none (§3.3). In 0.2, when they are stored, `above` joins the block's place group in sync (`sync.js` 103); a stand whose block is gone or no longer between `u` and its block when a note is loaded is dropped, and the block under it comes back, while a stack longer than its distance is cut by `fit`; the conflict test should leave out the rows, which are derived (`LAYOUT-RULES.md` §2.1).
+**Where the gaps live.** Every stack is kept on its block (`above`, by stretches of equal columns), the blocks standing in it with their lends and temporary lends inside it, so everything about the rows above a block belongs to that block, as sync merges a note by block and by group of fields. `Layout` holds no pairs and no column chains; a module that walks a column builds the chain from the boxes, never kept. 0.1 stores none (§3.3). In 0.2, when they are stored, `above` joins the block's place group in sync (`sync.js` 103); a stand whose block is gone or no longer between `u` and its block when a note is loaded is dropped, and the block under it comes back, while a stack longer than its distance is cut by `fit`; the conflict test should leave out the rows, which are derived (`LAYOUT-RULES.md` §2.1).
 
 `ops.js` builds on `settleTree` one function per action of §5.2 (`drop`, `arrow`, `create`, `remove`, `grow`, `width`, `height`, `areaSide`, `areaBottom`, `enter`, `leave`, `ungroup`, `drawArea`); `width` makes a width change for the handle and a size change with `cw: null` for its double click (RESIZE.2); `input.js` calls them; the bridge writes what `diff` returns and pushes one undo entry.
 
@@ -452,6 +456,7 @@ Today's structural undo is one stack per note (`offerUndo`, `index.html` 2618): 
 
 ## Review log
 
+- **Round 4 of the independent review** (2026-11-04, head `281c630`; 1 blocker, 4 major, 1 minor). Fixed first in the lab model, then in `LAYOUT-RULES.md` (§1.3, §2.1, GAP; its review log has each finding): a stand keeps its lend by the canonical height and a temporary lend (`tlend`) for the rows its temporary rows covered, so `show` and `unshow` share the stacks and G7 cuts only on a real shrink; `Stack.stands` lose `pad` (the room above a block is its own rows); `isHead(layout, box)` reads the chains; `Moved` is read by runs of blocks moved together. The tests of step 1 port the model's new cases.
 - **Round 3 of the independent review** (2026-11-04, head `0a28e78`; 1 blocker, 1 major, 1 minor). The gaps are now stacks (`LAYOUT-RULES.md` §1.3, GAP), written first as an executable model in `tests/lab/gap-model` and then into the rules: `Box.above` holds a block's stacks by stretches of columns, `Box.lend` is gone, `gap.js` implements the model and is tested against it (step 1), and 0.2 stores `above` in the block's place group. The safe mode saves text through the normal pipeline and never writes a place or a size (§3.5). G7 and G8 decided by the owner; `GAP.9` added to `RuleId`. A check of the rewrite against the model then fixed two cases in both (an anchor carried into a standing block's pad; G8 with slack) and `isHead`'s comment.
 
 - **Round 2 of the independent review** (2026-11-04, head `1db73b2`; 1 blocker, 3 major; five of the seven round 1 findings resolved, two partly). GAP.5's classes follow the whole path of blocks in a column, so a block put into the free room above a head block and several blocks that come between at once are split and joined back as one path (`LAYOUT-RULES.md` rules 2, 3); an area's side handle is the composite `areaSide`, a wall in the area and the area's width change in its container, accepted or refused whole, both containers written; the carry memory keeps `dir`; the engine's range `MAXCELL`, a note outside it opening in the safe mode, the stored values untouched; the rules list keeps what was asked and `resolve` what is in effect; the tests for each. A check of these fixes then keyed every lend of a path by the path's outer pair (`LAYOUT-RULES.md` §1.3), clamped `areaSide` before both parts, gave `WidthChange` the area's column and height, and put the range check before `open()`.
