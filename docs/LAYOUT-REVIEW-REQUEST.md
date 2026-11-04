@@ -1,5 +1,29 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 3 (2026-11-04)
+
+Thank you for round 2 ([your comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6639782304)). Its four findings are fixed; the diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/1db73b2...d7180d8>.
+
+1. **Blocker, GAP's classifier.** The within and across classes now follow the whole path of blocks in a column (`LAYOUT-RULES.md` GAP.5):
+   - a block put into the free room above a head block, and several blocks that come between one old pair at once, are split as one path and joined back as one (rules 2 and 3);
+   - every lend of a path is kept under the path's outer pair, looked up by column, and its key moves to the next block when an end of the pair is taken away (§1.3, GAP.6), so the blocks of a path can be deleted in any order;
+   - a new class, *across and within*, covers a column where old blocks went and new ones came in the same RELINK.
+
+   An internal check worked your two examples and three more sequences through the text: after every order of deletion the lower block comes back to its row.
+2. **Major, an area's side handle.** It is now a composite change, `areaSide` (§5.6, plan §2.1). The rectangle is clamped first. Then a wall acts inside the area: for the left edge the children keep their cells on the sheet. Then the area's width change, with its new height, runs in its container. The two parts are accepted or refused together, and both containers are written.
+3. **Major, direction.** The carry memory keeps `dir`, the last vertical direction. It starts down and changes only when the target row changes; SETTLE updates it before phase 2 (§6.D, phase 11).
+4. **Major, numeric domain.** `MAXCELL` (2^24) bounds every coordinate and size the engine computes with (§1.5). The bridge checks the range before `open()`. A note outside it opens in a safe mode: each value shown clamped, placement off, nothing written, the stored values untouched, the sync format unchanged (plan §3.5). A push past `MAXCELL` is refused, and the opening separation is bounded.
+
+Also done: the rules list keeps the requested values apart from what `resolve` puts in effect (VIEW.8). Tests for each fix are added to steps 1–3.
+
+**What we ask.**
+1. Are your round 2 findings resolved, and with them the two partial round 1 findings?
+2. Is the path-based GAP.5 (classes, rules 2 and 3, the lend key and its moves, GAP.6) sound and implementable as written, including orders of deletion and narrowing you can think of beyond the five we checked?
+3. Did the fixes introduce anything new?
+4. Verdict: can step 1 start?
+
+Out of scope and output: as in round 2.
+
 ## Round 2 (2026-11-04)
 
 Thank you for round 1. This round asks you to look again at both documents, which have changed a good deal since you read them. Your round 1 brief is kept below for reference.
