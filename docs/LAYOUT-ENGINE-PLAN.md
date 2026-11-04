@@ -104,7 +104,7 @@ In 0.1 nothing new is stored. The sheet is read at one fixed pixel width `W0px` 
 
 **Children and the sheet.** An area is a Box at sheet `(a, y)` with `H` header rows (`container.headerRows`); its child at `(c, r)` stands on sheet cell `(a + 1 + c, y + H + r)`, its handle on the area's column `c`. This is `LAYOUT-MODEL.md` §3.1's mapping in the engine's columns. `enter` and `ungroup` use it, and «З області» (`leave`) its column part, since AREA.7 puts the block under the area in the column it had inside; `ops.js` works in cells only.
 
-A note's sheet is `SHEETW` columns on every device. Its scale is fitted to the width the note uses, up to its rightmost block (W12): a window at least that wide shows it at full size, white room to the right when it is wider than the sheet, the rest of the sheet reached by the sideways scroll when it is narrower; a narrower window scales the note down to `MINSCALE`, narrower still the narrow view (VIEW.1, VIEW.2). The user may zoom in with «+» and move with the hand.
+A note's sheet is `SHEETW` columns on every device. Its scale is fitted to the width the note uses, up to its rightmost block (W12): a window at least that wide shows it at full size, white room to the right when it is wider than the sheet, the rest of the sheet reached by the sideways scroll when it is narrower; a narrower window scales the note down to `MINSCALE`, narrower still the narrow view (VIEW.1, VIEW.2). The user may zoom in with «+» and move with the hand. The fitted scale is recomputed on opening and after an action, never while typing, only when the caret leaves the block; carried to the window's edge, a block makes the sheet scroll by itself (W16).
 
 ### 3.2 Sizes
 
