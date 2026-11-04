@@ -155,7 +155,7 @@ Each phase reads only what the phases before it produced, and visits several blo
 | User action | Moved block | Sides (phase 2) | No room aside | Containment (phase 10) | Memory |
 |---|---|---|---|---|---|
 | A pointer move while carrying, or the hold running out, or Shift pressed | the carried block at the target | DRAG.B2, B3 | pushed up or down by its side (DRAG.B5) | clamped at the sides and top (DRAG.A3); an area grows at its bottom | the carry memory, §6.D |
-| An arrow in position mode | the selected block one cell over | DRAG.B2, B3 | as a carry | as a carry | empty |
+| An arrow in position mode | the selected block at the cell its jump aims at (DRAG.C4) | DRAG.B2, B3 | as a carry | as a carry | empty |
 | A click on the empty sheet, «+», a block made on a narrow screen | the new empty block at its cell, away from the start | DRAG.B2 with «away», and B3 | as a carry | as a carry | empty |
 | The width handle | the widened block itself, at its new width; no above or below is needed | every block it hits on its right is met from the side, pressed right | P-SINK, in phase 6 after P-DOWN | the width clamped at the container's edge; an area grows | the gesture's start, RESIZE.1 |
 | The right edge of the sheet, carried outwards | none | — | — | the sheet grows, up to the edge of the screen | the gesture's start |
@@ -211,7 +211,7 @@ DRAG turns a pointer into a target, hands it to SETTLE as a change, and shows or
 - **DRAG.C1 The preview.** During the carry, the layout shown is SETTLE's result for the current target; at «home» or «outside», the layout at the start of the carry, before any swap. The carried block shows its width and height at the target (INV-8).
 - **DRAG.C2 Drop.** Letting go in the «move» state stores the result as one undo entry [C2].
 - **DRAG.C3 Cancel.** Esc, the right mouse button, «home» and letting go outside the sheet store nothing [C1].
-- **DRAG.C4 Arrows.** An arrow in position mode is a carry of one cell with an empty memory, dropped at once [M7]. Position mode exists only on touch screens today, so it waits with them for their own stage, the snapping of today's arrow buttons included (W13).
+- **DRAG.C4 Arrows.** The arrows of position mode jump, as today: left to the left edge of the container, right to the last column where the block fits, up right under the nearest block above it in its columns, down right over the nearest block below, or under the lowest block when there is none. A jump is a carry to that cell with an empty memory, dropped at once, so what it meets is pushed by the rules of a carry. The arrows are for throwing a block to an edge, not for moving it a cell; a later release may jump several selected blocks at once, lining them up on a side of the sheet [W15]. On a computer position mode is entered from the block's menu («Виділити»); on touch it waits for its own stage (W13).
 
 ### 6.D The carry memory
 
