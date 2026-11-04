@@ -46,7 +46,7 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **New for 0.1: the arrows of position mode.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.
 - **New for 0.1: the code block's width** (§4.4) and **a collapsed area met by a carried block** (§3.2): both keep today's behaviour as far as the rules allow, marked proposed.
 - **Who edits the scaled layout** (S3, 2026-11-04): any device that shows the note at or above `MINSCALE` edits it, as the mockup does, and below it shows the narrow view; `DESKW` only decides who gives a phone note its width, in 0.2.
-- **New for 0.1: the text size and the phone.** Today's code writes `fx` with the cell of the current text size (`G = round(1.5 × size)`, `applyText`, `index.html` 3340). A phone reads at 18 px (`FS_BASE`, 3333), so every `fx` a phone wrote came with a 27 px cell and the phone's own width; a computer at a larger text size likewise. Such blocks read to other columns at `G = 24` (§3.1). Which notes did the owner arrange on a phone or at a larger text size?
+- **The text size and the phone** answered (2026-11-04, W11): both computers use the default 16 px text, so their `fx` read at `G = 24` give the columns they show today; notes arranged on a phone are shown by 0.1 as the computer shows them today, by the same shares, so nothing more is needed.
 
 ## 2. The modules
 
