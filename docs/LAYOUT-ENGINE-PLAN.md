@@ -1,6 +1,6 @@
 # The layout engine: implementation plan
 
-**Status: after review round 4, 2026-11-03: ready to start step 1. Amended on 2026-11-04 by A3: 0.1 folds texts, with one new field and step 0 before it.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
+**Status: after review round 4, 2026-11-03: ready to start step 1.** This plan builds the engine that [`LAYOUT-RULES.md`](LAYOUT-RULES.md) specifies and puts it into the current app as version 0.1. It answers E-5 of that document (the steps of `LAYOUT-MODEL.md` §7, re-planned for the decided model) and settles E-1 to E-4 for 0.1. Where this plan and `LAYOUT-MODEL.md` §5–§7 disagree, this plan wins; those sections described the anchor-and-sweep model that G1 replaced.
 
 Rules are cited by their ids in `LAYOUT-RULES.md` (`SIZE.1`, `P-ASIDE`, `INV-8`…); decisions by their ids in the table of `LAYOUT-MODEL.md` §2 (`W3`, `G6`…). **(proposed)** marks what rests on no decision of the owner yet.
 
@@ -10,7 +10,7 @@ The engine takes over **placement only**: where every block stands, how wide and
 
 Three properties make 0.1 a safe first release:
 
-1. **One new field and nothing else** (§3). 0.1 adds one optional field, a text's `fold` (§3.2, A3), with what CLAUDE.md asks of a new field: step 0 released to `.app` first, the field in `sync.js`, the Firestore rules checked, `FORMAT` raised. Otherwise a note written by 0.1 is read by the current version as a valid note (a folded text shows unfolded there), and the other way round. No migration.
+1. **No change of the stored format** (§3). A note written by 0.1 is read by the current version on `.app` as a valid note, and the other way round. No migration, no `FORMAT` raise, no new Firestore rules.
 2. **A switch.** Until step 6 the engine is off by default and is turned on in the settings menu for testing on `.dev` («Нова розкладка (0.1)», a device setting in `sheet:settings`, its label in `uk.json` and `en.json`). A tab reads it once, when it starts; changing it reloads the tab, so a tab never runs both layouts. Off, the app behaves exactly as now.
 3. **Pure core.** The rules run in Node without a browser, with a stub for measuring text (§4.3), so every rule of `LAYOUT-RULES.md` has fast tests before anything is wired.
 
@@ -18,26 +18,26 @@ Three properties make 0.1 a safe first release:
 
 | Module | Rules in 0.1 | Notes |
 |---|---|---|
-| SIZE | 1–4, 6, 8 | `ch` as a set height, `fold` for texts (H1, A3), the code block's own fold as today (§3.2); `ORDER`, `MINC` and `MINSCALE` at their defaults |
+| SIZE | 1–4, 6, 8 | `ch` as a set height, the code block's own fold as today (§3.2); `ORDER`, `MINC` and `MINSCALE` at their defaults |
 | GAP | 1–8 | pairs, gaps and lends kept in memory for the open note (§3.3) |
 | SETTLE | §5.1–§5.4, every primitive but P-SQUEEZE | the change table of §5.2 without the sheet's right edge and the area's top and bottom handles carried inwards |
 | DRAG | A1–A5, B1–B5, C1–C4, §6.D | |
-| RESIZE | 1–3 | the height handle of a text writes `ch` when released above the content and `fold` when released below (RESIZE.3, H1); the block's menu «Згорнути до 5 рядків» writes `fold` too (A3; 5 proposed); for code the handle sets its fold (`ch`, `open`) as today |
+| RESIZE | 1, 2, 3 for `ch` only | the height handle of a text writes `ch` when released above the content and clears it when released below, as today; for code it sets its fold (`ch`, `open`) as today; `fold` for texts is 0.2 |
 | AREA | 1, 2, 3, 5 (no hidden lines to bring back), 6, 7, 7a, 7b | both side handles (today the area has a right handle only); 7a and 7b as the mockup does them (A2); the app's area header and collapse (§3.2) |
 | EDIT | 1–4, 4a, 6 | EDIT.5 comes with hidden lines in 0.2 |
 | VIEW | 1 without zooming in (with `SHEETW` fixed, §3.1), 2–7 | the scale fits the note and stops at `MINSCALE`; the list of notes keeps today's behaviour; the reading mode and the frame or background look as app settings; the dev look |
 
 ### 1.2 Later
 
-- **0.2:** pairs and gaps stored and merged by sync (E-1 in full); `SHEETW` per note with the sheet's right edge (AREA.8) and a note without a width (VIEW.1c); hidden empty lines (SIZE.7, P-SQUEEZE, AREA.4, EDIT.5); the note's own view settings (VIEW.6a, per-note override); P18 text placement and fields as settings (O-2). Each of these changes the stored format and goes with a `FORMAT` raise. Also in 0.2, with no format change: zooming in from the fitted scale and from the narrow view, the scrollbar and the hand (VIEW.1, VIEW.1b), the list of notes pushing or covering the note (VIEW.1a), and the settings for `ORDER`, `MINC` and `MINSCALE`.
+- **0.2:** pairs and gaps stored and merged by sync (E-1 in full); `SHEETW` per note with the sheet's right edge (AREA.8) and a note without a width (VIEW.1c); folding as one function with one standard stored field for every kind that folds, text, area, code and to-do lists, code moved onto it from its `ch` and `open`, and with it the area's own ways (AREA.9, H5) (A3); hidden empty lines (SIZE.7, P-SQUEEZE, AREA.4, EDIT.5); the note's own view settings (VIEW.6a, per-note override); P18 text placement and fields as settings (O-2). Each of these changes the stored format and goes with a `FORMAT` raise, after step 0 of `LAYOUT-MODEL.md` §7 (the editor keeps fields it does not know) is released. Also in 0.2, with no format change: zooming in from the fitted scale and from the narrow view, the scrollbar and the hand (VIEW.1, VIEW.1b), the list of notes pushing or covering the note (VIEW.1a), and the settings for `ORDER`, `MINC` and `MINSCALE`.
 - **Stage 2:** the phone and the computer working together (O-5).
-- **Later:** an area's own ways to stay short (AREA.9 ways 2 and 3, its fold to a height, H5; A3); pinned blocks (O-7), block properties, kinds and commands as modules (`docs/BLOCKS-PLAN.md`, to be written).
+- **Later:** pinned blocks (O-7), block properties, kinds and commands as modules (`docs/BLOCKS-PLAN.md`, to be written).
 
 ### 1.3 Not finished before 0.1 starts
 
 These stay open while the engine is built; the plan follows the rule as written now and changes with the owner's answer.
 
-- **Areas:** settled as A1, A2 and A3 (AREA.7–AREA.9, 2026-11-04).
+- **Areas:** settled as A1, A2 and A3 (AREA.7–AREA.9, 2026-11-04): 0.1 folds nothing new, an area follows its blocks, its collapse to the header stays.
 - **The batch of small proposals:** `DESKW` 40 cells, the hand button (VIEW.1b), the carried block's width (DRAG.A5), P-REST, P-SEP between two uncarried blocks, the handle always shown with borders always visible (VIEW.6a). The owner confirms or corrects them in one list.
 - **O-2 (P18)** the default text placement and field: 0.1 keeps today's («як зараз»).
 - **O-3 (P12)** the release order against the sync release.
@@ -72,7 +72,7 @@ These stay open while the engine is built; the plan follows the rule as written 
 ```js
 /** The stored state of one container and its derived rows. The bridge builds the Boxes from index.html's blocks with `w` and `h`
  *  unset and no pairs; `open()` sizes them and finds the pairs.
- * @typedef {{id:string, kind:string, col:number, y:number, w?:number, h?:number, cw?:number, ch?:number, fold?:number, open?:boolean, collapsed?:boolean, lend?:Run[]}} Box
+ * @typedef {{id:string, kind:string, col:number, y:number, w?:number, h?:number, cw?:number, ch?:number, open?:boolean, collapsed?:boolean, lend?:Run[]}} Box
  * @typedef {{o:?string, n:number}} Run                      // n rows owned by block o, or unowned (o null)
  * @typedef {{cols:number, boxes:Map<string,Box>, pairs:Map<string,Run[]>, areas:Map<string,Layout>}} Layout   // pairs keyed 'upper>lower'
  * @typedef {{type:string, box:?string, id?:string, to?:?string, at?:{col:number,y:number,frow:number,w:number}, size?:object}} Change   // box: the container (null, the sheet); to: the container entered, for enter, leave and ungroup
@@ -108,10 +108,9 @@ A note is shown at `SHEETW` columns on every device: wider windows show white ro
 ### 3.2 Sizes
 
 - **`cw`** is the set width (SIZE.3) for texts and code; an area's `cw` is its width.
-- **`ch`** of a text is its set height, spare room below the text (RESIZE.3).
-- **`fold`** of a text, new and optional: the rows shown when it is folded, with «Розгорнути · ще N рядків» as a row of its own (H1, A3). Written by the height handle released below the content and by the block's menu «Згорнути до 5 рядків»; `ch` and `fold` are never both set (RESIZE.3). In `sync.js` it is validated as a positive whole number and joins the place group `PLACE`, since it changes the layout (`LAYOUT-MODEL.md` §5); none on read. A note of an older version has none, so nothing folds by itself. «Розгорнути» is a temporary height (H3), never written.
+- **`ch`** of a text is its set height, spare room below the text (RESIZE.3); 0.1 writes only `ch`.
 - **Code** keeps its fields: its `ch` is its fold height and `open` the user's choice of the full height, as today (`LAYOUT-MODEL.md` §5). The engine reads its shown height and its width from the passport (§4.4).
-- **Areas** keep `ch` (a set height, AREA.2) and `collapsed`. A collapsed area shows its header only; its children keep their stored places and take part in nothing until it is opened. A carried block does not enter a collapsed area: its frame is an edge as AREA.7a says (proposed, until H5 is settled; today a collapsed area is pushed, an open one entered).
+- **Areas** keep `ch` (a set height, AREA.2) and `collapsed`; with no `ch` an area is as tall as its blocks need, so it shrinks when they do (A3). A collapsed area shows its header only; its children keep their stored places and take part in nothing until it is opened. A carried block does not enter a collapsed area: its frame is an edge as AREA.7a says (proposed, until H5 is settled; today a collapsed area is pushed, an open one entered).
 
 ### 3.3 Pairs and gaps (E-1 for 0.1)
 
@@ -165,20 +164,19 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 ### 4.4 Passports (E-4)
 
 ```js
-/** @typedef {{width:'text'|'fill'|'set', fold(box:Box):?number, minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):number, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
+/** @typedef {{width:'text'|'fill'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):number, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
  *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'fill', the room at its place unless `cw` (below); 'set', `cw` always.
- *  fold: the rows the kind shows when folded, read from its own stored fields (below), or null when it is not folded
  *  rows: a leaf's rows at a width; for an area the passport gives only its header (`headerRows`, measured: today's header wraps on a narrow
  *  area, `areaMeasure`) and its `ch`; the area's height is its children's layout plus the header, from the engine's recursion (LAYOUT-RULES §5.4) */
 ```
 
 | Kind | Elastic | Width | Shown height | Container |
 |---|---|---|---|---|
-| text | `text` unless `cw` | SIZE.1, `TEXTW`, `MINC` | content rows, or `ch` when larger; `fold` + 1 when folded and longer | no |
+| text | `text` unless `cw` | SIZE.1, `TEXTW`, `MINC` | content rows, or `ch` when larger | no |
 | code | `fill` unless `cw` (proposed, as today) | the fill rule below; at least `MINW_CODE` | as today: folded at `ch` unless `open` | no |
 | area | `set` | `cw`, at least 12 cells as today | header plus its children's rows, or `ch` when larger; the header only when collapsed | yes: its header's rows |
 
-**One fold for every kind (A3; proposed as one property).** The engine knows one fold: the rows shown plus one row for «Розгорнути» when the content is longer (SIZE.6). Each passport reads it from its kind's stored fields: a text's `fold`; a code block's `ch` unless `open`, as today, so code keeps its stored fields in 0.1 and no code note changes; an area has none (its collapse to the header is a state of its own). The «Розгорнути» row and the menu command are one piece for every kind that folds, so a checklist or another long kind later folds by declaring it in its passport. Moving code to `fold` too would be a migration of its own, not needed for this.
+**One fold.** The engine knows one fold: the rows shown plus one row for «Розгорнути» when the content is longer (SIZE.6). In 0.1 only code has one, read by its passport from its `ch` unless `open`, as today. 0.2 gives every kind that folds one standard stored field and one look and command (A3), so the engine does not change for it.
 
 **The fill rule (0.1, proposed: today's code width in the terms of the rules).** A fill block without `cw` is as wide as its room at its place: up to the handle cell of the nearest block on its rows to its right, or the container's edge (today's `rawWidth`, `index.html` 2351–2362), at least `MINW_CODE`. Its width is recomputed with the rest widths, in every pass of SIZE.8 in phase 9 and in `open()`; it never presses anything by itself. Pressed from the left (P-ASIDE, or an area's left side handle as a wall), its `col` moves right and its width becomes its room again, down to `MINW_CODE`; then it presses the block on its right as a chain, as a set width does. Pressed from the right, its room ends at the pressing block, so it narrows, down to `MINW_CODE`, and then moves left as a set width does. Carried past the right edge (DRAG.A3), it narrows to the room down to `MINW_CODE` and then stops, as an elastic text does (W4). Carried, phase 1c gives it the room at the target and phase 9 recomputes it in the result; INV-8 holds because the preview is SETTLE's whole result (DRAG.C1), as for any block. DRAG.A5 is for texts.
 
@@ -194,19 +192,18 @@ Each step is one PR into `main` with every test green, the build marker raised a
 
 | Step | What | Tests | Effect on the app |
 |---|---|---|---|
-| 0 | The editor keeps block fields it does not know: `serBlock` writes them back (`LAYOUT-MODEL.md` §7, step 0); released to `.app` on its own, before 0.1 | a scenario: a note with an unknown block field keeps it through an edit, a move and an undo | none to see |
 | 1 | `shapes.js`, `size.js`, `gap.js` (with RELINK from places), `kinds.js`, the Node measuring stub | `tests/layoutsize.mjs`, `tests/layoutgap.mjs`: SIZE and GAP rules, INV-2, INV-3, INV-7 b, determinism under shuffled storage | none |
 | 2 | `settle.js`: the phases, the primitives, containment, the change table; `open()` with its normalisation (§3.5) | `tests/layoutsettle.mjs`: each primitive alone, the phase order, INV-1 to INV-5 after every SETTLE, the review's regression cases, bounds (§4.2) | none |
 | 3 | `drag.js` and `ops.js`: targets, the carry memory, letting through, entering and leaving areas, every action of §5.2 in 0.1 with its undo | `tests/layoutdrag.mjs`, `tests/layoutops.mjs`: the mockup's scenarios as cases, INV-7 a, INV-8 (the last preview equals the drop) | none |
 | 4 | `measure.js`, `view.js`, `input.js` | `tests/layoutview.mjs` in Chromium on a page of the engine alone, kept in `tests/lib/` (never in `public/`) and served by `tests/lib/server.mjs` from a second root next to `public/`: carry, hold, Shift, Esc, arrows, handles, areas, drawing, the narrow view, the reading mode | none |
-| 5 | `bridge.js` and the switch: with the switch on, `index.html` calls the engine where it calls today's layout (§6); the dev look shows INV violations; the text's `fold` in `sync.js` (`PLACE`, validation, `FORMAT` raised, `node tests/hashes.mjs --write`) and the menu command «Згорнути до 5 рядків» with its strings in `uk.json` and `en.json`; the Firestore rules checked for block fields, and published by the owner first if they restrict them | the existing browser scenarios with the switch off as today; with it on, by the table of §5.1; the round trip of an unmoved note (§3.1) | only with the switch on |
+| 5 | `bridge.js` and the switch: with the switch on, `index.html` calls the engine where it calls today's layout (§6); the dev look shows INV violations | the existing browser scenarios with the switch off as today; with it on, by the table of §5.1; the round trip of an unmoved note (§3.1) | only with the switch on |
 | 6 | The switch on by default; today's layout functions removed; `LAYOUT-MODEL.md` §8 departures closed | the existing scenarios with the engine only; `tests/lab/layout-probes.mjs` re-run and recorded | the engine for everyone on `.dev` |
 
 ### 5.1 The browser scenarios with the switch on
 
 Some scenarios assert today's behaviour that a decision changes, so they cannot pass with the switch on. Step 5 writes, in `tests/README.md`, a table of every scenario: **kept** (it passes as it is), **new expectation** (the same steps, the decided result: `appflow` and `appdrop` without permanent pushes, `appwidth` with elastic widths and `SHEETW`, `appdrop` with letting through), or **replaced** (a new scenario for the decision: `apptouch` with a tap that creates and a hold that shows the borders, `appsel` with position mode on a computer only and its arrows by the owner's answer, `applabels` with the narrow view, the hover ghost gone). Step 6 deletes the old expectations with the old code.
 
-Release of 0.1 to `.app` is a PR `main → prod` when the owner asks, after the owner has used it on `.dev`. 0.1 adds a stored field, so CLAUDE.md's rule for a storage change applies: the owner exports the notes from `.app` first, and 0.1 is checked on `.dev` with a copy of them; step 0 is on `.app` before. Its order against the sync release is O-3.
+Release of 0.1 to `.app` is a PR `main → prod` when the owner asks, after the owner has used it on `.dev`. 0.1 changes no stored field, so the export before the release is a precaution, not the CLAUDE.md requirement for a storage change. Its order against the sync release is O-3.
 
 ## 6. The boundary with `index.html`
 
@@ -229,7 +226,6 @@ Commands that are not placement keep their code and, where they change the layou
 | «Розгорнути» and «Згорнути» of a text | a temporary height, written never (H3) |
 | The code block's own «more» (`open`) | a size change, written, as today (§3.2) |
 | Collapse and open an area (kept as today, A3) | a size change of the area (§3.2) |
-| Fold a text: the block's menu «Згорнути до 5 рядків», or its height handle released below the content | `ops.height` writing `fold` (RESIZE.3, A3) |
 | Undo and redo of a structural entry | §6.4 |
 | Restoring a version | its stored fields are put back and the layout is opened from them (`open`) |
 | Restoring a block from history | it keeps its current place and size, as today, so it is a size change while the block exists; a block that no longer exists is `create` at its stored cell |
@@ -305,7 +301,7 @@ Today's structural undo is one stack per note (`offerUndo`, `index.html` 2618): 
 - **Rows of different fonts.** A device that measures a text taller than the device that wrote the note separates the blocks under it on opening and writes those rows with its first action in that container (§3.4). Otherwise §3.4 writes only what an action moved, so a keystroke that changes no height writes no row; a keystroke that changes a height writes the rows of the blocks under it, as today, and two devices editing the same note can then make a conflict copy, as today.
 - **A larger text size.** `fx` written at a larger text size reads to other columns (§3.1); a current-version tab at a larger text size reads the engine's `fx` to other columns. The owner's answer (§1.3) says whether this touches real notes.
 - **The structural undo stack and history.** An engine entry must restore exactly the stored fields it changed; tests undo every action and compare the stored blocks.
-- **Unknown fields.** 0.1 writes the new `fold`; an older version that edits a note would drop it, so step 0 (the editor keeps fields it does not know) is released to `.app` before 0.1, and `FORMAT` is raised so that older tabs on one device stop writing. Before step 0 was planned for 0.2, before the first new field.
+- **Unknown fields.** 0.1 writes only today's fields, so an older version that edits a note drops nothing of 0.1's. Step 0 of `LAYOUT-MODEL.md` §7 (the editor keeps fields it does not know) moves to 0.2, before the first new field.
 
 ## 8. Relation to the other documents
 
