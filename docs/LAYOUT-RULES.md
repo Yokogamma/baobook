@@ -54,7 +54,7 @@ Rules marked **(proposed)** rest on no decision of the owner yet; they say what 
 | Name | Value | Meaning | Decision |
 |---|---|---|---|
 | `SHEETW` | per note, stored; a new note made on a computer gets the width that computer shows with the list of notes open; a note begun on a phone has none until a computer opens it | The sheet's columns: its right edge for rest widths and for carrying | W7 |
-| `DESKW` | 40 cells of visible area with the list open | A device that shows at least this much gives a note begun on a phone its width (VIEW.1c). Editing the layout does not depend on it: any device that shows the note at `MINSCALE` or more edits it (VIEW.1) | W7, S3 |
+| `DESKW` | 40 cells of visible area with the list open | A device that shows at least this much gives a note begun on a phone its width (VIEW.1c). Editing the layout does not depend on it: a device that shows the note at `MINSCALE` or more edits it (VIEW.1), in the first release only a computer (W13) | W7, S3, W13 |
 | `TEXTW` | 26 cells (16 in the mockup) | The widest an elastic text gets by itself | W3 |
 | `MINC` | 6 cells, a setting | The narrowest a long elastic text gets when pressed | W3 |
 | `ORDER` | «push first, then narrow» (default) or «never narrow»; a setting | How an elastic block gives way | W3 |
@@ -215,7 +215,7 @@ DRAG turns a pointer into a target, hands it to SETTLE as a change, and shows or
 
 ### 6.D The carry memory
 
-Kept for one carry only and cleared at «home» and at the drop: the start place and pointer (DRAG.A2, A4); `start` (B1); the last target and the direction of the last vertical move, down before any vertical move when the target row is not above the start row (B3, phase 11); the blocks met from the side and their sides (B3), cleared at a swap; the neighbour letting the block through and the row it stopped at (B4); the hold point and its timer (phase 11); «away» (B1); and the note's width frozen for the carry, so that VIEW does not rescale the sheet under the pointer. Nothing else carries over from one pointer move to the next.
+Kept for one carry only and cleared at «home» and at the drop: the start place and pointer (DRAG.A2, A4); `start` (B1); the last target and the direction of the last vertical move, down before any vertical move when the target row is not above the start row (B3, phase 11); the blocks met from the side and their sides (B3), cleared at a swap; the neighbour letting the block through and the row it stopped at (B4); the hold point and its timer (phase 11); «away» (B1); the lowered bottom of each area it was carried in (AREA.7); and the note's width frozen for the carry, so that VIEW does not rescale the sheet under the pointer. Nothing else carries over from one pointer move to the next.
 
 ## 7. Module RESIZE: the handles of a block
 
