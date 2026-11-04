@@ -20,7 +20,7 @@ const own = (b) => b.id;
 const len = (seg) => seg.length;
 
 export function createModel(opts = {}) {
-  const O = { ownRowsGoOnNarrow: true, ...opts };   // opts: the switches this model knows (ownRowsGoOnNarrow)
+  const O = { ownRowsGoOnNarrow: false, ...opts };   // opts: ownRowsGoOnNarrow, true is the switch GAP.9 off (G8)
   const B = new Map();   // id → block
   const S = new Map();   // `${l}|${c}` → stack
   const key = (l, c) => l + '|' + c;

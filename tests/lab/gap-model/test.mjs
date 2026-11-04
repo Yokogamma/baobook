@@ -112,13 +112,13 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq(m.rows().F, 8, 'lesson 18: F stays under E with E\'s gap after C goes');
 }
 
-// ---- an open question the model shows: a heading over two columns narrows off the right one
+// ---- G8: a heading over two columns narrows off the right one
 {
   const start = () => [blk('A', 1, 9, 0), blk('B', 1, 4, 3), blk('C', 6, 9, 3)];   // A over B and C, two A rows above each
-  const a = createModel().open(start()).width('A', 1, 4);
-  eq([a.rows().C, a.stack('C', 7)], [0, 'top | · |'], 'narrow, as written: A\'s rows over C go with A, C rises to the top');
-  const b = createModel({ ownRowsGoOnNarrow: false }).open(start()).width('A', 1, 4);
-  eq([b.rows().C, b.stack('C', 7)], [3, 'top | _3 |'], 'narrow, the other way: C stays, the rows become free room');
+  const b = createModel().open(start()).width('A', 1, 4);
+  eq([b.rows().C, b.stack('C', 7)], [3, 'top | _3 |'], 'G8: narrowing is not deleting: C stays, the rows become free room');
+  const a = createModel({ ownRowsGoOnNarrow: true }).open(start()).width('A', 1, 4);
+  eq([a.rows().C, a.stack('C', 7)], [0, 'top | · |'], 'GAP.9 off: A\'s rows over C go with A, C rises to the top');
 }
 
 // ---- determinism: the order the blocks come in changes nothing
