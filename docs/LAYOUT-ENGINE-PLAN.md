@@ -23,7 +23,7 @@ Three properties make 0.1 a safe first release:
 | SETTLE | §5.1–§5.4, every primitive but P-SQUEEZE | the change table of §5.2 without the sheet's right edge and the area's top and bottom handles carried inwards |
 | DRAG | A1–A5, B1–B5, C1–C4, §6.D | |
 | RESIZE | 1, 2, 3 for `ch` only | the height handle of a text writes `ch` when released above the content and clears it when released below, as today; for code it sets its fold (`ch`, `open`) as today; `fold` for texts is 0.2 |
-| AREA | 1, 2, 3, 5 (no hidden lines to bring back), 6, 7, 7a, 7b | both side handles (today the area has a right handle only); 7a and 7b (proposed) as the mockup does them; the app's area header and collapse (§3.2) |
+| AREA | 1, 2, 3, 5 (no hidden lines to bring back), 6, 7, 7a, 7b | both side handles (today the area has a right handle only); 7a and 7b as the mockup does them (A2); the app's area header and collapse (§3.2) |
 | EDIT | 1–4, 4a, 6 | EDIT.5 comes with hidden lines in 0.2 |
 | VIEW | 1 without zooming in (with `SHEETW` fixed, §3.1), 2–7 | the scale fits the note and stops at `MINSCALE`; the list of notes keeps today's behaviour; the reading mode and the frame or background look as app settings; the dev look |
 
@@ -37,7 +37,7 @@ Three properties make 0.1 a safe first release:
 
 These stay open while the engine is built; the plan follows the rule as written now and changes with the owner's answer.
 
-- **Areas:** AREA.7a and AREA.7b are proposed; the owner is still trying them in the mockup. Folding an area (H5) in the new model is open (O-6).
+- **Areas:** settled as A1 and A2 (AREA.7–AREA.7b, 2026-11-04); folding an area (H5) in the new model is open (O-6).
 - **The batch of small proposals:** `DESKW` 40 cells, the hand button (VIEW.1b), the carried block's width (DRAG.A5), P-REST, P-SEP between two uncarried blocks, the handle always shown with borders always visible (VIEW.6a). The owner confirms or corrects them in one list.
 - **O-2 (P18)** the default text placement and field: 0.1 keeps today's («як зараз»).
 - **O-3 (P12)** the release order against the sync release.
@@ -277,7 +277,7 @@ Every item comes from a decision; the ones that touch the phone are listed so th
 - **Position mode on a computer** moves by one cell per arrow, buttons and keys (DRAG.C4), unless the owner keeps today's snapping (§1.3).
 - **Hover on the empty sheet** shows the cell cursor only, no ghost of a block (EDIT.2).
 - **Pushes are not permanent.** A block that grows and shrinks back leaves its neighbours where they were (H1, G1); today they stay pushed (`LAYOUT-MODEL.md` F3).
-- **The rest of `LAYOUT-RULES.md`:** letting through by holding or Shift, elastic widths, guides and sticking, the reading mode, areas entered by the pointer and stopping a block at their frame (proposed), both side handles of an area, drawing an area with at least 4 × 2 cells, then widened to the area's minimum width (12 cells, as today) (proposed).
+- **The rest of `LAYOUT-RULES.md`:** letting through by holding or Shift, elastic widths, guides and sticking, the reading mode, areas entered by the pointer and stopping a block at their frame (A1, A2), both side handles of an area, drawing an area with at least 4 × 2 cells, then widened to the area's minimum width (12 cells, as today) (proposed).
 
 ### 6.4 Undo
 
