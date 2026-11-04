@@ -378,6 +378,7 @@ The mockup keeps switches to compare ways the owner did not choose; the engine i
 - **O-16** Decided (W7, 2026-11-02): the narrow view, and the user can zoom in from it to the real layout with the scrollbar and the hand (VIEW.1).
 - **O-17** Decided (V2, 2026-11-02, after trying both in the mockup): while a new block is started in the reading mode, nothing shows but the caret (VIEW.6a).
 - **O-12** Decided as W10 (2026-11-02): «narrow first» is dropped.
+- **O-18** What a narrower window scales the note by (VIEW.1): the width the note really uses, up to its rightmost block, so that a note standing on the left of the sheet stays large in a half-screen window, or the whole `SHEETW`. Being tried in the mockup since 2026-11-04 with a half-screen window, zooming in with a sideways scroll and the hand (example «Широкая заметка»); the owner's sheet is 59 columns (W11), so it matters for a window on half a screen.
 
 ### 15.2 For the engine's design
 
