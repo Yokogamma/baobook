@@ -121,7 +121,7 @@ Settings whose value turns their rule off are listed with it: `STICK` 0 is `DRAG
 
 ### 2.1 What is stored and what is derived
 
-**Stored**, for every block: its container, `col`, `y`, its sizes set by hand (`cw`, `ch`, `fold`), the count of empty lines an area hid (SIZE.6), and its lends (§1.3). For the container: the list of neighbour pairs, each with the runs of its gap. A block's `y` is trusted only when it is a head block.
+**Stored**, for every block: its container, `col`, `y`, its sizes set by hand (`cw`, `ch`, `fold`), the count of empty lines an area hid (SIZE.6), and its lends (§1.3); and its gaps: for each of its upper neighbours, the runs of the gap between them, kept on the lower block (`above`), so that a pair and its gap are part of the lower block's place (LAYOUT-ENGINE-PLAN §2.1). The container's list of pairs is an index built from them. A block's `y` is trusted only when it is a head block.
 
 **Derived**, never trusted over the stored state: every block's shown width and height (SIZE), and the row of every block with upper neighbours, given by INV-2 and recomputed by FOLLOW. The stored `y` of such a block is a cache.
 
@@ -163,7 +163,7 @@ Inputs: the layout a SETTLE compares with (`base`, §5.1), the layout after its 
 - **GAP.2 Whose rows.** Every run of a gap has an owner or is unowned (§1.3). A gap's rows are, by default, the property of the block above them, and move with that block in its columns; blocks that swap places keep their own rows [G1, G4].
 - **GAP.3 Only between blocks.** A gap exists only for a pair of neighbours; pulling the last block of a column up, moving it away or deleting the block under it leaves no gap hanging [G3].
 - **GAP.4 FOLLOW.** The derived rows are recomputed by INV-2 in neighbour order: the blocks under a block whose shown height changed follow with their gaps and come back when it shrinks. A head block keeps its row. No pair and no gap changes, and the rows FOLLOW moves are not moves for RELINK (GAP.5 rule 1) [H1, G1]. (`reflow`)
-- **GAP.5 RELINK.** `relink(base, after, moves, carried, rules)`. The pairs are found again from the places of `after` (GAP.1). Each pair, in reading order of its lower block, is put in one class by comparing with `base`'s stored pairs, and gets its runs by the operation of that class; the five operations are the rules below, each switchable on its own (§1.6).
+- **GAP.5 RELINK.** `relink(base, after, moves, carried, rules)`. The pairs are found again from the places of `after` (GAP.1). Each pair, in reading order of its lower block, is put in one class by comparing with `base`'s stored pairs (`classify`), and gets its runs by the operation of that class; the five operations are the rules below, each switchable on its own (§1.6).
   - *Kept*: the pair was a pair in `base` → rule 1.
   - *Across*: its blocks were, in `base`, the upper and the lower neighbour of one block `x` that no longer stands between them: deleted, away, the carried block now elsewhere, or a block that narrowed or was pushed off their columns → rule 2.
   - *Within*: in a column of the lower block `l` where `u` → `l` is a pair of `base`, so that `u` was the nearest block above `l` there, a block `x` that was not `l`'s upper neighbour in `base` is now the nearest above `l`, with `u` the nearest above `x`: the carried block put there, a block that widened (its text changed, phase 1a, or at rest, phase 9), or a block a primitive moved there → rule 3, for the pairs `u` → `x` and `x` → `l`.
@@ -410,7 +410,7 @@ Each bug found while the owner tried the mockup came from two rules meeting with
 
 ## 13. Tests
 
-Every rule gets fast tests without a browser over the engine's pure functions, as `tests/sync*.mjs` test the sync core; the interface keeps browser scenarios. Each primitive and each GAP operation (FOLLOW and RELINK's adjust, join, split, fresh and fit) gets its own test file; the RELINK cases write their `moves` by hand. Every test checks INV-1 to INV-5 after each SETTLE; the gesture tests check INV-8 by comparing the last preview with the stored result; the review's scenarios (growth with a gap under it, away and back, a held neighbour on several columns) are regression cases from the start. The mockup's checks are the seed:
+Every rule gets fast tests without a browser over the engine's pure functions, as `tests/sync*.mjs` test the sync core; the interface keeps browser scenarios. Each primitive and each GAP operation gets its own test file (LAYOUT-ENGINE-PLAN §5: `tests/layoutgap-follow`, `-classify`, `-adjust`, `-join`, `-split`, `-fresh`, `-fit`, `-removed`, and `tests/layoutprim-aside`, `-sink`, `-up`, `-rest`); the RELINK cases write their `moves` by hand. Every test checks INV-1 to INV-5 after each SETTLE; the gesture tests check INV-8 by comparing the last preview with the stored result; the review's scenarios (growth with a gap under it, away and back, a held neighbour on several columns) are regression cases from the start. The mockup's checks are the seed:
 
 | Module | Rules | Mockup scenarios | Asserts |
 |---|---|---|---|
