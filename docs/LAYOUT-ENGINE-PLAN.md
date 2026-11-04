@@ -44,7 +44,7 @@ These stay open while the engine is built; the plan follows the rule as written 
 - **`W0`** answered: 1458 px, 59 columns (§3.1, W11).
 - **What a narrower window scales by** answered: the note's used width, up to its rightmost block (W12).
 - **Answered, W13: the arrows of position mode wait for the touch stage.** M7 says «arrow keys move a selected block by one cell, as today», and DRAG.C4 follows it; but today position mode has arrow buttons, not keys, and they snap: left to the margin, right to the furthest column, up under the nearest block above, down over the nearest block below (`snapBlock`, `index.html` 2763–2768). 0.1 follows DRAG.C4 (one cell per press, buttons and keys) until the owner says whether the snapping stays.
-- **New for 0.1: the code block's width** (§4.4) and **a collapsed area met by a carried block** (§3.2): both keep today's behaviour as far as the rules allow, marked proposed.
+- **The code block's width** answered (W14): elastic as a text, its natural width its longest line; widened by hand when needed. **A collapsed area met by a carried block** (§3.2) keeps today's behaviour as far as the rules allow, marked proposed.
 - **Who edits the layout** (S3 and W13, 2026-11-04): in 0.1 only a computer, a device whose primary pointer is fine and hovers (CSS `(pointer: fine)` and `(hover: hover)`), at `MINSCALE` or more; a phone or a tablet reads, writes, deletes and creates by «+», as VIEW.3 allows, and moves nothing, showing the real layout when it fits at `MINSCALE` and the narrow view below; `DESKW` only decides who gives a phone note its width, in 0.2.
 - **The text size and the phone** answered (2026-11-04, W11): both computers use the default 16 px text, so their `fx` read at `G = 24` give the columns they show today; notes arranged on a phone are shown by 0.1 as the computer shows them today, by the same shares, so nothing more is needed.
 
@@ -131,7 +131,7 @@ What this saves against today: a keystroke that changes no height writes no row,
 
 Every note on `.app` was laid out by today's `resolveIn`, whose result depends on the window's width and the order of the stored array (`LAYOUT-MODEL.md` F1, F4–F6). Read at `W0px`, its places may break the invariants: two cards overlap, a block lies past `SHEETW`, a child lies outside its area, a block stands in the free cell round an area (AREA.7a). `open()` makes a valid layout of them, shown and not written:
 
-0. **Sizes.** Every block's width and rows at its stored place: `RESTPASSES` passes of SIZE.8, the fill rule included (§4.4).
+0. **Sizes.** Every block's width and rows at its stored place: `RESTPASSES` passes of SIZE.8.
 1. **Clamp.** A card past its container's right edge moves left to the last column where it fits; an elastic block narrows first, as at the edge (DRAG.A3). A child below its area's set height makes the area taller in the layout (AREA.2).
 2. **Separate.** As today's `resolveIn` does: keep a list of placed blocks, empty at first; visit the blocks in reading order of the layout as it stands, ties by id; a block that hits a placed one, or stands in the free cell round an area, goes down alone to the bottom of the block it hits (or below the area's free cell), and is placed; when a pass moved a block, visit again from the start in the updated reading order; stop after a pass that moves nothing. Rows only grow and a placed block never moves, so this ends. It is P-SEP between two uncarried blocks (S6), done before any pair exists.
 3. **Pairs.** RELINK with every pair new (§3.3).
@@ -165,8 +165,8 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 ### 4.4 Passports (E-4)
 
 ```js
-/** @typedef {{width:'text'|'fill'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):number, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
- *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'fill', the room at its place unless `cw` (below); 'set', `cw` always.
+/** @typedef {{width:'text'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):number, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
+ *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'set', `cw` always.
  *  rows: a leaf's rows at a width; for an area the passport gives only its header (`headerRows`, measured: today's header wraps on a narrow
  *  area, `areaMeasure`) and its `ch`; the area's height is its children's layout plus the header, from the engine's recursion (LAYOUT-RULES §5.4) */
 ```
@@ -174,12 +174,12 @@ Every visit is in reading order of the layout its phase starts from, ties by id;
 | Kind | Elastic | Width | Shown height | Container |
 |---|---|---|---|---|
 | text | `text` unless `cw` | SIZE.1, `TEXTW`, `MINC` | content rows, or `ch` when larger | no |
-| code | `fill` unless `cw` (proposed, as today) | the fill rule below; at least `MINW_CODE` | as today: folded at `ch` unless `open` | no |
+| code | `text` unless `cw` (W14) | as a text: its natural width its longest line, at most `TEXTW`, giving way by SIZE.2; never below `MINW_CODE` (its header) | as today: folded at `ch` unless `open`; its lines wrap or scroll sideways by its `wrap` | no |
 | area | `set` | `cw`, at least 12 cells as today | header plus its children's rows, or `ch` when larger; the header only when collapsed | yes: its header's rows |
 
 **One fold.** The engine knows one fold: the rows shown plus one row for «Розгорнути» when the content is longer (SIZE.6). In 0.1 only code has one, read by its passport from its `ch` unless `open`, as today. 0.2 gives every kind that folds one standard stored field and one look and command (A3), so the engine does not change for it.
 
-**The fill rule (0.1, proposed: today's code width in the terms of the rules).** A fill block without `cw` is as wide as its room at its place: up to the handle cell of the nearest block on its rows to its right, or the container's edge (today's `rawWidth`, `index.html` 2351–2362), at least `MINW_CODE`. Its width is recomputed with the rest widths, in every pass of SIZE.8 in phase 9 and in `open()`; it never presses anything by itself. Pressed from the left (P-ASIDE, or an area's left side handle as a wall), its `col` moves right and its width becomes its room again, down to `MINW_CODE`; then it presses the block on its right as a chain, as a set width does. Pressed from the right, its room ends at the pressing block, so it narrows, down to `MINW_CODE`, and then moves left as a set width does. Carried past the right edge (DRAG.A3), it narrows to the room down to `MINW_CODE` and then stops, as an elastic text does (W4). Carried, phase 1c gives it the room at the target and phase 9 recomputes it in the result; INV-8 holds because the preview is SETTLE's whole result (DRAG.C1), as for any block. DRAG.A5 is for texts.
+**Code is elastic as a text (W14).** Today a code block without `cw` takes all the room to its right neighbour (`rawWidth`, `index.html` 2351–2362); in 0.1 it is as wide as its longest line, up to `TEXTW`, like a text, and the user widens it by hand when needed. Nothing stored changes; a code block with long lines looks narrower than today, its lines wrapped or scrolled sideways by its own setting.
 
 A text's measured width and the cell size follow the text size: a larger text size makes `G` larger (`--g`, as `applyText` does today), so the sheet scales and no column or row changes; the measuring cache is cleared. A new kind (a checklist, an image) adds a passport and nothing else in the engine.
 
