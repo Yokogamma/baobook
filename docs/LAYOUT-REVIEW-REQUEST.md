@@ -1,5 +1,41 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 4 (2026-11-04)
+
+Thank you for round 3 ([your comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6642160737)). Your blocker showed that gaps split over pairs of neighbours lose information, so we changed the representation instead of patching it. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/0a28e78...2bf705a>.
+
+**What changed.**
+
+1. **Gaps are stacks** (`LAYOUT-RULES.md` §1.3, §2.1, INV-2, INV-3, GAP.1–GAP.9).
+   - Every gap is kept whole on the block that had it before anything came between (per column: its `u`, or the top).
+   - The blocks that came between stand in it, each with its lend (the rows its body covers, never more than its height: decision G7) and its pad.
+   - Every row, a head block's included, comes from the stacks. Head rows are no longer trusted caches.
+   - RELINK works column by column: leave, adjust, stand, fresh, fit.
+   - Your two round 3 examples are now cases of the model, below.
+2. **The gaps were written first as an executable model**, `tests/lab/gap-model` (`node tests/lab/gap-model/test.mjs`; it is not run by CI), and the specification was then rewritten from it. The model passes:
+   - the examples of all three of your rounds, asserting rows and owners;
+   - decisions G5 to G8 and lesson 18;
+   - random sequences of inserts, growth, widening, narrowing, carries and deletions, compared with the same history without the inserted blocks;
+   - the same history from storage in another order;
+   - carries there and back;
+   - deletions that never move a block down.
+
+   Step 1 ports its cases to `tests/layoutgap-*.mjs` and keeps it as a second implementation to compare with (plan §5).
+3. **New decisions by the owner.**
+   - **G7:** a standing block that shrinks below its lend gives up those rows, so a later deletion moves nothing down.
+   - **G8:** narrowing is not deleting. The block under a narrowed one stays, and the rows become free room. It is a switch, `GAP.9`, whose «off» behaves like a deletion.
+4. **Your minor finding.** The safe mode saves text through the normal pipeline and never writes a place or a size; the stored geometry stays as it was (plan §3.5).
+
+**What we ask.**
+
+1. Is the round 3 blocker resolved by the stacks, and your major (the last upper block narrowing away)?
+2. Is the GAP section implementable as written, without the model? Where would two implementers differ? Consider the order of events in one RELINK, swaps, pushes by primitives (`moves`), rule 5's fit, slack, pads.
+3. Does the model agree with the text? Can you find a sequence that breaks either? The model and its tests are small enough to run and extend.
+4. Did anything else change for the worse?
+5. Verdict: can step 1 start?
+
+Out of scope and output: as in round 2.
+
 ## Round 3 (2026-11-04)
 
 Thank you for round 2 ([your comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6639782304)). Its four findings are fixed; the diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/1db73b2...d7180d8>.
