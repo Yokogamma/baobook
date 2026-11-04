@@ -1,5 +1,58 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 2 (2026-11-04)
+
+Thank you for round 1. This round asks you to look again at both documents, which have changed a good deal since you read them. Your round 1 brief is kept below for reference.
+
+**What changed since round 1.** You reviewed head `643f940`; the current head is `2f7cf6e` (diff: <https://github.com/Yokogamma/baobook/compare/643f940...2f7cf6e>).
+
+1. **Your seven findings were fixed** (`7313a24`, `d438873`). A [PR comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6634154830) maps each finding to its fix. For finding 1, the owner tried three ways in the mockup and chose «insertion»: a block that comes between two blocks by itself counts as put into the upper one's gap (`LAYOUT-RULES.md` GAP.5 rule 3, decision S8). Trying it exposed a second defect: rule 1 eroded a gap that does not hold its lower block whenever a text beside it grew and shrank back. Rule 1 now counts only real moves, never FOLLOW or a change of height (lessons 17 and 18).
+2. **An architecture review** looked at modularity, simplification, atomicity, extensibility and switchability. The owner accepted it with decision **R1**: every rule that is not core can be turned off without breaking the others, and 0.1 has a «Правила» list on `.dev`. The documents were restructured around it:
+   - **Switchable rules.** `LAYOUT-RULES.md` §1.6 lists the core rules, and every switch with its fallback and what it needs. The engine takes a `Rules` input, closed over those needs by `resolve` (plan §2.1).
+   - **GAP.5** is now a classification (`kept`, `across`, `within`, `fresh`) followed by five operations (`adjust`, `join`, `split`, `fresh`, `fit`). It works over an explicit `moves` input, which the change and the primitives produce.
+   - **SETTLE** is a pipeline of phases 1–10. Letting through is phase 3, inside the pipeline, plus a wrapper (phase 11 and the runs again, §5.1b).
+   - **Change kinds** are data, in one table (§5.2).
+   - **Fewer primitives.** One primitive, `sink`, covers P-DOWN, P-SINK and P-SEP. One `Obstacle` covers walls, container edges and immovable blocks.
+   - **`settleTree`** drives SETTLE across containers (§5.6).
+   - **One layout, two measures** (§2.1).
+   - **Results.** `{refused}` exists beside `{failed}` (§5.5).
+   - **Storage.** The gaps are stored on the lower block.
+   - **Writes.** A write is a diff against the stored fields, so no list of pending places is kept (plan §3.4).
+3. **Cross-checks.** Two rounds of agents checked the two documents against each other: 48 findings, then 24, all confirmed, none a blocker. All are fixed. The documents' review logs list them.
+
+**What we ask you to review.** Please answer these explicitly:
+
+1. **Round 1.** Is each of your seven findings resolved now? A status table is enough, with a pointer wherever one is not.
+2. **Switchable rules (R1).**
+   - Is §1.6 sound? Check that the core list is right, that every fallback can be built, and that the needs are complete. Also check whether the invariants that §1.6 claims hold under any set of switches really do.
+   - Can the plan's machinery express every switch: `Rules`, `resolve`, `ctx` reaching every module, every test in two forms, the property test under random rule sets, and the list (VIEW.8, `panel.js`)?
+3. **The restructured core.** Look for contradictions, parts that cannot be implemented, and wording that two implementers would read differently, in:
+   - GAP.5 with `moves` (`Moved` as a list of steps);
+   - the pipeline and the letting-through wrapper (a swap ends its run, each RELINK uses up its moves);
+   - the change kinds and `ChangeKind`;
+   - `settleTree` and `grew` in both directions;
+   - `{refused}`;
+   - the two measures.
+4. **The two documents together.** They were edited in parallel by two authors. Does the plan's surface (§2.1 typedefs and signatures) match the rules?
+5. **Steps and tests (plan §5).** Is each step still shippable and testable? This includes:
+   - SRI rows for `public/layout/` files from step 1;
+   - the test server's second root at step 4;
+   - one test file per primitive and per GAP operation;
+   - the split of the property test between Node (INV-1 to INV-5) and the browser (INV-6, INV-8).
+6. **Anything else** that is missing or risky. Then a verdict: can step 1 start?
+
+**Out of scope**, as in round 1: the owner's product decisions, unless one conflicts with another or cannot be built; the mockup's code; features after 0.1, except where 0.1 would block them.
+
+**Suggested order:**
+1. The two review logs (the newest entries) and §1.6 of the rules.
+2. The rules' §4 (GAP) and §5 (SETTLE).
+3. The plan's §2.1, §3.4 and §5.
+4. The rest, as needed.
+
+**What we would like back.** As in round 1: numbered findings, the most severe first. Give each one a severity (blocker, major or minor), the document and section, the evidence, and a concrete fix. Then the explicit answers and a short verdict. A comment on PR #124 or an issue in this repository is fine, in English or Russian.
+
+## Round 1 (2026-11-04)
+
 **Answered** on 2026-11-04 in [PR #124](https://github.com/Yokogamma/baobook/pull/124): 1 blocker and 6 major findings, fixed the same day; see the review logs of `LAYOUT-ENGINE-PLAN.md` and `LAYOUT-RULES.md`.
 
 **The documents** (all in this folder, on the branch `ccr-fde1eaa8-r7b10i`, pull request [#124](https://github.com/Yokogamma/baobook/pull/124)):
