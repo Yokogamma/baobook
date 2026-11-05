@@ -1,6 +1,63 @@
 # Review request: the layout engine, plan for version 0.1
 
-**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. Its three minor findings, in the lab model's `step` helper and in one test property, were repaired before the model serves as a strict oracle for `gap.js`.
+**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. Its three minor findings, in the lab model's `step` helper and in one test property, were repaired before the model serves as a strict oracle for `gap.js`. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`; round 10 checks it.
+
+## Round 10 (2026-11-05)
+
+Thank you for round 9. Its verdict was that step 1 can start, and its three oracle repairs are done (`e7f24b9`). Before step 1 began, the owner asked for one more full review of the whole plan, the rules and the model, not of a diff. An internal reviewer found no blocker, 6 major findings, 13 minor ones and 11 suggestions, all structural. The owner then made one decision: GAP.2, the owners of the rows of a gap, is core and has no switch (`LAYOUT-MODEL.md` §2, row R1). Everything is answered in `979b0ad`. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/4a17d3b...979b0ad>. Both review logs have an entry «The final review».
+
+**The six major findings.**
+1. **Stored fields stay stored** (plan §3.4, §6). Today every save writes the whole note from the live block objects. So it is now a rule of the boundary:
+   - a block object's `PLACE_FIELDS` hold the stored values as read;
+   - only an action's `diff` and an undo's put-back change them;
+   - drawing never reads them;
+   - the safe mode clamps only in its `Layout`.
+
+   Step 5 tests it: a note with a repair pending in an area, typing on the sheet, the area's stored bytes unchanged.
+2. **A `Bridge` typedef** (plan §2.1). `view.js`, `input.js`, `panel.js` and `measure.js` take it, never the page, and step 4's test page implements the same typedef.
+3. **The switches' needs closed** (rules §1.6).
+   - `P-SINK` no longer needs `P-ASIDE`, so `P-ASIDE` off sends a handle to `P-SINK` as its row says.
+   - `GAP.9` needs `GAP.5.2`.
+   - INV-7 a under `DRAG.A4` off is named.
+   - `RuleDecl` gains `relies`, the rules each fallback uses, and `tests/layoutrules.mjs` checks that no closure turns one off with it.
+4. **A carry that keeps some columns** (rules GAP.5 rule 2; plan `relink`; model `carryTo`).
+   - The `carried` block leaves every column it leaves as carried away, though it keeps others; every other block leaves as narrowed off.
+   - The carried block comes in at its displayed target, the others at their reference.
+   - The model's case: a block carried one column sideways takes its rows out of the column it left; deleted afterwards, the block under it rises to its place.
+5. **Every GAP switch in the model.** `gap52` and `gap53` join `gap51`, `gap8` and `gap9`, with named cases and random deletion histories under each; `GAP.2` is core.
+6. **GAP.10, `shift`** (rules; plan `gap.js`; model `shift`). An area's left side handle moves every child's columns at once. `shift` moves every stack with its columns, so nothing leaves or comes in, and owners and lends stay; left and back gives every stack as it was.
+
+**Minor findings and simplifications.** None changes what a user sees.
+- One `Measure` gives two answers, and a block's `t` is set wherever its `h` is.
+- G7 is the GAP operation `cap`, out of FOLLOW.
+- `Moved` is a list of rigid steps.
+- `away` is a field of the change, set by its maker.
+- An arrow is a carry with an empty memory, with no kind of its own.
+- `ChangeKind` loses `phases` (derived) and `memory`.
+- `drag.js` builds targets and changes and runs nothing, and `ops.js` runs an action's preview and commit through one function.
+- `layout.js` holds `open`, `show`, `unshow` and `diff`, and `open()` is the change kind `open`, reusing the pipeline.
+- `settle.js` is the one reader of `THROUGH`, and `through.js` holds pure pieces.
+- `geometry.js` holds EDIT.1's routing and the children's sheet cells, and `edit.js` holds EDIT.4, 4a and 6 as data.
+- The `doUndo` change is listed.
+- A layout gets a new identity only when it changed.
+- Undo entries keep the changed containers' stacks.
+- Stacks are one alternating list; `Layout.order` gives reading order; there is a `Result` type, and `on()`/`variant()` for 0.2's variants.
+- The bounded handle search; FOLLOW in one pass.
+- The engine switch reloads every tab.
+- `MAXCELL` is 2^20, which the view can still draw.
+- Pinned blocks are noted for 0.2.
+- DRAG.A3 is split, its drawn edges and scrolling now VIEW.9.
+- «Seg» is defined.
+
+The model passes 161 checks with 2,000 random sequences.
+
+**What we ask.**
+1. Do these changes keep the GAP contract you found sufficient in round 9? Look for regressions: the carry that keeps columns, `shift`, the `GAP.5.2` and `GAP.5.3` fallbacks as the model has them, and GAP.2 as core.
+2. Do the boundary rule «stored fields stay stored» and the `Bridge` typedef close the integration contract for steps 4 and 5?
+3. Did any simplification lose something a rule needed? In particular: one `Measure` with two answers, the arrow as a carry, phases derived from the change kind, and `open()` as a change kind.
+4. Verdict: can step 1 still start?
+
+Out of scope and output: as in round 2.
 
 ## Round 9 (2026-11-05)
 
