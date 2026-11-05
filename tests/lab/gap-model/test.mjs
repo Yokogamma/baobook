@@ -430,6 +430,22 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([exact.stack('L', 1), inverse.stack('L', 1), inverse.stack('X', 1)], ['A | A3 [X:A1] A5 |', 'X | X5 |', 'A | A3 |'], 'r10.2: the exact undo brings X back standing with its lend; created under the rules in effect, it cuts A\'s gap');
   eq([exact.remove('X').rows().L, inverse.remove('X').rows().L], [10, 4], 'r10.2: so deleting X again leaves L at 10 after the exact path and at 4 after the inverse one');
 }
+// ---- round 11: G7 is judged by each RELINK against the heights it ends with; a widening with a new height checks its new rectangle
+{
+  // shrunk in one RELINK and grown back in the next, X's lend stays cut: deleting it then lets L rise (G7). A height that ends where
+  // it started leaves the lend whole, which is what a shrink and a regrowth inside one RELINK interval give (phase 9 (a), then (b)):
+  // FOLLOW never reads a lend, and RELINK sees only the height of `after`
+  const g = () => createModel().open([blk('A', 1, 1, 0), blk('L', 1, 1, 10)]).insert(blk('X', 1, 2, 3, 3));
+  const two = g().width('X', 1, 6, 1).width('X', 1, 2, 3);
+  eq([two.stack('L', 1), two.rows().L, two.remove('X').rows().L], ['A | A2 [X:A1] A4 |', 10, 8], 'r11.1: X shrunk in one RELINK and grown in the next: its lend stays one row, and deleting it lets L rise to 8');
+  const one = g().width('X', 1, 6).width('X', 1, 2);
+  eq([one.stack('L', 1), one.rows().L, one.remove('X').rows().L], ['A | A2 [X:A3] A4 |', 10, 10], 'r11.1: X at the same height in every RELINK: its lend whole, and deleting it leaves L at 10 (no trace, H1)');
+  // a widening that gets shorter is checked at its new height in the columns it comes into, never at the old one
+  const blocks = [blk('X', 1, 2, 0, 3), blk('B', 4, 5, 2)];
+  const w = createModel().open(blocks).width('X', 1, 6, 1), v = createModel().open(blocks).height('X', 1).width('X', 1, 6);
+  eq([w.rows(), w.rows('canonical'), w.snapshot() === v.snapshot()], [{ B: 2, X: 0 }, { B: 2, X: 0 }, true], 'r11.3: X widened over B\'s columns while it gets one row tall: accepted, as the shrink then the widening');
+  clean(w, 'r11.3: invariants');
+}
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);

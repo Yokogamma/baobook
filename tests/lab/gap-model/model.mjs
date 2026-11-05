@@ -180,9 +180,10 @@ export function createModel(opts = {}) {
     }
   }
 
-  // ---- G7 (`cap`): a real shrink; what a standing block covers is never more than its height. Every write of a height calls it before
-  // anything reads the new height or the stacks: `height`, and `width` when the re-measure at the new width gives another height (a
-  // text widened and got shorter, SIZE.8); FOLLOW itself changes no stack
+  // ---- G7 (`cap`): a real shrink; what a standing block covers is never more than its height. RELINK judges it against the heights it
+  // ends with, after the blocks that left a column have given back what they had there, and every operation of the model is one
+  // RELINK: `height`, and `width` when the re-measure at the new width gives another height (a text widened and got shorter, SIZE.8).
+  // FOLLOW changes no stack and never reads a lend, so a height that falls and rises again between two RELINKs leaves no trace (H1)
   function capLends(x) {
     for (const st of S.values()) st.parts.forEach((p, j) => { if (j % 2 === 1 && p.id === x.id && len(p.lend) > x.h) p.lend = p.lend.slice(0, x.h); });
   }
@@ -265,11 +266,12 @@ export function createModel(opts = {}) {
       const x = B.get(id), was = cols(x), ys = rowsIn('canonical'), c0 = f0 - padOf(x), c1 = f1 + padOf(x), H = h == null ? x.h : h + 2 * padOf(x);
       if (!(c0 <= c1)) throw new Error('no columns');
       if (h != null && !(h >= 1)) throw new Error('height');
-      // in its own columns a taller block pushes what is under it (FOLLOW); in the columns it comes into, it must not hit
-      if (overlaps({ ...x, c0, c1 }, id) || cols({ c0, c1 }).some((c) => !was.includes(c) && overlaps({ ...x, c0: c, c1: c, h: H }, id))) throw new Error('width overlaps');
-      for (const c of was) if (c < c0 || c > c1) leave(x, c, 'narrow', ys);   // its body there is by the height it had (GAP.9)
+      // in the columns it keeps, its new height is FOLLOW's (a taller block pushes what is under it); in the columns it comes into, it
+      // must not hit at its new height; the columns it leaves it leaves by the height it had
+      if (cols({ c0, c1 }).some((c) => !was.includes(c) && overlaps({ ...x, c0: c, c1: c, h: H }, id))) throw new Error('width overlaps');
+      for (const c of was) if (c < c0 || c > c1) leave(x, c, 'narrow', ys);   // rule 2 by `base`: its lend, its body and slack (GAP.9)
       x.c0 = c0; x.c1 = c1;
-      if (H !== x.h) { x.h = H; capLends(x); }   // the new height, cut by G7 before it enters anywhere or FOLLOW reads it
+      if (H !== x.h) { x.h = H; capLends(x); }   // then G7 where it still stands, against the height it ends with, before it enters
       // it came in by itself: at its canonical row, as FOLLOW gives it over the stacks and heights of this moment (GAP's inputs)
       for (const c of cols(x)) if (!was.includes(c)) enter(x, c, ys);
       follow(); return api;
