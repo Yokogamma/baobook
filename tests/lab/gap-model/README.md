@@ -33,4 +33,4 @@ node tests/lab/gap-model/test.mjs [number of random sequences, 2000 by default; 
       - ending every temporary height gives the canonical rows;
       - reloading what 0.2 and 0.1 store gives the same canonical layout.
 
-It is not run by CI (only `tests/*.mjs` are); step 1 of `docs/LAYOUT-ENGINE-PLAN.md` turns its cases into `tests/layoutgap-*.mjs`.
+It is not run by CI by itself (only `tests/*.mjs` are). Step 1 of `docs/LAYOUT-ENGINE-PLAN.md` built the engine's `public/layout/gap.js` from it, and CI runs the model against it: `tests/layoutgap-oracle.mjs` runs this `test.mjs` on the engine through the model's API (`tests/lib/gapdriver.mjs`, set as `globalThis.GAP_MODEL_FACTORY`), and `tests/layoutgap-twin.mjs` runs both implementations event by event on random histories; `tests/layoutgap-*.mjs` hold the named cases per operation. Where the two differ, it is a bug of one of them.
