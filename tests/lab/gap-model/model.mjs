@@ -16,6 +16,10 @@
 // which the operations aim in, and the canonical one, which is stored. The stacks are the same in both; a temporary height pushes
 // what is under its block on the screen, as a growth would (§2.1), and writes nothing.
 //
+// An area ({area: true}) takes part in every rule by its extent (LAYOUT-RULES §1.1): its frame with one free cell on every side. The
+// model keeps every block by its extent inside, so its rows, lends, slack and bodies are counted in extent rows, and converts at its
+// surface: an area's frame row y, height h and columns c0…c1 come in and go out as such; its frame never stands at row 0 (proposed).
+//
 // The operations are the events the engine's RELINK sees, column by column: a block comes into a column (it stands in the gap it
 // lands in, or anchors a new stack when nothing is below it; dropped there, at its displayed row; widened there, at its canonical
 // one), leaves a column (a standing block gives its lend back; an anchor's stack is joined into the stack under it; under the last
@@ -26,7 +30,10 @@
 const len = (seg) => seg.length;
 
 export function createModel(opts = {}) {
-  const O = { gap8: true, gap9: true, ...opts };   // the switches GAP.8 (G6) and GAP.9 (G8), on by default
+  const O = { gap8: true, gap9: true, gap51: true, ...opts };   // the switches GAP.8 (G6), GAP.9 (G8) and GAP.5.1 (rule 1), on by default
+  const padOf = (b) => (b.area ? 1 : 0);
+  const inside = (b) => { const p = padOf(b); return { ...b, y: b.y - p, h: b.h + 2 * p, c0: b.c0 - p, c1: b.c1 + p }; };   // frame → extent
+  const frameRow = (b, y) => y + padOf(b);
   const B = new Map();   // id → block
   const S = new Map();   // `${l}|${c}` → stack
   const key = (l, c) => l + '|' + c;
@@ -93,12 +100,13 @@ export function createModel(opts = {}) {
 
   // ---- a block comes into column c (rules 3 and 4): dropped there, at its displayed row (the user aims at what is shown); come in by
   // itself (widened, pressed aside), at its canonical row `ys`, so that nothing a temporary height pushed is written (§2.1)
-  function enter(x, c, ys = null) {
-    const others = [...B.values()].filter((b) => b.id !== x.id && covers(b, c)).sort((a, b) => a.y - b.y || (a.id < b.id ? -1 : 1));
-    const below = others.find((b) => b.y >= x.y + shownH(x));
+  function enter(x, c, ys = null, byCanon = false) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
     const Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
+    const others = [...B.values()].filter((b) => b.id !== x.id && covers(b, c)).sort((a, b) => (byCanon ? Y(a) - Y(b) : a.y - b.y) || (a.id < b.id ? -1 : 1));
+    if (byCanon && others.some((b) => Y(b) < Y(x) + x.h && Y(x) < Y(b) + b.h)) throw new Error('restore overlaps');
+    const below = byCanon ? others.find((b) => Y(b) >= Y(x) + x.h) : others.find((b) => b.y >= x.y + shownH(x));
     if (!below) {   // fresh: x anchors a stack of its own, rows of the anchor above (unowned under the top)
-      const above = others.filter((b) => b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
+      const above = byCanon ? others.filter((b) => Y(b) + b.h <= Y(x)).pop() : others.filter((b) => b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
       S.set(key(x.id, c), { u, parts: [Array(Math.max(0, Y(x) - (above ? Y(above) + H(above) : 0))).fill(u == null ? '' : u)] });
       return;
     }
@@ -133,7 +141,7 @@ export function createModel(opts = {}) {
   // ---- a block leaves column c (deleted, carried away, narrowed or pressed off it): rule 2
   function leave(x, c, why, ys) {   // ys: the canonical rows before the change
     const f = seq(c).find((el) => el.id === x.id); if (!f) return;
-    const keep = why === 'narrow' && O.gap9;   // G8: narrowing is not deleting
+    const keep = (why === 'narrow' && O.gap9) || why === 'move';   // G8: narrowing is not deleting; GAP.5.1 off moves as a narrowing and a coming back
     release(x, c, keep, heirOf(f.st));
     if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8)
       const { st, i } = f;
@@ -210,7 +218,7 @@ export function createModel(opts = {}) {
     B, S,
     open(blocks) {   // from places only (GAP.1): every gap fresh, owned by the block above, free room unowned; no temporary height
       B.clear(); S.clear();
-      for (const b of blocks) B.set(b.id, { ...b, e: 0 });
+      for (const b of blocks) { if (b.area && b.y < 1) throw new Error('an area at row 0'); B.set(b.id, { ...inside(b), e: 0 }); }
       const cs = new Set(); for (const b of B.values()) for (const c of cols(b)) cs.add(c);
       for (const c of [...cs].sort((a, b) => a - b)) {
         const col = [...B.values()].filter((b) => covers(b, c)).sort((a, b) => a.y - b.y || (a.id < b.id ? -1 : 1));
@@ -219,23 +227,41 @@ export function createModel(opts = {}) {
       }
       follow(); return api;
     },
-    _insert(b) { const x = { e: 0, ...b }; if (B.has(x.id) || overlaps(x)) throw new Error('insert overlaps'); B.set(x.id, x); for (const c of cols(x)) enter(x, c); follow(); return api; },
+    _insert(b) { const x = { e: 0, ...inside(b) }; if (B.has(x.id) || overlaps(x) || x.y < 0) throw new Error('insert overlaps'); B.set(x.id, x); for (const c of cols(x)) enter(x, c); follow(); return api; },
+    _restore(b) {   // an undo puts a block back at its old cell, a canonical place: in every column by its canonical row (plan §6.4)
+      const x = { e: 0, ...inside(b) }; if (B.has(x.id) || x.y < 0) throw new Error('restore overlaps');
+      const ys = rowsIn('canonical'); B.set(x.id, x); ys.set(x.id, x.y);
+      for (const c of cols(x)) enter(x, c, ys, true);
+      follow(); if (overlaps(x)) throw new Error('restore overlaps');
+      return api;
+    },
     _remove(id) { const x = B.get(id), ys = rowsIn('canonical'); for (const c of cols(x)) leave(x, c, 'delete', ys); B.delete(id); follow(); return api; },
-    _height(id, h) { const x = B.get(id); if (!(h >= 1)) throw new Error('height'); x.h = h; capLends(x); follow(); return api; },   // a real change
+    _height(id, h) { const x = B.get(id); if (!(h >= 1)) throw new Error('height'); x.h = h + 2 * padOf(x); capLends(x); follow(); return api; },   // a real change
     _show(id, e) { const x = B.get(id); if (!(e >= 0)) throw new Error('temporary'); x.e = e; follow(); return api; },             // a temporary one
-    _width(id, c0, c1) {
-      const x = B.get(id), was = cols(x), ys = rowsIn('canonical');
+    _width(id, f0, f1) {
+      const x = B.get(id), was = cols(x), ys = rowsIn('canonical'), c0 = f0 - padOf(x), c1 = f1 + padOf(x);
       if (!(c0 <= c1)) throw new Error('no columns');
       if (overlaps({ ...x, c0, c1 }, id)) throw new Error('width overlaps');
       for (const c of was) if (c < c0 || c > c1) leave(x, c, 'narrow', ys);
       x.c0 = c0; x.c1 = c1;
-      for (const c of cols(x)) if (!was.includes(c)) enter(x, c, ys);   // it came in by itself: at its canonical row
+      // it came in by itself: at its canonical row, as FOLLOW gives it over the stacks and heights of this moment (GAP's inputs)
+      for (const c of cols(x)) if (!was.includes(c)) enter(x, c, ys);
       follow(); return api;
     },
     _move(list, d) {   // one step: every block of `list` moved by d rows, within its columns
       const ids = new Set(list); if (!ids.size || !d) return api;
       for (const id of ids) if (overlaps({ ...B.get(id), y: B.get(id).y + d }, id, ids)) throw new Error('move overlaps');
       const want = new Map([...B.values()].map((b) => [b.id, b.y + d])), yc = rowsIn('canonical');
+      if (!O.gap51) {   // GAP.5.1 off: a moved block leaves its columns as when narrowed off them, what its body stood on staying (rule 2),
+        // and comes in again at its row (rules 3, 4): no gap is adjusted, G5 and G6 are lost, and nothing else moves
+        const order = [...ids].sort((a, b) => B.get(a).y - B.get(b).y || (a < b ? -1 : 1)), ys = rowsIn('canonical');
+        for (const id of order) { const x = B.get(id); for (const c of cols(x)) leave(x, c, 'move', ys); }
+        for (const id of order) B.get(id).y += d;
+        for (const id of order) { const x = B.get(id); for (const c of cols(x)) enter(x, c); }
+        follow();
+        for (const id of ids) if (B.get(id).y !== want.get(id)) throw new Error('move: the stacks do not put ' + id + ' at its row');
+        return api;
+      }
       const cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c);
       for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d);
       follow(); const yc2 = rowsIn('canonical');
@@ -249,8 +275,9 @@ export function createModel(opts = {}) {
     carry(id, d) { return api.move([id], d); },
     _fit(targets) {   // rule 5: a block SETTLE put lower than FOLLOW over the stacks puts it (targets: id → displayed row) gets, in its
       // binding stack, the rows it lacks, owned by that stack's u; a block FOLLOW puts lower than its target stays there: no stack is cut
-      for (const [id, t] of Object.entries(targets)) {
-        const x = B.get(id); if (t <= x.y) continue;
+      const order = Object.keys(targets).sort((a, b) => B.get(a).y - B.get(b).y || B.get(a).c0 - B.get(b).c0 || (a < b ? -1 : 1));   // reading order (INV-5)
+      for (const id of order) {
+        const x = B.get(id), t = targets[id] - padOf(x); if (t <= x.y) continue;
         for (const c of cols(x)) {
           const f = seq(c).find((el) => el.id === id), st = f.st, i = f.i >= 0 ? f.i - 1 : st.parts.length - 1;
           if (x.y === spans(st)[i][1]) { st.parts[i] = [...st.parts[i], ...Array(t - x.y).fill(heirOf(st))]; break; }
@@ -259,21 +286,27 @@ export function createModel(opts = {}) {
       }
       return api;
     },
-    _carryTo(id, c0, c1, y) {   // carried away to other columns (DRAG.B1, GAP.7): rule 2 where it was, rule 3 or 4 where it lands
-      const x = B.get(id); if (!(c0 <= c1)) throw new Error('no columns');
-      if (overlaps({ ...x, c0, c1, y }, id)) throw new Error('carry overlaps');
+    _carryTo(id, f0, f1, fy, canonical = false) {   // carried away to other columns (DRAG.B1, GAP.7): rule 2 where it was, rule 3 or 4 where it lands;
+      // canonical: an undo carrying it back to its old cell, placed by its canonical row in every column (plan §6.4)
+      const x = B.get(id), c0 = f0 - padOf(x), c1 = f1 + padOf(x), y = fy - padOf(x); if (!(c0 <= c1)) throw new Error('no columns');
+      if (!canonical && overlaps({ ...x, c0, c1, y }, id)) throw new Error('carry overlaps');
       const ys = rowsIn('canonical'); for (const c of cols(x)) leave(x, c, 'away', ys);
       x.c0 = c0; x.c1 = c1; follow();   // the blocks under it rise into its place (G2); it is in no chain yet
+      if (canonical) {
+        const ys = rowsIn('canonical'); ys.set(x.id, y); x.y = y;
+        for (const c of cols(x)) enter(x, c, ys, true);
+        follow(); if (overlaps(x, id)) throw new Error('carry overlaps'); return api;
+      }
       x.y = y; if (overlaps(x, id)) throw new Error('carry overlaps');
       for (const c of cols(x)) enter(x, c);
       follow(); if (x.y !== y) throw new Error('carryTo: the stacks do not put ' + id + ' at its row'); return api;
     },
-    rows(measure = 'shown') { const y = measure === 'shown' ? new Map([...B.values()].map((b) => [b.id, b.y])) : rowsIn('canonical'); return Object.fromEntries([...B.keys()].sort().map((id) => [id, y.get(id)])); },
+    rows(measure = 'shown') { const y = measure === 'shown' ? new Map([...B.values()].map((b) => [b.id, b.y])) : rowsIn('canonical'); return Object.fromEntries([...B.keys()].sort().map((id) => [id, frameRow(B.get(id), y.get(id))])); },
     stack(l, c) { const st = S.get(key(l, c)); return st ? show(st) : null; },
     save() { return copy(); },                                   // the whole state, temporaries included
     load(s) { put(s); follow(); return api; },
     stored() { const s = copy(); for (const b of s.B.values()) b.e = 0; return s; },   // what 0.2 stores: places, sizes and stacks, no temporary
-    places() { const y = rowsIn('canonical'); return [...B.values()].map((b) => ({ id: b.id, c0: b.c0, c1: b.c1, y: y.get(b.id), h: b.h })); },   // what 0.1 stores
+    places() { const y = rowsIn('canonical'); return [...B.values()].map((b) => { const p = padOf(b); return { id: b.id, c0: b.c0 + p, c1: b.c1 - p, y: y.get(b.id) + p, h: b.h - 2 * p, ...(b.area ? { area: true } : {}) }; }); },   // what 0.1 stores
     snapshot() {
       const yc = rowsIn('canonical');
       const bs = [...B.values()].map((b) => [b.id, b.c0, b.c1, b.y, yc.get(b.id), b.h, b.e]).sort();
@@ -282,7 +315,7 @@ export function createModel(opts = {}) {
     },
     check() { return invariants(); },
   };
-  for (const name of ['insert', 'remove', 'height', 'show', 'width', 'move', 'carryTo', 'fit']) { api[name] = atomic(api['_' + name]); delete api['_' + name]; }
+  for (const name of ['insert', 'restore', 'remove', 'height', 'show', 'width', 'move', 'carryTo', 'fit']) { api[name] = atomic(api['_' + name]); delete api['_' + name]; }
 
   function overlaps(x, except, moving) {   // in the displayed layout; blocks moving in the same step keep their places to one another
     for (const b of B.values()) {

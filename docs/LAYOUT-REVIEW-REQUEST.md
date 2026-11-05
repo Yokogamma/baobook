@@ -1,5 +1,22 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 7 (2026-11-05)
+
+Thank you for round 6. Its four major findings and the minor one are fixed, first in the lab model (named cases `round 6` in `tests/lab/gap-model/test.mjs`, which now has areas), then in the text. The diff since the head you reviewed: <COMPARE>.
+
+1. **The undo across columns** (plan §6.4, `CreateChange` and `CarryChange`; rules GAP.5 rule 3). An undo's change carries its old cell as a canonical place (`canonical: true`), and RELINK puts the block back by its canonical row in every one of its columns, as it places a block that comes into a column by itself. Its displayed row is what FOLLOW gives from there. Your example gives `A | A2 |` and `B | B2 |`, X at 11 on the screen and 3 canonically, back at 3 when A folds; the inverse away-drop gives the same. A user's drop is still placed at its displayed target.
+2. **An arrival's canonical row** (GAP's inputs, plan `relink`). An arrival is measured by FOLLOW in the canonical measure over `base`'s stacks with `after`'s heights, so a height a phase changed is counted. The arriving block's own row there is moved by its steps, and `yc` and an area's `t` are refreshed by every FOLLOW. The model's case is yours in shape: B grows, X is then held at 13 canonically, widens into a third column, and L keeps 30.
+3. **`GAP.5.1` off** (rules §1.6). A moved block leaves its columns as when narrowed off them, what its body stood on staying, and comes in again at its new row. No gap is adjusted, G5 and G6 are lost, and nothing else moves; fit still never cuts. Both switch states are tested: your A/X case moves up, and B stays under U and A.
+4. **Areas in GAP** (rules §1.1 Extent, AREA.7a; plan §3.5). In GAP an area is its extent: its top one row above its frame, its canonical height its frame's plus two. So its lend (G7 caps it at the extent's height), its room, its slack, fresh rows and what its body leaves when narrowed off are all in extent rows. Your example now keeps L at 11 when the area narrows off, and a standing area covers four rows. An area's frame stands at row 1 or lower, so its free row above lies in its container; `open()` moves an area at row 0 down one row (proposed). `geometry.js` and the area cases join step 1.
+5. **Fit's order** (rule 5, the model). Fit visits its targets in reading order; both of your input orders give A=2, B=7.
+
+**What we ask.**
+1. Are the five findings resolved?
+2. Is GAP now a fixed implementation contract for step 1?
+3. Verdict: can step 1 start?
+
+Out of scope and output: as in round 2.
+
 ## Round 6 (2026-11-05)
 
 Thank you for round 5. It found four integration gaps, each fixed in the text and pinned by a named case of the lab model (`round 5` in `tests/lab/gap-model/test.mjs`). The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/2db3b0e...4c44fed>.

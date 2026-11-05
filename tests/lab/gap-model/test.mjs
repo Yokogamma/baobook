@@ -266,6 +266,45 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   u.carry('X', 3 + push - u.rows().X);
   eq([u.rows().X, u.rows('canonical').X, u.stack('X', 1)], [11, 3, 'A | A2 |'], 'r5.4: projected by the push at it (8): displayed 11, canonical 3, the gap as it was');
 }
+// ---- round 6: coordinates and accounting across columns and measures
+{
+  // (1) an undo puts a block back by its canonical row in every column; one displayed row cannot carry two columns' gaps
+  const start = () => createModel().open([blk('A', 1, 1, 0), blk('B', 2, 2, 0), blk('X', 1, 2, 3)]).show('A', 8);
+  const m = start();
+  eq([m.rows().X, m.rows('canonical').X], [11, 3], 'r6.1: X over A shown taller and over B');
+  m.remove('X').restore(blk('X', 1, 2, 3));
+  eq([m.stack('X', 1), m.stack('X', 2), m.rows().X, m.rows('canonical').X, m.show('A', 0).rows().X], ['A | A2 |', 'B | B2 |', 11, 3, 3], 'r6.1: restored at its canonical cell: both gaps as they were, back at 3 when A folds');
+  const d = start().remove('X').insert(blk('X', 1, 2, 11));
+  eq([d.stack('X', 2), d.rows('canonical').X], ['B | B10 |', 11], 'r6.1: dropped at the displayed row 11 instead, column 2 gets ten rows: why the undo carries the canonical cell');
+  const w = start().carryTo('X', 4, 5, 20).carryTo('X', 1, 2, 3, true);
+  eq([w.stack('X', 1), w.stack('X', 2), w.rows('canonical').X], ['A | A2 |', 'B | B2 |', 3], 'r6.1: carried away and back to its old cell by the undo: the same');
+  // (2) a block that comes into a column by itself takes the canonical row the stacks and heights give it now, a growth included
+  const g = createModel().open([blk('A', 1, 1, 0), blk('B', 2, 2, 0, 4), blk('X', 1, 2, 6), blk('S', 3, 3, 0), blk('L', 3, 3, 30)]).show('A', 8);
+  eq([g.rows().X, g.rows('canonical').X], [14, 6], 'r6.2: X pushed by A on the screen, held by B canonically');
+  g.height('B', 11);
+  eq([g.rows().X, g.rows('canonical').X], [14, 13], 'r6.2: B grows: X canonically at 13, its push now 1');
+  g.width('X', 1, 3);
+  eq([g.rows('canonical').L, g.stack('L', 3), g.show('A', 0).rows().L], [30, 'S | S12 [X:S1] S16 |', 30], 'r6.2: X widened into column 3 at its canonical row 13: L keeps 30');
+  // (3) GAP.5.1 off: a moved block leaves its columns as when narrowed and comes in again at its row; an upward move works
+  for (const gap51 of [true, false]) {
+    const a = createModel({ gap51 }).open([blk('A', 1, 1, 0), blk('X', 1, 1, 5)]).carry('X', -2);
+    eq([a.rows().X, a.stack('X', 1)], [3, 'A | A2 |'], `r6.3: GAP.5.1 ${gap51 ? 'on' : 'off'}: X carried up two rows`);
+    const b = createModel({ gap51 }).open([blk('U', 1, 1, 0), blk('A', 1, 1, 5), blk('B', 1, 1, 6)]).carry('A', -2);
+    eq([b.rows(), b.stack('B', 1)], [{ A: 3, B: 6, U: 0 }, gap51 ? 'A | U2 |' : 'U | U2 [A:U1] U2 |'], `r6.3: GAP.5.1 ${gap51 ? 'on' : 'off'}: B stays; ${gap51 ? 'the rows A left come under it (G5)' : 'A comes in again, standing in the gap'}`);
+  }
+  // (4) an area takes part by its extent: lends, retained bodies and rows in extent rows
+  const r = createModel().open([blk('A', 2, 2, 0), blk('L', 2, 2, 11)]).insert({ ...blk('R', 2, 2, 4, 2), area: true });
+  eq([r.stack('L', 2), r.rows().L], ['A | A2 [R:A4] A4 |', 11], 'r6.4: an area put between A and L covers four rows, its frame and its free rows');
+  eq(r.remove('R').stack('L', 2), 'A | A10 |', 'r6.4: taken away, it gives them back');
+  const n = createModel().open([blk('A', 2, 2, 0), { ...blk('R', 2, 4, 4, 2), area: true }, blk('L', 2, 2, 11)]).width('R', 4, 4);
+  eq([n.rows().L, n.stack('L', 2)], [11, 'A | A10 |'], 'r6.4: an area narrowed off a column keeps its extent there (GAP.9): L stays at 11');
+  let top = false; try { createModel().open([{ ...blk('R', 2, 3, 0, 2), area: true }]); } catch { top = true; }
+  eq(top, true, 'r6.4: an area\'s frame never stands at row 0: its free row above lies in the container');
+  // (5) fit visits its targets in reading order, whatever order they are given in
+  const f1 = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 1, 5)]).fit({ A: 2, B: 7 }).rows();
+  const f2 = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 1, 5)]).fit({ B: 7, A: 2 }).rows();
+  eq([f1, f2], [{ A: 2, B: 7 }, { A: 2, B: 7 }], 'r6.5: fit gives the same in either order of its targets');
+}
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);
