@@ -1,6 +1,43 @@
 # Review request: the layout engine, plan for version 0.1
 
-**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`. Round 10 checked it: no blocker, 2 major and 4 minor findings, fixed in `fb80595`; round 11 checks them.
+**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`. Round 10 found no blocker, 2 major and 4 minor findings, fixed in `fb80595`. Round 11 found 2 major and 1 minor, fixed in `f0bf010`; round 12 checks them.
+
+## Round 12 (2026-11-05)
+
+Thank you for round 11. All three findings are fixed in `f0bf010`, in the model first. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/f6717c8...f0bf010>. Both review logs have an entry «Round 11 of the independent review».
+
+1. **G7 is judged by each RELINK** (rules GAP.4, GAP.5, INV-3, PR-6, phase 9 (a); plan §2, §2.1, §4.3).
+   - We chose another way than the one you proposed. `cap` is RELINK's alone: after rule 2, against the canonical heights of `after`. `resize` only sets `h` and `t` together, and no cap is made at a write, so there is none to lose.
+   - A shrink is real when a RELINK sees it: the block's canonical height in `after` is below its lend in `base`.
+   - Why no state is needed between two RELINKs: FOLLOW counts segs and heights and never reads a lend. A lend is read only by rule 2: in RELINK, and in GAP.6 in phase 1b, from `start`.
+   - So a height that falls and rises again inside one RELINK interval (a pass of SIZE.8, then phase 9 (b)) leaves no trace, as a growth that shrinks back leaves none (H1). No user saw that shrink, since the preview is the result (INV-8).
+   - Your trace is two RELINKs in the model, so the shrink is real there: «r11.1» keeps X's lend at one row, and deleting X lets L rise to 8. The same trace at an unchanged height keeps the lend whole, and L stays at 10.
+   - Rule 2 now says that a narrowed anchor's body is counted by its height in `base`. Inside a RELINK, a block that leaves some columns gives back there what it had; `cap` then applies only where it still stands.
+   - Step 2 has both cases through SETTLE (rules §13):
+     - a text shorter at its rest width in 9 (a): its lend is cut by the RELINK of (c);
+     - a text shorter in a pass of SIZE.8 and taller again in 9 (b): its lend is kept whole.
+2. **An exact undo checks the blocks only its entry holds** (plan §6.4).
+   - The entry records the measurement signature of every block the exact path would put back, at the width and options `before` gives it: deleted blocks and a deleted area's children included, a deleted block by the content the entry keeps.
+   - The exact path needs the identity and also every recorded signature to equal today's: chips resolved against today's notes, today's text size, text placement and font epoch.
+   - Your example is written out in §6.4: X, the only block of its note with a chip to N, deleted, then N renamed in another tab. The undo takes the inverse path, at X's new height.
+   - A change of the text size, the placement or a font while a container is empty is caught the same way, since the signatures carry them.
+   - Comparing signatures measures nothing, so with every signature equal the exact chain stays.
+   - Step 3 has three new cases:
+     - the renamed chip;
+     - the text size changed with a container's only block deleted;
+     - two exact undos in a row with nothing changed.
+3. **`width(..., h)` is checked at the new height** (model).
+   - In the columns it comes into, the block is checked at its new height. In the columns it keeps, a taller block pushes what is under it (FOLLOW). The columns it leaves, it leaves by `base`.
+   - «r11.3» is your reproducer: accepted, and equal to the shrink followed by the widening.
+
+The model passes 185 checks with 2,000 random sequences.
+
+**What we ask.**
+1. Is G7 judged by each RELINK sound? Does any phase between two RELINKs read a lend, so that a stale lend could change a result?
+2. Does the signature check of §6.4 close the exact undo for blocks only the entry holds? Is any input of a restored layout left out?
+3. Verdict: can the model be ported to step 1 as the strict oracle, and can step 3's undo be built on §6.4?
+
+Out of scope and output: as in round 2.
 
 ## Round 11 (2026-11-05)
 
