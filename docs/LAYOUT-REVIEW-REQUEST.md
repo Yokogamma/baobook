@@ -20,9 +20,28 @@ Thank you for round 5. It found four integration gaps, each fixed in the text an
    - Your example projects 3 to 11, and the block gets back canonical 3 with its gap.
    - Recreation, entering, leaving and ungrouping use the same projection.
 
+**The full review of the same head** (six agents; 6 major, 3 minor) is answered in the same commit (plan review log, «A full review of `2db3b0e`»):
+1. **Undo prepared first** (plan §6.4). The bridge prepares the restore, all parts of a composite one together, applies it, and only then pops the entry. A refused or failed restore keeps the entry and the state, and the toast says it could not undo.
+2. **Content that cannot be placed** (`LAYOUT-RULES.md` §5.5, plan §2.1, §3.5, §4.2). A refusal answers a request to place. A change of content that has already happened is never refused: the content is kept and saved, and the note's geometry goes to the safe mode.
+3. **One list of written fields** (plan §3.4). `PLACE_FIELDS` covers `parent`, the place, `cw`, `ch`, `open` and `collapsed`, and a cleared field is written as removed. `diff`, the patch, the bridge and the undo all use it.
+4. **The clamp before the judges** (rules phases 1c and 10, plan `ChangeKind.contain`). The target is clamped in phase 1c and a created block measured there. Phase 10 only checks and never moves a block.
+5. **The extent** (rules §1.1, AREA.7a, plan `geometry.js`). One contact rule: an area takes its frame with one free cell on every side, and every comparison between blocks uses extents, the stacks and FOLLOW included. Two areas keep two free cells between them (proposed).
+6. **Text size** (plan §4.4, §6.1). A change of it is a view-only re-measure, as the measured counterexample shows.
+
+The three minor findings:
+- a re-measure during a gesture waits for its end, tested with a late font;
+- the chain under `GAP.5.2` off stays core and only the rows change;
+- step 1 tests the pure column conversion, and step 5 the real `serBlock`.
+
+The recommendations taken:
+- `settle.js` split in three;
+- one function for an action's preview and its commit;
+- a kind's preconditions, including that a block never grows taller when it gets wider;
+- stacks kept as runs in the engine.
+
 **What we ask.**
-1. Are the four findings resolved?
-2. Is GAP now implementable as written, as a fixed contract for step 1?
+1. Are the four round 5 findings and the full review's findings resolved?
+2. Is GAP now implementable as written, as a fixed contract for step 1? Are the plan's contracts for the later steps (writes, refusal after input, undo) compatible with it?
 3. Verdict: can step 1 start?
 
 Out of scope and output: as in round 2.
