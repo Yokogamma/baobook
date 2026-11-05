@@ -2,7 +2,7 @@
 
 ## Round 7 (2026-11-05)
 
-Thank you for round 6. Its four major findings and the minor one are fixed, first in the lab model (named cases `round 6` in `tests/lab/gap-model/test.mjs`, which now has areas), then in the text. The diff since the head you reviewed: <COMPARE>.
+Thank you for round 6. Its four major findings and the minor one are fixed, first in the lab model (named cases `round 6` in `tests/lab/gap-model/test.mjs`, which now has areas), then in the text. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/4c44fed...c3d845e>.
 
 1. **The undo across columns** (plan §6.4, `CreateChange` and `CarryChange`; rules GAP.5 rule 3). An undo's change carries its old cell as a canonical place (`canonical: true`), and RELINK puts the block back by its canonical row in every one of its columns, as it places a block that comes into a column by itself. Its displayed row is what FOLLOW gives from there. Your example gives `A | A2 |` and `B | B2 |`, X at 11 on the screen and 3 canonically, back at 3 when A folds; the inverse away-drop gives the same. A user's drop is still placed at its displayed target.
 2. **An arrival's canonical row** (GAP's inputs, plan `relink`). An arrival is measured by FOLLOW in the canonical measure over `base`'s stacks with `after`'s heights, so a height a phase changed is counted. The arriving block's own row there is moved by its steps, and `yc` and an area's `t` are refreshed by every FOLLOW. The model's case is yours in shape: B grows, X is then held at 13 canonically, widens into a third column, and L keeps 30.
