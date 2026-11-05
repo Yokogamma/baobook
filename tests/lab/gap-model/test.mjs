@@ -342,6 +342,15 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([z.stack('Z', 3), z.stack('A', 3)], ['top | _2 |', 'Z | Z2 |'], 'r8.3: arrivals top to bottom: Z first, then A under it');
   eq(z.remove('Z').width('A', 3, 3).rows().A, 2, 'r8.3: Z deleted and A narrowed to column 3: A at 2, as the order of arrival gives');
 }
+// ---- round 9: the oracle's one RELINK over several steps, fit at its end, and what the switch's owners change later
+{
+  const m = createModel().open([blk('X', 1, 1, 3)]).step([[['X'], 1], [['X'], 1]]);
+  eq(m.rows().X, 5, 'r9.1: two steps in one RELINK, each measured at the rows it starts from: X at 5');
+  const f = createModel().open([blk('A', 1, 1, 0), blk('X', 1, 1, 3), blk('S', 2, 2, 0), blk('L', 2, 2, 20)]).show('A', 8).step([[['L'], 1]], { X: [1, 2] });
+  eq([f.rows().L, f.rows('canonical').L], [29, 21], 'r9.2: L moved down one while X widens over it at its canonical row: FOLLOW puts L lower than its target on the screen, and that is the result (rule 5)');
+  const d = [true, false].map((gap51) => createModel({ gap51 }).open([blk('U', 1, 1, 0), blk('A', 1, 1, 5), blk('B', 1, 1, 6)]).carry('A', -2).remove('U').rows().B);
+  eq(d, [1, 3], 'r9.3: after GAP.5.1 off the rows A left are A\'s, not U\'s, so deleting U then takes fewer: an expected difference');
+}
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);
@@ -537,8 +546,9 @@ function measureCase(seed) {
   if (JSON.stringify(m.rows()) !== canon) return { seed, unshow: true };
   return null;
 }
-// GAP.5.1 off changes only owners: a history with no deletion gives the same rows, in both measures, with it on and off (a deletion
-// takes its owner's rows, G2, so after one the two may differ by the owners the switch changed)
+// GAP.5.1 off changes only owners: a history of inserts, heights, temporary heights, widenings, carries and moves gives the same rows,
+// in both measures, with it on and off. A deletion, a carry away and a narrowing take rows by their owner (G2, a departing block's
+// room), so after one the two may differ by the owners the switch changed (the named case «r9.3»)
 function switchCase(seed) {
   const r = rng(seed), pick = (a) => a[Math.floor(r() * a.length)], int = (a, b) => a + Math.floor(r() * (b - a + 1)), W = 12;
   const on = createModel().open(bases(r, 4, W)), off = createModel({ gap51: false }).open([...on.B.values()].map((b) => ({ id: b.id, c0: b.c0, c1: b.c1, y: b.y, h: b.h }))); let n = 0;
@@ -549,7 +559,7 @@ function switchCase(seed) {
     if (kind === 'insert') { const c0 = int(0, W - 2), b = { ...blk('x' + n++, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 30), int(1, 3)), e: pick([0, 1]) }; same = both((m) => m.insert(b)); }
     if (kind === 'height') { const id = pick(live), h = Math.max(1, on.B.get(id).h + pick([-1, 1, 2])); same = both((m) => m.height(id, h)); }
     if (kind === 'show') { const id = pick(live), e = pick([0, 1, 3]); same = both((m) => m.show(id, e)); }
-    if (kind === 'width') { const id = pick(live), x = on.B.get(id), a = Math.max(0, x.c0 + pick([-1, 1])), z = Math.max(a, Math.min(W - 1, x.c1 + pick([-1, 1]))); same = both((m) => m.width(id, a, z)); }
+    if (kind === 'width') { const id = pick(live), x = on.B.get(id), a = Math.max(0, x.c0 - int(0, 1)), z = Math.min(W - 1, x.c1 + int(0, 1)); same = both((m) => m.width(id, a, z)); }   // widening only
     if (kind === 'carry') { const id = pick(live), d = pick([-2, -1, 1, 2]); same = both((m) => m.carry(id, d)); }
     if (kind === 'move') { const ids = [pick(live), pick(live)], d = pick([-1, 1]); same = both((m) => m.move(ids, d)); }
     if (!same) return { seed, step, kind, refused: 'one way only' };

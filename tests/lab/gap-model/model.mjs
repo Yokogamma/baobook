@@ -272,8 +272,19 @@ export function createModel(opts = {}) {
     },
     carry(id, d) { return api.move([id], d); },
     _step(moves = [], widths = {}) {   // one RELINK: the steps of `moves` (rule 1) and blocks changing their columns (rules 2, 3, 4)
-      const adjust = () => { for (const [list, d] of moves) { const ids = new Set(list), cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c); for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d); } };
-      const target = new Map([...B.values()].map((b) => [b.id, b.y])); for (const [list, d] of moves) for (const id of list) target.set(id, target.get(id) + d);
+      // rule 1 on the stacks alone, step by step, each step's slacks measured at the rows it starts from: FOLLOW after each, a block
+      // in no chain (it left every column it had) keeping the row its steps so far give it
+      const running = new Map([...B.values()].map((b) => [b.id, b.y]));
+      const adjust = () => {
+        const row = new Map(running);
+        for (const [list, d] of moves) {
+          const ids = new Set(list), cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c);
+          for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d);
+          for (const id of ids) row.set(id, row.get(id) + d);
+          follow(); for (const b of B.values()) if (!cols(b).some((c) => seq(c).some((el) => el.id === b.id))) b.y = row.get(b.id);
+        }
+      };
+      const target = new Map(running); for (const [list, d] of moves) for (const id of list) target.set(id, target.get(id) + d);
       // the reference of an arrival: rule 1 replayed on a copy, every block keeping its columns, then FOLLOW in the canonical measure
       const s0 = copy(); adjust(); const ref = rowsIn('canonical'); put(s0);
       const ys = rowsIn('canonical'), ids = Object.keys(widths), at = (id) => [target.get(id), B.get(id).c0, id];
@@ -289,8 +300,11 @@ export function createModel(opts = {}) {
       for (const b of B.values()) b.y = target.get(b.id);   // the rows SETTLE gave them, for finding where each arrival stands
       for (const [x, was] of entering) { now.set(x.id, ref.get(x.id)); for (const c of cols(x)) if (!was.includes(c)) enter(x, c, now); }   // rule 3, top to bottom
       follow();
+      // rule 5: a moved block FOLLOW puts higher than its target gets the rows it lacks; one it puts lower (a canonical entry pushing it
+      // on the screen) stands there
+      const moved = {}; for (const [list] of moves) for (const id of list) moved[id] = frameRow(B.get(id), target.get(id));
+      raw.fit(moved);
       const errs = invariants(); if (errs.length) throw new Error('step: ' + errs[0]);
-      for (const [list] of moves) for (const id of list) if (B.get(id).y !== target.get(id)) throw new Error('step: the stacks do not put ' + id + ' at its row');
       return api;
     },
     _fit(targets) {   // rule 5: a block SETTLE put lower than FOLLOW over the stacks puts it (targets: id → displayed row) gets, in its

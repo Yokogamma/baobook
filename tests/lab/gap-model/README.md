@@ -28,7 +28,7 @@ node tests/lab/gap-model/test.mjs [number of random sequences, 2000 by default]
       - Carries of the inserted blocks are left out: by G5 and G6 a move by hand changes the gaps on purpose.
     - Carries and moves of several blocks there and back, some under temporary heights: the displayed rows come back exactly; the canonical ones never rise and stop changing after the first trip (INV-7 c).
     - Deletions that never move a block down, in either measure.
-    - `GAP.5.1` off: a history without deletions gives the same rows in both measures with the switch on and off.
+    - `GAP.5.1` off: a history of inserts, heights, temporary heights, widenings, carries and moves gives the same rows in both measures with the switch on and off. A deletion, a carry away or a narrowing takes rows by their owner, so after one the two may differ (named case «r9.3»).
     - The two measures:
       - ending every temporary height gives the canonical rows;
       - reloading what 0.2 and 0.1 store gives the same canonical layout.

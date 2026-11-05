@@ -1,5 +1,7 @@
 # Review request: the layout engine, plan for version 0.1
 
+**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. Its three minor findings, in the lab model's `step` helper and in one test property, were repaired before the model serves as a strict oracle for `gap.js`.
+
 ## Round 9 (2026-11-05)
 
 Thank you for round 8. The major finding is fixed by narrowing what the switch turns off; the two oracle defects are fixed in the model (named cases `round 8`). The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/d3e9fc9...4a17d3b>.
