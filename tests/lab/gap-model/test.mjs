@@ -305,6 +305,29 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   const f2 = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 1, 5)]).fit({ B: 7, A: 2 }).rows();
   eq([f1, f2], [{ A: 2, B: 7 }, { A: 2, B: 7 }], 'r6.5: fit gives the same in either order of its targets');
 }
+// ---- round 7: an arrival in the same RELINK as a move; GAP.5.1 off keeps every other block where it is
+{
+  // (1) X moves up one under A shown taller, held canonically by U, and comes into column 3 in the same RELINK: its reference is
+  // rule 1 replayed, canonical 3, not its canonical row plus the displayed step (2)
+  const m = createModel().open([blk('A', 1, 1, 0), blk('U', 2, 2, 0, 3), blk('X', 1, 2, 3), blk('S', 3, 3, 0), blk('L', 3, 3, 20)]).show('A', 3);
+  eq([m.rows().X, m.rows('canonical').X], [6, 3], 'r7.1: X pushed by A on the screen');
+  m.step([[['X'], -1]], { X: [1, 3] });
+  eq([m.rows().X, m.rows('canonical').X, m.stack('L', 3), m.rows('canonical').L], [5, 3, 'S | S2 [X:S1] S16 |', 20], 'r7.1: moved and widened in one RELINK: entered at its reference 3, L keeps 20');
+  eq(m.show('A', 0).rows().L, 20, 'r7.1: A folds: L at 20, no extra row');
+  // (2) a grown standing block carried with GAP.5.1 off: its growth's push stays as rows of the gap, L does not move
+  for (const gap51 of [true, false]) {
+    const g = createModel({ gap51 }).open([blk('A', 1, 1, 0), blk('L', 1, 1, 10)]).insert(blk('X', 1, 1, 2)).height('X', 3);
+    eq([g.rows().L, g.stack('L', 1)], [12, 'A | A1 [X:A1] A7 |'], `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: X grew to 3, L pushed to 12`);
+    g.carry('X', 1);
+    eq([g.rows().X, g.rows().L, g.stack('L', 1)], [3, 12, gap51 ? 'A | A2 [X:A1] A6 |' : 'A | A2 [X:A3] A6 |'], `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: carried down one, L stays at 12`);
+    eq(g.remove('X').rows().L, gap51 ? 10 : 12, `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: X deleted: ${gap51 ? 'its growth goes, L rises to 10' : 'its growth stayed as A\'s rows, L stays at 12'}`);
+  }
+  // (3) several blocks moved together with GAP.5.1 off, in either order of their ids
+  for (const gap51 of [true, false]) for (const ids of [['A', 'B'], ['B', 'A']]) {
+    const k = createModel({ gap51 }).open([blk('U', 1, 1, 0), blk('A', 1, 1, 5), blk('B', 1, 1, 8), blk('L', 1, 1, 12)]).move(ids, -1);
+    eq(k.rows(), { A: 4, B: 7, L: 12, U: 0 }, `r7.3: GAP.5.1 ${gap51 ? 'on' : 'off'}, ${ids.join(', ')} up one: L stays`);
+  }
+}
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);

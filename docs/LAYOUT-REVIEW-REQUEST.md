@@ -1,5 +1,20 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 8 (2026-11-05)
+
+Thank you for round 7. Both major findings and the model defect are fixed, first in the lab model (named cases `round 7`), then in the text. The diff since the head you reviewed: <COMPARE>.
+
+1. **An arrival in the same RELINK as a move** (rules, GAP's inputs; plan `relink`). An arrival's reference is now prescribed: before rule 2, RELINK replays rule 1 for every step on a copy of `base`'s stacks, as if each block kept its columns, and FOLLOW in the canonical measure gives the block's row there. A step's `rows` are never added to a canonical row, and the reference is kept for rule 3 whatever columns the block leaves. The model has `step(moves, widths)`, one RELINK. Your example now enters at 3, `S | S2 [X:S1] S16 |`, and L keeps 20 after A folds.
+2. **`GAP.5.1` off keeps every other block where it is** (rules §1.6). A standing block moved with the switch off gives its lend back and leaves the rows its body took beyond it, its growth's push, as rows of its stack's `u`; an anchor's body and slack stay as before. Your grown-standing case keeps L at 12 in both switch states. Deleting X then lets L rise to 10 with the switch on, and leaves it at 12 with the switch off, where the growth's rows are A's.
+3. **The model's fallback** finds a block's neighbours in the column's chain, as rule 3 says. Your multi-block move gives A=4, B=7, L=12 in both id orders and both switch states.
+
+**What we ask.**
+1. Are the three findings resolved?
+2. Is GAP now a fixed implementation contract for step 1?
+3. Verdict: can step 1 start?
+
+Out of scope and output: as in round 2.
+
 ## Round 7 (2026-11-05)
 
 Thank you for round 6. Its four major findings and the minor one are fixed, first in the lab model (named cases `round 6` in `tests/lab/gap-model/test.mjs`, which now has areas), then in the text. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/4c44fed...c3d845e>.
