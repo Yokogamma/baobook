@@ -1,6 +1,8 @@
 // Runs the lab model of gaps (model.mjs) on the examples of the review rounds and on random sequences.
 // node tests/lab/gap-model/test.mjs [seeds]
-import { createModel } from './model.mjs';
+import { createModel as labModel } from './model.mjs';
+// tests/layoutgap-oracle.mjs runs these same cases on the engine's GAP, through the model's API (tests/lib/gapdriver.mjs)
+const createModel = globalThis.GAP_MODEL_FACTORY || labModel;
 
 let failed = 0, passed = 0;
 const ok = (cond, msg) => { if (cond) passed++; else { failed++; console.log('FAIL', msg); } };
