@@ -412,32 +412,53 @@ export function relink(base, after, moves, carried, rules) {
   // rules 3 and 4, in two passes over the arrivals, each top to bottom: first the blocks put where they are (the carried block at its
   // displayed target, or by its canonical row for an undo; a created block on the screen; a block that passed another, in the columns it
   // passed it in, at its displayed target), then the blocks that come in by themselves, each at its reference, around those
-  const listOf = (id) => [...into.get(id)].sort((a, b) => a - b);
+  const listOf = (id) => [...(into.get(id) || [])].sort((a, b) => a - b);
   const fits = new Map(); for (const [ids] of steps) for (const id of ids) if (tgt.has(id)) fits.set(id, tgt.get(id).y);
   if (cid != null && tgt.has(cid)) fits.set(cid, tgt.get(cid).y);
-  function firstPass(V) {
-    const ys0 = rowsIn(V, 'canonical'), done = new Map();
+  // the reference copy keeps every block in the columns of base, those it leaves included, so who passed whom there is judged over those
+  // columns (D moved up past B in the two columns they share in base, while it leaves one of them: in the copy it passed B in both)
+  const passedV = new Map();
+  for (const c of allCols(W)) {
+    const list = seq(W, c).map((el) => el.id).filter((id) => tgt.has(id)).sort((a, b) => tgt.get(a).y - tgt.get(b).y || byId(a, b));
+    for (const id of displaced(W, c, list, weightOf)) add(passedV, id, c);
+  }
+  if (canonical) passedV.delete(cid);   // an undo's carry back leaves all its columns anyway
+  // the blocks that passed others and the blocks they passed: the only ones rule 5 visits before the blocks that come in by themselves
+  const touched = new Set(passed.keys());
+  for (const [p, cs] of passed) for (const c of cs) {
+    const was = seq(W, c).map((el) => el.id), now = afterCols.get(c) || [];
+    for (const q of was) if (q !== p && now.includes(q) && (was.indexOf(q) < was.indexOf(p)) !== (now.indexOf(q) < now.indexOf(p))) touched.add(q);
+  }
+  const early = new Map([...fits].filter(([id]) => touched.has(id)));
+  // rules 3 and 4, in two passes over the arrivals, each top to bottom. The first: the blocks put where they are (the carried block at its
+  // displayed target, or by its canonical row for an undo; a created block on the screen; a block that passed another, in the columns it
+  // passed it in, at its displayed target), each into the columns of its own it is not in; `pv` says who passed whom in the columns the
+  // blocks of V are in. Then, when a block passed another, rule 5 for the moved blocks among those that passed or were passed
+  function firstPass(V, pv) {
+    const ys0 = rowsIn(V, 'canonical'), done = new Map(), inChain = (id, c) => seq(V, c).some((el) => el.id === id);
     for (const b of V.B.values()) b.y = tgt.get(b.id).y;   // every block at the row SETTLE gave it
-    for (const id of arrivals) {
-      const x = V.B.get(id), list = listOf(id);
-      if (id === cid && canonical) { const ys2 = new Map(ys0); ys2.set(id, canonTarget(id)); for (const c of list) enter(V, x, c, ys2, true); done.set(id, list); }
-      else if (id === cid || !base.boxes.has(id)) { for (const c of list) enter(V, x, c); done.set(id, list); }   // carried, or created: as the user aims
-      else if (passed.has(id)) { const here = list.filter((c) => passed.get(id).has(c)); for (const c of here) enter(V, x, c); done.set(id, here); }
+    for (const id of [...arrivals, ...[...pv.keys()].filter((id) => !into.has(id))]) {
+      const own = id === cid || !base.boxes.has(id) ? listOf(id) : [];   // carried, or created: as the user aims
+      const list = [...new Set([...own, ...(pv.get(id) || [])])].filter((c) => !inChain(id, c)).sort((a, b) => a - b), x = V.B.get(id);
+      if (!list.length) continue;
+      if (id === cid && canonical) { const ys2 = new Map(ys0); ys2.set(id, canonTarget(id)); for (const c of list) enter(V, x, c, ys2, true); }
+      else for (const c of list) enter(V, x, c);
+      done.set(id, list);
     }
-    // when a block passed another, rule 5 for the moved blocks and the carried one comes before the blocks that come in by themselves: a
-    // block that passed another no longer pushes what it passed, which may then show higher than its target, and a block measured round
-    // it before rule 5 gave it its rows would be pushed by them in its new columns, a temporary height made canonical
-    if (passed.size) { followWork(V); fitWork(V, fits); for (const b of V.B.values()) b.y = tgt.get(b.id).y; }
+    // a block that passed another no longer pushes what it passed, which may then show higher than its target; a block that comes in by
+    // itself, measured round it before rule 5 gave it its rows, would be pushed by them in its new columns, a temporary height made
+    // canonical. Only those blocks: a pass elsewhere in the container changes nothing of the others
+    if (passed.size) { followWork(V); fitWork(V, early); for (const b of V.B.values()) b.y = tgt.get(b.id).y; }
     return done;
   }
   // every arrival's reference: rule 1 replayed on a copy of base's stacks, every block keeping its columns but the blocks that passed others,
-  // which are out of the columns they passed them in; the first pass made there too, so the blocks put in their new order push what is
-  // under them now and nothing they passed; then canonical FOLLOW
-  const V = copyWork(W), outOf = new Map(passed); if (canonical && W.B.has(cid)) outOf.set(cid, new Set(cols(W.B.get(cid))));
+  // which are out of the columns they passed them in, judged over the columns of base; the first pass made there too, so the blocks put in
+  // their new order push what is under them now and nothing they passed, and no column holds two blocks in both orders; canonical FOLLOW
+  const V = copyWork(W), outOf = new Map(passedV); if (canonical && W.B.has(cid)) outOf.set(cid, new Set(cols(W.B.get(cid))));
   departAll(V, outOf, why, ys);
   for (const [id, t] of tgt) if (!V.B.has(id)) V.B.set(id, { ...t });
   setHeights(V); for (const b of V.B.values()) b.y = start.get(b.id) ?? b.y;
-  adjustWork(V, steps); firstPass(V); const ref = rowsIn(V, 'canonical');
+  adjustWork(V, steps); firstPass(V, passedV); const ref = rowsIn(V, 'canonical');
   // rule 2, column by column, top to bottom in each chain
   departAll(W, out, why, ys);
   // the heights and columns of after (a new block at its target, in no chain yet); G7 for every block still standing; rule 1
@@ -446,7 +467,7 @@ export function relink(base, after, moves, carried, rules) {
   capAll(W);
   for (const b of W.B.values()) if (start.has(b.id)) b.y = start.get(b.id);
   adjustWork(W, steps);
-  const placed = firstPass(W), now = rowsIn(W, 'canonical');
+  const placed = firstPass(W, passed), now = rowsIn(W, 'canonical');
   for (const id of arrivals) {
     const done = new Set(placed.get(id) || []), rest = listOf(id).filter((c) => !done.has(c)); if (!rest.length) continue;
     if (!passed.has(id)) now.set(id, ref.get(id));   // a block that passed another keeps the canonical row it came in at

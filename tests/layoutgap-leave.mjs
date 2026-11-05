@@ -48,6 +48,22 @@ const G0 = follow(resize(placed([box('T', 3, 4, 2), box('A', 4, 5, 4), box('W', 
 const tw = relink(G0, edit(G0, (m, set) => { set('T', { y: 11 }); set('A', { y: 7 }); set('W', { w: 3 }); }), { T: steps([1, 9]), A: steps([2, 1]) }, null, DEFAULT);
 eq('5g a moved block given back the temporary rows of a block that passed it pushes nothing canonically into a column that comes in by itself', [rows(tw), canon(tw), stack(tw, 'W', 5), rows(follow(resize(tw, 'T', 1, 0)))], [{ A: 7, T: 11, W: 18 }, { A: 7, T: 11, W: 16 }, 'A | A8 |', { A: 7, T: 11, W: 16 }]);
 clean('5h invariants', tw);
+// D moved up past B in the two columns they share while it leaves column 1, B moved down and widening into column 3: the reference copy,
+// where D keeps column 1, has D above B there too, so no column holds them in both orders
+const B0 = placed([box('B', 1, 2, 1), box('D', 1, 2, 4)]);
+const cross = relink(B0, edit(B0, (m, set) => { set('B', { w: 4, y: 5, yc: 5 }); set('D', { col: 1, w: 2, y: 0, yc: 0 }); }), { D: steps([1, -4]), B: steps([2, 4]) }, null, DEFAULT);
+eq('5i a block that passes another while it leaves one of their columns: no cycle, and the rows two RELINKs give', [rows(cross), stack(cross, 'B', 3)], [{ B: 5, D: 0 }, 'top | _5 |']);
+clean('5j invariants', cross);
+// B, pushed to 12 by A's growth in column 1 (its stack in column 2 still 11), moved down a row and shifted from columns 1–2 to 2–3; P passing
+// Q in column 10 in the same RELINK, or not: rule 5 before the blocks that come in by themselves is for the blocks a pass concerns, so B's
+// memory is the same either way, and narrowed back to column 2 it stands at 11, as the model has it
+const M0 = (() => { const L = follow(resize(placed([box('A', 1, 1, 0), box('B', 1, 2, 11), box('P', 10, 10, 1), box('Q', 10, 10, 4)]), 'A', 2)); return relink(L, L, {}, null, DEFAULT); })();
+const shiftB = (pass) => {
+  const out = relink(M0, edit(M0, (m, set) => { set('B', { col: 1, w: 3, y: 13, yc: 13 }); if (pass) set('P', { y: 10, yc: 10 }); }), pass ? { B: steps([1, 1]), P: steps([2, 9]) } : { B: steps([1, 1]) }, null, DEFAULT);
+  const back = relink(out, edit(out, (m, set) => set('B', { col: 1, w: 2 })), {}, null, DEFAULT);
+  return [rows(out).B, stack(out, 'B', 2), rows(back).B];
+};
+eq('5k a pass in columns far away changes nothing of a block that moves and shifts its columns', [shiftB(false), shiftB(true)], [[13, 'top | _11 |', 11], [13, 'top | _11 |', 11]]);
 const D0 = placed([box('U', 1, 1, 0), box('A', 1, 1, 3), box('D', 1, 1, 6)]);
 const up = relink(D0, edit(D0, (m, set) => set('D', { y: 1, yc: 1 })), { D: steps([1, -5]) }, null, DEFAULT);
 eq('5a no carried block: D moved up past A is the one displaced, not A, which stays; D comes in at its target, in A\'s gap', [rows(up), stack(up, 'A', 1)], [{ A: 3, D: 1, U: 0 }, 'U | · [D:U1] U1 |']);
