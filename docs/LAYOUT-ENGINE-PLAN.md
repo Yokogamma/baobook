@@ -334,8 +334,9 @@ Every visit is in reading order of the layout its phase starts from, ties by id,
 ### 4.3 Measuring (E-3)
 
 ```js
-/** @typedef {{rows(id:string, cells:number):{rows:number, shown:number}, natural(id:string):number}} Measure
- *   // by block id: rows the canonical height at that width, shown the displayed one, with its temporary heights (rows ≤ shown);
+/** @typedef {{rows(id:string, cells:number):{rows:number, shown:number, lines:number}, natural(id:string):number}} Measure
+ *   // by block id: rows the canonical height at that width, shown the displayed one, with its temporary heights (rows ≤ shown), lines the
+ *   // content's lines, wrapped or not, by which a code block folds as today;
  *   // the browser's measure reads the content through the bridge, the Node stub from a map id → {kind, text, wrap, temp} */
 ```
 
@@ -347,19 +348,20 @@ Every visit is in reading order of the layout its phase starts from, ties by id,
 ### 4.4 Passports (E-4)
 
 ```js
-/** @typedef {{width:'text'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):{rows:number, shown:number}, hides:boolean, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
+/** @typedef {{width:'text'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):{rows:number, shown:number}, hides:boolean, container:null|{headerRows(box:Box, measure:Measure):number, height(box:Box, inner:number, measure:Measure):number}}} Kind
  *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'set', `cw` always.
  *  minCells: the kind's own floor, under SIZE's min(natural width, MINC): code's header, 12 cells (MINW_CODE), an area's 12, a text's one cell;
  *  the engine keeps no kind's minimum of its own.
  *  hides: whether its empty lines at the start and the end may hide (SIZE.7): a text's true, the others false; read by nothing until 0.2.
- *  rows: a leaf's rows at a width; for an area the passport gives only its header (`headerRows`, measured: today's header wraps on a narrow
- *  area, `areaMeasure`) and its `ch`; the area's height is its children's layout plus the header, from the engine's recursion (LAYOUT-RULES §5.4) */
+ *  rows: a leaf's rows at a width, canonical and displayed; for an area the passport gives its header (`headerRows`, measured: today's
+ *  header wraps on a narrow area) and its height (`height`: the header plus the rows its children take, which the engine's recursion
+ *  gives it, or its `ch` when larger, the header alone when collapsed; LAYOUT-RULES §5.4) */
 ```
 
 | Kind | Elastic | Width | Shown height | Container |
 |---|---|---|---|---|
 | text | `text` unless `cw` | SIZE.1, `TEXTW`, `MINC` | content rows, or `ch` when larger | no |
-| code | `text` unless `cw` (W14) | as a text: its natural width its longest line, at most `TEXTW`, giving way by SIZE.2; never below its header's 12 cells, its passport's `minCells` (`MINW_CODE`) | as today: folded at `ch` unless `open`; its lines wrap or scroll sideways by its `wrap` | no |
+| code | `text` unless `cw` (W14) | as a text: its natural width its longest line, at most `TEXTW`, giving way by SIZE.2; never below its header's 12 cells, its passport's `minCells` (`MINW_CODE`) | as today: folded at `ch`, or with no `ch` at 12 lines when it has more than 14 (`COLLAPSE_AT`, `SHOW`, `index.html` 983), unless `open`, plus the row of «Розгорнути»; the fold counts the content's lines, which the measure gives; its lines wrap or scroll sideways by its `wrap` | no |
 | area | `set` | `cw`, at least 12 cells as today (`minCells`) | header plus its children's rows, or `ch` when larger; the header only when collapsed | yes: its header's rows |
 
 **One fold.** The engine knows one fold: the rows shown plus one row for «Розгорнути» when the content is longer (SIZE.6). In 0.1 only code has one, read by its passport from its `ch` unless `open`, as today. 0.2 gives every kind that folds one standard stored field and one look and command (A3), so the engine does not change for it.
@@ -527,6 +529,7 @@ Today's structural undo is one stack per note (`offerUndo`, `index.html` 2618): 
 
 ## Review log
 
+- **The code reviews of step 1** (2026-11-05, PR #132; an internal review and the independent one). Fixed in `gap.js`: an arrival's reference when another block passed it; which block counts as passing; a created block not carried; a deletion inside RELINK; the order of the departures from a column; the rows the first step starts from after a height changed; an undo's carry back in the columns it keeps; `check()` on a broken stack; ids compared as lists, never joined. In `kinds.js`: a code block with no `ch` folds at 12 lines when it has more than 14, as today, so the `Measure` gives the content's `lines` (§4.3, §4.4); an area's passport gives its height, collapsed or by `ch` (`container.height`). `geometry.js`: an area's right free column inside its container (`LAYOUT-RULES.md` §1.1, proposed). Each with its case in `tests/layoutgap-*.mjs`, `layoutsize.mjs` or `layoutgeometry.mjs`.
 - **Round 12 of the independent review** (2026-11-05, head `501c7b6`; no finding). The three fixes of round 11 resolved; the signature check of §6.4 covers deleted blocks and an empty container, and no other input of a restored layout is missing within 0.1's scope. Verdict: step 1 uses the lab model as the strict GAP oracle, and step 3's undo is built on §6.4.
 - **Round 11 of the independent review** (2026-11-05, head `f6717c8`; 2 major, 1 minor, no blocker; the opening prepass found sufficient for step 2). (1) A cap made when a height was written was lost when phase 9 (c) relinked from the layout after phase 8: `cap` is RELINK's alone, after rule 2, against `after`'s heights, and `resize` only sets `h` and `t` (§2, §2.1, §4.3; `LAYOUT-RULES.md` GAP.4). (2) An exact undo could put back a deleted block whose measurement changed while only the entry held it (a linked note renamed): the entry records the signature of every block it would put back, and the exact path needs each to be today's (§6.4, step 3's cases). (3) The model's `width` with a new height is checked at that height (`LAYOUT-RULES.md`'s log).
 - **Round 10 of the independent review** (2026-11-05, head `7319b8b`; 2 major, 4 minor, no blocker; round 9's fixes confirmed, the representation kept). (1) With `cap` out of FOLLOW, a height lowered after phase 1a (a text widened to its rest width in phase 9 (a), a width handle) kept a lend longer than the block: `gap.js`'s `resize` is now the one writer of `h` and `t` and calls `cap`, and RELINK starts with it against `after`'s heights (§2, §2.1, §4.3; `LAYOUT-RULES.md` GAP.4). (2) An undo's exact path was allowed while the layout was equal, though new content or new rules could need another one: an identity is now fresh for every change of a measurement signature or of the rules, and only a measure of the same inputs keeps it (§6.4, step 3's cases). (6) `open()` could not run as an ordinary change kind before any stack exists: steps 0–2 are a stack-free prepass in `layout.js`, then GAP.1, then phases 9 and 10 through `settle.js`'s `rest` (§2.1, §3.5, step 2's case of a valid note opened as stored). The model's three findings and their rules are in `LAYOUT-RULES.md`'s log; the model has a case for each finding but the measure's.

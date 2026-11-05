@@ -344,69 +344,93 @@ function adjustWork(W, steps) {
   }
 }
 
-/** The blocks of a column whose place in the chain differs between base and after (a swap, a block carried past a neighbour, GAP.5): the
- *  carried block when taking it out makes the two orders agree, otherwise the blocks out of the longest common order. */
-function displaced(W, c, afterOrder, carried) {
+const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);   // ids may hold any character, so never join() them
+
+/** The blocks of a column whose place in the chain differs between base and after (a swap, a block carried or moved past a neighbour,
+ *  GAP.5): the fewest that explain the change, a block that moved before any that did not, the carried block first of all. That is the
+ *  heaviest subsequence of after's order that keeps base's order, a block that did not move weighing more than every block that did, a
+ *  block of `moves` more than the carried one; the blocks out of it are displaced. @param {Map<string,number>} weightOf */
+function displaced(W, c, afterOrder, weightOf) {
   const inAfter = new Set(afterOrder), was = seq(W, c).map((el) => el.id).filter((id) => inAfter.has(id));
-  const now = afterOrder.filter((id) => was.includes(id));
-  if (was.join() === now.join()) return [];
-  if (carried && was.includes(carried)) { const a = was.filter((id) => id !== carried), b = now.filter((id) => id !== carried); if (a.join() === b.join()) return [carried]; }
-  const pos = new Map(was.map((id, i) => [id, i])), seqIdx = now.map((id) => pos.get(id));
-  const best = []; const len = seqIdx.map(() => 1), prev = seqIdx.map(() => -1);   // the longest increasing subsequence keeps its blocks
-  for (let i = 0; i < seqIdx.length; i++) for (let j = 0; j < i; j++) if (seqIdx[j] < seqIdx[i] && len[j] + 1 > len[i]) { len[i] = len[j] + 1; prev[i] = j; }
-  let k = len.indexOf(Math.max(...len)); while (k >= 0) { best.push(now[k]); k = prev[k]; }
-  const keep = new Set(best); return now.filter((id) => !keep.has(id));
+  const inBase = new Set(was), now = afterOrder.filter((id) => inBase.has(id));
+  if (sameList(was, now)) return [];
+  const pos = new Map(was.map((id, i) => [id, i])), idx = now.map((id) => pos.get(id)), wt = (id) => weightOf(id, now.length);
+  const best = now.map(wt), prev = now.map(() => -1);
+  for (let i = 0; i < now.length; i++) for (let j = 0; j < i; j++) if (idx[j] < idx[i] && best[j] + wt(now[i]) > best[i]) { best[i] = best[j] + wt(now[i]); prev[i] = j; }
+  let k = 0; for (let i = 1; i < now.length; i++) if (best[i] > best[k]) k = i;
+  const keep = new Set(); while (k >= 0) { keep.add(now[k]); k = prev[k]; }
+  return now.filter((id) => !keep.has(id));
+}
+
+// rule 2 for every block of `out` (id → the columns it leaves), column by column, each column's blocks top to bottom in its chain as it stands
+function departAll(V, out, whyOf, ys) {
+  const byCol = new Map();
+  for (const [id, cs] of out) for (const c of cs) { if (!byCol.has(c)) byCol.set(c, new Set()); byCol.get(c).add(id); }
+  for (const c of [...byCol.keys()].sort((a, b) => a - b)) {
+    const order = seq(V, c).map((el) => el.id).filter((id) => byCol.get(c).has(id));
+    for (const id of order) leave(V, V.B.get(id), c, whyOf(id), ys);
+  }
 }
 
 /** GAP.5 RELINK, in one container: the stacks of `after`, a layout SETTLE made from `base` (its rows are targets), with `moves` the steps that
- *  moved its blocks. In each column: every block that left it, top to bottom (rule 2, by what base gave it); `cap` against after's heights
- *  (G7); the steps of `moves` (rule 1); every block that came into it, top to bottom (rules 3 and 4): the carried block at its displayed
- *  target, or by its canonical row for an undo, every other at its reference (rule 1 replayed on a copy of base's stacks, every block in its
- *  columns, then canonical FOLLOW); then rule 5 and FOLLOW, whose rows are the result. The carried block leaves as carried away, a block in
- *  base and not in after as deleted, every other as narrowed or pressed off.
+ *  moved its blocks. A block of base missing from after is taken away first, by GAP.6, as phase 1b does. Then, in each column: every block
+ *  that left it, top to bottom in its chain (rule 2, by what base gave it); `cap` against after's heights (G7); the steps of `moves` (rule 1),
+ *  the first measured at the rows FOLLOW gives over base's stacks with after's heights; every block that came into it, top to bottom (rules 3
+ *  and 4): at its displayed target the carried block, a created one (not in base) and a block in a column whose chain it passed in;
+ *  by its canonical row in every column the carried block of an undo ({id, canonical: true}), which leaves all its columns for it; every
+ *  other at its reference (rule 1 replayed on a copy of base's stacks, every block keeping its columns but those it passed in, then
+ *  canonical FOLLOW); then rule 5 and FOLLOW, whose rows are the result. The carried block leaves as carried away, every other block as
+ *  narrowed or pressed off.
  *  @param {Layout} base @param {Layout} after @param {Map<string,Moved>|Object<string,Moved>} moves @param {?(string|Carried)} carried
  *  @param {Rules} rules @returns {Layout} */
 export function relink(base, after, moves, carried, rules) {
   const cid = carried == null ? null : typeof carried === 'string' ? carried : carried.id, canonical = !!(carried && carried.canonical);
-  const W = work(base, rules), steps = stepsOf(moves);
+  let b0 = base; for (const id of base.order) if (!after.boxes.has(id)) b0 = remove(b0, id, rules);
+  const W = work(b0, rules), steps = stepsOf(moves);
   const tgt = new Map(); for (const id of after.order) tgt.set(id, gapBlock(after.boxes.get(id)));   // after, in GAP's coordinates: rows are targets
   const canonTarget = (id) => { const b = after.boxes.get(id); return (b.yc ?? b.y) - (isArea(b) ? 1 : 0); };
   const setHeights = (V) => { for (const [id, t] of tgt) if (V.B.has(id)) { const b = V.B.get(id); b.h = t.h; b.e = t.e; } };
-  // the canonical rows of base, by which rule 2 measures; and every arrival's reference, on a copy, every block keeping its columns
-  const ys = rowsIn(W, 'canonical');
-  // (rule 1 measures each step's slack at the rows it starts from: the first at base's, as SETTLE's moves are relative to base)
-  const R = copyWork(W); setHeights(R); adjustWork(R, steps); const ref = rowsIn(R, 'canonical');
-  // who leaves and who comes into which column
+  const why = (id) => (id === cid ? 'away' : 'narrow');
+  const ys = rowsIn(W, 'canonical');   // the canonical rows of base, by which rule 2 measures
+  // who leaves and who comes into which column; who passed whom in a column's chain
   const afterCols = new Map(); for (const [id, t] of tgt) for (const c of cols(t)) { if (!afterCols.has(c)) afterCols.set(c, []); afterCols.get(c).push(id); }
   for (const list of afterCols.values()) list.sort((a, b) => tgt.get(a).y - tgt.get(b).y || byId(a, b));
-  const out = new Map(), into = new Map();   // id → columns it leaves, columns it comes into
+  const out = new Map(), into = new Map(), passed = new Map();   // id → columns it leaves, comes into, passed another block in
   const add = (m, id, c) => { if (!m.has(id)) m.set(id, new Set()); m.get(id).add(c); };
-  for (const b of W.B.values()) { const t = tgt.get(b.id); for (const c of cols(b)) if (!t || !covers(t, c)) add(out, b.id, c); }
+  for (const b of W.B.values()) { const t = tgt.get(b.id); for (const c of cols(b)) if (!covers(t, c)) add(out, b.id, c); }
   for (const [id, t] of tgt) { const b = W.B.get(id); for (const c of cols(t)) if (!b || !covers(b, c)) add(into, id, c); }
-  for (const [c, list] of afterCols) for (const id of displaced(W, c, list, cid)) { add(out, id, c); add(into, id, c); }
-  const rowOf = (id) => (tgt.has(id) ? tgt.get(id).y : W.B.get(id).y), c0Of = (id) => (W.B.has(id) ? W.B.get(id).c0 : tgt.get(id).c0);
-  const topDown = (ids) => [...ids].sort((a, b) => rowOf(a) - rowOf(b) || c0Of(a) - c0Of(b) || byId(a, b));
-  const arrivals = topDown(into.keys());   // ordered before anything changes columns, as the departures are
-  // rule 2, top to bottom
-  for (const id of topDown(out.keys())) {
-    const x = W.B.get(id), why = !tgt.has(id) ? 'delete' : id === cid ? 'away' : 'narrow';
-    for (const c of [...out.get(id)].sort((a, b) => a - b)) leave(W, x, c, why, ys);
-    if (!tgt.has(id)) W.B.delete(id);
-  }
+  const moving = new Set(); for (const [ids] of steps) for (const id of ids) moving.add(id);
+  const weightOf = (id, n) => (id === cid ? 1 : moving.has(id) ? n + 1 : (n + 1) * (n + 1));
+  for (const [c, list] of afterCols) for (const id of displaced(W, c, list, weightOf)) { add(out, id, c); add(into, id, c); add(passed, id, c); }
+  if (canonical && W.B.has(cid)) { for (const c of cols(W.B.get(cid))) add(out, cid, c); for (const c of cols(tgt.get(cid))) add(into, cid, c); }
+  const rowOf = (id) => tgt.get(id).y, c0Of = (id) => (W.B.has(id) ? W.B.get(id).c0 : tgt.get(id).c0);
+  const arrivals = [...into.keys()].sort((a, b) => rowOf(a) - rowOf(b) || c0Of(a) - c0Of(b) || byId(a, b));
+  // the rows each step starts from: FOLLOW over base's stacks with after's heights, since a height a phase changed is no move
+  const S = copyWork(W); setHeights(S); const start = rowsIn(S, 'shown');
+  // every arrival's reference, on a copy: the blocks that passed others in a column out of it, so that they push nothing they passed
+  const R = copyWork(W), inR = new Map();
+  for (const [id, cs] of passed) inR.set(id, cs);
+  if (canonical && R.B.has(cid)) inR.set(cid, new Set(cols(R.B.get(cid))));
+  departAll(R, inR, why, ys);
+  setHeights(R); for (const b of R.B.values()) b.y = start.get(b.id);
+  adjustWork(R, steps); const ref = rowsIn(R, 'canonical');
+  // rule 2, column by column, top to bottom in each chain
+  departAll(W, out, why, ys);
   // the heights and columns of after (a new block at its target, in no chain yet); G7 for every block still standing; rule 1
   for (const [id, t] of tgt) if (!W.B.has(id)) W.B.set(id, { ...t });
   setHeights(W); for (const [id, t] of tgt) { const b = W.B.get(id); b.c0 = t.c0; b.c1 = t.c1; }
   capAll(W);
+  for (const b of W.B.values()) if (start.has(b.id)) b.y = start.get(b.id);
   adjustWork(W, steps);
   // rules 3 and 4, top to bottom, every block at the row SETTLE gave it
   const now = rowsIn(W, 'canonical');
   for (const b of W.B.values()) b.y = tgt.get(b.id).y;
   for (const id of arrivals) {
-    const x = W.B.get(id), list = [...into.get(id)].sort((a, b) => a - b);
+    const x = W.B.get(id), list = [...into.get(id)].sort((a, b) => a - b), mine = passed.get(id) || new Set();
     if (id === cid && canonical) { const ys2 = new Map(now); ys2.set(id, canonTarget(id)); for (const c of list) enter(W, x, c, ys2, true); continue; }
-    if (id === cid) { for (const c of list) enter(W, x, c); continue; }
-    now.set(id, ref.has(id) ? ref.get(id) : canonTarget(id));
-    for (const c of list) enter(W, x, c, now);
+    const onScreen = id === cid || !base.boxes.has(id);   // carried, or created: measured on the screen, as the user aims at what is shown
+    now.set(id, base.boxes.has(id) ? ref.get(id) : canonTarget(id));
+    for (const c of list) { if (onScreen || mine.has(c)) enter(W, x, c); else enter(W, x, c, now); }
   }
   followWork(W);
   // rule 5: the moved blocks and the carried one, to the rows SETTLE gave them
@@ -472,7 +496,28 @@ export function stackAt(layout, l, c) {
 /** INV-1 in both measures, the canonical rows never below the displayed ones, INV-3 (the chains are the blocks of each column in row order,
  *  every owner covers its column, no lend longer than its block's canonical height) and INV-2 (the rows are FOLLOW's). @returns {string[]} */
 export function check(layout) {
-  const errs = [], W = work(layout, null), bs = [...W.B.values()], yc = rowsIn(W, 'canonical'), ys = rowsIn(W, 'shown');
+  const errs = [];
+  let W; try { W = work(layout, null); } catch (e) { return ['unreadable: ' + e.message]; }
+  // the stacks' shape first, so that a stale or broken stack is reported, never thrown: every stack's anchor and u in its column, its parts
+  // alternating seg and stand, every stand a block of the layout in that column, every stack reached from the top of its column
+  const stackCols = new Set();
+  for (const [k, st] of W.S) {
+    const l = anchorOf(k), c = colOf(k); stackCols.add(c);
+    if (!W.B.has(l) || !covers(W.B.get(l), c)) errs.push(`stack ${k}: ${l} does not cover column ${c}`);
+    if (st.u != null && !(W.B.has(st.u) && covers(W.B.get(st.u), c))) errs.push(`stack ${k}: its u ${st.u} is not in column ${c}`);
+    if (!Array.isArray(st.parts) || st.parts.length % 2 !== 1) { errs.push(`stack ${k}: its parts do not alternate seg and stand`); continue; }
+    st.parts.forEach((p, i) => {
+      if (!isStand(i)) { if (!Array.isArray(p)) errs.push(`stack ${k}: part ${i} is no seg`); return; }
+      if (!p || !W.B.has(p.id) || !covers(W.B.get(p.id), c)) errs.push(`stack ${k}: a stand of ${p && p.id}, which is not in column ${c}`);
+    });
+  }
+  if (!errs.length) for (const c of stackCols) {
+    let reached; try { reached = new Set(chain(W, c)); } catch (e) { errs.push(e.message); continue; }
+    for (const k of W.S.keys()) if (colOf(k) === c && !reached.has(anchorOf(k))) errs.push(`stack ${k}: not reached from the top of column ${c}`);
+  }
+  if (errs.length) return errs;
+  let yc, ys; try { yc = rowsIn(W, 'canonical'); ys = rowsIn(W, 'shown'); } catch (e) { return [e.message]; }
+  const bs = [...W.B.values()];
   for (const [name, y, hh] of [['displayed', (b) => ys.get(b.id), (b) => b.h + b.e], ['canonical', (b) => yc.get(b.id), (b) => b.h]])
     for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const a = bs[i], b = bs[j];
       if (a.c0 <= b.c1 && b.c0 <= a.c1 && y(a) < y(b) + hh(b) && y(b) < y(a) + hh(a)) errs.push(`overlap ${a.id} ${b.id} (${name})`); }
@@ -482,8 +527,8 @@ export function check(layout) {
     if (box.y !== ys.get(b.id) + pad || (box.yc ?? box.y) !== yc.get(b.id) + pad) errs.push(`row of ${b.id} is not FOLLOW's`);
   }
   for (const c of allCols(W)) {
-    const got = seq(W, c).map((el) => el.id), want = bs.filter((b) => covers(b, c)).sort((a, b) => ys.get(a.id) - ys.get(b.id)).map((b) => b.id);
-    if (got.join() !== want.join()) errs.push(`column ${c}: chain ${got.join()} ≠ blocks ${want.join()}`);
+    const got = seq(W, c).map((el) => el.id), want = bs.filter((b) => covers(b, c)).sort((a, b) => ys.get(a.id) - ys.get(b.id) || byId(a.id, b.id)).map((b) => b.id);
+    if (!sameList(got, want)) errs.push(`column ${c}: chain ${JSON.stringify(got)} ≠ blocks ${JSON.stringify(want)}`);
   }
   for (const [k, st] of W.S) {
     const c = colOf(k), rows = st.parts.flatMap((p, i) => (isStand(i) ? p.lend : p));

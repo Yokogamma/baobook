@@ -30,4 +30,24 @@ const P = placed([box('X', 1, 1, 2), box('B', 1, 1, 6)]);
 const past = relink(P, edit(P, (m, set) => set('X', { y: 10 })), { X: steps([1, 8]) }, 'X', DEFAULT);
 eq('4 X carried down past B in their column: it leaves its place, taking its rows, B rises into it (G2), and X comes in under B', [rows(past), stack(past, 'B', 1), stack(past, 'X', 1)], [{ B: 2, X: 10 }, 'top | _2 |', 'B | B7 |']);
 clean('4a invariants', past);
+// the code review of step 1 (#132): blocks that pass others, two departures from one column, a deletion inside RELINK, ids of any form
+const Y0 = placed([box('X', 1, 1, 1), box('Y', 1, 2, 4)]);
+const pw = relink(Y0, edit(Y0, (m, set) => { set('X', { y: 10, yc: 10 }); set('Y', { w: 4 }); }), { X: steps([1, 9]) }, 'X', DEFAULT);
+eq('5 X carried past Y while Y widens into column 3 by itself: Y\'s reference is not pushed by X, so Y stays at 4', [rows(pw), stack(pw, 'Y', 3)], [{ X: 10, Y: 4 }, 'top | _4 |']);
+const D0 = placed([box('U', 1, 1, 0), box('A', 1, 1, 3), box('D', 1, 1, 6)]);
+const up = relink(D0, edit(D0, (m, set) => set('D', { y: 1, yc: 1 })), { D: steps([1, -5]) }, null, DEFAULT);
+eq('5a no carried block: D moved up past A is the one displaced, not A, which stays; D comes in at its target, in A\'s gap', [rows(up), stack(up, 'A', 1)], [{ A: 3, D: 1, U: 0 }, 'U | · [D:U1] U1 |']);
+clean('5b invariants', up);
+const T0 = placed([box('X', 1, 1, 1), box('Y', 1, 2, 4), box('L', 1, 2, 8)]);
+const two = relink(T0, edit(T0, (m, set) => { set('X', { y: 12, yc: 12 }); set('Y', { col: 1, w: 2 }); }), { X: steps([1, 11]) }, 'X', DEFAULT);
+eq('6 two departures from column 1 in one RELINK, X carried past L and Y narrowed off: top to bottom in the chain, so Y\'s body stays (GAP.9)', [rows(two), stack(two, 'L', 1), rows(remove(two, 'Y', DEFAULT)).L], [{ L: 8, X: 12, Y: 4 }, 'top | _8 |', 8]);
+for (const [del, nar] of [['Z', 'A'], ['A', 'Z']]) {
+  const Z0 = placed([box(del, 1, 1, 1), box(nar, 1, 2, 4), box('L', 1, 2, 7)]);
+  const inside = relink(Z0, edit(Z0, (m, set) => { m.delete(del); set(nar, { col: 1, w: 2, y: 0, yc: 0 }); }), { [nar]: steps([1, -4]) }, null, DEFAULT);
+  const g = remove(Z0, del, DEFAULT), first = relink(g, edit(g, (m, set) => set(nar, { col: 1, w: 2, y: 0, yc: 0 })), { [nar]: steps([1, -4]) }, null, DEFAULT);
+  eq(`7 a block deleted inside RELINK (${del}) is taken away first, as GAP.6 in phase 1b: the same stacks, whatever the ids`, [rows(inside), stack(inside, 'L', 1), rows(remove(inside, nar, DEFAULT)).L], [rows(first), stack(first, 'L', 1), rows(remove(first, nar, DEFAULT)).L]);
+}
+const C0 = placed([box('a', 1, 1, 2), box('a,a', 1, 1, 6)]);
+const cm = relink(C0, edit(C0, (m, set) => set('a,a', { y: 0, yc: 0 })), { 'a,a': steps([1, -6]) }, 'a,a', DEFAULT);
+eq('8 ids that hold a comma: «a,a» carried above «a» is seen passing it', rows(cm), { a: 2, 'a,a': 0 });
 done();
