@@ -2,7 +2,7 @@
 
 ## Round 5 (2026-11-05)
 
-Thank you for round 4 ([your comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6644095368)). Every finding was fixed first in the lab model, with your executed examples as its named cases, and then in the text. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/281c630...ccr-fde1eaa8-r7b10i>.
+Thank you for round 4 ([your comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6644095368)). Every finding was fixed first in the lab model, with your executed examples as its named cases, and then in the text. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/281c630...2db3b0e>.
 
 **What changed.**
 
