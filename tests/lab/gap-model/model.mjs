@@ -247,6 +247,18 @@ export function createModel(opts = {}) {
       return api;
     },
     carry(id, d) { return api.move([id], d); },
+    _fit(targets) {   // rule 5: a block SETTLE put lower than FOLLOW over the stacks puts it (targets: id → displayed row) gets, in its
+      // binding stack, the rows it lacks, owned by that stack's u; a block FOLLOW puts lower than its target stays there: no stack is cut
+      for (const [id, t] of Object.entries(targets)) {
+        const x = B.get(id); if (t <= x.y) continue;
+        for (const c of cols(x)) {
+          const f = seq(c).find((el) => el.id === id), st = f.st, i = f.i >= 0 ? f.i - 1 : st.parts.length - 1;
+          if (x.y === spans(st)[i][1]) { st.parts[i] = [...st.parts[i], ...Array(t - x.y).fill(heirOf(st))]; break; }
+        }
+        follow();
+      }
+      return api;
+    },
     _carryTo(id, c0, c1, y) {   // carried away to other columns (DRAG.B1, GAP.7): rule 2 where it was, rule 3 or 4 where it lands
       const x = B.get(id); if (!(c0 <= c1)) throw new Error('no columns');
       if (overlaps({ ...x, c0, c1, y }, id)) throw new Error('carry overlaps');
@@ -270,7 +282,7 @@ export function createModel(opts = {}) {
     },
     check() { return invariants(); },
   };
-  for (const name of ['insert', 'remove', 'height', 'show', 'width', 'move', 'carryTo']) { api[name] = atomic(api['_' + name]); delete api['_' + name]; }
+  for (const name of ['insert', 'remove', 'height', 'show', 'width', 'move', 'carryTo', 'fit']) { api[name] = atomic(api['_' + name]); delete api['_' + name]; }
 
   function overlaps(x, except, moving) {   // in the displayed layout; blocks moving in the same step keep their places to one another
     for (const b of B.values()) {

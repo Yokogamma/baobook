@@ -9,12 +9,12 @@ node tests/lab/gap-model/test.mjs [number of random sequences, 2000 by default]
 - `model.mjs`: the state and the events RELINK sees column by column.
   - **The state.** The blocks, each with its canonical height `h` and the rows `e` a temporary height adds while it lasts. For every block and every column where it is an anchor, a stack: the anchor above or the top, the gap's rows with their owners, and the blocks standing in it. Each standing block has its lend, the rows its body covers by its canonical height, at most `h`. A temporary height pushes what is under its block on the screen and writes nothing. A block put lower than the gap reaches has the room above it as its own rows.
   - **FOLLOW.** It runs in both measures: displayed, which every operation works on, and canonical, which is stored.
-  - **The events.** A block comes into a column, leaves it, changes its real height, or gets or ends a temporary height. One block or several move in one step (`move`, `carry`), or a block is carried away to other columns (`carryTo`). A dropped block is placed at its displayed row; a block that comes into a column by itself (`width`), at its canonical row. A move is made on the displayed layout; canonically the block moves the same way, at most as far.
+  - **The events.** A block comes into a column, leaves it, changes its real height, or gets or ends a temporary height. `fit` gives a block SETTLE put lower than its stacks hold it the rows it lacks, and never cuts a stack. One block or several move in one step (`move`, `carry`), or a block is carried away to other columns (`carryTo`). A dropped block is placed at its displayed row; a block that comes into a column by itself (`width`), at its canonical row. A move is made on the displayed layout; canonically the block moves the same way, at most as far.
   - **Switches.** `gap8` and `gap9` are the switches `GAP.8` and `GAP.9`.
   - **Storage.** `save`/`load` keep the whole state; `stored` is what 0.2 stores, `places` what 0.1 stores.
 - `test.mjs` has named cases and random sequences.
   - **Named cases**, asserting rows and owners:
-    - the examples of the four rounds of the independent review (PR #124);
+    - the examples of the five rounds of the independent review (PR #124), round 5's for the engine's contract: `fit` after an entry at the canonical row, rigid steps, the projection of an old cell for the inverse undo;
     - G5–G8 and lesson 18;
     - both states of the switches.
   - **Random sequences.**

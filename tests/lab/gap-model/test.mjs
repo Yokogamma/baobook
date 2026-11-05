@@ -241,6 +241,31 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   const p = createModel().open([blk('A', 1, 1, 0), blk('X', 1, 1, 3), blk('S', 2, 2, 10), blk('L', 2, 2, 20)]).show('A', 8).width('X', 1, 2);
   eq([p.rows('canonical').X, p.stack('L', 2), p.show('A', 0).rows().X], [11, 'S | · [X:S1] S8 |', 11], 'measures: X, carried past S on the screen by A\'s temporary rows, widened under S: the order on the screen wins and X stays under S');
 }
+// ---- round 5: the integration of the two measures and of the steps
+{
+  // (1) fit after a canonical entry: SETTLE's rows are only targets; FOLLOW over the new stacks gives the rows, and no stack is cut
+  const m = createModel().open([blk('A', 1, 1, 0), blk('X', 1, 1, 3), blk('S', 2, 2, 0), blk('L', 2, 2, 20)]).show('A', 8).width('X', 1, 2);
+  eq([m.rows().X, m.rows('canonical').X, m.rows().L, m.rows('canonical').L, m.stack('L', 2)], [11, 3, 28, 20, 'S | S2 [X:S1] S16 |'], 'r5.1: X widened under A shown taller: canonical row kept, L pushed on the screen only');
+  const before = m.snapshot(); m.fit({ X: 11, L: 20 });
+  eq(m.snapshot() === before, true, 'r5.1: fit with the rows SETTLE had (L still at 20) changes nothing: L stands where FOLLOW puts it, no row is cut');
+  eq([m.show('A', 0).rows().L, m.stack('L', 2)], [20, 'S | S2 [X:S1] S16 |'], 'r5.1: A folds: L back at 20, the gap whole');
+  const f = createModel().open([blk('A', 1, 1, 0), blk('L', 1, 1, 5)]).fit({ L: 7 });
+  eq([f.rows().L, f.stack('L', 1)], [7, 'A | A6 |'], 'r5.1: a block SETTLE put lower than its stacks hold it gets the rows it lacks, of its stack\'s u');
+  // (2) a primitive that moves blocks by different rows reports one rigid step per common part, in order: P-UP leaving A=0, B=1, X=2
+  const p = createModel().open([blk('A', 1, 1, 2), blk('B', 1, 1, 6), blk('X', 1, 1, 8)]);
+  p.move(['B'], -3).move(['A', 'B'], -2).move(['X'], -6);
+  eq([p.rows(), p.stack('A', 1), p.stack('B', 1), p.stack('X', 1)], [{ A: 0, B: 1, X: 2 }, 'top | · |', 'A | · |', 'B | · |'], 'r5.2: B up 3, then A and B up 2, then X up 6: every gap closed as the moves say');
+  const q = createModel().open([blk('U', 1, 1, 0), blk('A', 1, 1, 4), blk('B', 1, 1, 7), blk('X', 1, 1, 9)]).move(['B'], -2).move(['A', 'B'], -1);
+  eq([q.rows(), q.stack('A', 1), q.stack('B', 1), q.stack('X', 1)], [{ A: 3, B: 4, U: 0, X: 9 }, 'U | U2 |', 'A | · |', 'B | U1+A2+B1 |'], 'r5.2: the rows each step leaves come under the run that moved, with their owners');
+  // (4) the inverse undo projects an old canonical row into the displayed layout by the push at it
+  const u = createModel().open([blk('A', 1, 1, 0), blk('X', 1, 1, 3)]).show('A', 8).carry('X', 1);
+  eq([u.rows().X, u.rows('canonical').X], [12, 4], 'r5.4: X moved down one under A shown taller');
+  let inside = false; try { u.carry('X', 3 - u.rows().X); } catch { inside = true; }
+  eq(inside, true, 'r5.4: the old canonical row 3 used as a displayed target lies inside A shown taller: refused');
+  const push = u.rows().A + u.B.get('A').h + u.B.get('A').e - (u.rows('canonical').A + u.B.get('A').h);   // the block right above: its displayed bottom less its canonical bottom
+  u.carry('X', 3 + push - u.rows().X);
+  eq([u.rows().X, u.rows('canonical').X, u.stack('X', 1)], [11, 3, 'A | A2 |'], 'r5.4: projected by the push at it (8): displayed 11, canonical 3, the gap as it was');
+}
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);

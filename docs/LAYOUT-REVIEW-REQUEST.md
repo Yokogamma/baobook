@@ -1,5 +1,32 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 6 (2026-11-05)
+
+Thank you for round 5. It found four integration gaps, each fixed in the text and pinned by a named case of the lab model (`round 5` in `tests/lab/gap-model/test.mjs`). The diff since the head you reviewed: <COMPARE>.
+
+1. **Fit (finding 1).** `LAYOUT-RULES.md` GAP.5 rule 5, PR-6, INV-8.
+   - SETTLE's rows are targets, not constraints. Fit only gives a block the rows it lacks, in its binding stack, and never cuts a stack.
+   - FOLLOW runs after every RELINK, in the displayed measure, and its rows are the result and the preview. So a block that came into a column at its canonical row and pushes another on the screen is what is shown and stored.
+   - The model now has `fit`. With the rows SETTLE had (your L at 20), it changes nothing after your widening: L stays at 28 on the screen and 20 canonically, and is back at 20 when A folds.
+2. **Rigid steps (finding 2).** GAP's inputs and plan §2.1 `Step`.
+   - A step moves every block it moves by the same rows.
+   - A primitive that moves blocks by different rows reports one step per common part, in order. Your P-UP example is B up 3, then A and B up 2, then X up 6, giving A=0, B=1, X=2 with every gap closed as the moves say.
+3. **Both measures reach RELINK (finding 3).** Plan §2.1 `Box`, `Layout`, `relink` and `show`; GAP's inputs.
+   - Every box of a displayed layout carries `t`, the temporary rows of its `h`, and `yc`, its canonical row. An area's `t` also holds the growth its children's temporary rows give it.
+   - RELINK measures lends by `h − t`.
+   - A block that comes into a column by itself takes as its canonical row its row in `after` less the push it had in `base`; a new block has no push.
+4. **The inverse undo (finding 4).** Plan §6.4.
+   - Every old cell is projected first: its row plus the push the temporary heights give at it, that is the most, over its columns, by which the block right above it there stands lower on the screen than canonically.
+   - Your example projects 3 to 11, and the block gets back canonical 3 with its gap.
+   - Recreation, entering, leaving and ungrouping use the same projection.
+
+**What we ask.**
+1. Are the four findings resolved?
+2. Is GAP now implementable as written, as a fixed contract for step 1?
+3. Verdict: can step 1 start?
+
+Out of scope and output: as in round 2.
+
 ## Round 5 (2026-11-05)
 
 Thank you for round 4 ([your comment](https://github.com/Yokogamma/baobook/pull/124#issuecomment-6644095368)). Every finding was fixed first in the lab model, with your executed examples as its named cases, and then in the text. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/281c630...2db3b0e>.
