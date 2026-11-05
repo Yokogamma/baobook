@@ -3,9 +3,9 @@
 // GAP.9 off; the carried block leaves the columns it leaves as carried away, though it keeps others; under the last anchor the lowest
 // standing block takes its place, the stack cleared with GAP.5.2 off; a block carried past a neighbour of a column it keeps counts as
 // leaving its old place and coming in at its new one (the engine's own case: the lab model keeps every chain's order).
-import { relink, remove } from '../public/layout/gap.js';
+import { relink, remove, follow, resize } from '../public/layout/gap.js';
 import { DEFAULT, resolve } from '../public/layout/rules.js';
-import { eq, done, box, placed, edit, stack, rows, steps, clean } from './lib/gapcase.mjs';
+import { eq, done, box, placed, edit, stack, rows, canon, steps, clean } from './lib/gapcase.mjs';
 
 const ins = (L, b, R = DEFAULT) => relink(L, edit(L, (m) => m.set(b.id, b)), {}, b.id, R);
 for (const on of [true, false]) {
@@ -34,6 +34,20 @@ clean('4a invariants', past);
 const Y0 = placed([box('X', 1, 1, 1), box('Y', 1, 2, 4)]);
 const pw = relink(Y0, edit(Y0, (m, set) => { set('X', { y: 10, yc: 10 }); set('Y', { w: 4 }); }), { X: steps([1, 9]) }, 'X', DEFAULT);
 eq('5 X carried past Y while Y widens into column 3 by itself: Y\'s reference is not pushed by X, so Y stays at 4', [rows(pw), stack(pw, 'Y', 3)], [{ X: 10, Y: 4 }, 'top | _4 |']);
+const V0 = placed([box('X', 1, 1, 6), box('Y', 1, 1, 2)]);
+const upw = relink(V0, edit(V0, (m, set) => set('X', { w: 3, y: 0, yc: 0 })), { X: steps([1, -6]) }, null, DEFAULT);
+eq('5d X moved up past Y while it widens into column 2: its own reference is where it came in above Y, row 0, and Y stays', [rows(upw), stack(upw, 'X', 2)], [{ X: 0, Y: 2 }, 'top | · |']);
+const P0 = placed([box('X', 1, 1, 1), box('Y', 1, 2, 4), box('Z', 2, 2, 7)]);
+const two2 = relink(P0, edit(P0, (m, set) => { set('X', { y: 10, yc: 10 }); set('Y', { w: 4, y: 8, yc: 8 }); }), { X: steps([1, 9]), Y: steps([2, 4]) }, null, DEFAULT);
+eq('5e X passes Y in column 1 and Y passes Z in column 2, Y widening into column 3: X does not push Y\'s reference', [rows(two2), stack(two2, 'Y', 3)], [{ X: 10, Y: 8, Z: 7 }, 'top | _8 |']);
+clean('5f invariants', two2);
+// T, two of its three rows temporary, moved past A in column 4 and A moved down a row while W widens into column 5 by itself: when T
+// leaves A's column, A shows two rows higher and rule 5 gives them back; W comes into column 5 after that, so the temporary rows push W on
+// the screen only and it rises to 16 when they end, as two RELINKs (the pass, then the widening) would leave it
+const G0 = follow(resize(placed([box('T', 3, 4, 2), box('A', 4, 5, 4), box('W', 4, 4, 14)]), 'T', 3, 2));
+const tw = relink(G0, edit(G0, (m, set) => { set('T', { y: 11 }); set('A', { y: 7 }); set('W', { w: 3 }); }), { T: steps([1, 9]), A: steps([2, 1]) }, null, DEFAULT);
+eq('5g a moved block given back the temporary rows of a block that passed it pushes nothing canonically into a column that comes in by itself', [rows(tw), canon(tw), stack(tw, 'W', 5), rows(follow(resize(tw, 'T', 1, 0)))], [{ A: 7, T: 11, W: 18 }, { A: 7, T: 11, W: 16 }, 'A | A8 |', { A: 7, T: 11, W: 16 }]);
+clean('5h invariants', tw);
 const D0 = placed([box('U', 1, 1, 0), box('A', 1, 1, 3), box('D', 1, 1, 6)]);
 const up = relink(D0, edit(D0, (m, set) => set('D', { y: 1, yc: 1 })), { D: steps([1, -5]) }, null, DEFAULT);
 eq('5a no carried block: D moved up past A is the one displaced, not A, which stays; D comes in at its target, in A\'s gap', [rows(up), stack(up, 'A', 1)], [{ A: 3, D: 1, U: 0 }, 'U | · [D:U1] U1 |']);
