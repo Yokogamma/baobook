@@ -1,6 +1,61 @@
 # Review request: the layout engine, plan for version 0.1
 
-**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. Its three minor findings, in the lab model's `step` helper and in one test property, were repaired before the model serves as a strict oracle for `gap.js`. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`; round 10 checks it.
+**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`. Round 10 checked it: no blocker, 2 major and 4 minor findings, fixed in `fb80595`; round 11 checks them.
+
+## Round 11 (2026-11-05)
+
+Thank you for round 10. All six findings are fixed, in the model first and then in the rules and the plan, in `fb80595`. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/7319b8b...fb80595>. Both review logs have an entry «Round 10 of the independent review».
+
+**The two major findings.**
+1. **G7 at every write of a height** (rules GAP.4, GAP.5, phases 1a and 9 (a), PR-6; plan §2, §2.1, §4.3).
+   - FOLLOW stays pure.
+   - A block's sizes are set only through `gap.js`'s `resize`. It sets `h` and `t` from the measure's two answers. When the canonical height falls, it calls `cap` before anything reads the new height or the stacks.
+   - Every phase that sets a size goes through it: 1a, 1c, 4, every pass of SIZE.8 in 9 (a), P-REST in 9 (b), and `open()`.
+   - RELINK starts with `cap` against `after`'s heights. Phase 9 (c) compares with the layout after phase 8, which was made before 9 (a) lowered a height.
+   - The model's `width` now takes the height the re-measure gives at the new width.
+   - Your case is «r10.1». X widens into a free column and gets one row tall. Its lend is cut at once, and L rises from 10 to 8 canonically (from 12 to 10 on the screen, under a temporary height of A). Deleting X then leaves L at 8.
+   - The random histories now include widths with new heights. Step 2 has the case through phase 9 (a), with no size change of its own (rules §13).
+2. **An undo's identity counts content and rules** (plan §6.4).
+   - An identity is fresh for every change of what the layout is made from, whether or not a row or a stack changed: an action, a change of any block's measurement signature in its containers, a change of the rules in effect, an undo.
+   - Only these keep it: a measure run again over the same signatures, a temporary height, a window, a scale, the looks.
+   - Step 3 has both of your cases. In the first, typing keeps a text one row at the new width, and the width is then undone. In the second, a rule is turned off and the note re-opens to an equal layout.
+   - The model's «r10.2» runs the GAP part: L ends at 10 after the exact path and at 4 after the inverse one.
+
+**The four minor findings.**
+3. **The carried block is always fitted** (model `step`).
+   - «r10.3» is your case: X ends at 17 in both measures, and B's stack reads `B | B16 |`.
+   - The random deletion histories now include sideways carries narrowed at an edge.
+4. **`GAP.5.2` off under the last anchor** (rules §1.6; model `leave`).
+   - The fallback clears there too: the promoted stack keeps no rows, and the blocks standing above keep no lend, as in a joined stack.
+   - «r10.4» pins both states with rows and lends: X=5, Y=7 with the switch on; X=0, Y=1 with it off.
+5. **The wall's intermediate state** (rules GAP.10, §5.2, phase 10, §5.6; model `side`).
+   - `shift` checks no containment. It runs in phase 1a, before `base`, so `base` holds the shifted stacks.
+   - Children past column 0 keep their stacks left of it until the wall presses them back in phase 4. P-SINK in phase 6 moves inside a child the wall could not press.
+   - RELINK in phase 8 sees each child leave those columns as pressed off and come into its new ones by itself.
+   - Phase 10 checks INV-4 once, after the wall. A child still outside refuses the handle (AREA.3).
+   - The model's `side(k, W)` runs this as one atomic change; the public `shift` keeps its guard.
+   - «r10.5» covers three cases:
+     - a child pressed back from column −1, every row unchanged;
+     - the handle stopping where two children cannot fit;
+     - a press into another child, which the model refuses because it has no P-ASIDE chain (the engine presses that child aside).
+6. **Opening is a stack-free prepass** (plan §2.1, §3.5).
+   - `open()` is no longer a change kind.
+   - Steps 0–2 run in `layout.js` with no stacks and no FOLLOW: sizes at the read places, every block clamped, and a separation loop of its own, in which a block goes down alone.
+   - Then GAP.1, then phases 9 and 10 through `settle.js`'s new export `rest`.
+   - Step 2 opens a valid note with a head row and a gap: its displayed and canonical rows equal the stored ones, and nothing is written. The model's «r10.6» checks the same.
+
+The model passes 181 checks with 2,000 random sequences; its other random suites now scale with the same argument.
+
+**What we ask.**
+1. Do the fixes close the six findings without a regression? Look in particular at:
+   - `cap` at the start of RELINK;
+   - the single RELINK of `side` for the wall;
+   - the `GAP.5.2` clearing under the last anchor.
+2. Is the identity rule of §6.4 complete? Can any input of a layout change between an action and its undo without a fresh identity?
+3. Is the opening prepass of §3.5 enough for step 2?
+4. Verdict: can the model be ported to step 1 as the strict oracle?
+
+Out of scope and output: as in round 2.
 
 ## Round 10 (2026-11-05)
 
