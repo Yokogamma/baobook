@@ -27,9 +27,13 @@ Thank you for round 4 ([your comment](https://github.com/Yokogamma/baobook/pull/
 
 **The random tests.** As you suggested, base blocks now also change width (coming in from the side) and show temporary heights, and inserted blocks come in showing taller. Carries of inserted blocks stay out of the paired histories (by G5 and G6 a move by hand changes gaps on purpose), and so do carries of base blocks (whether a gap holds a block depends on what the inserted blocks push). Carries and moves of several blocks are covered by the round-trip test.
 
-The paired histories are exact unless a base block came into a column, or left it, while it or that column did not stand as without the inserted blocks; then the stacks of every other column must agree (about 17% of the 4,000 sequences touch such a column). Further random tests:
+The paired histories run twice:
+- **Guarded.** Base blocks change width only while they all stand as without the inserted blocks, and never under one. Every row then agrees in both measures, and stacks may differ only in the columns those blocks touched (G4's order of arrival, 6 of 2,000 sequences).
+- **Unguarded.** The comparison is exact unless a base block came into a column, or left it, while it or that column did not stand as without the inserted blocks (about 15% of the sequences). Then the stacks of every other column must agree.
+
+Further random tests:
 - deletion never moves a block down, in either measure;
-- round trips under temporary heights put every block back on the screen, and canonically move a block at most once, down, by the slack it used;
+- round trips under temporary heights put every block back on the screen, and canonically move a block at most once, down, by the slack it used (a single move up leaves that slack as its own rows, so the blocks under it stand that much lower in the stored layout, INV-7 c);
 - ending every temporary height gives the canonical rows;
 - reloading what 0.2 and 0.1 store gives the same canonical layout.
 

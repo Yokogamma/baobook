@@ -325,7 +325,7 @@ function bases(r, n, W) {
   }
   return base;
 }
-function randomCase(seed) {
+function randomCase(seed, guarded = false) {
   const r = rng(seed), pick = (a) => a[Math.floor(r() * a.length)], int = (a, b) => a + Math.floor(r() * (b - a + 1));
   const W = 14, base = bases(r, 5, W);
   const m = createModel().open(base), o = createModel().open(base), ins = [], log = [];
@@ -342,6 +342,8 @@ function randomCase(seed) {
     else if (kind === 'baseshow') { const b = pick(base), e = pick([0, 0, 1, 3]); both((mm) => mm.show(b.id, e)); }
     else if (kind === 'basewidth') { const b = pick(base), x = m.B.get(b.id), a = Math.max(0, x.c0 + int(-3, 3)), z = Math.min(W - 1, Math.max(a, x.c1 + int(-3, 3))), moved = displaced(b.id);
       const changed = []; for (let c = Math.min(a, x.c0); c <= Math.max(z, x.c1); c++) if (c < a || c > z || c < x.c0 || c > x.c1) changed.push(c);
+      // guarded: only while every base block stands as in the oracle, in both measures, and never under an inserted block
+      if (guarded && (base.some((q) => displaced(q.id)) || ins.some((id) => m.B.has(id) && m.B.get(id).y < x.y && m.B.get(id).c0 <= z && a <= m.B.get(id).c1))) continue;
       const before = new Map(changed.map((c) => [c, look(m, c) !== look(o, c)]));   // the column did not look as it does without them
       const was = m.snapshot(); both((mm) => mm.width(b.id, a, z));
       if (m.snapshot() !== was) for (const c of changed) if (moved || before.get(c)) touched.add(c); }
@@ -360,7 +362,8 @@ function randomCase(seed) {
   if (sh.snapshot() !== m.snapshot()) return { seed, order: true };
   if (m.snapshot() === o.snapshot()) return null;
   const untouched = (x) => JSON.stringify([...x.S.keys()].filter((k) => !touched.has(+k.split('|')[1])).sort().map((k) => [k, x.stack(k.split('|')[0], +k.split('|')[1])]));
-  if (touched.size && untouched(m) === untouched(o)) return { seed, owners: true };
+  const rowsOf = (x) => JSON.stringify([x.rows(), x.rows('canonical')]);
+  if (touched.size && untouched(m) === untouched(o) && (!guarded || rowsOf(m) === rowsOf(o))) return { seed, owners: true };
   return { seed, diff: [m.snapshot(), o.snapshot()] };
 }
 // carrying a block by hand d rows and back, or moving several blocks together in one step and back, puts every block where it
@@ -434,7 +437,14 @@ function measureCase(seed) {
   return null;
 }
 {
-  const N = +process.argv[2] || 2000; let bad = 0, first = null, owners = 0;
+  const N = +process.argv[2] || 2000;
+  // guarded: base blocks change width only while they all stand as without the inserted blocks and never under one; then the
+  // columns they touch keep the rows of every block in both measures, only stacks (G4's order of arrival) may differ there
+  let bad = 0, first = null, owners = 0;
+  for (let s = 1; s <= N; s++) { let res; try { res = randomCase(s, true); } catch (e) { res = { seed: s, error: e.message }; } if (res && res.owners) owners++; else if (res) { bad++; first = first || res; } }
+  ok(bad === 0, `random (guarded): ${bad} of ${N} sequences leave a trace; first: ${JSON.stringify(first)}`);
+  console.log(`random (guarded): ${N} sequences, exact but for ${owners} with the same rows in both measures and other stacks only in the columns a base block came into or left beside an inserted block (G4)`);
+  bad = 0; first = null; owners = 0;
   for (let s = 1; s <= N; s++) { let res; try { res = randomCase(s); } catch (e) { res = { seed: s, error: e.message }; } if (res && res.owners) owners++; else if (res) { bad++; first = first || res; } }
   ok(bad === 0, `random: ${bad} of ${N} sequences leave a trace; first: ${JSON.stringify(first)}`);
   console.log(`random: ${N} sequences of inserts, growth, temporary heights, widening, narrowing and deletions, base blocks changing height and width, every inserted block deleted at the end, compared with the history without them (exact, but for ${owners} whose other stacks are all in columns a base block came into or left while it or that column stood otherwise than without them: INV-7 b)`);

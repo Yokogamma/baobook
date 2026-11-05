@@ -18,7 +18,9 @@ node tests/lab/gap-model/test.mjs [number of random sequences, 2000 by default]
     - G5–G8 and lesson 18;
     - both states of the switches.
   - **Random sequences.**
-    - Inserts, growth, temporary heights, widening, narrowing and deletions, with base blocks changing height and width. The result is compared with the same history without the inserted blocks (the oracle of C3 and S8).
+    - Inserts, growth, temporary heights, widening, narrowing and deletions, with base blocks changing height and width. The result is compared with the same history without the inserted blocks (the oracle of C3 and S8), twice:
+      - guarded: base blocks change width only while they all stand as without the inserted blocks and never under one; then every row agrees in both measures, and stacks may differ only in the columns they touched (G4's order of arrival);
+      - unguarded, as below.
       - It is exact unless a base block came into a column, or left it, while it or that column did not stand as without the inserted blocks. That block then took its place there from what the inserted blocks did, and INV-7 b is for the neighbours a block had when it came: that column's stacks may differ (the named cases «INV-7 b» show how), every other column's must agree.
       - Base blocks are not carried there: whether a gap holds a block depends on what the inserted blocks push.
       - The same history is replayed from storage in another order.
