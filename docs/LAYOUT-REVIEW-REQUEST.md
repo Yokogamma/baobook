@@ -1,6 +1,6 @@
 # Review request: the layout engine, plan for version 0.1
 
-**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`. Round 10 found no blocker, 2 major and 4 minor findings, fixed in `fb80595`. Round 11 found 2 major and 1 minor, fixed in `f0bf010`; round 12 checks them.
+**Status (2026-11-05).** Round 9 of the independent review found no blocker or major issue: GAP is sufficiently specified and step 1 can start. A final internal review of the whole plan followed (no blocker, 6 major, 13 minor, structural), answered in `979b0ad`. Round 10 found no blocker, 2 major and 4 minor findings, fixed in `fb80595`. Round 11 found 2 major and 1 minor, fixed in `f0bf010`. Round 12 (head `501c7b6`) found nothing in its scope: all three fixes resolved, the lab model is the strict GAP oracle for step 1, and step 3's undo can be built on plan §6.4. The review is closed; step 1 starts.
 
 ## Round 12 (2026-11-05)
 
