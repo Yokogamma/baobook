@@ -42,8 +42,15 @@ await p1.close();
 // C is deployed and the app is opened at an address with a query; then the network is down at the next start
 deploy('C', BUILD);
 const p2=await open(site.url+'?src=home'); await p2.waitForTimeout(500);
-const setC=await until(()=>p2.evaluate(async k=>{ if(!(await caches.keys()).includes(k)) return false; const r=await (await caches.open(k)).match('/'); return !!r && /name="t-ver" content="C"/.test(await r.text()); }, 'baobook-shell-'+BUILD), 10000);   // the worker of C installed its set before the network goes
-ok('4a the deploy of C installed the set baobook-shell-'+BUILD+' with the page C', !!setC);
+const setC=await until(()=>p2.evaluate(async k=>{ if(!(await caches.keys()).includes(k)) return false; const r=await (await caches.open(k)).match('/'); return !!r && /name="t-ver" content="C"/.test(await r.text()); }, 'baobook-shell-'+BUILD), 10000);   // the page is the first entry the worker of C writes
+ok('4a the deploy of C wrote the set baobook-shell-'+BUILD+' with the page C', !!setC);
+// The network goes only once the worker of C has taken over. Until then the browser sends a start to the worker of A: while C writes the rest
+// of its set, and in the few ms after, before the browser has C as installed, A answers from its own set (A); while C activates, the browser
+// stops A and the start can hang. The only shell set left must be C's: only C's activate removes every older set, so the active worker is C's.
+let sw; const tookC=await until(async()=>(sw=await p2.evaluate(async()=>{ const r=await navigator.serviceWorker.getRegistration();
+  return {active:r && r.active && r.active.state, installing:!!(r && r.installing), waiting:!!(r && r.waiting), shells:(await caches.keys()).filter(k=>k.startsWith('baobook-shell-'))}; }),
+  sw.active==='activated' && !sw.installing && !sw.waiting && sw.shells.join()==='baobook-shell-'+BUILD), 10000);
+ok('4b the worker of C took over: active, nothing installing or waiting, the older sets gone ('+JSON.stringify(sw)+')', tookC);
 ok('4 opened online at /?src=home: C ('+await tver(p2)+')', await tver(p2)==='C');
 await p2.close();
 await ctx.setOffline(true);
