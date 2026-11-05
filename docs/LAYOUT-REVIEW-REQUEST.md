@@ -2,7 +2,7 @@
 
 ## Round 6 (2026-11-05)
 
-Thank you for round 5. It found four integration gaps, each fixed in the text and pinned by a named case of the lab model (`round 5` in `tests/lab/gap-model/test.mjs`). The diff since the head you reviewed: <COMPARE>.
+Thank you for round 5. It found four integration gaps, each fixed in the text and pinned by a named case of the lab model (`round 5` in `tests/lab/gap-model/test.mjs`). The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/2db3b0e...a7a70b0>.
 
 1. **Fit (finding 1).** `LAYOUT-RULES.md` GAP.5 rule 5, PR-6, INV-8.
    - SETTLE's rows are targets, not constraints. Fit only gives a block the rows it lacks, in its binding stack, and never cuts a stack.
