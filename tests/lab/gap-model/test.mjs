@@ -285,12 +285,12 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([g.rows().X, g.rows('canonical').X], [14, 13], 'r6.2: B grows: X canonically at 13, its push now 1');
   g.width('X', 1, 3);
   eq([g.rows('canonical').L, g.stack('L', 3), g.show('A', 0).rows().L], [30, 'S | S12 [X:S1] S16 |', 30], 'r6.2: X widened into column 3 at its canonical row 13: L keeps 30');
-  // (3) GAP.5.1 off: a moved block leaves its columns as when narrowed and comes in again at its row; an upward move works
+  // (3) GAP.5.1 off: rule 1 still sets every gap's length; only the owners of the rows a move carries change; an upward move works
   for (const gap51 of [true, false]) {
     const a = createModel({ gap51 }).open([blk('A', 1, 1, 0), blk('X', 1, 1, 5)]).carry('X', -2);
     eq([a.rows().X, a.stack('X', 1)], [3, 'A | A2 |'], `r6.3: GAP.5.1 ${gap51 ? 'on' : 'off'}: X carried up two rows`);
     const b = createModel({ gap51 }).open([blk('U', 1, 1, 0), blk('A', 1, 1, 5), blk('B', 1, 1, 6)]).carry('A', -2);
-    eq([b.rows(), b.stack('B', 1)], [{ A: 3, B: 6, U: 0 }, gap51 ? 'A | U2 |' : 'U | U2 [A:U1] U2 |'], `r6.3: GAP.5.1 ${gap51 ? 'on' : 'off'}: B stays; ${gap51 ? 'the rows A left come under it (G5)' : 'A comes in again, standing in the gap'}`);
+    eq([b.rows(), b.stack('B', 1)], [{ A: 3, B: 6, U: 0 }, gap51 ? 'A | U2 |' : 'A | A2 |'], `r6.3: GAP.5.1 ${gap51 ? 'on' : 'off'}: B stays; the rows A left come under it ${gap51 ? 'with their owner (G5)' : 'as rows of the stack they come into'}`);
   }
   // (4) an area takes part by its extent: lends, retained bodies and rows in extent rows
   const r = createModel().open([blk('A', 2, 2, 0), blk('L', 2, 2, 11)]).insert({ ...blk('R', 2, 2, 4, 2), area: true });
@@ -314,19 +314,33 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   m.step([[['X'], -1]], { X: [1, 3] });
   eq([m.rows().X, m.rows('canonical').X, m.stack('L', 3), m.rows('canonical').L], [5, 3, 'S | S2 [X:S1] S16 |', 20], 'r7.1: moved and widened in one RELINK: entered at its reference 3, L keeps 20');
   eq(m.show('A', 0).rows().L, 20, 'r7.1: A folds: L at 20, no extra row');
-  // (2) a grown standing block carried with GAP.5.1 off: its growth's push stays as rows of the gap, L does not move
+  // (2) a grown standing block carried in both states of GAP.5.1: the same lengths, L does not move
   for (const gap51 of [true, false]) {
     const g = createModel({ gap51 }).open([blk('A', 1, 1, 0), blk('L', 1, 1, 10)]).insert(blk('X', 1, 1, 2)).height('X', 3);
     eq([g.rows().L, g.stack('L', 1)], [12, 'A | A1 [X:A1] A7 |'], `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: X grew to 3, L pushed to 12`);
     g.carry('X', 1);
-    eq([g.rows().X, g.rows().L, g.stack('L', 1)], [3, 12, gap51 ? 'A | A2 [X:A1] A6 |' : 'A | A2 [X:A3] A6 |'], `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: carried down one, L stays at 12`);
-    eq(g.remove('X').rows().L, gap51 ? 10 : 12, `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: X deleted: ${gap51 ? 'its growth goes, L rises to 10' : 'its growth stayed as A\'s rows, L stays at 12'}`);
+    eq([g.rows().X, g.rows().L, g.stack('L', 1)], [3, 12, 'A | A2 [X:A1] A6 |'], `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: carried down one, L stays at 12`);
+    eq(g.remove('X').rows().L, 10, `r7.2: GAP.5.1 ${gap51 ? 'on' : 'off'}: X deleted: its growth goes, L rises to 10`);
   }
   // (3) several blocks moved together with GAP.5.1 off, in either order of their ids
   for (const gap51 of [true, false]) for (const ids of [['A', 'B'], ['B', 'A']]) {
     const k = createModel({ gap51 }).open([blk('U', 1, 1, 0), blk('A', 1, 1, 5), blk('B', 1, 1, 8), blk('L', 1, 1, 12)]).move(ids, -1);
     eq(k.rows(), { A: 4, B: 7, L: 12, U: 0 }, `r7.3: GAP.5.1 ${gap51 ? 'on' : 'off'}, ${ids.join(', ')} up one: L stays`);
   }
+}
+// ---- round 8: GAP.5.1 off moves nothing else in either measure; the oracle's one RELINK
+{
+  for (const gap51 of [true, false]) {
+    const m = createModel({ gap51 }).open([blk('A', 1, 1, 0), blk('B', 2, 2, 0, 3), blk('L', 1, 2, 12), blk('X', 2, 2, 20)]).height('A', 5).show('B', 1);
+    eq([m.rows(), m.rows('canonical')], [{ A: 0, B: 0, L: 16, X: 24 }, { A: 0, B: 0, L: 16, X: 24 }], `r8.1: GAP.5.1 ${gap51 ? 'on' : 'off'}: B's temporary row taken by the slack`);
+    m.carry('L', 2);
+    eq([m.rows().L, m.rows().X, m.rows('canonical').X, m.show('B', 0).rows().X], [18, 24, 24, 24], `r8.1: GAP.5.1 ${gap51 ? 'on' : 'off'}: L moved down two, X stays at 24 in both measures, and after B's temporary row ends`);
+  }
+  const x = createModel().open([blk('X', 1, 1, 3)]).step([[['X'], 1]], { X: [2, 2] });
+  eq([x.rows().X, x.B.get('X').c0, x.stack('X', 2)], [4, 2, 'top | _4 |'], 'r8.2: moved down one and narrowed sideways in one RELINK: X at column 2, row 4');
+  const z = createModel().open([blk('A', 1, 1, 5), blk('Z', 2, 2, 2)]).step([], { A: [1, 3], Z: [2, 3] });
+  eq([z.stack('Z', 3), z.stack('A', 3)], ['top | _2 |', 'Z | Z2 |'], 'r8.3: arrivals top to bottom: Z first, then A under it');
+  eq(z.remove('Z').width('A', 3, 3).rows().A, 2, 'r8.3: Z deleted and A narrowed to column 3: A at 2, as the order of arrival gives');
 }
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
@@ -523,6 +537,27 @@ function measureCase(seed) {
   if (JSON.stringify(m.rows()) !== canon) return { seed, unshow: true };
   return null;
 }
+// GAP.5.1 off changes only owners: a history with no deletion gives the same rows, in both measures, with it on and off (a deletion
+// takes its owner's rows, G2, so after one the two may differ by the owners the switch changed)
+function switchCase(seed) {
+  const r = rng(seed), pick = (a) => a[Math.floor(r() * a.length)], int = (a, b) => a + Math.floor(r() * (b - a + 1)), W = 12;
+  const on = createModel().open(bases(r, 4, W)), off = createModel({ gap51: false }).open([...on.B.values()].map((b) => ({ id: b.id, c0: b.c0, c1: b.c1, y: b.y, h: b.h }))); let n = 0;
+  const both = (fn) => { let a = true, b = true; try { fn(on); } catch { a = false; } try { fn(off); } catch { b = false; } return a === b; };
+  for (let step = 0; step < 30; step++) {
+    const live = [...on.B.keys()], kind = pick(['insert', 'height', 'show', 'width', 'carry', 'carry', 'move']);
+    let same = true;
+    if (kind === 'insert') { const c0 = int(0, W - 2), b = { ...blk('x' + n++, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 30), int(1, 3)), e: pick([0, 1]) }; same = both((m) => m.insert(b)); }
+    if (kind === 'height') { const id = pick(live), h = Math.max(1, on.B.get(id).h + pick([-1, 1, 2])); same = both((m) => m.height(id, h)); }
+    if (kind === 'show') { const id = pick(live), e = pick([0, 1, 3]); same = both((m) => m.show(id, e)); }
+    if (kind === 'width') { const id = pick(live), x = on.B.get(id), a = Math.max(0, x.c0 + pick([-1, 1])), z = Math.max(a, Math.min(W - 1, x.c1 + pick([-1, 1]))); same = both((m) => m.width(id, a, z)); }
+    if (kind === 'carry') { const id = pick(live), d = pick([-2, -1, 1, 2]); same = both((m) => m.carry(id, d)); }
+    if (kind === 'move') { const ids = [pick(live), pick(live)], d = pick([-1, 1]); same = both((m) => m.move(ids, d)); }
+    if (!same) return { seed, step, kind, refused: 'one way only' };
+    if (JSON.stringify([on.rows(), on.rows('canonical')]) !== JSON.stringify([off.rows(), off.rows('canonical')])) return { seed, step, kind, on: on.rows(), off: off.rows() };
+    const e = off.check(); if (e.length) return { seed, step, errs: e };
+  }
+  return null;
+}
 {
   const N = +process.argv[2] || 2000;
   // guarded: base blocks change width only while they all stand as without the inserted blocks and never under one; then the
@@ -537,7 +572,7 @@ function measureCase(seed) {
   console.log(`random: ${N} sequences of inserts, growth, temporary heights, widening, narrowing and deletions, base blocks changing height and width, every inserted block deleted at the end, compared with the history without them (exact, but for ${owners} whose other stacks are all in columns a base block came into or left while it or that column stood otherwise than without them: INV-7 b)`);
 }
 
-for (const [name, fn, N] of [['retrace', retraceCase, 2000], ['delete moves nothing down', deleteCase, 2000], ['measures', measureCase, 1000]]) {
+for (const [name, fn, N] of [['retrace', retraceCase, 2000], ['delete moves nothing down', deleteCase, 2000], ['measures', measureCase, 1000], ['GAP.5.1 off moves nothing', switchCase, 1000]]) {
   let bad = 0, first = null;
   for (let s = 1; s <= N; s++) { let res; try { res = fn(s); } catch (e) { res = { seed: s, error: e.message }; } if (res) { bad++; first = first || res; } }
   ok(bad === 0, `${name}: ${bad} of ${N}; first: ${JSON.stringify(first)}`);

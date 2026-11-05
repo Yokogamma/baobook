@@ -1,5 +1,27 @@
 # Review request: the layout engine, plan for version 0.1
 
+## Round 9 (2026-11-05)
+
+Thank you for round 8. The major finding is fixed by narrowing what the switch turns off; the two oracle defects are fixed in the model (named cases `round 8`). The diff since the head you reviewed: <COMPARE>.
+
+1. **`GAP.5.1` off** (rules §1.6, the core list, GAP.5).
+   - Leaving and coming back cannot keep every other block where it is in both measures, so the switch no longer does that.
+   - Rule 1's lengths of gaps are core: they are what INV-2 and INV-8 need.
+   - The switch turns off only what rule 1 does to owners. The rows a move carries under a block, and the slack it used, become rows of the stack they come into, its `u`'s, and free room stays free.
+   - So nothing moves otherwise, and the rows are the same with it on and off. Your case keeps X at 24 in both measures, before and after B's temporary row ends, in both switch states.
+   - A deletion afterwards takes other rows than with it on, since the owners differ; the table says so.
+   - `GAP.8` now needs `GAP.5.1`.
+   - A random test runs 1,000 histories without deletions with the switch on and off, and finds the same rows in both measures after every operation.
+2. **`step`** replays rule 1 on the stacks alone, with no placement guard, for the reference and for the retained columns. It validates the whole result at the end. Your X at column 1, row 3 moved down one and narrowed sideways arrives at column 2, row 4.
+3. **Order of arrival.** `step` takes departures and arrivals top to bottom by the rows SETTLE gave, then by column and id. Your A and Z give Z first, and A ends at 2 after Z is deleted and A narrowed.
+
+**What we ask.**
+1. Are the three findings resolved?
+2. Is GAP now a fixed implementation contract for step 1?
+3. Verdict: can step 1 start?
+
+Out of scope and output: as in round 2.
+
 ## Round 8 (2026-11-05)
 
 Thank you for round 7. Both major findings and the model defect are fixed, first in the lab model (named cases `round 7`), then in the text. The diff since the head you reviewed: <https://github.com/Yokogamma/baobook/compare/c3d845e...d3e9fc9>.
