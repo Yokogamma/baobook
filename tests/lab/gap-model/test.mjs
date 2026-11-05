@@ -98,7 +98,7 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
 {
   const m = createModel().open([blk('A', 1, 3, 5), blk('L', 1, 3, 8)]);
   m.carry('A', -3);
-  eq([m.rows().A, m.rows().L, m.stack('L', 2)], [2, 8, 'A | A3+A2 |'.replace('A3+A2', 'A5')], 'G6: A up 3, L stays, the rows are A\'s');
+  eq([m.rows().A, m.rows().L, m.stack('L', 2)], [2, 8, 'A | A5 |'], 'G6: A up 3, L stays, the rows are A\'s');
   m.remove('A');
   eq(m.rows().L, 2, 'G6: A deleted, its rows go, L rises to its place');
 }
@@ -148,34 +148,58 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq(s1 === s2, true, 'determinism: shuffled storage');
 }
 
-// ---- round 4 (finding 1, the blocker): a block put into a gap while it shows taller than it is (two measures, §2.1)
+// ---- round 4 (finding 1, the blocker): a block put into a gap while it shows taller than it is (two measures, §2.1). The stacks are
+// the same in both measures: its lend is by its canonical height, and its temporary rows push the blocks under it on the screen only
 {
   const at = () => createModel().open([blk('A', 1, 3, 0), blk('L', 1, 3, 12)]).insert({ ...blk('X', 1, 3, 3, 3), e: 3 });   // X is 3, shown 6
   const m = at();
-  eq([m.stack('L', 2), m.rows().L, m.rows('canonical').L], ['A | A2 [X:A3 ^A3] A3 |', 12, 12], 'r4.1: dropped shown at 6: it covers 3 rows, its temporary rows 3 more; L stays at 12 in both measures');
+  eq([m.stack('L', 2), m.rows().L, m.rows('canonical').L], ['A | A2 [X:A3] A6 |', 15, 12], 'r4.1: dropped shown at 6: it covers 3 rows; its temporary rows push L on the screen, to 15; canonical L stays at 12');
   m.show('X', 0);
-  eq([m.stack('L', 2), m.rows().L, m.rows('canonical').L], ['A | A2 [X:A3 ^A3] A3 |', 12, 12], 'r4.1: the temporary height ends: no stack changes, L stays');
+  eq([m.stack('L', 2), m.rows().L, m.rows('canonical').L], ['A | A2 [X:A3] A6 |', 12, 12], 'r4.1: the temporary height ends: no stack changes, L stays');
   m.show('X', 3);
-  eq(m.rows().L, 12, 'r4.1: shown again: its temporary rows lie over the same rows, L stays');
+  eq([m.rows().L, m.rows('canonical').L], [15, 12], 'r4.1: shown again: the same push on the screen, nothing written');
   const s = m.stored(), m2 = createModel().load(s);
-  eq([m2.snapshot() === createModel().load(s).snapshot(), m2.rows().L, m2.stack('L', 2)], [true, 12, 'A | A2 [X:A3 ^A3] A3 |'], 'r4.1: reloaded from what 0.2 stores');
+  eq([m2.rows().L, m2.stack('L', 2)], [12, 'A | A2 [X:A3] A6 |'], 'r4.1: reloaded from what 0.2 stores');
   const m1 = createModel().open(m.places());
   eq(m1.rows(), m.rows('canonical'), 'r4.1: reloaded from what 0.1 stores (places only): the same canonical rows');
-  const before = m.snapshot(); let refused = false; try { m.carry('X', 4); } catch { refused = true; }
+  const before = m.snapshot(); let refused = false; try { m.carry('X', 7); } catch { refused = true; }
   eq([refused, m.snapshot() === before], [true, true], 'r4.1: a refused move (it would hit L) changes nothing');
   m.carry('X', 1);
-  eq([m.stack('L', 2), m.rows().L], ['A | A3 [X:A3 ^A3] A2 |', 12], 'r4.1: carried down one row inside the gap, all it covers goes with it');
+  eq([m.stack('L', 2), m.rows().L, m.rows('canonical').X], ['A | A3 [X:A3] A5 |', 15, 4], 'r4.1: carried down one row inside the gap, in both measures');
   m.show('X', 0).remove('X');
   eq([m.stack('L', 2), m.rows().L, m.rows('canonical').L], ['A | A11 |', 12, 12], 'r4.1: removed after the temporary height ended: the gap whole, L at 12');
   const g = at().show('X', 0).height('X', 4);
-  eq([g.rows('canonical').L, g.stack('L', 2)], [13, 'A | A2 [X:A3 ^A3] A3 |'], 'r4.1: a real growth pushes L as any text does (H1), the rows under X go with it');
+  eq([g.rows('canonical').L, g.stack('L', 2)], [13, 'A | A2 [X:A3] A6 |'], 'r4.1: a real growth pushes L as any text does (H1)');
   const k = at().height('X', 2);
-  eq([k.rows().L, k.rows('canonical').L, k.stack('L', 2)], [11, 11, 'A | A2 [X:A2 ^A3] A3 |'], 'r4.1: a real shrink (G7): L rises by 1 in both measures');
+  eq([k.rows().L, k.rows('canonical').L, k.stack('L', 2)], [14, 11, 'A | A2 [X:A2] A6 |'], 'r4.1: a real shrink (G7): L rises by 1 in both measures');
   eq(k.remove('X').stack('L', 2), 'A | A10 |', 'r4.1: then removed: nothing moves down');
   const p = createModel().open([blk('A', 1, 3, 0), blk('L', 1, 3, 12)]).insert(blk('X', 1, 3, 3, 3)).show('X', 3);
-  eq([p.rows().L, p.rows('canonical').L, p.stack('L', 2)], [15, 12, 'A | A2 [X:A3] A6 |'], 'r4.1: put in as it is, then shown taller: the temporary rows push L on the screen only');
+  eq([p.rows().L, p.rows('canonical').L, p.stack('L', 2)], [15, 12, 'A | A2 [X:A3] A6 |'], 'r4.1: put in as it is, then shown taller: the same, whatever came first');
+  const q = createModel().open([blk('A', 1, 3, 0), blk('L', 1, 3, 9)]).insert(blk('X', 1, 3, 3, 3)).show('X', 4);
+  eq([q.rows().L, q.rows('canonical').L], [13, 9], 'r4.1: the temporary rows push L on the screen only');
   const t = createModel().open([blk('A', 1, 3, 0), blk('L', 1, 3, 12)]).insert(blk('X', 1, 3, 3, 6)).height('X', 3);
   eq([t.rows().L, t.remove('X').stack('L', 2), t.rows().L], [9, 'A | A8 |', 9], 'r4.1: the reviewer\'s trace is a real shrink from 6 to 3: G7 lets L rise to 9 and keeps it there');
+  const a = createModel().open([blk('A', 1, 3, 0), blk('L', 1, 3, 12)]).insert({ ...blk('X', 1, 3, 3, 3), e: 3 }).show('X', 0).insert(blk('Y', 1, 3, 7));
+  eq([a.stack('L', 2), a.rows().L], ['A | A2 [X:A3] A1 [Y:A1] A4 |', 12], 'r4.1: the rows that lay under its temporary rows are rows of the gap: a block can be put there');
+  const c = createModel().open([blk('A', 1, 3, 0), blk('L', 1, 3, 12)]).insert({ ...blk('X', 1, 3, 3, 3), e: 3 }).show('X', 0).carry('L', -5);
+  eq([c.rows().L, c.stack('L', 2)], [7, 'A | A2 [X:A3] A1 |'], 'r4.1: and the block under it can be carried up into them');
+}
+// ---- the temporary heights write nothing: a block that comes in by itself takes its canonical row; an anchor narrowed off takes
+// its canonical body and slack (Fable's check of round 4)
+{
+  const m = createModel().open([blk('A', 0, 4, 0), blk('B', 5, 9, 0, 3), blk('L', 0, 9, 15)]).insert(blk('X', 4, 6, 4, 4));
+  m.show('A', 3);
+  eq([m.rows().X, m.rows('canonical').X], [7, 4], 'measures: A shown taller pushes X on the screen');
+  m.width('X', 4, 7);
+  eq([m.rows().X, m.rows('canonical').X, m.rows('canonical').L, m.stack('L', 7)], [7, 4, 15, 'B | B1 [X:B4] B7 |'], 'measures: X widened into B\'s columns keeps its canonical row there');
+  m.show('A', 0);
+  eq([m.rows().X, m.rows().L], [4, 15], 'measures: A folds back: X and L back');
+  const k = createModel().open([blk('X', 1, 6, 0, 2), blk('L', 4, 6, 4), blk('K', 1, 3, 10)]).show('X', 3).width('X', 1, 3);
+  eq([k.rows('canonical').L, k.rows().L], [4, 4], 'measures: an anchor shown taller narrowed off: L keeps its canonical row, and on the screen X\'s temporary rows stop pushing it');
+  const start = () => createModel().open([blk('Q', 7, 7, 0, 11), blk('B', 6, 7, 13, 2), blk('L', 6, 6, 18)]).height('Q', 13);
+  const w = start().insert({ ...blk('X', 6, 6, 12, 1), e: 2 }).width('B', 7, 7);
+  eq([w.rows().L, w.rows('canonical').L], [22, 20], 'measures: B narrowed off under X shown taller: L keeps its canonical row (GAP.9); on the screen X\'s temporary rows, which B\'s slack took before, now push it');
+  eq(w.remove('X').rows().L, start().width('B', 7, 7).rows().L, 'measures: then X removed: as without X');
 }
 // ---- round 4 (finding 2): an owner deleted takes its rows from every stack of the column, not only the one beside it
 {
@@ -203,6 +227,15 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([o.stack('H', 2), o.remove('X').rows().H], ['top | _3 [X:_1] _6 |', 10], 'r4.3: GAP.8 off: the rows it left stay free room, H stays');
   const a = createModel({ gap8: false }).open([blk('A', 1, 3, 5), blk('L', 1, 3, 8)]).carry('A', -3);
   eq([a.stack('L', 2), a.remove('A').rows().L], ['A | _3+A2 |', 5], 'r4.3: GAP.8 off for an anchor head too');
+}
+// ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
+{
+  const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);
+  eq([m.stack('L', 1), m.stack('L', 2)], ['H | H4 |', 'H | P2+H2 |'], 'GAP.8: H is the first block of column 1 only: the free room it left there is its own; in column 2 P\'s rows came under it');
+  m.remove('P').remove('H');
+  eq(m.rows().L, 3, 'GAP.8: P and H deleted: L rises by what was theirs');
+  const o = createModel({ gap8: false }).open([blk('Q', 2, 2, 0, 1), blk('H', 1, 2, 3), blk('L', 1, 2, 6)]).height('Q', 3).carry('H', -2);
+  eq(o.stack('L', 1), 'H | _2+H2 |', 'GAP.8 off: the slack H used in column 1, where it is first, stays free room');
 }
 // ---- round 4 (finding 4): the last anchor deleted, the block standing in its stack keeps the room above it
 {
@@ -239,10 +272,26 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([d.rows().H, d.stack('H', 2)], [8, 'top | _8 |'], 'r4.6: GAP.9 off: they go');
 }
 
+// ---- INV-7 b is for the neighbours a block had when it came. A block that becomes its neighbour while it is in keeps what it got
+{
+  // a block that came into its gap stands in it (G4), and on in the gap of the block under it after it goes
+  const hist = (m) => m.width('P', 8, 9).width('Q', 8, 9);
+  const w = createModel().open([blk('P', 1, 3, 7), blk('Q', 1, 3, 20)]).insert(blk('X', 4, 9, 32)); hist(w); w.remove('X');
+  const o = createModel().open([blk('P', 1, 3, 7), blk('Q', 1, 3, 20)]); hist(o);
+  eq([w.rows(), w.stack('Q', 9), o.stack('Q', 9)], [o.rows(), 'top | _7 [P:_1] _12 |', 'P | P12 |'], 'INV-7 b: P and Q came in over X: the rows as without X; Q is the anchor, P stands in its gap');
+  eq([w.remove('P').rows().Q, o.remove('P').rows().Q], [20, 7], 'INV-7 b: deleting P then gives its lend back with X\'s visit, and closes its gap without it');
+  // an anchor narrowed off from under it keeps as rows only the slack its growth left (G8); its going is then G2 for the block under
+  const start = () => createModel().open([blk('Q', 2, 2, 0, 10), blk('B', 1, 2, 10), blk('L', 1, 1, 15)]).height('Q', 12);
+  const g = start().insert(blk('X', 1, 1, 5)).height('X', 3).width('B', 2, 2);
+  eq([g.rows().L, g.stack('L', 1)], [17, 'top | _5 [X:_1] _9 |'], 'INV-7 b: X grew into B\'s slack, B narrowed off: L stays (G8)');
+  eq([g.remove('X').rows().L, start().width('B', 2, 2).rows().L], [15, 17], 'INV-7 b: X deleted: L rises by what X\'s growth had taken of the slack; without X it stays');
+}
+
 // ---- random sequences against the oracle: the same history without the inserted blocks (C3, S8, H1, G7). Carries of the inserted
 // blocks are left out: by G5 and G6 a block moved by hand changes the gaps on purpose (the retrace cases test them). Base blocks
 // change height, show and end temporary heights, and change width (they come in from the side, as in finding 4 of round 4) when
-// they stand where they stand in the oracle and come in under no inserted block
+// they stand where they stand in the oracle in both measures (a block that comes in by itself takes its row as it is, S8: an inserted
+// block that holds it lower is a push it keeps) and come in under no inserted block
 function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 function bases(r, n, W) {
   const int = (a, b) => a + Math.floor(r() * (b - a + 1)), base = [];
@@ -258,8 +307,8 @@ function randomCase(seed) {
   const m = createModel().open(base), o = createModel().open(base), ins = [], log = [];
   const tryOp = (fn) => { const snap = m.snapshot(); try { fn(m); log.push(fn); return true; } catch (e) { if (m.snapshot() !== snap) throw new Error('a refused op changed the state: ' + e.message); return false; } };
   const both = (fn) => { const s = m.save(); if (!tryOp(fn)) return; try { fn(o); } catch { m.load(s); log.pop(); } };
-  const sameBase = () => base.every((b) => m.B.get(b.id).y === o.B.get(b.id).y);
-  let sideways = false;   // a base block came in from the side somewhere
+  const sameBase = () => { const mc = m.rows('canonical'), oc = o.rows('canonical'); return base.every((b) => m.B.get(b.id).y === o.B.get(b.id).y && mc[b.id] === oc[b.id]); };
+  const touched = new Set();   // columns a base block came into or left while an inserted block covered them
   for (let step = 0; step < 40; step++) {
     const kind = pick(['insert', 'insert', 'grow', 'widen', 'narrow', 'show', 'base', 'base', 'basewidth', 'baseshow', 'delete']);
     if (kind === 'insert') { const id = 'x' + ins.length, c0 = int(0, W - 2), b = { ...blk(id, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 40), int(1, 3)), e: pick([0, 0, 1, 2]) };
@@ -269,7 +318,8 @@ function randomCase(seed) {
     else if (kind === 'basewidth') { if (!sameBase()) continue; const b = pick(base), x = m.B.get(b.id), a = Math.max(0, x.c0 + int(-3, 3)), z = Math.min(W - 1, Math.max(a, x.c1 + int(-3, 3)));
       // not under an inserted block: coming in under one, it takes that block's rows, which go when it goes (rule 4, G2)
       if (ins.some((id) => m.B.has(id) && m.B.get(id).y < x.y && m.B.get(id).c0 <= z && a <= m.B.get(id).c1)) continue;
-      sideways = true; both((mm) => mm.width(b.id, a, z)); }
+      for (let c = Math.min(a, x.c0); c <= Math.max(z, x.c1); c++) if ((c < a || c > z || c < x.c0 || c > x.c1) && ins.some((id) => m.B.has(id) && m.B.get(id).c0 <= c && c <= m.B.get(id).c1)) touched.add(c);
+      both((mm) => mm.width(b.id, a, z)); }
     else {
       const live = ins.filter((id) => m.B.has(id)); if (!live.length) continue; const id = pick(live), x = { ...m.B.get(id) };
       if (kind === 'grow') { const h = x.h + int(1, 2); tryOp((mm) => mm.height(id, h)); }
@@ -284,13 +334,12 @@ function randomCase(seed) {
   const sh = createModel().open([...base].reverse()); for (const fn of log) fn(sh);   // the same history from storage in another order
   if (sh.snapshot() !== m.snapshot()) return { seed, order: true };
   if (m.snapshot() === o.snapshot()) return null;
-  // after base blocks came in from the side or narrowed, two things that depend on where the blocks stand differ; the displayed
-  // rows are the same. (1) Two base blocks that came in over an inserted block stand in its gap, the lower one taking no gap of
-  // its own (G4, S8); without the inserted block the lower one would have come in fresh, under rows of the upper one (rule 4):
-  // the owners differ, and the canonical rows by the temporary lend of the upper one when it came in showing taller (§2.1).
-  // (2) An anchor narrowed off a column keeps its slack there as rows (G8); an inserted block standing above it, held lower by
-  // another column, takes part of that slack as its own, which is not state and goes with it: the stack is shorter by it
-  if (sideways && JSON.stringify(m.rows()) === JSON.stringify(o.rows())) return { seed, owners: true, canonical: JSON.stringify(m.rows('canonical')) !== JSON.stringify(o.rows('canonical')) };
+  // A base block that came into a column, or left it, while an inserted block covered it became that block's neighbour there while
+  // it was in: INV-7 b is for the neighbours a block had when it came, and taking it away is G2 for the others. Those columns may
+  // end with other stacks than without the inserted block (the named cases «INV-7 b» show both ways); every other column's stacks
+  // must be the same
+  const untouched = (x) => JSON.stringify([...x.S.keys()].filter((k) => !touched.has(+k.split('|')[1])).sort().map((k) => [k, x.stack(k.split('|')[0], +k.split('|')[1])]));
+  if (touched.size && untouched(m) === untouched(o)) return { seed, owners: true };
   return { seed, diff: [m.snapshot(), o.snapshot()] };
 }
 // carrying a block by hand d rows and back, or moving several blocks together in one step and back, puts every block where it
@@ -301,7 +350,7 @@ function retraceCase(seed) {
   const r = rng(seed), int = (a, b) => a + Math.floor(r() * (b - a + 1)), W = 14, base = bases(r, 6, W);
   const m = createModel().open(base); m.height(base[int(0, base.length - 1)].id, 4);   // some slack somewhere
   if (r() < 0.5) m.show(base[int(0, base.length - 1)].id, int(1, 2));
-  const lens = () => JSON.stringify([m.rows(), [...m.S.entries()].map(([k, st]) => [k, st.parts.reduce((n, p, i) => n + (i % 2 ? p.lend.length + p.tlend.length : p.length), 0)]).sort()]);
+  const lens = () => JSON.stringify([m.rows(), [...m.S.entries()].map(([k, st]) => [k, st.parts.reduce((n, p, i) => n + (i % 2 ? p.lend.length : p.length), 0)]).sort()]);
   const rowsBefore = m.rows(), d = int(1, 3) * (r() < 0.5 ? -1 : 1);
   const ids = [...new Set(Array.from({ length: int(1, 3) }, () => base[int(0, base.length - 1)].id))];
   try { m.move(ids, d); } catch { return null; }
@@ -359,10 +408,10 @@ function measureCase(seed) {
   return null;
 }
 {
-  const N = +process.argv[2] || 2000; let bad = 0, first = null, owners = 0, canon = 0;
-  for (let s = 1; s <= N; s++) { let res; try { res = randomCase(s); } catch (e) { res = { seed: s, error: e.message }; } if (res && res.owners) { owners++; if (res.canonical) canon++; } else if (res) { bad++; first = first || res; } }
+  const N = +process.argv[2] || 2000; let bad = 0, first = null, owners = 0;
+  for (let s = 1; s <= N; s++) { let res; try { res = randomCase(s); } catch (e) { res = { seed: s, error: e.message }; } if (res && res.owners) owners++; else if (res) { bad++; first = first || res; } }
   ok(bad === 0, `random: ${bad} of ${N} sequences leave a trace; first: ${JSON.stringify(first)}`);
-  console.log(`random: ${N} sequences of inserts, growth, temporary heights, widening, narrowing and deletions, base blocks changing height and width, every inserted block deleted at the end, compared with the history without them (${owners} with the same displayed rows and other owners or stack lengths after base blocks came in from the side or narrowed, G4 and G8's slack; ${canon} of them with other canonical rows by a temporary lend)`);
+  console.log(`random: ${N} sequences of inserts, growth, temporary heights, widening, narrowing and deletions, base blocks changing height and width, every inserted block deleted at the end, compared with the history without them (exact, but for ${owners} whose other stacks are all in columns a base block came into or left while an inserted block covered them: INV-7 b)`);
 }
 
 for (const [name, fn, N] of [['retrace', retraceCase, 2000], ['delete moves nothing down', deleteCase, 2000], ['measures', measureCase, 1000]]) {
