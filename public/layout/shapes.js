@@ -102,14 +102,15 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  */
 
 /** Measuring (LAYOUT-ENGINE-PLAN §4.3): by block id, `rows` the canonical rows of its content at a card width of `cells`, `shown` the displayed
- *  ones with its temporary heights (rows ≤ shown); `natural` its natural card width in cells. The browser's measure reads the content
- *  through the bridge, the Node stub (tests/lib/measure.mjs) from a map.
- * @typedef {{rows(id:string, cells:number):{rows:number, shown:number}, natural(id:string):number}} Measure
+ *  ones with its temporary heights (rows ≤ shown), `lines` the lines of its content, wrapped or not, by which a code block folds as today;
+ *  `natural` its natural card width in cells. The browser's measure reads the content through the bridge, the Node stub
+ *  (tests/lib/measure.mjs) from a map.
+ * @typedef {{rows(id:string, cells:number):{rows:number, shown:number, lines:number}, natural(id:string):number}} Measure
  */
 
 /** A passport (LAYOUT-ENGINE-PLAN §4.4), one per kind in kinds.js, reached only as ctx.kinds.
  * @typedef {{width:'text'|'set', minCells(box:Box, measure:Measure):number, rows(box:Box, cells:number, measure:Measure):{rows:number, shown:number},
- *            hides:boolean, container:null|{headerRows(box:Box, measure:Measure):number}}} Kind
+ *            hides:boolean, container:null|{headerRows(box:Box, measure:Measure):number, height(box:Box, inner:number, measure:Measure):number}}} Kind
  *  width: 'text', elastic by SIZE.1–SIZE.4 unless `cw`; 'set', `cw` always. minCells: the kind's own floor in card cells. rows: a leaf's
- *  shown height at a card width, canonical and displayed; for an area only its header and its `ch` (its children's rows are the engine's).
+ *  shown height at a card width, canonical and displayed; a container's `height` its frame's rows from the rows its children take (inner).
  */

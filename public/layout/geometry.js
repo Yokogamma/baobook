@@ -69,9 +69,10 @@ export function neighbourOrder(boxes) {
 export function inRange(v) { return Number.isInteger(v) && v >= 0 && v <= MAXCELL; }
 
 /** The cells a block's place may take in a container of `cols` columns (INV-4, DRAG.A3's clamp, applied in phase 1c): its handle cell from
- *  column 0, its card ending at the last column at most, its row from 0, an area's frame from row 1 so that its free row lies inside
- *  (LAYOUT-RULES §1.1, proposed). A card wider than the container has no column: colMax is below colMin. */
-export function range(b, cols) { return { colMin: 0, colMax: cols - b.w, yMin: isArea(b) ? 1 : 0 }; }
+ *  column 0, its card ending at the last column at most, its row from 0; an area's frame from row 1 and its right free column at the last
+ *  column at most, so that its free row above and its free column on the right lie inside (LAYOUT-RULES §1.1, proposed); its free column on
+ *  the left is its handle cell. A card wider than the container has no column: colMax is below colMin. */
+export function range(b, cols) { return { colMin: 0, colMax: cols - b.w - (isArea(b) ? 1 : 0), yMin: isArea(b) ? 1 : 0 }; }
 /** A place clamped into that range, the card kept whole as long as it fits (DRAG.A3 narrows an elastic block first: changes.js). */
 export function clampPlace(b, cols) {
   const r = range(b, cols);
