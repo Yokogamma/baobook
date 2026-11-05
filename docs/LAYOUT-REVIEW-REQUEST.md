@@ -9,30 +9,34 @@ Thank you for round 4 ([your comment](https://github.com/Yokogamma/baobook/pull/
 1. **Two measures (your blocker).** `LAYOUT-RULES.md` §1.3, §2.1, INV-2, INV-3, GAP.4, GAP.5 rules 1–4.
    - A standing block's lend is measured by its canonical height, so G7 holds as decided and cuts only on a real shrink.
    - A temporary height pushes the blocks under its block on the screen, whatever that block is, and changes no stack. Your example gives `A | A2 [X:A3] A6 |`, L at 15 on the screen and at 12 canonically, and `A | A11 |` after the removal. The real shrink of your trace (6 → 3) still lets L rise to 9 (G7).
-   - What follows from a change is written so that the canonical layout gets the same change:
-     - a block that comes into a column by itself (widened, pressed aside) takes its canonical row there;
-     - rule 1 grows a gap where it holds the block in either measure and takes the smaller slack first, so a move holds in both;
-     - a narrowed anchor keeps its canonical body and slack (GAP.9).
-   - An internal check found that a first design, which recorded the rows a temporary height covered, left traces and wrote temporary heights through width changes. It was replaced before this request.
+   - A move is made on the displayed layout as if the temporary heights were real; with them taken out it holds where its gaps hold the block, as after a growth that shrinks back (H1, INV-7 c).
+   - A change of columns is written at the canonical rows, so no push of a temporary height is written:
+     - a block that comes into a column by itself (widened, pressed aside) takes its canonical row there, unless the screen put it under a block of that column;
+     - a narrowed anchor keeps its canonical body and slack (GAP.9); on the screen a temporary height may then move the block under it until it ends.
+   - Two internal checks shaped this. A first design, which recorded the rows a temporary height covered, left traces, had rows no operation could reach, and wrote temporary heights through width changes. A second, which made every move hold in both measures, refused legal carries. Both were replaced before this request.
 2. **An owner's rows across a column (finding 2).** Rule 2 takes a departing block's rows wherever they lie in the column, and INV-3 and the model's `check()` require every owner to cover its column. Your example gives A=0, B=1, also for U carried away; narrowed off with `GAP.9` on, U's rows become rows of the stacks they lie in.
 3. **Standing head blocks (finding 3).** The first block of a chain may stand, and `isHead(layout, box)` reads the chains. GAP.8 is per column, as G6 says: the free room the first block of a column leaves, anchor or standing, becomes its own. Your example gives `top | _3 [X:_1] X2+_4 |` and H at 8 after the removal; with `GAP.8` off, H stays at 10.
 4. **The last anchor (finding 4).** There is no pad now: the room above a block put lower than the gap reaches is its own rows. Under the last anchor, the lowest standing block becomes the stack's anchor and its room becomes rows of `u`. Your paired histories now agree exactly: X=8, `A | A7 |`.
 5. **Moves of several blocks (finding 5).** Rule 1 works, step by step, on runs of chain blocks moved together. Only the gap above each run and the gap under it change, each once, and the order of the rows under a run is named. The model has `move(ids, d)`; your example keeps `U2` between A and B both ways, and so do a standing block moved with its anchor, and with the anchor above it.
 6. **GAP.9's scope (finding 6).** It covers the rows a block owns and an anchor's body. A standing block always gives its lend back (S8), so your round 3 case returns L to 10 in both switch states.
-7. **INV-7 b is now exact about its scope.** It is for the neighbours a block had when it came. A block that becomes its neighbour while it is in gets G2 when it goes; this happens when the block comes into a column the inserted one covers, or another block leaves such a column from between them. The named cases «INV-7 b» show the two ways: G4's order of arrival, and G8's slack taken by the inserted block.
+7. **INV-7 b is now exact about its scope.** It is for the neighbours a block had when it came, and the gaps as they were then. A block that changes its columns while an inserted block, or what it pushed, stands there takes its place as it finds it (S8, G8), and keeps it when the inserted block goes (G2). The named cases «INV-7 b» show each way:
+   - G4's order of arrival;
+   - G8's slack taken by the inserted block's growth;
+   - a block widened while the inserted block's growth held it lower;
+   - a block narrowed off from above another while that held it.
 
 **The random tests.** As you suggested, base blocks now also change width (coming in from the side) and show temporary heights, and inserted blocks come in showing taller. Carries of inserted blocks stay out of the paired histories (by G5 and G6 a move by hand changes gaps on purpose), and so do carries of base blocks (whether a gap holds a block depends on what the inserted blocks push). Carries and moves of several blocks are covered by the round-trip test.
 
-The paired histories are exact unless a base block came into a column, or left it, while an inserted block covered it; then the stacks of every other column must agree. Further random tests:
+The paired histories are exact unless a base block came into a column, or left it, while it or that column did not stand as without the inserted blocks; then the stacks of every other column must agree (about 17% of the 4,000 sequences touch such a column). Further random tests:
 - deletion never moves a block down, in either measure;
-- a move holds in both measures;
+- round trips under temporary heights put every block back on the screen, and canonically move a block at most once, down, by the slack it used;
 - ending every temporary height gives the canonical rows;
 - reloading what 0.2 and 0.1 store gives the same canonical layout.
 
 **What we ask.**
 1. Are the six round 4 findings resolved?
-2. The two measures: is «a temporary height pushes on the screen and writes nothing, and what follows from a change is written so that the canonical layout gets the same change» sound and complete? Consider every way a block can come into a column, a carry with a temporary height on above or below it, the undo of plan §6.4, and INV-8.
-3. INV-7 b's scope: is «the neighbours it had when it came» the right promise? Do the two named ways a later neighbour keeps a trace follow from G2, G4 and G8 as decided, or do they point to a representation problem?
+2. The two measures: is «a temporary height pushes on the screen and writes nothing; a move is made on the screen as if it were real; a change of columns is written at the canonical rows» sound and complete? Consider every way a block can come into a column, a carry with a temporary height on above or below it, the undo of plan §6.4, and INV-8.
+3. INV-7 b's scope: is «the neighbours it had when it came, and the gaps as they were then» the right promise? Do the named ways a block that changed its columns meanwhile keeps a trace follow from G2, G4, G8 and S8 as decided, or do they point to a representation problem?
 4. Is GAP implementable as written now? Where would two implementers differ?
 5. Verdict: can step 1 start?
 

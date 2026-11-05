@@ -21,7 +21,7 @@
 // one), leaves a column (a standing block gives its lend back; an anchor's stack is joined into the stack under it; under the last
 // anchor, the lowest block standing in its stack takes its place), changes its real height (G7 cuts a standing block's lend at its
 // height), gets or loses a temporary height (no stack changes), or moves, alone or with others in one step (the rows change only at
-// the edges of each run of blocks that moved together, so that the move holds in both measures).
+// the edges of each run of blocks that moved together).
 
 const len = (seg) => seg.length;
 
@@ -164,24 +164,24 @@ export function createModel(opts = {}) {
 
   // ---- blocks moved by d rows in one step (a carry by hand, or a primitive moving several blocks with their gaps): rule 1.
   // Per column, each run of chain blocks that moved together keeps everything inside it; only the gap above the run and the gap
-  // under it change. A gap holds the run's top when it has no slack there in either measure, so that the move holds in both.
-  // Moving down, the gap under the run loses rows, the run's own first, then from the top. The gap above it grows: where it holds
+  // under it change. A gap holds the run's top when it has no slack there on the screen: the move is made on the displayed layout,
+  // as if the temporary heights were real, and the canonical layout is that result with them taken out (H1), so where a temporary
+  // height held the block the move is relative to it, and when it ends the block may stop where another column holds it. Moving down, the gap under the run loses rows, the run's own first, then from the top. The gap above it grows: where it holds
   // the run's top, by rows of its stack's u (unowned under the top); when the run stands in that stack and so does the gap under
   // it, by as many rows as the gap under it lost, whatever the slack, so that the stack keeps every row it had, and, where it holds
-  // the run's top, by the rest as room of the run's top, its own rows. Moving up, the smaller slack goes first, then rows from the
+  // the run's top, by the rest as room of the run's top, its own rows. Moving up, the slack goes first, then rows from the
   // bottom of the gap above; under the run come first the slack used, as the run's top's own rows, then the rows it left, with
   // their owners (G5). In a column where the run's top is the first block, the free room it leaves and the slack it used become
   // its own (G6, GAP.8; with GAP.8 off they stay free room); with nothing under the run they go (G5).
-  function moveIn(c, ids, d, yc) {
+  function moveIn(c, ids, d) {
     const q = seq(c), moved = q.map((el) => ids.has(el.id)), runs = [];
     for (let a = 0; a < q.length; a++) {   // every run, with its two gaps and its slack, read before anything changes
       if (!moved[a] || (a > 0 && moved[a - 1])) continue;
       let z = a; while (z + 1 < q.length && moved[z + 1]) z++;
       const top = q[a], bot = q[z], ust = top.st, ui = top.i >= 0 ? top.i - 1 : ust.parts.length - 1;
       const [lst, li] = bot.i >= 0 ? [bot.st, bot.i + 1] : [lowerOf(bot.id, c), 0];
-      const slackShown = B.get(top.id).y - spans(ust)[ui][1], slackCanon = yc.get(top.id) - spans(ust, 'canonical', yc)[ui][1];
-      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust,
-        holds: slackShown === 0 || slackCanon === 0, slack: Math.min(slackShown, slackCanon) });
+      const slack = B.get(top.id).y - spans(ust)[ui][1];
+      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack === 0, slack });
       a = z;
     }
     for (const { r, head, run, ust, ui, lst, li, sameStack, holds, slack } of runs) {
@@ -237,9 +237,13 @@ export function createModel(opts = {}) {
       for (const id of ids) if (overlaps({ ...B.get(id), y: B.get(id).y + d }, id, ids)) throw new Error('move overlaps');
       const want = new Map([...B.values()].map((b) => [b.id, b.y + d])), yc = rowsIn('canonical');
       const cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c);
-      for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d, yc);
+      for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d);
       follow(); const yc2 = rowsIn('canonical');
-      for (const id of ids) if (B.get(id).y !== want.get(id) || yc2.get(id) !== yc.get(id) + d) throw new Error('move: the stacks do not put ' + id + ' at its row in both measures');
+      for (const id of ids) {
+        if (B.get(id).y !== want.get(id)) throw new Error('move: the stacks do not put ' + id + ' at its row');
+        const dc = yc2.get(id) - yc.get(id);   // canonically it moves the same way, at most as far
+        if (d > 0 ? dc < 0 || dc > d : dc > 0 || dc < d) throw new Error('move: ' + id + ' moved ' + dc + ' canonically for ' + d);
+      }
       return api;
     },
     carry(id, d) { return api.move([id], d); },
