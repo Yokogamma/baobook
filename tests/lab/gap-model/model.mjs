@@ -24,8 +24,9 @@
 // lands in, or anchors a new stack when nothing is below it; dropped there, at its displayed row; widened there, at its canonical
 // one), leaves a column (a standing block gives its lend back; an anchor's stack is joined into the stack under it; under the last
 // anchor, the lowest block standing in its stack takes its place), changes its real height (G7 cuts a standing block's lend at its
-// height), gets or loses a temporary height (no stack changes), or moves, alone or with others in one step (the rows change only at
-// the edges of each run of blocks that moved together).
+// height, at once, whatever wrote it), gets or loses a temporary height (no stack changes), or moves, alone or with others in one step
+// (the rows change only at the edges of each run of blocks that moved together); and every column shifts at once (GAP.10), through
+// columns left of 0 for an area's left side handle, whose wall then presses the children back.
 
 const len = (seg) => seg.length;
 
@@ -161,6 +162,9 @@ export function createModel(opts = {}) {
     }
     const mine = f.st; S.delete(key(x.id, c));
     const L = lowerOf(x.id, c);
+    // GAP.5.2 off: the stack of the block that went loses its rows, the blocks standing in it stand on with no lends, whether it joins
+    // the stack under it or, under the last anchor, its lowest standing block takes its place
+    const gone = (p, j) => (O.gap52 ? p : j % 2 === 0 ? [] : { id: p.id, lend: [] });
     if (L) {          // join: the stack above x and the stack under it become one
       const up = mine.parts.slice(), last = up.pop();
       // narrowed off: what its body stood on and its slack there (the rows by which its stack did not hold it) stay, measured
@@ -168,17 +172,17 @@ export function createModel(opts = {}) {
       // under it through this one stops pushing it
       const slack = keep ? ys.get(x.id) - spans(mine, 'canonical', ys)[mine.parts.length - 1][1] : 0;
       const body = keep ? Array(x.h + slack).fill(heirOf(mine)) : [];
-      // GAP.5.2 off: the joined stack keeps only the rows of the stack under it; the blocks standing above stand on, their lends gone
-      const gone = (p, j) => (O.gap52 ? p : j % 2 === 0 ? [] : { id: p.id, lend: [] });
       L.u = mine.u; L.parts = [...up.map(gone), [...gone(last, 0), ...body, ...L.parts[0]], ...L.parts.slice(1)];
     } else if (mine.parts.length > 1) {   // the last anchor: the lowest block standing in its stack becomes the stack's anchor, the
       // others stand on in it; its lend and the rows under it go (GAP.3), and the room above it that was its own becomes the gap's
       const k = mine.parts.length - 2, s = mine.parts[k], to = heirOf(mine), f = (seg) => seg.map((o) => (o === s.id ? to : o));
-      S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (j % 2 === 0 ? f(p) : { id: p.id, lend: f(p.lend) })) });
+      S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (j % 2 === 0 ? f(p) : { id: p.id, lend: f(p.lend) })).map(gone) });
     }
   }
 
-  // ---- G7: a real shrink; what a standing block covers is never more than its height
+  // ---- G7 (`cap`): a real shrink; what a standing block covers is never more than its height. Every write of a height calls it before
+  // anything reads the new height or the stacks: `height`, and `width` when the re-measure at the new width gives another height (a
+  // text widened and got shorter, SIZE.8); FOLLOW itself changes no stack
   function capLends(x) {
     for (const st of S.values()) st.parts.forEach((p, j) => { if (j % 2 === 1 && p.id === x.id && len(p.lend) > x.h) p.lend = p.lend.slice(0, x.h); });
   }
@@ -257,12 +261,15 @@ export function createModel(opts = {}) {
     _remove(id) { const x = B.get(id), ys = rowsIn('canonical'); for (const c of cols(x)) leave(x, c, 'delete', ys); B.delete(id); follow(); return api; },
     _height(id, h) { const x = B.get(id); if (!(h >= 1)) throw new Error('height'); x.h = h + 2 * padOf(x); capLends(x); follow(); return api; },   // a real change
     _show(id, e) { const x = B.get(id); if (!(e >= 0)) throw new Error('temporary'); x.e = e; follow(); return api; },             // a temporary one
-    _width(id, f0, f1) {
-      const x = B.get(id), was = cols(x), ys = rowsIn('canonical'), c0 = f0 - padOf(x), c1 = f1 + padOf(x);
+    _width(id, f0, f1, h = null) {   // h: the height the re-measure gives it at its new width, if another (SIZE.8), a real change
+      const x = B.get(id), was = cols(x), ys = rowsIn('canonical'), c0 = f0 - padOf(x), c1 = f1 + padOf(x), H = h == null ? x.h : h + 2 * padOf(x);
       if (!(c0 <= c1)) throw new Error('no columns');
-      if (overlaps({ ...x, c0, c1 }, id)) throw new Error('width overlaps');
-      for (const c of was) if (c < c0 || c > c1) leave(x, c, 'narrow', ys);
+      if (h != null && !(h >= 1)) throw new Error('height');
+      // in its own columns a taller block pushes what is under it (FOLLOW); in the columns it comes into, it must not hit
+      if (overlaps({ ...x, c0, c1 }, id) || cols({ c0, c1 }).some((c) => !was.includes(c) && overlaps({ ...x, c0: c, c1: c, h: H }, id))) throw new Error('width overlaps');
+      for (const c of was) if (c < c0 || c > c1) leave(x, c, 'narrow', ys);   // its body there is by the height it had (GAP.9)
       x.c0 = c0; x.c1 = c1;
+      if (H !== x.h) { x.h = H; capLends(x); }   // the new height, cut by G7 before it enters anywhere or FOLLOW reads it
       // it came in by itself: at its canonical row, as FOLLOW gives it over the stacks and heights of this moment (GAP's inputs)
       for (const c of cols(x)) if (!was.includes(c)) enter(x, c, ys);
       follow(); return api;
@@ -282,12 +289,22 @@ export function createModel(opts = {}) {
       return api;
     },
     carry(id, d) { return api.move([id], d); },
-    _shift(k) {   // a uniform shift of every block's columns by k (an area's left side handle, its children kept on their sheet cells):
-      // every stack moves with its columns, nothing is left or entered, so owners and lends stay (GAP `shift`)
-      for (const b of B.values()) { b.c0 += k; b.c1 += k; if (b.c0 < 0) throw new Error('shift past the edge'); }
-      const moved = [...S.entries()].map(([kk, st]) => { const [l, c] = kk.split('|'); return [key(l, +c + k), st]; });
-      S.clear(); for (const [kk, st] of moved) S.set(kk, st);
-      follow(); return api;
+    _shift(k) {   // a uniform shift of every block's columns by k, promising a settled result: refused if a card would pass column 0
+      shiftCols(k); if ([...B.values()].some((b) => b.c0 + padOf(b) < 0)) throw new Error('shift past the edge');
+      return api;
+    },
+    _side(k, W) {   // an area's left side handle carried by k columns (inwards when k > 0), the area now W columns wide (LAYOUT-RULES §5.6,
+      // AREA.3), as one change: every child keeps its cell on the sheet, `shift` re-keying the stacks through columns left of 0 (GAP.10);
+      // then the wall presses every child left of column 0 to it, keeping its width, in one RELINK, as pressed aside: rule 2 as narrowed
+      // off, rule 3 at its canonical row; containment is checked once, after the wall (phase 10), and a child that cannot fit even alone
+      // refuses the handle. The model has no P-ASIDE chain and no P-SINK: a press that would hit another child is refused here, where
+      // the engine presses that child aside or sinks the pressed one
+      shiftCols(-k);
+      const widths = {};
+      for (const b of B.values()) { const f0 = b.c0 + padOf(b), f1 = b.c1 - padOf(b); if (f0 < 0) widths[b.id] = [0, f1 - f0]; }
+      if (Object.keys(widths).length) raw.step([], widths);
+      for (const b of B.values()) if (b.c0 + padOf(b) < 0 || b.c1 - padOf(b) > W - 1) throw new Error('the handle stops: ' + b.id + ' cannot fit');
+      return api;
     },
     _step(moves = [], widths = {}, carried = null) {   // one RELINK: the steps of `moves` (rule 1) and blocks changing their columns
       // (rules 2, 3, 4); the `carried` block leaves its columns as carried away and comes in at its displayed target, every other one
@@ -327,6 +344,7 @@ export function createModel(opts = {}) {
       // rule 5: a moved block FOLLOW puts higher than its target gets the rows it lacks; one it puts lower (a canonical entry pushing it
       // on the screen) stands there
       const moved = {}; for (const [list] of moves) for (const id of list) moved[id] = frameRow(B.get(id), target.get(id));
+      if (carried != null) moved[carried] = frameRow(B.get(carried), target.get(carried));   // the carried block too, moved vertically or not
       raw.fit(moved);
       const errs = invariants(); if (errs.length) throw new Error('step: ' + errs[0]);
       return api;
@@ -375,8 +393,16 @@ export function createModel(opts = {}) {
     check() { return invariants(); },
   };
   const raw = {};
-  for (const name of ['insert', 'restore', 'remove', 'height', 'show', 'width', 'move', 'carryTo', 'fit', 'step', 'shift']) { raw[name] = api['_' + name]; api[name] = atomic(raw[name]); delete api['_' + name]; }
+  for (const name of ['insert', 'restore', 'remove', 'height', 'show', 'width', 'move', 'carryTo', 'fit', 'step', 'shift', 'side']) { raw[name] = api['_' + name]; api[name] = atomic(raw[name]); delete api['_' + name]; }
 
+  // GAP.10: every block's columns and every stack move by k; nothing is left or entered, so owners and lends stay. The columns may pass
+  // the container's edge on the way (an area's left side handle, before its wall presses the children back): no containment here
+  function shiftCols(k) {
+    for (const b of B.values()) { b.c0 += k; b.c1 += k; }
+    const moved = [...S.entries()].map(([kk, st]) => { const [l, c] = kk.split('|'); return [key(l, +c + k), st]; });
+    S.clear(); for (const [kk, st] of moved) S.set(kk, st);
+    follow();
+  }
   function overlaps(x, except, moving) {   // in the displayed layout; blocks moving in the same step keep their places to one another
     for (const b of B.values()) {
       if (b.id === x.id || b.id === except || (moving && moving.has(b.id))) continue;

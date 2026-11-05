@@ -1,4 +1,4 @@
-// Runs the lab model of gaps (model.mjs) on the examples of the four review rounds and on random sequences.
+// Runs the lab model of gaps (model.mjs) on the examples of the review rounds and on random sequences.
 // node tests/lab/gap-model/test.mjs [seeds]
 import { createModel } from './model.mjs';
 
@@ -381,6 +381,55 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   u.shift(1);
   eq(JSON.stringify([u.stack('B', 3), u.stack('L', 3), u.rows()]), before, 'final.4: and back: every stack as it was');
 }
+// ---- round 10: G7 at every write of a height; the carried block fitted with no vertical step; GAP.5.2 off under the last anchor;
+// the wall of an area's left side handle; opening a valid note; a rules change and the exact undo
+{
+  // a standing text that gets shorter by widening (its rest width back, SIZE.8), not by a height of its own: its lend is cut at once
+  const g = createModel().open([blk('A', 1, 1, 0), blk('L', 1, 1, 10)]).insert(blk('X', 1, 1, 3, 3)).show('A', 2);
+  eq(g.stack('L', 1), 'A | A2 [X:A3] A4 |', 'r10.1: X stands in A\'s gap, its lend its three rows');
+  g.width('X', 1, 2, 1);
+  eq([g.stack('L', 1), g.rows().L, g.rows('canonical').L], ['A | A2 [X:A1] A4 |', 10, 8], 'r10.1: X widened into column 2 and got one row tall: its lend is cut to one row (G7) and L rises by two in both measures');
+  clean(g, 'r10.1: invariants after the widening');
+  g.remove('X');
+  eq([g.stack('L', 1), g.rows().L, g.rows('canonical').L], ['A | A7 |', 10, 8], 'r10.1: X deleted then: L stays, never down (G7)');
+  // a carry that keeps columns and moves no row: the carried block is fitted to its displayed target all the same (rule 5)
+  const k = createModel().open([blk('A', 1, 1, 0, 10), blk('B', 2, 8, 0), blk('X', 1, 8, 12, 2)]).show('A', 5);
+  eq([k.rows().X, k.rows('canonical').X], [17, 12], 'r10.3: X shown at 17 under A\'s temporary rows, canonically at 12');
+  k.carryTo('X', 2, 8, 17);
+  eq([k.rows().X, k.rows('canonical').X, k.stack('X', 2)], [17, 17, 'B | B16 |'], 'r10.3: X narrowed at the edge off the column that held it lower, dropped where it is shown: it stays at 17, the rows it lacked B\'s');
+  clean(k, 'r10.3: invariants');
+  // GAP.5.2 off: under the last anchor, the lowest standing block takes its place and the stack loses its rows and lends too
+  for (const gap52 of [true, false]) {
+    const p = createModel({ gap52 }).open([blk('L', 1, 1, 10)]).insert(blk('X', 1, 1, 5)).insert(blk('Y', 1, 1, 7)).remove('L');
+    eq([p.rows().X, p.rows().Y, p.stack('Y', 1)], gap52 ? [5, 7, 'top | _5 [X:_1] _1 |'] : [0, 1, 'top | · [X:·] · |'], `r10.4: GAP.5.2 ${gap52 ? 'on' : 'off'}: the last anchor deleted, Y takes its place${gap52 ? ', the rows above it kept' : ' with no rows and X with no lend'}`);
+  }
+  // an area's left side handle carried inwards by two columns: the children keep their sheet cells through columns left of 0, then
+  // the wall presses X back to column 0; it comes into its new column by itself, at its canonical row, standing in A's gap there
+  const w = () => createModel().open([blk('A', 2, 5, 0), blk('X', 1, 2, 3), blk('L', 2, 5, 8)]);
+  const a = w().side(2, 4);
+  eq([a.rows(), a.B.get('X').c0, a.B.get('X').c1, a.stack('L', 0), a.stack('L', 1)], [{ A: 0, L: 8, X: 3 }, 0, 1, 'X | X4 |', 'A | A2 [X:A1] A4 |'], 'r10.5: the wall presses X from column −1 to 0: every row stays');
+  clean(a, 'r10.5: invariants after the wall');
+  eq(a.remove('X').rows().L, 8, 'r10.5: X deleted then: L stays, held in the column X came into');
+  const refused = (fn) => { try { fn(); return false; } catch { return true; } };
+  const r = w(), before = r.snapshot();
+  ok(refused(() => r.side(3, 3)) && r.snapshot() === before, 'r10.5: A and L, four columns wide, cannot fit in three: the handle stops and nothing changed');
+  const q = createModel().open([blk('X', 1, 1, 0), blk('Y', 2, 3, 0)]), was = q.snapshot();
+  ok(refused(() => q.side(2, 4)) && q.snapshot() === was, 'r10.5: X pressed into Y: refused in the model, which has no P-ASIDE chain (the engine presses Y aside)');
+  ok(refused(() => createModel().open([blk('X', 1, 3, 0)]).shift(-2)), 'r10.5: a shift alone, which promises a settled result, still refuses a card past column 0');
+  // opening a valid note keeps every place, head rows and gaps included, in both measures, and stores nothing new
+  const input = [blk('A', 1, 3, 3), blk('B', 1, 3, 7, 2), blk('C', 5, 6, 2)];
+  const o = createModel().open(input);
+  eq([o.rows(), o.rows('canonical'), o.stack('A', 1), o.stack('B', 2)], [{ A: 3, B: 7, C: 2 }, { A: 3, B: 7, C: 2 }, 'top | _3 |', 'A | A3 |'], 'r10.6: a valid note with a head row and a gap opens as stored');
+  eq(o.places(), input, 'r10.6: and what 0.1 would store is what was read');
+  // a rules change between an action and its undo, with an equal layout: the exact path would bring back a stack the rules now in
+  // effect never make, so it is not taken (plan §6.4)
+  const s = createModel().open([blk('A', 1, 1, 0), blk('L', 1, 1, 10)]).insert(blk('X', 1, 1, 4)), entry = s.save(); s.remove('X');
+  const reopened = () => createModel({ gap53: false }).open(s.places());
+  eq(reopened().snapshot(), s.snapshot(), 'r10.2: X deleted, GAP.5.3 turned off and the note reopened: the same layout and stacks');
+  const exact = reopened().load(entry), inverse = reopened().restore(blk('X', 1, 1, 4));
+  eq([exact.stack('L', 1), inverse.stack('L', 1), inverse.stack('X', 1)], ['A | A3 [X:A1] A5 |', 'X | X5 |', 'A | A3 |'], 'r10.2: the exact undo brings X back standing with its lend; created under the rules in effect, it cuts A\'s gap');
+  eq([exact.remove('X').rows().L, inverse.remove('X').rows().L], [10, 4], 'r10.2: so deleting X again leaves L at 10 after the exact path and at 4 after the inverse one');
+}
 // ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);
@@ -485,14 +534,16 @@ function randomCase(seed, guarded = false) {
       // guarded: only while every base block stands as in the oracle, in both measures, and never under an inserted block
       if (guarded && (base.some((q) => displaced(q.id)) || ins.some((id) => m.B.has(id) && m.B.get(id).y < x.y && m.B.get(id).c0 <= z && a <= m.B.get(id).c1))) continue;
       const before = new Map(changed.map((c) => [c, look(m, c) !== look(o, c)]));   // the column did not look as it does without them
-      const was = m.snapshot(); both((mm) => mm.width(b.id, a, z));
+      const h = r() < 0.3 ? Math.max(1, x.h + pick([-1, 1])) : null;   // sometimes the re-measure at the new width gives another height
+      const was = m.snapshot(); both((mm) => mm.width(b.id, a, z, h));
       if (m.snapshot() !== was) for (const c of changed) if (moved || before.get(c)) touched.add(c); }
     else {
       const live = ins.filter((id) => m.B.has(id)); if (!live.length) continue; const id = pick(live), x = { ...m.B.get(id) };
       if (kind === 'grow') { const h = x.h + int(1, 2); tryOp((mm) => mm.height(id, h)); }
       if (kind === 'show') { const e = pick([0, 1, 2]); tryOp((mm) => mm.show(id, e)); }
       if (kind === 'widen') { const a = Math.max(0, x.c0 - int(0, 2)), b = Math.min(W - 1, x.c1 + int(0, 2)); tryOp((mm) => mm.width(id, a, b)); }
-      if (kind === 'narrow' && x.c1 > x.c0) { const a = x.c0 + int(0, 1), b = Math.max(a, x.c1 - int(0, 1)); tryOp((mm) => mm.width(id, a, b)); }
+      // an inserted block only grows (a shrink of one standing in a gap is G7, which leaves its trace on purpose): narrowed, it may get taller
+      if (kind === 'narrow' && x.c1 > x.c0) { const a = x.c0 + int(0, 1), b = Math.max(a, x.c1 - int(0, 1)), h = r() < 0.4 ? x.h + 1 : null; tryOp((mm) => mm.width(id, a, b, h)); }
       if (kind === 'delete') tryOp((mm) => mm.remove(id));
     }
     const e = m.check(); if (e.length) return { seed, step, errs: e };
@@ -541,9 +592,10 @@ function deleteCase(seed, opts = {}) {
       if (kind === 'insert') { const c0 = int(0, W - 2); m.insert({ ...blk('x' + n++, c0, Math.min(W - 1, c0 + int(0, 6)), int(0, 30), int(1, 3)), e: pick([0, 0, 2]) }); }
       if (kind === 'height') { const id = pick(live); m.height(id, Math.max(1, m.B.get(id).h + pick([-2, -1, 1, 2]))); }
       if (kind === 'show') m.show(pick(live), pick([0, 0, 1, 3]));
-      if (kind === 'width') { const id = pick(live), x = m.B.get(id), a = Math.max(0, x.c0 + pick([-1, 0, 1])); m.width(id, a, Math.max(a, Math.min(W - 1, x.c1 + pick([-1, 0, 1])))); }
+      if (kind === 'width') { const id = pick(live), x = m.B.get(id), a = Math.max(0, x.c0 + pick([-1, 0, 1])); m.width(id, a, Math.max(a, Math.min(W - 1, x.c1 + pick([-1, 0, 1]))), pick([null, null, Math.max(1, x.h - 2), x.h + 1])); }
       if (kind === 'carry') m.carry(pick(live), pick([-2, -1, 1, 2]));
-      if (kind === 'sideways') { const id = pick(live), x = m.B.get(id), k = pick([-1, 1]); m.carryTo(id, x.c0 + k, x.c1 + k, x.y + pick([0, 0, 1])); }   // keeps some columns
+      if (kind === 'sideways') { const id = pick(live), x = m.B.get(id), k = pick([-1, 1]), cut = x.c1 > x.c0 && r() < 0.4;   // keeps some columns; sometimes narrowed at an edge
+        m.carryTo(id, x.c0 + k + (cut && k > 0 ? 1 : 0), x.c1 + k - (cut && k < 0 ? 1 : 0), x.y + pick([0, 0, 1])); }
       if (kind === 'move') m.move([pick(live), pick(live)], pick([-1, 1]));
       if (kind === 'delete' && live.length > 1) { const id = pick(live), was = [m.rows(), m.rows('canonical')]; m.remove(id); const now = [m.rows(), m.rows('canonical')];
         for (const i of [0, 1]) for (const k of Object.keys(now[i])) if (now[i][k] > was[i][k]) return { seed, step, deleted: id, moved: k, measure: i ? 'canonical' : 'shown', from: was[i][k], to: now[i][k] }; }
@@ -563,7 +615,7 @@ function measureCase(seed) {
       if (kind === 'insert') { const c0 = int(0, W - 2); m.insert({ ...blk('x' + n++, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 30), int(1, 3)), e: pick([0, 1, 3]) }); }
       if (kind === 'show') m.show(pick(live), pick([0, 1, 2, 4]));
       if (kind === 'height') { const id = pick(live); m.height(id, Math.max(1, m.B.get(id).h + pick([-1, 1]))); }
-      if (kind === 'width') { const id = pick(live), x = m.B.get(id), a = Math.max(0, x.c0 + pick([-1, 1])); m.width(id, a, Math.max(a, Math.min(W - 1, x.c1 + pick([-1, 1])))); }
+      if (kind === 'width') { const id = pick(live), x = m.B.get(id), a = Math.max(0, x.c0 + pick([-1, 1])); m.width(id, a, Math.max(a, Math.min(W - 1, x.c1 + pick([-1, 1]))), pick([null, Math.max(1, x.h - 1), x.h + 1])); }
       if (kind === 'carry') m.carry(pick(live), pick([-1, 1]));
       if (kind === 'delete' && live.length > 1) m.remove(pick(live));
     } catch { /* refused */ }
@@ -613,8 +665,10 @@ function switchCase(seed) {
   console.log(`random: ${N} sequences of inserts, growth, temporary heights, widening, narrowing and deletions, base blocks changing height and width, every inserted block deleted at the end, compared with the history without them (exact, but for ${owners} whose other stacks are all in columns a base block came into or left while it or that column stood otherwise than without them: INV-7 b)`);
 }
 
-for (const [name, fn, N] of [['retrace', retraceCase, 2000], ['delete moves nothing down', deleteCase, 2000], ['measures', measureCase, 1000], ['GAP.5.1 off moves nothing', switchCase, 1000],
+const scale = (+process.argv[2] || 2000) / 2000;   // the other suites scale with the argument, at their defaults with none
+for (const [name, fn, n] of [['retrace', retraceCase, 2000], ['delete moves nothing down', deleteCase, 2000], ['measures', measureCase, 1000], ['GAP.5.1 off moves nothing', switchCase, 1000],
   ['delete moves nothing down, GAP.5.2 off', (s) => deleteCase(s, { gap52: false }), 500], ['delete moves nothing down, GAP.5.3 off', (s) => deleteCase(s, { gap53: false }), 500]]) {
+  const N = Math.max(1, Math.round(n * scale));
   let bad = 0, first = null;
   for (let s = 1; s <= N; s++) { let res; try { res = fn(s); } catch (e) { res = { seed: s, error: e.message }; } if (res) { bad++; first = first || res; } }
   ok(bad === 0, `${name}: ${bad} of ${N}; first: ${JSON.stringify(first)}`);
