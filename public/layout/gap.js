@@ -379,7 +379,8 @@ function departAll(V, out, whyOf, ys) {
  *  and 4): at its displayed target the carried block, a created one (not in base) and a block in a column whose chain it passed in;
  *  by its canonical row in every column the carried block of an undo ({id, canonical: true}), which leaves all its columns for it; every
  *  other at its reference (rule 1 replayed on a copy of base's stacks, every block keeping its columns but those it passed in, then
- *  canonical FOLLOW); then rule 5 and FOLLOW, whose rows are the result. The carried block leaves as carried away, every other block as
+ *  canonical FOLLOW; a block that passed another takes its own from such a copy with every block in its columns); then rule 5 and FOLLOW,
+ *  whose rows are the result. The carried block leaves as carried away, every other block as
  *  narrowed or pressed off.
  *  @param {Layout} base @param {Layout} after @param {Map<string,Moved>|Object<string,Moved>} moves @param {?(string|Carried)} carried
  *  @param {Rules} rules @returns {Layout} */
@@ -407,13 +408,17 @@ export function relink(base, after, moves, carried, rules) {
   const arrivals = [...into.keys()].sort((a, b) => rowOf(a) - rowOf(b) || c0Of(a) - c0Of(b) || byId(a, b));
   // the rows each step starts from: FOLLOW over base's stacks with after's heights, since a height a phase changed is no move
   const S = copyWork(W); setHeights(S); const start = rowsIn(S, 'shown');
-  // every arrival's reference, on a copy: the blocks that passed others in a column out of it, so that they push nothing they passed
-  const R = copyWork(W), inR = new Map();
-  for (const [id, cs] of passed) inR.set(id, cs);
-  if (canonical && R.B.has(cid)) inR.set(cid, new Set(cols(R.B.get(cid))));
-  departAll(R, inR, why, ys);
-  setHeights(R); for (const b of R.B.values()) b.y = start.get(b.id);
-  adjustWork(R, steps); const ref = rowsIn(R, 'canonical');
+  // every arrival's reference: rule 1 replayed on a copy of base's stacks, then canonical FOLLOW. For the blocks that passed others the copy
+  // keeps every block in its columns, so their own row comes from their own steps; for every other block it has the blocks that passed
+  // others out of the columns they passed them in, so that those push nothing they passed
+  const replay = (outOf) => {
+    const V = copyWork(W); departAll(V, outOf, why, ys);
+    setHeights(V); for (const b of V.B.values()) b.y = start.get(b.id);
+    adjustWork(V, steps); return rowsIn(V, 'canonical');
+  };
+  const inR = new Map(passed); if (canonical && W.B.has(cid)) inR.set(cid, new Set(cols(W.B.get(cid))));
+  const refOthers = replay(inR), refPassers = passed.size ? replay(new Map()) : refOthers;
+  const ref = new Map([...refOthers].map(([id, y]) => [id, passed.has(id) ? refPassers.get(id) : y]));
   // rule 2, column by column, top to bottom in each chain
   departAll(W, out, why, ys);
   // the heights and columns of after (a new block at its target, in no chain yet); G7 for every block still standing; rule 1
