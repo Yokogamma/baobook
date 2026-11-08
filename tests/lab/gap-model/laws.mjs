@@ -67,7 +67,7 @@ export function shrink(c, law) {
 }
 
 /** N random cases; returns the counts and the first failure, shrunk. */
-export function runLaws(N, { seed0 = 1, passWhy = 'away' } = {}) {
+export function runLaws(N, { seed0 = 1 } = {}) {
   const counts = {}, inc = (k) => (counts[k] = (counts[k] || 0) + 1);
   let tried = 0, failure = null;
   for (let seed = seed0; tried < N && seed < seed0 + N * 40; seed++) {
@@ -77,7 +77,7 @@ export function runLaws(N, { seed0 = 1, passWhy = 'away' } = {}) {
     const blocks = [...A, ...Z].map(({ e, ...b }) => b), temps = blocks.filter(() => r() < 0.25).map((b) => [b.id, 1 + Math.floor(r() * 3)]);
     const m = createModel(opts).open(blocks); for (const [id, e] of temps) m.show(id, e);
     const base = frames(m), part = (p) => Object.fromEntries(Object.entries(base).filter(([id]) => id[0] === p));
-    const ea = action(r, part('a'), { off: 0, passWhy }), ez = action(r, part('z'), { off: 20, passWhy });
+    const ea = action(r, part('a'), { off: 0 }), ez = action(r, part('z'), { off: 20 });
     if (!ea || !ez) { inc('no valid action drawn'); continue; }
     if (ea.T.carried && ez.T.carried) { inc('two carried blocks drawn'); continue; }
     const near = { ...ea.T, after: { ...ea.after } }, far = { ...ez.T, after: { ...ez.after } };

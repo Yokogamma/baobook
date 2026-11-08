@@ -153,18 +153,21 @@ export function createModel(opts = {}) {
   // ---- a block leaves column c (deleted, carried away, narrowed or pressed off it): rule 2
   function leave(x, c, why, ys) {   // ys: the canonical rows before the change
     const f = seq(c).find((el) => el.id === x.id); if (!f) return;
-    const keep = why === 'narrow' && O.gap9;   // G8: narrowing is not deleting
+    // a pass (a block of a swap changing its place in the chain of a column it keeps) frees nothing: it keeps what narrowing keeps with
+    // GAP.9 on and gives back what leaving gives back with GAP.5.2 on, whatever the switches, so the blocks under its place do not move
+    const pass = why === 'pass', g52 = pass || O.gap52;
+    const keep = pass || (why === 'narrow' && O.gap9);   // G8: narrowing is not deleting
     release(x, c, keep, heirOf(f.st));
     if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8); with GAP.5.2 off it goes with it
       const { st, i } = f;
-      st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...(O.gap52 ? st.parts[i].lend : []), ...st.parts[i + 1]]);
+      st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...(g52 ? st.parts[i].lend : []), ...st.parts[i + 1]]);
       return;
     }
     const mine = f.st; S.delete(key(x.id, c));
     const L = lowerOf(x.id, c);
     // GAP.5.2 off: the stack of the block that went loses its rows, the blocks standing in it stand on with no lends, whether it joins
     // the stack under it or, under the last anchor, its lowest standing block takes its place
-    const gone = (p, j) => (O.gap52 ? p : j % 2 === 0 ? [] : { id: p.id, lend: [] });
+    const gone = (p, j) => (g52 ? p : j % 2 === 0 ? [] : { id: p.id, lend: [] });
     if (L) {          // join: the stack above x and the stack under it become one
       const up = mine.parts.slice(), last = up.pop();
       // narrowed off: what its body stood on and its slack there (the rows by which its stack did not hold it) stay, measured
@@ -378,16 +381,16 @@ export function createModel(opts = {}) {
     // One RELINK on an explicit transition (step 1b): what SETTLE declares it did, checked against the geometry by the caller.
     // T, in the model's frame coordinates: after {id: {c0, c1, y, h, e, yc, area}} (y the displayed target, yc the canonical one of an
     // undo's carry back), steps [[ids, d]] (rule 1, rigid, in order), carried, canonical (the carried block is an undo's carry back),
-    // leave [[id, c, why]] (why: delete, away, narrow, press), enter [[id, c, how]] (how: put, at its displayed target, the carried or a
-    // created block; self, at its reference, widened or pressed in; back, an undo's, at its canonical target) and pass [[id, c, why]]
-    // (in column c, which it keeps, id changes its place in the chain: it leaves its old place as `why` says and comes back at its
-    // displayed target). Columns are GAP's, an area's extent ones.
+    // leave [[id, c, why]] (why: away, narrow, press), enter [[id, c, how]] (how: put, at its displayed target, the carried or a created
+    // block; self, at its reference, widened or pressed in; back, an undo's, at its canonical target) and pass [[id, c]] (in column c,
+    // which it keeps, id, a block of a swap, changes its place in the chain: it leaves its old place freeing nothing, whatever the
+    // switches, and comes back at its displayed target). Columns are GAP's, an area's extent ones.
     _relink(T) {
       const tg = new Map(Object.entries(T.after).map(([id, b]) => { const { yc, ...rest } = b; return [id, { id, e: 0, ...inside({ e: 0, ...rest }) }]; }));
       const steps = T.steps || [], carried = T.carried ?? null, canonical = !!T.canonical;
       const kv = (list) => { const m = new Map(); for (const [id, c, w] of list || []) m.set(key(id, c), w); return m; };
-      const LV = kv(T.leave), EN = kv(T.enter), PS = kv(T.pass);
-      const passWhy = new Map(); for (const [id, , w] of T.pass || []) if (!passWhy.has(id)) passWhy.set(id, w);
+      const LV = kv(T.leave), EN = kv(T.enter), PS = new Map((T.pass || []).map(([id, c]) => [key(id, c), 'pass']));
+      const passWhy = new Map((T.pass || []).map(([id]) => [id, 'pass']));
       const byTarget = (a, b) => tg.get(a).y - tg.get(b).y || tg.get(a).c0 - tg.get(b).c0 || (a < b ? -1 : 1);
       // GAP.6 first, top to bottom, for every block after does not hold
       for (const id of [...B.keys()].filter((id) => !tg.has(id)).sort((a, b) => B.get(a).y - B.get(b).y || (a < b ? -1 : 1))) gap6(id);
@@ -474,7 +477,10 @@ export function createModel(opts = {}) {
     rows(measure = 'shown') { const y = measure === 'shown' ? new Map([...B.values()].map((b) => [b.id, b.y])) : rowsIn('canonical'); return Object.fromEntries([...B.keys()].sort().map((id) => [id, frameRow(B.get(id), y.get(id))])); },
     stack(l, c) { const st = S.get(key(l, c)); return st ? show(st) : null; },
     save() { return copy(); },                                   // the whole state, temporaries included
-    load(s) { put(s); follow(); return api; },
+    load(s) {   // a copy of the state, so that what runs after it never changes the state saved
+      put({ B: new Map([...s.B].map(([k, b]) => [k, { ...b }])), S: new Map([...s.S].map(([k, st]) => [k, { u: st.u, parts: st.parts.map((p, i) => (i % 2 ? { id: p.id, lend: p.lend.slice() } : p.slice())) }])) });
+      follow(); return api;
+    },
     stored() { const s = copy(); for (const b of s.B.values()) b.e = 0; return s; },   // what 0.2 stores: places, sizes and stacks, no temporary
     places() { const y = rowsIn('canonical'); return [...B.values()].map((b) => { const p = padOf(b); return { id: b.id, c0: b.c0 + p, c1: b.c1 - p, y: y.get(b.id) + p, h: b.h - 2 * p, ...(b.area ? { area: true } : {}) }; }); },   // what 0.1 stores
     snapshot() {

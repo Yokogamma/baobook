@@ -5,7 +5,8 @@
 // comes from the declaration itself.
 //
 // base and after: {id: {c0, c1, y, h, e, area}} in frame coordinates (y the displayed row; an area by its frame, which this file turns
-// into its extent, as GAP counts it). T as model.mjs's relink takes it, with `swap` the two blocks of a swap when there is one.
+// into its extent, as GAP counts it). T as model.mjs's relink takes it, with `swap` the two blocks of a swap when there is one: the carried
+// block and its neighbour.
 
 const extent = (b) => { const p = b.area ? 1 : 0; return { c0: b.c0 - p, c1: b.c1 + p, y: b.y - p, h: b.h + 2 * p, e: b.e || 0 }; };
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
@@ -34,7 +35,7 @@ export function checkDeclaration(base, T) {
   const errs = [], after = T.after, carried = T.carried ?? null, canonical = !!T.canonical, swap = T.swap || [];
   const g = explain(base, after);
   const LV = new Map((T.leave || []).map(([id, c, w]) => [kc(id, c), w])), EN = new Map((T.enter || []).map(([id, c, h]) => [kc(id, c), h]));
-  const PS = new Map((T.pass || []).map(([id, c, w]) => [kc(id, c), w]));
+  const PS = new Map((T.pass || []).map(([id, c]) => [kc(id, c), true]));
   const leftSet = new Set(g.left.map(([id, c]) => kc(id, c))), enteredSet = new Set(g.entered.map(([id, c]) => kc(id, c)));
   // an undo's carry back leaves every column it had and comes back into every column it has, those it keeps included
   if (canonical && carried != null && base[carried] && after[carried]) {
@@ -46,10 +47,24 @@ export function checkDeclaration(base, T) {
   for (const k of LV.keys()) if (!leftSet.has(k)) errs.push(`declared leave ${k} is not in the geometry`);
   for (const k of enteredSet) if (!EN.has(k)) errs.push(`entry of ${k} not declared`);
   for (const k of EN.keys()) if (!enteredSet.has(k)) errs.push(`declared entry ${k} is not in the geometry`);
-  // order: every pair whose order changes in a column both keep has a declared passer there
+  // order: every pair whose order changes in a column both keep has a declared passer there, and every declared passer changes its order
+  // with some block there: a pass the geometry does not show would free its place for nothing
   for (const [c, p, q] of g.reordered) if (!PS.has(kc(p, c)) && !PS.has(kc(q, c))) errs.push(`${p} and ${q} change their order in column ${c} with no declared pass`);
   for (const k of PS.keys()) { const [id, c] = [k.slice(0, k.lastIndexOf('|')), +k.slice(k.lastIndexOf('|') + 1)];
-    if (!base[id] || !after[id] || !covers(extent(base[id]), c) || !covers(extent(after[id]), c)) errs.push(`declared pass ${k} in a column it does not keep`); }
+    if (!base[id] || !after[id] || !covers(extent(base[id]), c) || !covers(extent(after[id]), c)) errs.push(`declared pass ${k} in a column it does not keep`);
+    else if (!g.reordered.some(([cc, p, q]) => cc === c && (p === id || q === id))) errs.push(`declared pass ${k}: it changes its order with no block there`); }
+  // a swap: the carried block and the next block over or under it in a column they share in base, nothing between them there
+  if (T.swap) {
+    const [x, n] = T.swap, X = base[x] && extent(base[x]), N = base[n] && extent(base[n]);
+    if (x !== carried) errs.push(`swap ${x}/${n}: its first block is not the carried one`);
+    else if (!N || !after[n]) errs.push(`swap ${x}/${n}: no such neighbour`);
+    else {
+      const shared = cols(X).filter((c) => covers(N, c));
+      const between = (c) => Object.entries(base).some(([id, b]) => { if (id === x || id === n) return false; const e = extent(b); const lo = Math.min(X.y, N.y), hi = Math.max(X.y, N.y); return covers(e, c) && e.y > lo && e.y < hi; });
+      if (!shared.length) errs.push(`swap ${x}/${n}: they share no column`);
+      else if (shared.every(between)) errs.push(`swap ${x}/${n}: a block stands between them in every column they share`);
+    }
+  }
   // the reasons each action may give
   for (const [k, w] of LV) { const id = k.slice(0, k.lastIndexOf('|'));
     if (w === 'away' && id !== carried) errs.push(`${k}: only the carried block leaves as carried away`);
@@ -60,10 +75,9 @@ export function checkDeclaration(base, T) {
     if (h === 'back' && !(canonical && id === carried)) errs.push(`${k}: only an undo's carry back comes back by its canonical row`);
     if (h === 'self' && (created || id === carried)) errs.push(`${k}: a created or carried block does not come in by itself`);
     if (!['put', 'self', 'back'].includes(h)) errs.push(`${k}: no such way to come in, ${h}`); }
-  for (const [k, w] of PS) { const id = k.slice(0, k.lastIndexOf('|'));
-    if (!(id === carried || swap.includes(id))) errs.push(`${k}: only the carried block or a block of the swap changes its order`);
-    if (w === 'away' && id !== carried) errs.push(`${k}: only the carried block leaves its place as carried away`);
-    if (!['away', 'narrow'].includes(w)) errs.push(`${k}: no such reason to pass, ${w}`); }
+  // a carry inside its columns keeps every neighbour on its side (DRAG.B2) and pushes what it reaches; only a swap changes an order
+  for (const k of PS.keys()) { const id = k.slice(0, k.lastIndexOf('|'));
+    if (!swap.includes(id)) errs.push(`${k}: only a block of a swap changes its order`); }
   for (const [ids, d] of T.steps || []) { if (!Number.isInteger(d) || d === 0) errs.push(`a step of ${d} rows`); for (const id of ids) if (!base[id]) errs.push(`step of ${id}, not in base`); }
   return errs;
 }
