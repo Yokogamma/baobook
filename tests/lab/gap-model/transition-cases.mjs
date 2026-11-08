@@ -1,0 +1,54 @@
+// Named cases of the model's relink(T) (step 1b of docs/LAYOUT-ENGINE-PLAN.md): every example the reviews of step 1 found on the path of a
+// block that changes its order in a column it keeps, the case the old model had no rule for, each with its declaration. Several have a
+// block other than the carried one pass another, which the contract does not allow SETTLE to declare outside a swap (declare.mjs says
+// so); they stay as cases of the executor, which runs any declared pass, and their expectations are those of the reviews.
+import { createModel } from './model.mjs';
+import { checkDeclaration } from './declare.mjs';
+
+const blk = (id, c0, c1, y, h = 1) => ({ id, c0, c1, y, h });
+const frames = (m) => Object.fromEntries([...m.B.values()].map((b) => [b.id, { c0: b.c0, c1: b.c1, y: b.y, h: b.h, e: b.e }]));
+const T = (m, edits, x = {}) => { const a = frames(m); for (const [id, p] of Object.entries(edits)) a[id] = { ...a[id], ...p }; return { after: a, leave: [], enter: [], pass: [], steps: [], carried: null, ...x }; };
+
+/** [name, got, want, the declaration's errors] for each case. */
+export function transitionCases() {
+  const out = [], run = (name, m, t, got, want) => { const errs = checkDeclaration(frames(m), t); m.relink(t); out.push([name, got(m), want, errs]); };
+  { const m = createModel().open([blk('X', 1, 1, 1), blk('Y', 1, 2, 4)]);
+    run('X carried past Y while Y widens into column 3 by itself: Y stays, its reference not pushed', m,
+      T(m, { X: { y: 10 }, Y: { c1: 3 } }, { steps: [[['X'], 9]], carried: 'X', pass: [['X', 1, 'away']], enter: [['Y', 3, 'self']] }),
+      (m) => [m.rows(), m.stack('Y', 3)], [{ X: 10, Y: 4 }, 'top | _4 |']); }
+  { const m = createModel().open([blk('U', 1, 1, 0), blk('A', 1, 1, 3), blk('D', 1, 1, 6)]);
+    run('D moved up past A comes in at its target, in A\'s gap', m, T(m, { D: { y: 1 } }, { steps: [[['D'], -5]], pass: [['D', 1, 'narrow']] }),
+      (m) => [m.rows(), m.stack('A', 1)], [{ A: 3, D: 1, U: 0 }, 'U | · [D:U1] U1 |']); }
+  { const m = createModel().open([blk('X', 1, 1, 1), blk('Y', 1, 1, 4)]);
+    run('X moved down past Y while widening into column 2: its own reference, row 10', m,
+      T(m, { X: { y: 10, c1: 2 } }, { steps: [[['X'], 9]], pass: [['X', 1, 'narrow']], enter: [['X', 2, 'self']] }),
+      (m) => [m.rows(), m.stack('X', 2)], [{ X: 10, Y: 4 }, 'top | _10 |']); }
+  { const m = createModel().open([blk('X', 1, 1, 6), blk('Y', 1, 1, 2)]);
+    run('X moved up past Y while widening into column 2: row 0, above Y', m,
+      T(m, { X: { y: 0, c1: 2 } }, { steps: [[['X'], -6]], pass: [['X', 1, 'narrow']], enter: [['X', 2, 'self']] }),
+      (m) => [m.rows(), m.stack('X', 2)], [{ X: 0, Y: 2 }, 'top | · |']); }
+  { const m = createModel().open([blk('X', 1, 1, 1), blk('Y', 1, 2, 4), blk('Z', 2, 2, 7)]);
+    run('X passes Y in column 1 and Y passes Z in column 2, Y widening into column 3: X does not push Y', m,
+      T(m, { X: { y: 10 }, Y: { y: 8, c1: 3 } }, { steps: [[['X'], 9], [['Y'], 4]], pass: [['X', 1, 'narrow'], ['Y', 2, 'narrow']], enter: [['Y', 3, 'self']] }),
+      (m) => [m.rows(), m.stack('Y', 3)], [{ X: 10, Y: 8, Z: 7 }, 'top | _8 |']); }
+  { const m = createModel().open([blk('T', 3, 4, 2), blk('A', 4, 5, 4), blk('W', 4, 4, 14)]); m.show('T', 2);
+    run('the temporary rows of a block that passed another are not made canonical in a column a block comes into by itself', m,
+      T(m, { T: { y: 11 }, A: { y: 7 }, W: { c1: 5 } }, { steps: [[['T'], 9], [['A'], 1]], pass: [['T', 4, 'narrow']], enter: [['W', 5, 'self']] }),
+      (m) => { const r = [m.rows(), m.rows('canonical'), m.stack('W', 5)]; m.show('T', 0); return [...r, m.rows()]; },
+      [{ A: 7, T: 11, W: 18 }, { A: 7, T: 11, W: 16 }, 'A | A8 |', { A: 7, T: 11, W: 16 }]); }
+  { const m = createModel().open([blk('B', 1, 2, 1), blk('D', 1, 2, 4)]);
+    run('D moved up past B while leaving one of their two columns, B moved down and widening: no cycle', m,
+      T(m, { B: { y: 5, c1: 3 }, D: { y: 0, c0: 2 } }, { steps: [[['D'], -4], [['B'], 4]], pass: [['D', 2, 'narrow']], leave: [['D', 1, 'narrow']], enter: [['B', 3, 'self']] }),
+      (m) => [m.rows(), m.stack('B', 3)], [{ B: 5, D: 0 }, 'top | _5 |']); }
+  for (const far of [false, true]) {
+    const m = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 2, 11), blk('P', 10, 10, 1), blk('Q', 10, 10, 4)]); m.height('A', 2);
+    run(`B moved down a row and shifted from columns 1–2 to 2–3, ${far ? 'P passing Q in column 10 in the same RELINK' : 'nothing else'}: B's memory, narrowed back to column 2`, m,
+      T(m, far ? { B: { y: 13, c0: 2, c1: 3 }, P: { y: 10 } } : { B: { y: 13, c0: 2, c1: 3 } }, { steps: far ? [[['B'], 1], [['P'], 9]] : [[['B'], 1]], pass: far ? [['P', 10, 'narrow']] : [], leave: [['B', 1, 'narrow']], enter: [['B', 3, 'self']] }),
+      (m) => { const st = m.stack('B', 2); m.width('B', 2, 2); return [st, m.rows().B]; }, ['top | _11 |', 11]);
+  }
+  { const m = createModel().open([blk('C', 1, 1, 4), blk('N', 1, 2, 8), blk('A', 2, 2, 6)]);
+    run('a swap with a wide neighbour: N takes C\'s row and passes A in column 2, C right under N', m,
+      T(m, { N: { y: 4 }, C: { y: 5 } }, { steps: [[['N'], -4], [['C'], 1]], carried: 'C', swap: ['C', 'N'], pass: [['C', 1, 'away'], ['N', 2, 'narrow']] }),
+      (m) => m.rows(), { A: 6, C: 5, N: 4 }); }
+  return out;
+}
