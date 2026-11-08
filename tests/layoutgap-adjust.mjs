@@ -31,4 +31,10 @@ const two = relink(X, edit(X, (m, set) => set('X', { y: 5 })), { X: steps([1, 1]
 eq('4 two steps in one RELINK, each measured at the rows it starts from: X at 5 (r9.1)', rows(two).X, 5);
 let threw = false; try { adjust(placed([box('A', 1, 1, 0), box('B', 3, 3, 0)]), { A: steps([1, 1]), B: steps([1, 2]) }, R); } catch { threw = true; }
 ok('4a a step is rigid: one step that moved two blocks by different rows is refused', threw);
+// the code review of step 1 (#132): a height, a move and a widening in one RELINK; the step starts from the rows the new height gives
+const H0 = placed([box('A', 1, 2, 0), box('B', 1, 1, 4)]);
+const hw = relink(H0, edit(H0, (m, set) => { set('A', { w: 2, h: 3 }); set('B', { w: 3, y: 7, yc: 7 }); }), { B: steps([1, 1]) }, null, R);
+eq('5 A narrowed to column 1 and three rows tall, B pushed by it to 6 and moved down one, widening into column 2: B stands at 7 there', [rows(hw), stack(hw, 'B', 2), stack(hw, 'B', 1)], [{ A: 0, B: 7 }, 'top | _7 |', 'A | A4 |']);
+eq('5a A deleted then, B keeps 7 (it was held there by column 2 too)', rows(remove(hw, 'A', R)).B, 7);
+clean('5b invariants', hw);
 done();

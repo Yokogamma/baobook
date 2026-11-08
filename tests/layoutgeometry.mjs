@@ -36,6 +36,7 @@ ok('3b neighbour order: every upper neighbour first, ties by reading order', eq(
 ok('4 MAXCELL is 2^20, which the view can still draw', MAXCELL === 1048576);
 ok('4a in range: whole numbers 0 … MAXCELL only', inRange(0) && inRange(MAXCELL) && !inRange(MAXCELL + 1) && !inRange(-1) && !inRange(1.5) && !inRange(1e20) && !inRange(NaN) && !inRange(Number.MAX_SAFE_INTEGER + 2));
 ok('4b a place\'s range: the handle cell from column 0, the card ending at the last column, an area\'s frame from row 1', eq(range(box('X', 0, 0, 5, 1), 20), { colMin: 0, colMax: 15, yMin: 0 }) && range(a, 20).yMin === 1);
+ok('4b′ an area\'s right free column stays inside too (proposed): an area 8 wide in 20 columns ends its frame at column 18 at most', range(a, 20).colMax === 11 && extent({ ...a, col: range(a, 20).colMax }).c1 === 19);
 ok('4c clamped: a card past the right edge moves left to the last column where it fits; a row above the top comes down', eq(clampPlace(box('X', 18, -2, 5, 1), 20), { col: 15, y: 0 }) && eq(clampPlace(box('A', -1, 0, 8, 2, 'area'), 20), { col: 0, y: 1 }));
 
 /* ── 5. EDIT.1: what a point belongs to ── */

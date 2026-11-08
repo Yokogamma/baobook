@@ -68,4 +68,19 @@ const chars = (n) => 'x'.repeat(n);
   ok('4c code: one row per line, folded at ch with one row for «Розгорнути», unfolded when open', rowsAt(C, 12, ctx).rows === 6 && rowsAt({ ...C, ch: 3 }, 12, ctx).rows === 4 && rowsAt({ ...C, ch: 3, open: true }, 12, ctx).rows === 6 && rowsAt({ ...C, ch: 8 }, 12, ctx).rows === 6);
   ok('4d code with wrap wraps; without, it does not', rowsAt(box('W', 0, 0, 13, 1, { kind: 'code' }), 4, ctx).rows === 3);
 }
+/* ── 5. the code review of step 1 (#132): a long code block folds as today; an area's height; the room against an area ── */
+{
+  const lines = (n) => Array.from({ length: n }, (_, i) => 'l' + i).join('\n');
+  const ctx = ctxOf({ C14: { kind: 'code', text: lines(14) }, C15: { kind: 'code', text: lines(15) }, C30: { kind: 'code', text: lines(30) }, W15: { kind: 'code', text: lines(15).replace(/l/g, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxl'), wrap: true },
+    A: { kind: 'area', header: 1 }, X: { text: chars(60) } });
+  const code = (id, o = {}) => box(id, 0, 0, 13, 1, { kind: 'code', ...o });
+  ok('5 a code block of 14 lines with no ch shows them all; of 15, 12 and one row for «Розгорнути» (COLLAPSE_AT 14, SHOW 12)', rowsAt(code('C14'), 12, ctx).rows === 14 && rowsAt(code('C15'), 12, ctx).rows === 13 && rowsAt(code('C30'), 12, ctx).rows === 13);
+  ok('5a open, it shows every line; with ch 3, three and the row', rowsAt(code('C30', { open: true }), 12, ctx).rows === 30 && rowsAt(code('C30', { ch: 3 }), 12, ctx).rows === 4);
+  ok('5b wrapped, it folds by its 15 lines, not by the rows they wrap to', rowsAt(code('W15', { kind: 'code' }), 12, ctx).rows === 13);
+  const area = KINDS.area.container, A = box('A', 0, 1, 21, 6, { kind: 'area', cw: 20 });
+  ok('5c an area is its header and the rows its children take, or its ch when larger; collapsed, its header alone (AREA.2)', area.height(A, 4, ctx.measure) === 5 && area.height({ ...A, ch: 9 }, 4, ctx.measure) === 9 && area.height({ ...A, collapsed: true, ch: 9 }, 4, ctx.measure) === 1);
+  const X = box('X', 0, 3, 2, 1), Ar = box('A', 12, 5, 13, 3, { kind: 'area', cw: 12 });   // the area's frame from row 5: its free row is row 4
+  const room = (w) => roomAt(layoutOf(59, [X, Ar]), X, w, ctx);
+  ok('5d the room ends at an area\'s free column on the rows of its extent: a text whose last row is the area\'s free row above its frame is held', room(20) === 58 && room(10) === 11 && room(6) === 11);
+}
 process.exit(fails ? 1 : 0);
