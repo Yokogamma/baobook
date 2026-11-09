@@ -68,6 +68,10 @@ export function transitionCases() {
       (m) => m.rows(), { b1: 3, b3: 4 });
     run('then b3 goes on to row 7 from the new start, b1 staying at row 3', m, T(m, { b3: { y: 7 } }, { steps: [[['b3'], 3]], carried: 'b3' }),
       (m) => m.rows(), { b1: 3, b3: 7 }); }
+  { const m = createModel().open([blk('Y', 1, 1, 3), blk('X', 1, 1, 6)]);
+    run('P-UP off: X carried up into Y, which is pushed down under it instead (the fallback of §1.6): X passes Y, Y stays and moves', m,
+      T(m, { X: { y: 3 }, Y: { y: 4 } }, { steps: [[['Y'], 1], [['X'], -3]], carried: 'X', fallback: 'P-UP', pass: [['X', 1]] }),
+      (m) => m.rows(), { X: 3, Y: 4 }); }
   { const m = createModel().open([blk('a3', 1, 4, 3, 3), blk('a1', 1, 1, 13, 2)]); m.show('a1', 1); m.show('a3', 1);
     // OPEN QUESTION of the contract, kept as the model gives it today: a1 (one temporary row) carried up and swapped with a3 (one too);
     // a3 moves down by a1's height on the screen, 3, which rule 1 keeps canonically as well, and a1 comes in on the screen with its
@@ -115,6 +119,8 @@ export function declarationCases() {
     ['a step of a block after does not hold is refused', checkDeclaration(base, { after: { b3: base.b3, a: base.a }, steps: [[['b1'], 1]], leave: [], enter: [], pass: [], carried: null }), 'which after does not hold'],
     ['two blocks on one cell in after are refused', D({ a: { ...base.a, c0: 3, c1: 3, y: 4 } }, { leave: [['a', 5, 'narrow']], enter: [['a', 3, 'self']] }), 'overlap in after'],
     ['a push declared after the move that makes it, which replayed carries one block past another, is refused', D({ b3: { ...base.b3, y: 7 }, b1: { ...base.b1, y: 8 } }, { steps: [[['b3'], 7], [['b1'], 4]], carried: 'b3' }), 'carries b3 past b1'],
+    ['a pass by the carried block outside a swap with no fallback declared is refused', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', pass: [['b3', 3]] }), 'only a block of a swap'],
+    ['the same pass under the fallback of P-UP off is accepted', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', fallback: 'P-UP', pass: [['b3', 3]] }), null],
     ['the same push as one step per common part is accepted', D({ b3: { ...base.b3, y: 7 }, b1: { ...base.b1, y: 8 } }, { steps: [[['b3'], 3], [['b3', 'b1'], 4]], carried: 'b3' }), null],
   ];
 }
