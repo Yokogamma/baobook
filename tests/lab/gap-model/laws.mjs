@@ -35,11 +35,13 @@ export function runCase(c) {
   try { m1.relink(T); } catch (e) { return { law: 'valid', err: e.message }; }
   // landing: every block the steps move and the carried block stand where SETTLE put them; lower only where a block that came in by itself
   // pushes it on the screen (rule 5 never cuts a stack)
-  { const rows = m1.rows(), selfIn = T.enter.some(([, , h]) => h === 'self');
+  { const rows = m1.rows(), a = T.after;
+    // a block that came in by itself pushes on the screen only what shares a column with it there
+    const pushedBySelf = (id) => T.enter.some(([s, c, h]) => h === 'self' && s !== id && a[id].c0 <= c && c <= a[id].c1);
     for (const id of new Set([...T.steps.flatMap(([ids]) => ids), ...(T.carried != null ? [T.carried] : [])])) {
-      if (!(id in T.after) || !(id in rows)) continue;
-      const want = T.after[id].y, got = rows[id];
-      if (got < want || (got > want && !selfIn)) return { law: 'landing', id, want, got };
+      if (!(id in a) || !(id in rows)) continue;
+      const want = a[id].y, got = rows[id];
+      if (got < want || (got > want && !pushedBySelf(id))) return { law: 'landing', id, want, got };
     } }
   if (far) {
     // the same near transition with the far blocks left as they were
@@ -98,7 +100,7 @@ export function runLaws(N, { seed0 = 1 } = {}) {
     if (!ea || !ez) { inc('no valid action drawn'); continue; }
     if (ea.T.carried && ez.T.carried) { inc('two carried blocks drawn'); continue; }
     const near = { ...ea.T, after: { ...ea.after } }, far = { ...ez.T, after: { ...ez.after } };
-    tried++; inc(ea.kind); if (near.pass.length) inc('with passes'); if (near.swap && near.pass.some(([id]) => id === near.swap[1])) inc('a swap neighbour passing'); if (temps.length) inc('under temporary heights');
+    tried++; inc(ea.kind); if (near.pass.length) inc('with passes'); if (near.swap && near.pass.some(([id]) => id === near.swap[1])) inc('a swap neighbour passing'); if (near.swap && near.steps.some(([ids]) => ids.includes(near.swap[0]) && ids.includes(near.swap[1]))) inc('a swap after a push'); if (temps.length) inc('under temporary heights');
     const c = { seed, opts, blocks, temps, near, far }, f = runCase(c);
     if (f) { inc('failed: ' + f.law); if (!failure) failure = { GEN_VERSION, seed, failure: f, case: shrink(c, f.law) }; }
   }

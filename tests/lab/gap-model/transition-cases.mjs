@@ -71,10 +71,22 @@ export function transitionCases() {
   { const m = createModel().open([blk('a3', 1, 4, 3, 3), blk('a1', 1, 1, 13, 2)]); m.show('a1', 1); m.show('a3', 1);
     // OPEN QUESTION of the contract, kept as the model gives it today: a1 (one temporary row) carried up and swapped with a3 (one too);
     // a3 moves down by a1's height on the screen, 3, which rule 1 keeps canonically as well, and a1 comes in on the screen with its
-    // canonical body, 2 rows: a3 lands a row lower than SETTLE put it (7, not 6), and canonically a row under a1 (6, not 5)
-    run('OPEN: a swap of blocks with temporary heights leaves the neighbour a row lower than the swap put it', m,
+    // canonical body, 2 rows: a3 lands a row lower than SETTLE put it (7, not 6), and canonically a row under a1 (6, not 5); so does
+    // whatever followed the neighbour when it was pushed before the pin
+    run('OPEN: a swap of blocks with temporary heights leaves the neighbour, and what followed it, a row lower than the swap put them', m,
       T(m, { a1: { y: 3 }, a3: { y: 6 } }, { steps: [[['a1'], -7], [['a1'], -4], [['a3'], 3]], carried: 'a1', swap: ['a1', 'a3'], pass: [['a1', 1]] }),
       (m) => [m.rows(), m.rows('canonical')], [{ a1: 3, a3: 7 }, { a1: 3, a3: 6 }]); }
+  { const m = createModel().open([blk('Q', 1, 2, 0), blk('X', 1, 2, 6), blk('B', 1, 2, 10)]); m.show('Q', 1);
+    // OPEN QUESTION of the contract, kept as the model gives it today: Q has a temporary row; in one RELINK Q is narrowed out of column
+    // 2 (as P-ASIDE's press would) and X is carried up 2 rows on the screen, 7 to 5. Rule 2 comes before rule 1, so in column 2 X no
+    // longer has Q's temporary row above it and moves up through a row of slack, which by rule 1 stays its own rows under it: X goes
+    // canonically from 6 to 5 only, and B from 10 to 11, and when Q's temporary row ends X stays at 5 and B at 11. The carry first and
+    // the narrowing after it, as two RELINKs, leave them canonically at 4 and 10. Rule 1 says the first; §2.1 (a temporary push is never
+    // written) and GAP.9 suggest the second
+    run('OPEN: a narrowing of a block with a temporary row and a move under it in one RELINK write the temporary push', m,
+      T(m, { Q: { c1: 1 }, X: { y: 5 } }, { steps: [[['X'], -2]], carried: 'X', leave: [['Q', 2, 'narrow']] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('Q', 0); return [...r, m.rows()]; },
+      [{ B: 11, Q: 0, X: 5 }, { B: 11, Q: 0, X: 5 }, { B: 11, Q: 0, X: 5 }]); }
   return out;
 }
 

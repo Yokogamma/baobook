@@ -3,7 +3,7 @@
 // with the neighbour right under the carried block, a width change (narrowed, widened, shifted), a block created or deleted, a height,
 // under temporary heights. Each gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the
 // declaration explains the geometry. Text blocks only (areas: next). The generator's version goes with every saved example.
-export const GEN_VERSION = 3;
+export const GEN_VERSION = 4;
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
@@ -62,11 +62,25 @@ function carrySettle(after, base, x) {
   return false;
 }
 
+// the moves of a carry as rigid steps, one per common part (LAYOUT-RULES GAP's inputs): a block the carry pushes moves with it over the
+// last rows of its way, so x alone first, then x with every block pushed at least that far, and so on. False when a block moved the other
+// way or further than x
+function commonParts(T, base, after, x, d) {
+  const disp = Object.keys(after).filter((id) => id !== x && base[id] && after[id].y !== base[id].y).map((id) => [id, after[id].y - base[id].y]);
+  if (disp.some(([, e]) => Math.sign(e) !== Math.sign(d) || Math.abs(e) > Math.abs(d))) return false;
+  const levels = [...new Set(disp.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
+  let done = 0;
+  for (const L of [...levels, 0].map((v) => Math.abs(d) - v)) {
+    if (L > done) { const with_ = disp.filter(([, e]) => Math.abs(d) - Math.abs(e) < L).map(([id]) => id); T.steps.push([[x, ...with_], Math.sign(d) * (L - done)]); done = L; }
+  }
+  return true;
+}
+
 /** One random action on `base` ({id: block}); returns {kind, after, T} or null when the draw gives no valid transition. */
 export function action(r, base, opts = {}) {
   const int = (a, b) => a + Math.floor(r() * (b - a + 1)), pick = (a) => a[Math.floor(r() * a.length)];
   const ids = Object.keys(base); if (!ids.length) return null;
-  const kinds = opts.kinds || ['carry', 'carry', 'carry', 'sideways', 'swap', 'swap', 'width', 'width', 'create', 'delete', 'height'];
+  const kinds = opts.kinds || ['carry', 'carry', 'carry', 'sideways', 'swap', 'swap', 'swap', 'swap', 'width', 'width', 'compose', 'create', 'delete', 'height'];
   const kind = pick(kinds), after = clone(base), W = opts.W ?? 8, off = opts.off ?? 0;
   const T = { after, steps: [], leave: [], enter: [], pass: [], carried: null };
   const reorders = (x, but = null) => {   // the columns where x, which keeps them, changes its order with another block (not `but`) that keeps them
@@ -77,6 +91,20 @@ export function action(r, base, opts = {}) {
     }
     return out;
   };
+  if (kind === 'compose') {
+    // a carry and, in the same RELINK, another block narrowed or widened by a column where nothing is: as phase 8 relinks a carry with
+    // the blocks P-ASIDE pressed (pressing itself is not made here)
+    const c = action(r, base, { ...opts, kinds: ['carry'] }); if (!c) return null;
+    const free = ids.filter((id) => id !== c.T.carried && c.after[id] && c.after[id].y === base[id].y); if (!free.length) return null;
+    const k = pick(free), K = c.after[k], a = Math.max(off, K.c0 + pick([-1, 0, 1])), z = Math.min(off + W - 1, Math.max(a, K.c1 + pick([-1, 0, 1])));
+    if (a === K.c0 && z === K.c1) return null;
+    const was = cols(K), nk = { ...K, c0: a, c1: z };
+    if (ids.some((id) => id !== k && c.after[id] && hits(c.after[id], nk))) return null;
+    c.after[k] = nk;
+    for (const col of was) if (col < a || col > z) c.T.leave.push([k, col, 'narrow']);
+    for (const col of cols(nk)) if (!was.includes(col)) c.T.enter.push([k, col, 'self']);
+    return { kind, after: c.after, T: c.T };
+  }
   if (kind === 'carry' || kind === 'sideways') {
     const x = pick(ids), X = after[x], k = kind === 'sideways' ? pick([-1, 1]) : 0, d = int(-12, 12);
     if (!d && !k) return null;
@@ -87,15 +115,7 @@ export function action(r, base, opts = {}) {
     // sideways, it moves only into free room: a block met from the side would be P-ASIDE's, which this generator does not make
     if (k && ids.some((id) => id !== x && hits(after[id], X) && !cols(X).filter((c) => c >= base[id].c0 && c <= base[id].c1).some((c) => c >= base[x].c0 && c <= base[x].c1))) return null;
     if (!carrySettle(after, base, x)) return null;
-    // the moves as rigid steps, one per common part (LAYOUT-RULES GAP's inputs): a block the carry pushes moves with it over the last rows
-    // of its way, so x alone first, then x with every block pushed at least that far, and so on
-    const disp = Object.keys(after).filter((id) => id !== x && base[id] && after[id].y !== base[id].y).map((id) => [id, after[id].y - base[id].y]);
-    if (disp.some(([, e]) => Math.sign(e) !== Math.sign(d) || Math.abs(e) > Math.abs(d))) return null;
-    const levels = [...new Set(disp.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
-    let done = 0;
-    for (const L of [...levels, 0].map((v) => Math.abs(d) - v)) {
-      if (L > done) { const with_ = disp.filter(([, e]) => Math.abs(d) - Math.abs(e) < L).map(([id]) => id); T.steps.push([[x, ...with_], Math.sign(d) * (L - done)]); done = L; }
-    }
+    if (!commonParts(T, base, after, x, d)) return null;
     // a carry inside its columns changes no order (DRAG.B2): a case where the pushes did is the generator's, not SETTLE's
     if (ids.some((id) => after[id] && reorders(id).length)) return null;
     for (const c of cols(base[x])) if (c < X.c0 || c > X.c1) T.leave.push([x, c, 'away']);
@@ -116,13 +136,22 @@ export function action(r, base, opts = {}) {
     if ((X.e || 0) || (N.e || 0)) return null;
     const between = (c) => ids.some((id) => id !== x && id !== n && base[id].c0 <= c && c <= base[id].c1 && base[id].y > Math.min(X.y, N.y) && base[id].y < Math.max(X.y, N.y));
     if (cols(X).filter((c) => c >= N.c0 && c <= N.c1).every(between)) return null;
-    let xp, xy, ny;
-    if (down) { xp = N.y - hX; ny = xp; xy = ny + hN; } else { xp = N.y + hN; xy = N.y; ny = xy + hX; }
+    // going down, the carried block may push the neighbour first (P-DOWN, its lower neighbours following), which then stops and lets it
+    // through (M2, M6): pinned where it stopped, the carried block right against it
+    const push = down && r() < 0.5 ? int(1, 4) : 0;
+    let xp, xy, ny, pN = N.y;
+    if (push) {
+      after[x].y = N.y - hX + push;
+      if (!carrySettle(after, base, x) || after[n].y !== N.y + push) return null;
+      if (!commonParts(T, base, after, x, after[x].y - X.y)) return null;
+      pN = after[n].y; xp = after[x].y;
+    } else xp = down ? N.y - hX : N.y + hN;
+    if (down) { ny = xp; xy = ny + hN; } else { xy = N.y; ny = xy + hX; }
     after[x].y = xy; after[n].y = ny;
     if (ids.some((id) => id !== x && id !== n && (hits(after[id], after[n]) || hits(after[id], after[x]) || hits(after[id], { ...X, y: xp })))) return null;
     T.carried = x; T.swap = [x, n];
-    if (xp !== X.y) T.steps.push([[x], xp - X.y]);   // the pin
-    if (down) { T.steps.push([[n], ny - N.y]); T.steps.push([[x], xy - xp]); } else { T.steps.push([[x], xy - xp]); T.steps.push([[n], ny - N.y]); }
+    if (!push && xp !== X.y) T.steps.push([[x], xp - X.y]);   // the pin
+    if (down) { T.steps.push([[n], ny - pN]); T.steps.push([[x], xy - xp]); } else { T.steps.push([[x], xy - xp]); T.steps.push([[n], ny - pN]); }
     // the carried block changes its order with the neighbour only; anything else it would pass, P-DOWN or P-UP would have pushed
     if (reorders(x, n).length) return null;
     for (const c of reorders(x)) T.pass.push([x, c]);

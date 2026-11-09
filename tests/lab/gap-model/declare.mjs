@@ -67,7 +67,15 @@ export function checkDeclaration(base, T) {
       if (!shared.length) errs.push(`swap ${x}/${n}: they share no column`);
       else if (shared.every(between)) errs.push(`swap ${x}/${n}: a block stands between them in every column they share`);
       else if ((X.y < N.y) === (AX.y < AN.y)) errs.push(`swap ${x}/${n}: their order is not exchanged`);
-      else if (X.y < N.y ? AN.y !== N.y - hX || AX.y !== AN.y + hN : AX.y !== N.y || AN.y !== AX.y + hX) errs.push(`swap ${x}/${n}: not at the rows the swap gives them`);
+      else {
+        // the neighbour may have been pushed before it stopped (M2, M6): it is pinned where it stopped, so its swap is its last step, the
+        // carried block's displayed height towards where the carried block was pinned; going down the carried block then stands right
+        // under it, going up right over it
+        const nSteps = (T.steps || []).filter(([ids]) => ids.includes(n)), last = nSteps[nSteps.length - 1], down = X.y < N.y;
+        const swapStep = last && last[0].length === 1 && last[1] === (down ? -hX : hX);
+        const pinned = AN.y + (down ? hX : -hX);   // the neighbour's row before the swap
+        if (!swapStep || (down ? AX.y !== AN.y + hN || pinned < N.y : AN.y !== AX.y + hX || pinned > N.y)) errs.push(`swap ${x}/${n}: not at the rows the swap gives them`);
+      }
       for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
     }
   }
@@ -83,6 +91,9 @@ export function checkDeclaration(base, T) {
   for (const [ids, d] of T.steps || []) for (const id of ids) { if (!after[id]) errs.push(`step of ${id}, which after does not hold`); moved.set(id, (moved.get(id) || 0) + d); }
   if (heightsKept) {
     for (const [id, d] of moved) if (after[id] && extent(base[id]).y + d !== extent(after[id]).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
+    // with nothing deleted and nothing leaving a column, a block no step moves keeps its row: every other change of row is a move
+    if (Object.keys(base).every((id) => after[id]) && !(T.leave || []).length && !(canonical && carried != null))
+      for (const id of Object.keys(base)) if (!moved.has(id) && extent(base[id]).y !== extent(after[id]).y) errs.push(`${id} is at another row in after with no step that moves it`);
     const y = new Map(Object.keys(base).filter((id) => after[id]).map((id) => [id, extent(base[id]).y])), pair = (p, q) => swap.includes(p) && swap.includes(q);
     const keptCols = (id) => { const a = extent(base[id]), b = extent(after[id]); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
     for (const [ids, d] of T.steps || []) {
