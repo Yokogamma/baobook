@@ -5,7 +5,9 @@
 //   2. local: a transition in columns far away, in the same RELINK, changes nothing of the others: rows in both measures, columns,
 //      heights and stacks with their owners and lends;
 //   3. after-effects: from the result, deleting any block, narrowing any block by a column and ending every temporary height keep the
-//      invariants.
+//      invariants;
+//   4. landing: the blocks the steps move and the carried block stand where SETTLE put them, lower only where a block that came in by
+//      itself pushes them on the screen.
 // A failure is shrunk (fewer blocks, fewer temporary heights, the far transition dropped), keeping the declaration valid and the failure,
 // and returned whole: the generator's version, the switches, the blocks, the temporary heights and the declaration.
 import { createModel } from './model.mjs';
@@ -24,19 +26,32 @@ export function projection(m, ids) {
 
 // one case: the blocks (frames), their temporary heights, the near and the far transition; returns a failure or null
 export function runCase(c) {
-  const mk = () => { const m = createModel(c.opts).open(c.blocks); for (const [id, e] of c.temps) m.show(id, e); return m; };
+  const mk = () => { const m = createModel(c.opts).open(c.blocks); for (const [id, e] of c.temps) if (m.B.has(id)) m.show(id, e); return m; };
   const m1 = mk(), base = frames(m1), near = c.near, far = c.far;
   const T = far
     ? { after: { ...near.after, ...far.after }, steps: [...near.steps, ...far.steps], leave: [...near.leave, ...far.leave], enter: [...near.enter, ...far.enter], pass: [...near.pass, ...far.pass], carried: near.carried ?? far.carried, swap: near.swap || far.swap }
     : near;
   const errs = checkDeclaration(base, T); if (errs.length) return { law: 'declaration', errs };
   try { m1.relink(T); } catch (e) { return { law: 'valid', err: e.message }; }
+  // landing: every block the steps move and the carried block stand where SETTLE put them; lower only where a block that came in by itself
+  // pushes it on the screen (rule 5 never cuts a stack)
+  { const rows = m1.rows(), selfIn = T.enter.some(([, , h]) => h === 'self');
+    for (const id of new Set([...T.steps.flatMap(([ids]) => ids), ...(T.carried != null ? [T.carried] : [])])) {
+      if (!(id in T.after) || !(id in rows)) continue;
+      const want = T.after[id].y, got = rows[id];
+      if (got < want || (got > want && !selfIn)) return { law: 'landing', id, want, got };
+    } }
   if (far) {
     // the same near transition with the far blocks left as they were
     const m2 = mk(), alone = { ...near, after: { ...Object.fromEntries(Object.entries(base).filter(([id]) => id[0] === 'z')), ...near.after } };
     try { m2.relink(alone); } catch (e) { return { law: 'valid', err: 'alone: ' + e.message }; }
     const ids = Object.keys(near.after);
     if (projection(m1, ids) !== projection(m2, ids)) return { law: 'local', with: projection(m1, ids), alone: projection(m2, ids) };
+    // and the other way: the far transition alone gives the far blocks what both together give them
+    const m3 = mk(), farAlone = { ...far, after: { ...Object.fromEntries(Object.entries(base).filter(([id]) => id[0] !== 'z' && !(id in far.after))), ...far.after } };
+    try { m3.relink(farAlone); } catch (e) { return { law: 'valid', err: 'far alone: ' + e.message }; }
+    const fids = Object.keys(far.after);
+    if (projection(m1, fids) !== projection(m3, fids)) return { law: 'local', side: 'far', with: projection(m1, fids), alone: projection(m3, fids) };
   }
   for (const id of Object.keys(T.after)) {
     const s = m1.save();
@@ -58,9 +73,11 @@ export function shrink(c, law) {
   for (let changed = true; changed;) {
     changed = false;
     const tries = [];
-    if (cur.far) tries.push({ ...cur, far: null, blocks: cur.blocks.filter((b) => b.id[0] !== 'z') });
-    for (const t of cur.temps) tries.push({ ...cur, temps: cur.temps.filter((x) => x !== t) });
-    for (const b of cur.blocks) if (b.id !== cur.near.carried) tries.push({ ...cur, blocks: cur.blocks.filter((x) => x.id !== b.id), temps: cur.temps.filter(([id]) => id !== b.id), near: drop(cur.near, b.id), far: cur.far && drop(cur.far, b.id) });
+    if (cur.far) tries.push({ ...cur, far: null, blocks: cur.blocks.filter((b) => b.id[0] !== 'z'), temps: cur.temps.filter(([id]) => id[0] !== 'z') });
+    // a temporary height dropped ends in after too, and the rows a declaration gives are then the generator's, so it must still check out
+    const unshow = (T, id) => T && id in T.after ? { ...T, after: { ...T.after, [id]: { ...T.after[id], e: 0 } } } : T;
+    for (const t of cur.temps) tries.push({ ...cur, temps: cur.temps.filter((x) => x !== t), near: unshow(cur.near, t[0]), far: unshow(cur.far, t[0]) });
+    for (const b of cur.blocks) if (b.id !== cur.near.carried && !(cur.near.swap || []).includes(b.id) && !(cur.far && (cur.far.swap || []).includes(b.id))) tries.push({ ...cur, blocks: cur.blocks.filter((x) => x.id !== b.id), temps: cur.temps.filter(([id]) => id !== b.id), near: drop(cur.near, b.id), far: cur.far && drop(cur.far, b.id) });
     for (const t of tries) { const f = runCase(t); if (f && f.law === law) { cur = t; changed = true; break; } }
   }
   return cur;

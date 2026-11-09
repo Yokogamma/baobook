@@ -53,25 +53,58 @@ export function checkDeclaration(base, T) {
   for (const k of PS.keys()) { const [id, c] = [k.slice(0, k.lastIndexOf('|')), +k.slice(k.lastIndexOf('|') + 1)];
     if (!base[id] || !after[id] || !covers(extent(base[id]), c) || !covers(extent(after[id]), c)) errs.push(`declared pass ${k} in a column it does not keep`);
     else if (!g.reordered.some(([cc, p, q]) => cc === c && (p === id || q === id))) errs.push(`declared pass ${k}: it changes its order with no block there`); }
-  // a swap: the carried block and the next block over or under it in a column they share in base, nothing between them there
+  // a swap (LAYOUT-RULES §5.1b, phase 3): the carried block and the next block over or under it in a column they share in base, nothing
+  // between them there, their order exchanged; going down, the neighbour takes the row the carried block is pinned at, right against it,
+  // and the carried block stands right under it; going up, the carried block takes the neighbour's top row and the neighbour stands right
+  // under it. The neighbour counts as a block that stayed and moved: in a column they share, the carried block is the one that passes
   if (T.swap) {
     const [x, n] = T.swap, X = base[x] && extent(base[x]), N = base[n] && extent(base[n]);
     if (x !== carried) errs.push(`swap ${x}/${n}: its first block is not the carried one`);
-    else if (!N || !after[n]) errs.push(`swap ${x}/${n}: no such neighbour`);
+    else if (!N || !after[n] || !after[x]) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
-      const shared = cols(X).filter((c) => covers(N, c));
+      const shared = cols(X).filter((c) => covers(N, c)), AX = extent(after[x]), AN = extent(after[n]), hX = X.h + X.e, hN = N.h + N.e;
       const between = (c) => Object.entries(base).some(([id, b]) => { if (id === x || id === n) return false; const e = extent(b); const lo = Math.min(X.y, N.y), hi = Math.max(X.y, N.y); return covers(e, c) && e.y > lo && e.y < hi; });
       if (!shared.length) errs.push(`swap ${x}/${n}: they share no column`);
       else if (shared.every(between)) errs.push(`swap ${x}/${n}: a block stands between them in every column they share`);
+      else if ((X.y < N.y) === (AX.y < AN.y)) errs.push(`swap ${x}/${n}: their order is not exchanged`);
+      else if (X.y < N.y ? AN.y !== N.y - hX || AX.y !== AN.y + hN : AX.y !== N.y || AN.y !== AX.y + hX) errs.push(`swap ${x}/${n}: not at the rows the swap gives them`);
+      for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
+    }
+  }
+  // the layout after holds no two blocks on one cell, on the screen (INV-1)
+  { const A = Object.entries(after).map(([id, b]) => [id, extent(b)]);
+    for (let i = 0; i < A.length; i++) for (let j = i + 1; j < A.length; j++) { const [p, a] = A[i], [q, b] = A[j];
+      if (a.c0 <= b.c1 && b.c0 <= a.c1 && a.y < b.y + b.h + b.e && b.y < a.y + a.h + a.e) errs.push(`${p} and ${q} overlap in after`); } }
+  // the steps: blocks after holds; where no height changes, they bring every block they move to its row in after, and replayed in order
+  // they put no block on another in a column both keep (a block a move pushes moves with it, in the same step: one step per common part);
+  // the two blocks of a swap pass through each other by definition
+  const heightsKept = Object.keys(base).every((id) => !after[id] || (base[id].h === after[id].h && (base[id].e || 0) === (after[id].e || 0)));
+  const moved = new Map();
+  for (const [ids, d] of T.steps || []) for (const id of ids) { if (!after[id]) errs.push(`step of ${id}, which after does not hold`); moved.set(id, (moved.get(id) || 0) + d); }
+  if (heightsKept) {
+    for (const [id, d] of moved) if (after[id] && extent(base[id]).y + d !== extent(after[id]).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
+    const y = new Map(Object.keys(base).filter((id) => after[id]).map((id) => [id, extent(base[id]).y])), pair = (p, q) => swap.includes(p) && swap.includes(q);
+    const keptCols = (id) => { const a = extent(base[id]), b = extent(after[id]); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
+    for (const [ids, d] of T.steps || []) {
+      for (const id of ids) if (y.has(id)) y.set(id, y.get(id) + d);
+      const live = [...y.keys()];
+      for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+        const p = live[i], q = live[j]; if (pair(p, q)) continue;
+        const a = keptCols(p), b = keptCols(q), hp = extent(base[p]).h + extent(base[p]).e, hq = extent(base[q]).h + extent(base[q]).e;
+        if (a.c0 <= b.c1 && b.c0 <= a.c1 && y.get(p) < y.get(q) + hq && y.get(q) < y.get(p) + hp) { errs.push(`replayed, a step puts ${p} on ${q}`); i = live.length; break; }
+        const declared = (c0, c1) => { for (let c = c0; c <= c1; c++) if (PS.has(kc(p, c)) || PS.has(kc(q, c))) return true; return false; };
+        if (a.c0 <= b.c1 && b.c0 <= a.c1 && (extent(base[p]).y < extent(base[q]).y) !== (y.get(p) < y.get(q)) && !declared(Math.max(a.c0, b.c0), Math.min(a.c1, b.c1))) { errs.push(`replayed, a step carries ${p} past ${q}`); i = live.length; break; }
+      }
     }
   }
   // the reasons each action may give
   for (const [k, w] of LV) { const id = k.slice(0, k.lastIndexOf('|'));
     if (w === 'away' && id !== carried) errs.push(`${k}: only the carried block leaves as carried away`);
+    if (id === carried && w !== 'away') errs.push(`${k}: the carried block leaves every column it leaves as carried away`);
     if (w === 'delete') errs.push(`${k}: a deleted block is one after does not hold, with no declaration`);
     if (!['away', 'narrow', 'press', 'delete'].includes(w)) errs.push(`${k}: no such reason to leave, ${w}`); }
   for (const [k, h] of EN) { const id = k.slice(0, k.lastIndexOf('|')), created = !base[id];
-    if (h === 'put' && !(id === carried || created)) errs.push(`${k}: only the carried block or a created one comes in where it is put`);
+    if (h === 'put' && !((id === carried && !canonical) || created)) errs.push(`${k}: only the carried block or a created one comes in where it is put, and an undo's carry back by its canonical row`);
     if (h === 'back' && !(canonical && id === carried)) errs.push(`${k}: only an undo's carry back comes back by its canonical row`);
     if (h === 'self' && (created || id === carried)) errs.push(`${k}: a created or carried block does not come in by itself`);
     if (!['put', 'self', 'back'].includes(h)) errs.push(`${k}: no such way to come in, ${h}`); }

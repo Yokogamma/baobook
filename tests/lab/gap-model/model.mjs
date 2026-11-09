@@ -156,7 +156,7 @@ export function createModel(opts = {}) {
     // a pass (a block of a swap changing its place in the chain of a column it keeps) frees nothing: it keeps what narrowing keeps with
     // GAP.9 on and gives back what leaving gives back with GAP.5.2 on, whatever the switches, so the blocks under its place do not move
     const pass = why === 'pass', g52 = pass || O.gap52;
-    const keep = pass || (why === 'narrow' && O.gap9);   // G8: narrowing is not deleting
+    const keep = pass || ((why === 'narrow' || why === 'press') && O.gap9);   // G8: narrowing or pressing aside is not deleting (GAP.9)
     release(x, c, keep, heirOf(f.st));
     if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8); with GAP.5.2 off it goes with it
       const { st, i } = f;
