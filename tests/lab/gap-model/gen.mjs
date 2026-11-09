@@ -3,7 +3,7 @@
 // with the neighbour right under the carried block, a width change (narrowed, widened, shifted), a block created or deleted, a height,
 // under temporary heights. Each gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the
 // declaration explains the geometry. Text blocks only (areas: next). The generator's version goes with every saved example.
-export const GEN_VERSION = 5;
+export const GEN_VERSION = 6;
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
@@ -131,9 +131,6 @@ export function action(r, base, opts = {}) {
       .sort((a, b) => (down ? base[a].y - base[b].y : base[b].y - base[a].y));
     if (!near.length) return null;
     const n = near[0], N = base[n], hN = N.h + (N.e || 0);
-    // a swap of a block with a temporary height is an open question of the contract (transition-cases.mjs: the neighbour moved by the
-    // carried block's height on the screen keeps those rows canonically, and lands a row lower): left out until it is settled
-    if ((X.e || 0) || (N.e || 0)) return null;
     const between = (c) => ids.some((id) => id !== x && id !== n && base[id].c0 <= c && c <= base[id].c1 && base[id].y > Math.min(X.y, N.y) && base[id].y < Math.max(X.y, N.y));
     if (cols(X).filter((c) => c >= N.c0 && c <= N.c1).every(between)) return null;
     // going down, the carried block may push the neighbour first (P-DOWN, its lower neighbours following), which then stops and lets it

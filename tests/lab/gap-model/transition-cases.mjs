@@ -88,22 +88,54 @@ export function transitionCases() {
     run('P-UP off: X carried up into Y, which is pushed down under it instead (the fallback of §1.6): X passes Y, Y stays and moves', m,
       T(m, { X: { y: 3 }, Y: { y: 4 } }, { steps: [[['Y'], 1], [['X'], -3]], carried: 'X', fallback: 'P-UP', pass: [['X', 1]] }),
       (m) => m.rows(), { X: 3, Y: 4 }); }
+  { const m = createModel({ gap8: false }).open([blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)]); m.show('a0', 2); m.show('a3', 1);
+    // found by the laws (seed 11225, GEN_VERSION 6): a1 carried up pushes a0 and a2 up (P-UP) while a3 widens into column 1 by itself; a3
+    // comes in there at its reference, over a2, and its temporary row pushes a2 on the screen, a row under where SETTLE put it, and a2
+    // pushes a1 in column 3: both stand canonically where SETTLE put them, and there when the temporary rows end (§2.1)
+    run('a block that came in by itself pushes on the screen, through a block it pushes, a block the steps moved; canonically both land', m,
+      T(m, { a0: { y: 8 }, a1: { y: 13 }, a2: { y: 10 }, a3: { c0: 1 } }, { steps: [[['a1'], -4], [['a1', 'a0'], -3], [['a1', 'a0', 'a2'], -1]], carried: 'a1', enter: [['a3', 1, 'self']] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('a0', 0); m.show('a3', 0); return [...r, m.rows()]; },
+      [{ a0: 8, a1: 14, a2: 11, a3: 4 }, { a0: 8, a1: 13, a2: 10, a3: 4 }, { a0: 8, a1: 13, a2: 10, a3: 4 }]); }
+  // O-21 (decided 2026-11-09): a swap's neighbour moves by the carried block's height on the screen, its temporary rows included, and
+  // lands exactly where the swap put it; that displacement is structural and writes none of the carried block's temporary rows, so when
+  // they end the neighbour follows the carried block
   { const m = createModel().open([blk('a3', 1, 4, 3, 3), blk('a1', 1, 1, 13, 2)]); m.show('a1', 1); m.show('a3', 1);
-    // OPEN QUESTION of the contract, kept as the model gives it today: a1 (one temporary row) carried up and swapped with a3 (one too);
-    // a3 moves down by a1's height on the screen, 3, which rule 1 keeps canonically as well, and a1 comes in on the screen with its
-    // canonical body, 2 rows: a3 lands a row lower than SETTLE put it (7, not 6), and canonically a row under a1 (6, not 5); so does
-    // whatever followed the neighbour when it was pushed before the pin
-    run('OPEN: a swap of blocks with temporary heights leaves the neighbour, and what followed it, a row lower than the swap put them', m,
+    // a1 (one temporary row) carried up and swapped with a3 (one too): a3 moves down by a1's 3 rows on the screen, to 6, right under a1;
+    // canonically it stands right under a1's 2 rows, at 5, and stays there when the temporary rows end
+    run('O-21: a swap of blocks with temporary heights lands the neighbour where the swap put it: 6 on the screen, 5 canonically, 5 when they end', m,
       T(m, { a1: { y: 3 }, a3: { y: 6 } }, { steps: [[['a1'], -7], [['a1'], -4], [['a3'], 3]], carried: 'a1', swap: ['a1', 'a3'], pass: [['a1', 1]] }),
-      (m) => [m.rows(), m.rows('canonical')], [{ a1: 3, a3: 7 }, { a1: 3, a3: 6 }]); }
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('a1', 0); m.show('a3', 0); return [...r, m.rows()]; },
+      [{ a1: 3, a3: 6 }, { a1: 3, a3: 5 }, { a1: 3, a3: 5 }]); }
+  { const m = createModel().open([blk('N', 1, 2, 0, 2), blk('X', 1, 1, 5), blk('B', 1, 2, 9)]); m.show('X', 1);
+    // going up: X (one temporary row) takes N's top row, N moves down by X's 2 rows on the screen; B, which X's temporary row pushed at
+    // its old place, keeps its row on the screen, now pushed through N; when the temporary row ends N and B follow X
+    run('O-21: going up, the neighbour right under the carried block, and the block under the carried block\'s old place kept on the screen', m,
+      T(m, { X: { y: 0 }, N: { y: 2 } }, { steps: [[['X'], -3], [['X'], -2], [['N'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
+      [{ B: 10, N: 2, X: 0 }, { B: 9, N: 1, X: 0 }, { B: 9, N: 1, X: 0 }]); }
+  { const m = createModel().open([blk('X', 1, 1, 0), blk('N', 1, 1, 4, 2), blk('F', 1, 1, 7)]); m.show('X', 1);
+    // going down after a push: X (one temporary row) pushes N by 2 and F follows (P-DOWN), N is pinned at 7 and moves up by X's 2 rows,
+    // X stands right under it; F stays where the push put it, 10, and follows X when its temporary row ends
+    run('O-21: going down after a push, the neighbour and what followed it land where the swap put them', m,
+      T(m, { X: { y: 7 }, N: { y: 5 }, F: { y: 10 } }, { steps: [[['X'], 3], [['X', 'N', 'F'], 2], [['N'], -2], [['X'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
+      [{ F: 10, N: 5, X: 7 }, { F: 9, N: 5, X: 7 }, { F: 9, N: 5, X: 7 }]); }
+  { const m = createModel().open([blk('X', 1, 1, 0), blk('N', 1, 2, 4, 2), blk('E', 2, 2, 8), blk('B', 1, 2, 12)]); m.show('X', 1);
+    // the boundary of O-21: going down, a wide N moves up by X's 2 rows on the screen; in column 2, which X does not come into, the row of
+    // X's temporary push that N moves up through stays its own rows under it, as in any move (rule 1, O-22), so E and B keep their rows on
+    // the screen and keep them when X's temporary row ends; N lands right over X
+    run('O-21: going down, a wide neighbour; what it moves up through in a column the carried block does not come into stays its own rows', m,
+      T(m, { X: { y: 5 }, N: { y: 3 } }, { steps: [[['X'], 3], [['N'], -2], [['X'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
+      [{ B: 13, E: 9, N: 3, X: 5 }, { B: 13, E: 9, N: 3, X: 5 }, { B: 13, E: 9, N: 3, X: 5 }]); }
   { const m = createModel().open([blk('Q', 1, 2, 0), blk('X', 1, 2, 6), blk('B', 1, 2, 10)]); m.show('Q', 1);
-    // OPEN QUESTION of the contract, kept as the model gives it today: Q has a temporary row; in one RELINK Q is narrowed out of column
-    // 2 (as P-ASIDE's press would) and X is carried up 2 rows on the screen, 7 to 5. Rule 2 comes before rule 1, so in column 2 X no
-    // longer has Q's temporary row above it and moves up through a row of slack, which by rule 1 stays its own rows under it: X goes
-    // canonically from 6 to 5 only, and B from 10 to 11, and when Q's temporary row ends X stays at 5 and B at 11. The carry first and
-    // the narrowing after it, as two RELINKs, leave them canonically at 4 and 10. Rule 1 says the first; §2.1 (a temporary push is never
-    // written) and GAP.9 suggest the second
-    run('OPEN: a narrowing of a block with a temporary row and a move under it in one RELINK write the temporary push', m,
+    // O-22 (decided 2026-11-09): Q has a temporary row; in one RELINK Q is narrowed out of column 2 (as P-ASIDE's press would) and X is
+    // carried up 2 rows on the screen, 7 to 5. Rule 2 comes before rule 1, so in column 2 X no longer has Q's temporary row above it and
+    // moves up through a row of slack, which by rule 1 stays its own rows under it: X goes canonically from 6 to 5 only, and B from 10
+    // to 11, and when Q's temporary row ends X stays at 5 and B at 11, where they were seen. One RELINK equals the narrowing first and
+    // the carry after it as two RELINKs; the carry first and the narrowing after it would leave them canonically at 4 and 10. §2.1
+    // promises no trace only for a temporary height that starts and ends with no move between
+    run('O-22: a narrowing of a block with a temporary row and a move under it in one RELINK: X and B stay where they were seen when it ends', m,
       T(m, { Q: { c1: 1 }, X: { y: 5 } }, { steps: [[['X'], -2]], carried: 'X', leave: [['Q', 2, 'narrow']] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('Q', 0); return [...r, m.rows()]; },
       [{ B: 11, Q: 0, X: 5 }, { B: 11, Q: 0, X: 5 }, { B: 11, Q: 0, X: 5 }]); }

@@ -7,7 +7,7 @@
 //   3. after-effects: from the result, deleting any block, narrowing any block by a column and ending every temporary height keep the
 //      invariants;
 //   4. landing: the blocks the steps move and the carried block stand where SETTLE put them, lower only where a block that came in by
-//      itself pushes them on the screen.
+//      itself pushes them on the screen, directly or through the blocks it pushes.
 // A failure is shrunk (fewer blocks, fewer temporary heights, the far transition dropped), keeping the declaration valid and the failure,
 // and returned whole: the generator's version, the switches, the blocks, the temporary heights and the declaration.
 import { createModel } from './model.mjs';
@@ -37,8 +37,12 @@ export function runCase(c) {
   // landing: every block the steps move and the carried block stand where SETTLE put them; lower only where a block that came in by itself
   // pushes it on the screen (rule 5 never cuts a stack)
   { const rows = m1.rows(), a = T.after;
-    // a block that came in by itself pushes on the screen only what shares a column with it there
-    const pushedBySelf = (id) => T.enter.some(([s, c, h]) => h === 'self' && s !== id && a[id].c0 <= c && c <= a[id].c1);
+    // a block that came in by itself pushes on the screen what is under it in a column it came into, and what that pushes in turn: the
+    // blocks under those in a column they share
+    const reach = new Set(), share = (p, q) => a[p].c0 <= a[q].c1 && a[q].c0 <= a[p].c1;
+    for (const [s, c, h] of T.enter) if (h === 'self' && s in a) for (const id of Object.keys(a)) if (id !== s && a[id].c0 <= c && c <= a[id].c1 && a[id].y > a[s].y) reach.add(id);
+    for (let grew = true; grew;) { grew = false; for (const r of [...reach]) for (const id of Object.keys(a)) if (!reach.has(id) && share(id, r) && a[id].y > a[r].y) { reach.add(id); grew = true; } }
+    const pushedBySelf = (id) => reach.has(id);
     for (const id of new Set([...T.steps.flatMap(([ids]) => ids), ...(T.carried != null ? [T.carried] : [])])) {
       if (!(id in a) || !(id in rows)) continue;
       const want = a[id].y, got = rows[id];
@@ -104,7 +108,7 @@ export function runLaws(N, { seed0 = 1 } = {}) {
     if (!ea || !ez) { inc('no valid action drawn'); continue; }
     if (ea.T.carried && ez.T.carried) { inc('two carried blocks drawn'); continue; }
     const near = { ...ea.T, after: { ...ea.after } }, far = { ...ez.T, after: { ...ez.after } };
-    tried++; inc(ea.kind); if (near.pass.length) inc('with passes'); if (near.swap && near.pass.some(([id]) => id === near.swap[1])) inc('a swap neighbour passing'); if (near.swap && near.steps.some(([ids]) => ids.includes(near.swap[0]) && ids.includes(near.swap[1]))) inc('a swap after a push'); if (temps.length) inc('under temporary heights');
+    tried++; inc(ea.kind); if (near.pass.length) inc('with passes'); if (near.swap && near.pass.some(([id]) => id === near.swap[1])) inc('a swap neighbour passing'); if (near.swap && near.steps.some(([ids]) => ids.includes(near.swap[0]) && ids.includes(near.swap[1]))) inc('a swap after a push'); if (temps.length) inc('under temporary heights'); if (near.swap && near.swap.some((id) => base[id].e)) inc('a swap of a block with a temporary height');
     const c = { seed, opts, blocks, temps, near, far }, f = runCase(c);
     if (f) { inc('failed: ' + f.law); if (!failure) failure = { GEN_VERSION, seed, failure: f, case: shrink(c, f.law) }; }
   }
