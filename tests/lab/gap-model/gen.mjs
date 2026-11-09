@@ -3,7 +3,7 @@
 // with the neighbour right under the carried block, a width change (narrowed, widened, shifted), a block created or deleted, a height,
 // under temporary heights. Each gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the
 // declaration explains the geometry. Text blocks only (areas: next). The generator's version goes with every saved example.
-export const GEN_VERSION = 4;
+export const GEN_VERSION = 5;
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
@@ -172,9 +172,13 @@ export function action(r, base, opts = {}) {
   } else if (kind === 'delete') {
     delete after[pick(ids)];
   } else if (kind === 'height') {
+    // a real height: the blocks under it follow with their gaps (FOLLOW, no move), so after holds the rows FOLLOW gives over base's
+    // stacks with the new height, which are also the rows the first step would start from (`start`); that needs the stacks: `rowsWith`
+    if (!opts.rowsWith) return null;
     const x = pick(ids); after[x].h = Math.max(1, after[x].h + pick([-2, -1, 1, 2]));
-    // a taller block pushes what is under it by FOLLOW: no move to declare; the rows after are what FOLLOW will give, which RELINK
-    // does not read for blocks it does not move
+    const rows = opts.rowsWith(Object.fromEntries(ids.map((id) => [id, { h: after[id].h, e: after[id].e || 0 }])));
+    for (const id of ids) if (id in rows) after[id].y = rows[id];
+    T.start = Object.fromEntries(ids.map((id) => [id, after[id].y]));
   }
   return { kind, after, T };
 }

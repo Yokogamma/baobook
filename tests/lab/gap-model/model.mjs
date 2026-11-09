@@ -398,6 +398,8 @@ export function createModel(opts = {}) {
       // the rows the first step starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move
       const startOf = () => { const s = copy(); for (const [id, t] of tg) if (B.has(id)) { B.get(id).h = t.h; B.get(id).e = t.e; } follow(); const y = new Map([...B.values()].map((b) => [b.id, b.y])); put(s); return y; };
       const start = startOf();
+      // the rows the first step starts from, when the transition gives them, are FOLLOW's over base's stacks with after's heights
+      if (T.start) for (const [id, y] of Object.entries(T.start)) if (B.has(id) && frameRow(B.get(id), start.get(id)) !== y) throw new Error(`relink: ${id} starts at ${y}, FOLLOW gives ${frameRow(B.get(id), start.get(id))}`);
       const fits = {}; for (const [list] of steps) for (const id of list) if (tg.has(id)) fits[id] = T.after[id].y;
       if (carried != null && !canonical && tg.has(carried)) fits[carried] = T.after[carried].y;
       const departAll = (out) => {   // rule 2, column by column, top to bottom in each chain: out(id, c) → why or null
@@ -473,6 +475,11 @@ export function createModel(opts = {}) {
       follow(); raw.fit(fits);
       const errs = invariants(); if (errs.length) throw new Error('relink: ' + errs[0]);
       return api;
+    },
+    rowsWith(heights) {   // the displayed frame rows FOLLOW gives over the stacks with these heights ({id: {h, e}}, frame), nothing written
+      const s0 = copy();
+      for (const [id, v] of Object.entries(heights)) { const b = B.get(id); if (!b) continue; b.h = v.h + 2 * padOf(b); b.e = v.e || 0; }
+      follow(); const r = Object.fromEntries([...B.values()].map((b) => [b.id, frameRow(b, b.y)])); put(s0); follow(); return r;
     },
     rows(measure = 'shown') { const y = measure === 'shown' ? new Map([...B.values()].map((b) => [b.id, b.y])) : rowsIn('canonical'); return Object.fromEntries([...B.keys()].sort().map((id) => [id, frameRow(B.get(id), y.get(id))])); },
     stack(l, c) { const st = S.get(key(l, c)); return st ? show(st) : null; },

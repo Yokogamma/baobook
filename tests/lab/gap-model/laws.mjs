@@ -29,7 +29,8 @@ export function runCase(c) {
   const mk = () => { const m = createModel(c.opts).open(c.blocks); for (const [id, e] of c.temps) if (m.B.has(id)) m.show(id, e); return m; };
   const m1 = mk(), base = frames(m1), near = c.near, far = c.far;
   const T = far
-    ? { after: { ...near.after, ...far.after }, steps: [...near.steps, ...far.steps], leave: [...near.leave, ...far.leave], enter: [...near.enter, ...far.enter], pass: [...near.pass, ...far.pass], carried: near.carried ?? far.carried, swap: near.swap || far.swap }
+    ? { after: { ...near.after, ...far.after }, steps: [...near.steps, ...far.steps], leave: [...near.leave, ...far.leave], enter: [...near.enter, ...far.enter], pass: [...near.pass, ...far.pass], carried: near.carried ?? far.carried, swap: near.swap || far.swap,
+        ...(near.start || far.start ? { start: { ...(near.start || {}), ...(far.start || {}) } } : {}), ...(near.fallback || far.fallback ? { fallback: near.fallback || far.fallback } : {}) }
     : near;
   const errs = checkDeclaration(base, T); if (errs.length) return { law: 'declaration', errs };
   try { m1.relink(T); } catch (e) { return { law: 'valid', err: e.message }; }
@@ -96,7 +97,10 @@ export function runLaws(N, { seed0 = 1 } = {}) {
     const blocks = [...A, ...Z].map(({ e, ...b }) => b), temps = blocks.filter(() => r() < 0.25).map((b) => [b.id, 1 + Math.floor(r() * 3)]);
     const m = createModel(opts).open(blocks); for (const [id, e] of temps) m.show(id, e);
     const base = frames(m), part = (p) => Object.fromEntries(Object.entries(base).filter(([id]) => id[0] === p));
-    const ea = action(r, part('a'), { off: 0 }), ez = action(r, part('z'), { off: 20 });
+    // the rows FOLLOW gives over the stacks with other heights, for a height change; the far part's own blocks only, so that its `start`
+    // names none of the near ones
+    const rowsWith = (only) => (hs) => { const all = m.rowsWith(hs); return Object.fromEntries(Object.entries(all).filter(([id]) => id[0] === only)); };
+    const ea = action(r, part('a'), { off: 0, rowsWith: rowsWith('a') }), ez = action(r, part('z'), { off: 20, rowsWith: rowsWith('z') });
     if (!ea || !ez) { inc('no valid action drawn'); continue; }
     if (ea.T.carried && ez.T.carried) { inc('two carried blocks drawn'); continue; }
     const near = { ...ea.T, after: { ...ea.after } }, far = { ...ez.T, after: { ...ez.after } };

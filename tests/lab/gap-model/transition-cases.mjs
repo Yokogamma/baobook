@@ -68,6 +68,22 @@ export function transitionCases() {
       (m) => m.rows(), { b1: 3, b3: 4 });
     run('then b3 goes on to row 7 from the new start, b1 staying at row 3', m, T(m, { b3: { y: 7 } }, { steps: [[['b3'], 3]], carried: 'b3' }),
       (m) => m.rows(), { b1: 3, b3: 7 }); }
+  { const m = createModel().open([blk('C', 1, 1, 4, 4), blk('N', 1, 2, 8), blk('A', 2, 2, 6)]);
+    run('the same wide neighbour under a carried block 4 rows tall: C already right against N, N takes row 4 and passes A in column 2, C at 5', m,
+      T(m, { N: { y: 4 }, C: { y: 5 } }, { steps: [[['N'], -4], [['C'], 1]], carried: 'C', swap: ['C', 'N'], pass: [['C', 1], ['N', 2]] }),
+      (m) => m.rows(), { A: 6, C: 5, N: 4 }); }
+  { const m = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 1, 4)]);
+    run('an undo carrying A back to its old cell, row 7, under B: A leaves its column and comes back by its canonical row, B rising into its place', m,
+      T(m, { A: { y: 7, yc: 7 }, B: { y: 0 } }, { carried: 'A', canonical: true, leave: [['A', 1, 'away']], enter: [['A', 1, 'back']] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ A: 7, B: 0 }, { A: 7, B: 0 }]); }
+  { const m = createModel().open([blk('U', 1, 1, 0)]); m.show('U', 2);
+    run('an undo making a deleted X again at its old cell, canonical row 2, under U with two temporary rows: on the screen at 4, canonically 2, and 2 when they end', m,
+      T(m, { X: { c0: 1, c1: 2, y: 4, yc: 2, h: 1, e: 0 } }, { carried: 'X', canonical: true, enter: [['X', 1, 'back'], ['X', 2, 'back']] }),
+      (m) => { const r = [m.rows().X, m.rows('canonical').X]; m.show('U', 0); return [...r, m.rows().X]; }, [4, 2, 2]); }
+  { const m = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 1, 2)]);
+    run('a real height: A grows from 1 row to 3, B under it follows with its gap to row 4 (FOLLOW, no move)', m,
+      T(m, { A: { h: 3 }, B: { y: 4 } }, { start: { A: 0, B: 4 } }),
+      (m) => m.rows(), { A: 0, B: 4 }); }
   { const m = createModel().open([blk('Y', 1, 1, 3), blk('X', 1, 1, 6)]);
     run('P-UP off: X carried up into Y, which is pushed down under it instead (the fallback of §1.6): X passes Y, Y stays and moves', m,
       T(m, { X: { y: 3 }, Y: { y: 4 } }, { steps: [[['Y'], 1], [['X'], -3]], carried: 'X', fallback: 'P-UP', pass: [['X', 1]] }),
@@ -115,12 +131,17 @@ export function declarationCases() {
     ['the swap\'s neighbour declared to pass the carried block is refused', D(swapAfter, { steps: swapSteps, carried: 'b3', swap: ['b3', 'b1'], pass: [['b3', 3], ['b1', 3]] }), 'the carried block passes it'],
     ['a swap with no exchange of order is refused', D({ b3: { ...base.b3, y: 2 } }, { steps: [[['b3'], 2]], carried: 'b3', swap: ['b3', 'b1'] }), 'not exchanged'],
     ['the carried block leaving as narrowed is refused', D({ b3: { ...base.b3, c1: 2 } }, { carried: 'b3', leave: [['b3', 3, 'narrow']] }), 'leaves every column it leaves as carried away'],
-    ['an undo\'s carry back coming in where it is put is refused', D({ b3: { ...base.b3, c1: 4, y: 0 } }, { carried: 'b3', canonical: true, leave: [[ 'b3', 1, 'away'], ['b3', 2, 'away'], ['b3', 3, 'away']], enter: [['b3', 1, 'back'], ['b3', 2, 'back'], ['b3', 3, 'back'], ['b3', 4, 'put']] }), 'an undo\'s carry back by its canonical row'],
+    ['an undo\'s carry back coming in where it is put is refused', D({ b3: { ...base.b3, c1: 4, y: 0 } }, { carried: 'b3', canonical: true, leave: [[ 'b3', 1, 'away'], ['b3', 2, 'away'], ['b3', 3, 'away']], enter: [['b3', 1, 'back'], ['b3', 2, 'back'], ['b3', 3, 'back'], ['b3', 4, 'put']] }), 'comes back by its canonical row'],
     ['a step of a block after does not hold is refused', checkDeclaration(base, { after: { b3: base.b3, a: base.a }, steps: [[['b1'], 1]], leave: [], enter: [], pass: [], carried: null }), 'which after does not hold'],
     ['two blocks on one cell in after are refused', D({ a: { ...base.a, c0: 3, c1: 3, y: 4 } }, { leave: [['a', 5, 'narrow']], enter: [['a', 3, 'self']] }), 'overlap in after'],
     ['a push declared after the move that makes it, which replayed carries one block past another, is refused', D({ b3: { ...base.b3, y: 7 }, b1: { ...base.b1, y: 8 } }, { steps: [[['b3'], 7], [['b1'], 4]], carried: 'b3' }), 'carries b3 past b1'],
     ['a pass by the carried block outside a swap with no fallback declared is refused', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', pass: [['b3', 3]] }), 'only a block of a swap'],
     ['the same pass under the fallback of P-UP off is accepted', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', fallback: 'P-UP', pass: [['b3', 3]] }), null],
+    ['an undo carrying a block back past another needs no pass: it leaves its columns and comes back into them', checkDeclaration({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 4, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 7, yc: 7, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 0, h: 1, e: 0 } }, steps: [], carried: 'A', canonical: true, leave: [['A', 1, 'away']], enter: [['A', 1, 'back']], pass: [] }), null],
+    ['a deleted block made again by an undo coming in where it is put is refused', checkDeclaration({ U: { c0: 1, c1: 1, y: 0, h: 1, e: 2 } }, { after: { U: { c0: 1, c1: 1, y: 0, h: 1, e: 2 }, X: { c0: 1, c1: 2, y: 4, yc: 2, h: 1, e: 0 } }, steps: [], carried: 'X', canonical: true, leave: [], enter: [['X', 1, 'put'], ['X', 2, 'put']], pass: [] }), 'comes back by its canonical row'],
+    ['a height changed in columns far away does not turn off the check of the steps here', checkDeclaration({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 4, h: 1, e: 0 }, Z: { c0: 20, c1: 20, y: 0, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 7, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 8, h: 1, e: 0 }, Z: { c0: 20, c1: 20, y: 0, h: 2, e: 0 } }, steps: [[['A'], 7], [['B'], 4]], carried: 'A', leave: [], enter: [], pass: [] }), 'carries A past B'],
+    ['a block under one that grew starts from the row FOLLOW gives, which the transition states', checkDeclaration({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 2, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 0, h: 3, e: 0 }, B: { c0: 1, c1: 1, y: 4, h: 1, e: 0 } }, start: { A: 0, B: 4 }, steps: [], carried: null, leave: [], enter: [], pass: [] }), null],
+    ['the same with a step from a start that is not FOLLOW\'s, which does not add up, is refused', checkDeclaration({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 2, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 0, h: 3, e: 0 }, B: { c0: 1, c1: 1, y: 6, h: 1, e: 0 } }, start: { A: 0, B: 4 }, steps: [[['B'], 4]], carried: null, leave: [], enter: [], pass: [] }), 'add up to 4 rows'],
     ['the same push as one step per common part is accepted', D({ b3: { ...base.b3, y: 7 }, b1: { ...base.b1, y: 8 } }, { steps: [[['b3'], 3], [['b3', 'b1'], 4]], carried: 'b3' }), null],
   ];
 }
