@@ -19,7 +19,7 @@ import { push, resize, startRows } from './gap.js';
  *  @typedef {import('./shapes.js').Step} Step @typedef {import('./shapes.js').Work} Work @typedef {import('./shapes.js').Obstacle} Obstacle */
 
 /** A working state over a layout, its moved block and the context. @param {Layout} L @param {?string} moved @param {Ctx} ctx @returns {Work} */
-export function working(L, moved, ctx) { return { L, moved, ctx, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
+export function working(L, moved, ctx) { return { L, base: L, moved, ctx, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
 /** A phase starts: its visits go in the reading order of the layout it starts from (LAYOUT-RULES §5.1, INV-5). @param {Work} ws */
 export function phase(ws) { ws.order = ws.L.order.slice(); return ws; }
 
@@ -67,38 +67,48 @@ function record(ws, before, after, by) {
 /** The steps and the start rows of the transition the next RELINK reads (LAYOUT-RULES GAP's inputs; LAYOUT-ENGINE-PLAN §5.2), cut once
  *  from what the phases did since `base`, not from the steps each call recorded: those hold only inside their call (phase 1c moves the
  *  carried block alone all the way to its target, onto the neighbour that a later call pushes).
- *  - The start rows are GAP's (gap.js `startRows`): FOLLOW over `base`'s stacks with the heights the phases left, so a block a narrowing
- *    pushed starts where that push put it, and one under a block that left its column starts where GAP counts it from, whatever the
- *    working state's push did; a row FOLLOW gives is no step.
- *  - The moves: every block a primitive moved (it has recorded steps) and the moved block go from their start rows to their rows now, cut
- *    one per common part, the moved block's direction first (down when it did not move), in each direction the furthest alone first and
- *    the others joining it for the last rows of the way. A block no primitive moved has no step: what moved it on the screen is FOLLOW's
- *    or a departure's, which RELINK makes from the declaration.
+ *  - The start rows are GAP's (gap.js `startRows`): FOLLOW over `base`'s stacks with the heights the phases left; a row FOLLOW gives is
+ *    no step.
+ *  - Every block a primitive moved, and the moved block, has its real way declared, so RELINK brings it where the phases put it (GAP.5
+ *    rule 5) even when its row now is its start row: first, where its real origin (the row it stood at before the first primitive moved
+ *    it, the moved block's row in `base`) is not its start row, a step from the one to the other (a block under one that left its column
+ *    and grew starts lower in GAP's projection than it stood: the departure leaves it where it was); then its moves, from its origin to its
+ *    row now, cut one per common part, the moved block's direction first (down when it did not move), in each direction the furthest
+ *    alone first and the others joining it for the last rows of the way. A block no primitive moved has no step: what moved it on the
+ *    screen is FOLLOW's or a departure's, which RELINK makes from the declaration.
  *  - A swap (phase 3, LAYOUT-RULES §5.1b) keeps its structural steps apart: the moves are cut up to the rows where the moved block was
  *    pinned against its neighbour, then the neighbour moves alone by the moved block's height, as the check of a swap requires, then the
  *    moved block by the neighbour's.
  *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o]
  *  @returns {{steps:Array<[string[], number]>, start:Record<string, number>}} */
 export function transitionSteps(ws, base, o = {}) {
-  const S = startRows(base, ws.L, ws.ctx.rules), start = {}, d = [];
-  const moved = new Set([...ws.steps].filter(([, l]) => l.length).map(([id]) => id));
-  if (ws.moved != null) moved.add(ws.moved);
+  const S = startRows(base, ws.L, ws.ctx.rules), start = {}, fix = [], d = [];
   // a swap: the rows before it, where the moved block stood pinned against its neighbour (extent tops; an area's frame is a row under)
   const pre = new Map(), tail = [];
   if (o.swap) {
     const [x, n] = o.swap, X = ws.L.boxes.get(x), N = ws.L.boxes.get(n), down = top(base.boxes.get(x)) < top(base.boxes.get(n));
-    moved.add(n);
     if (down) { pre.set(n, top(N) + ext(X) + pad(N)); pre.set(x, top(X) - ext(N) + pad(X)); tail.push([[n], -ext(X)], [[x], ext(N)]); }
     else { pre.set(n, top(X) + pad(N)); pre.set(x, top(X) + ext(N) + pad(X)); tail.push([[n], ext(X)], [[x], -ext(N)]); }
   }
+  // how far each block went: the moves the primitives recorded, the swap's own (by 'swap') coming after as its structural steps; the moved
+  // block from its row in base to its row now, or to its pinned row before a swap
+  const went = new Map();
+  for (const [id, l] of ws.steps) { const k = l.filter((s) => s.by !== 'swap'); if (k.length) went.set(id, k.reduce((n, s) => n + s.rows, 0)); }
+  if (o.swap && !went.has(o.swap[1])) went.set(o.swap[1], 0);
+  const g0 = ws.moved;
+  if (g0 != null && base.boxes.has(g0) && ws.L.boxes.has(g0)) went.set(g0, (pre.has(g0) ? pre.get(g0) : ws.L.boxes.get(g0).y) - base.boxes.get(g0).y);
   for (const id of base.order) {
     const a = ws.L.boxes.get(id); if (!a || !S.has(id)) continue;
     start[id] = S.get(id);
-    const to = pre.has(id) ? pre.get(id) : a.y;
-    if (moved.has(id) && to !== start[id]) d.push([id, to - start[id]]);
+    if (!went.has(id)) continue;
+    const to = pre.has(id) ? pre.get(id) : a.y, from = to - went.get(id);
+    if (from !== start[id]) fix.push([id, from - start[id]]);
+    if (to !== from) d.push([id, to - from]);
   }
+  // the corrections one block at a time, those going up from the top and those going down from the bottom, so that none is put on another
+  fix.sort((p, q) => (p[1] < 0 && q[1] < 0 ? start[p[0]] - start[q[0]] : p[1] > 0 && q[1] > 0 ? start[q[0]] - start[p[0]] : p[1] - q[1]));
   const g = d.find(([id]) => id === ws.moved);
-  return { steps: [...cut(d, g && g[1] < 0 ? -1 : 1), ...tail], start };
+  return { steps: [...fix.map(([id, r]) => [[id], r]), ...cut(d, g && g[1] < 0 ? -1 : 1), ...tail], start };
 }
 /** The rows a push gave because a height changed: FOLLOW's, no step (GAP.5 rule 1). */
 function followed(ws, before, after) {
@@ -108,7 +118,7 @@ function followed(ws, before, after) {
 /** A block put at row y (down), the blocks under it following with their gaps; recorded as a step. @param {Work} ws */
 export function sinkTo(ws, id, y, by) {
   const b = get(ws, id); if (y <= b.y) return;
-  const before = ws.L, after = push(before, put(before, { ...b, y }), skipOf(ws), ws.ctx.rules);
+  const before = ws.L, after = push(before, put(before, { ...b, y }), skipOf(ws), ws.ctx.rules, ws.base);
   record(ws, before, after, by); ws.L = after;
 }
 /** Blocks put higher (P-UP): nothing follows them; recorded as steps, with the moved block's own row if P-UP lowered it.
@@ -128,7 +138,7 @@ export function reshape(ws, id, col, w) {
     const r = rowsAt(nb, w - 1, ws.ctx);
     if (r.shown !== b.h || r.shown - r.rows !== (b.t || 0)) after = resize(after, id, r.shown, r.shown - r.rows);
   }
-  after = push(before, relayout(after, new Map(after.boxes)), skipOf(ws), ws.ctx.rules);
+  after = push(before, relayout(after, new Map(after.boxes)), skipOf(ws), ws.ctx.rules, ws.base);
   followed(ws, before, after); ws.L = after;
 }
 

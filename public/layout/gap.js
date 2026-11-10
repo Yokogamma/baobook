@@ -10,7 +10,7 @@
 // extent's columns c0…c1, its extent's top row y (displayed) and its canonical height h with its temporary rows e; every operation writes a
 // new Layout and changes none it was given (stacks are replaced, never mutated).
 
-import { on } from './rules.js';
+import { on, DEFAULT } from './rules.js';
 import { extent, isArea, readingOrder, byId } from './geometry.js';
 import { checkTransition } from './transition.js';
 
@@ -375,38 +375,34 @@ export function follow(layout) { return toLayout(work(layout, null), layout); }
 /** A push with its followers, for SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2): `after` is `before` with some blocks moved
  *  down or grown; every block they reach is pushed down so that it keeps its gap under them, in the order of the chains: in each column of
  *  a chain, under the element above it there, at most the stack's rows and at most the distance it had in `before`, so a gap P-UP closed
- *  stays closed and a column with slack takes the push into its slack first. An element leads the next one of its chain in a column only
- *  while both still cover that column (a block pressed aside or narrowed off a column pushes nothing there, GAP.9) and the next one still
- *  stands under it on the screen (an earlier phase may have put it beside or over it, for P-SEP to settle). A block that left a column
- *  (narrowed or pressed off it) leads nothing there, but the chain goes on through it: the next element follows the one above it with
- *  the rows the departure leaves there, as RELINK's rule 2 will (GAP.9: its body, by its canonical height, and every row of the gap
- *  stay; with GAP.9 off its own rows go with it and an anchor's body leaves none; a standing block leaves its lend either way). The
- *  blocks of `skip` (the moved block of the change, in no chain until phase 8) neither lead nor follow, and the chain stops at them, its
- *  held place keeping the blocks under it where they are (DRAG.B1). Blocks only go down; no stack changes, RELINK's alone.
- *  @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @param {?Rules} [rules] @returns {Layout} */
-export function push(before, after, skip = new Set(), rules = null) {
-  const W = toWork(after), W0 = toWork(before), H = (b) => b.h + b.e, keep9 = !rules || on(rules, 'GAP.9');
+ *  stays closed and a column with slack takes the push into its slack first. The chains are those of `base` (the layout the RELINK interval
+ *  started from, whose stacks the working state keeps) once every element that no longer covers a column of its chain there has left it by
+ *  RELINK's own rule 2 (`leave`, as narrowed or pressed off): its body and the canonical slack above it stay as rows with GAP.9, its own
+ *  rows go with it without, a standing block's lend comes back with GAP.5.2 and goes with it without; so the next element follows the one
+ *  above it with the rows RELINK will give it. An element leads the next one only while the next one still stands under it on the screen
+ *  (an earlier phase may have put it beside or over it, for P-SEP to settle). The blocks of `skip` (the moved block of the change, in no
+ *  chain until phase 8) neither lead nor follow where they still stand in a chain, and the chain stops at them, the held place keeping
+ *  the blocks under it where they are (DRAG.B1). Blocks only go down; no stack of the layout changes, RELINK's alone.
+ *  @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @param {?Rules} [rules] @param {Layout} [base]
+ *  @returns {Layout} */
+export function push(before, after, skip = new Set(), rules = null, base = before) {
+  const W = toWork(after), W0 = toWork(before), H = (b) => b.h + b.e;
+  const D = work(base, rules || DEFAULT);
+  departAll(D, (id, c) => (W.B.has(id) && !covers(W.B.get(id), c) ? 'narrow' : null), rowsIn(D, 'canonical'), null);
   const preds = new Map([...W.B.keys()].map((id) => [id, []])), succs = new Map([...W.B.keys()].map((id) => [id, []]));
   const lead = (p, q, gap, c) => {
-    if (p == null || skip.has(p) || skip.has(q) || !W.B.has(p) || !W.B.has(q)) return;
+    if (p == null || !W.B.has(p) || !W.B.has(q)) return;
     const P = W.B.get(p), Q = W.B.get(q); if (!covers(P, c) || !covers(Q, c)) return;
     const P0 = W0.B.get(p), Q0 = W0.B.get(q), was = P0 && Q0 ? Q0.y - (P0.y + H(P0)) : gap;
     if (was < 0) return;   // not under it on the screen any more (a phase moved one of them): it does not follow it
     preds.get(q).push([p, Math.min(gap, was)]); succs.get(p).push(q);
   };
-  const columns = [...new Set([...W.S.keys()].map(colOf))].sort((a, b) => a - b);
-  for (const c of columns) {
-    // since the last element that leads here: the rows of the gap, the elements that left the column, and the rows their bodies leave
-    let prev = null, runs = [], gone = new Set(), bodies = 0;
-    const at = (id, lend) => {
-      if (skip.has(id)) { prev = null; runs = []; gone = new Set(); bodies = 0; return; }
-      if (!covers(W.B.get(id), c)) { gone.add(id); bodies += lend != null ? lend : keep9 ? W.B.get(id).h : 0; return; }
-      lead(prev, id, runs.reduce((n, r) => n + (keep9 || !gone.has(r.o) ? r.n : 0), 0) + bodies, c);
-      prev = id; runs = []; gone = new Set(); bodies = 0;
-    };
-    for (const l of chain(W, c)) {
-      W.S.get(key(l, c)).parts.forEach((p, i) => { if (!isStand(i)) runs.push(...p); else at(p.id, rlen(p.lend)); });
-      at(l, null);
+  for (const c of [...new Set([...D.S.keys()].map(colOf))].sort((a, b) => a - b)) {
+    let prev = null, gap = 0;
+    const at = (id) => { if (skip.has(id)) prev = null; else { lead(prev, id, gap, c); prev = id; } gap = 0; };
+    for (const l of chain(D, c)) {
+      D.S.get(key(l, c)).parts.forEach((p, i) => { if (!isStand(i)) gap += rlen(p); else at(p.id); });
+      at(l);
     }
   }
   const indeg = new Map([...preds].map(([id, ps]) => [id, ps.length])), ready = [...indeg].filter(([, n]) => n === 0).map(([id]) => id), y = new Map();
