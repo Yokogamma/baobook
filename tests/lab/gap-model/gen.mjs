@@ -1,22 +1,36 @@
 // Random transitions as SETTLE would declare them (step 1b of docs/LAYOUT-ENGINE-PLAN.md), built from the action, never read back from
-// the stacks: a carry of one block (vertically, sideways, or away) with the blocks it reaches sinking or going up as rigid steps, a swap
-// with the neighbour right under the carried block, a width change (narrowed, widened, shifted), a block created or deleted, a height,
-// under temporary heights. Each gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the
-// declaration explains the geometry. Text blocks only (areas: next). The generator's version goes with every saved example.
-export const GEN_VERSION = 8;
+// the stacks: a carry of one block (vertically, or sideways) with the blocks it reaches sinking or going up as rigid steps, a carry
+// sideways that presses a block aside, a swap with the neighbour right under or over the carried block, a width change (narrowed, widened,
+// shifted), a block created or deleted, a block carried away (taken away, then put where it lands, two RELINKs), an undo's carry back and
+// a deleted block made again by an undo (each placed by its canonical row), a height; text blocks and areas, under temporary heights. Each
+// gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the declaration explains the
+// geometry. The generator's version goes with every saved example.
+//
+// Blocks come and go in frame coordinates ({c0, c1, y, h, e, yc, area}: an area by its frame, y its displayed row, yc its canonical one);
+// inside, every block is its extent (LAYOUT-RULES §1.1: an area's frame with one free cell on every side), as GAP counts it, and the
+// columns a declaration names are GAP's, the extent's.
+export const GEN_VERSION = 9;
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
+const covers = (b, c) => b.c0 <= c && c <= b.c1;
 const share = (a, b) => a.c0 <= b.c1 && b.c0 <= a.c1;
 const hits = (a, b) => share(a, b) && a.y < b.y + b.h + (b.e || 0) && b.y < a.y + a.h + (a.e || 0);
 const clone = (m) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { ...v }]));
+const pad = (b) => (b.area ? 1 : 0);
+/** A block's extent from its frame (and back): an area one cell wider on every side. */
+const toExt = (b) => { const p = pad(b), o = { ...b, c0: b.c0 - p, c1: b.c1 + p, y: b.y - p, h: b.h + 2 * p, e: b.e || 0 }; if (b.yc != null) o.yc = b.yc - p; return o; };
+const toFrame = (b) => { const p = pad(b), o = { ...b, c0: b.c0 + p, c1: b.c1 - p, y: b.y + p, h: b.h - 2 * p }; if (b.yc != null) o.yc = b.yc + p; return o; };
 
-/** A random sheet of n text blocks in columns off…off+W-1, a free row between any two that share a column. */
-export function sheet(r, n, { off = 0, W = 8, rows = 24, pre = 'b' } = {}) {
+/** A random sheet of n blocks in columns off…off+W-1, a free row between any two extents that share a column; with `areas`, that share
+ *  of them areas (a frame of 1 to 3 card columns, its extent inside the columns, its frame never at row 0). Frame coordinates. */
+export function sheet(r, n, { off = 0, W = 8, rows = 24, pre = 'b', areas = 0 } = {}) {
   const int = (a, b) => a + Math.floor(r() * (b - a + 1)), out = [];
   for (let i = 0; i < n; i++) for (let t = 0; t < 40; t++) {
-    const c0 = off + int(0, W - 2), b = { id: pre + i, c0, c1: Math.min(off + W - 1, c0 + int(0, 3)), y: int(0, rows), h: int(1, 3), e: 0 };
-    if (!out.some((o) => share(o, b) && o.y < b.y + b.h + 1 && b.y < o.y + o.h + 1)) { out.push(b); break; }
+    const area = r() < areas, c0 = off + int(0, W - 2), x = { c0, c1: Math.min(off + W - 1, c0 + int(area ? 2 : 0, 3)), y: int(0, rows), h: int(area ? 3 : 1, area ? 5 : 3), e: 0 };
+    if (area && x.c1 - x.c0 < 2) continue;
+    const b = { id: pre + i, ...(area ? toFrame({ ...x, area: true }) : x) };
+    if (!out.some((o) => { const p = toExt(o); return share(p, x) && p.y < x.y + x.h + 1 && x.y < p.y + p.h + 1; })) { out.push(b); break; }
   }
   return out;
 }
@@ -76,13 +90,54 @@ function commonParts(T, base, after, x, d) {
   return true;
 }
 
-/** One random action on `base` ({id: block}); returns {kind, after, T} or null when the draw gives no valid transition. */
-export function action(r, base, opts = {}) {
+// the blocks a block's departure from its columns reaches: those under it in its columns, and under those, by their displayed rows
+function reachedFrom(base, x) {
+  const out = new Set(), queue = [x];
+  while (queue.length) { const k = queue.pop(), K = base[k];
+    for (const [id, b] of Object.entries(base)) if (id !== x && !out.has(id) && share(b, K) && b.y >= K.y + K.h + K.e) { out.add(id); queue.push(id); } }
+  return out;
+}
+
+// a free cell for a block placed by its canonical row (an undo: a carry back, or a deleted block made again), in columns c0…c1 at canonical
+// row yc: the blocks of those columns are none that the departure of `gone` moves, nothing overlaps it in either measure, and the block under
+// it in each column stays where it is on the screen. Returns its displayed row, FOLLOW's: in each column, the rows above it there counted
+// from the displayed bottom of the block above it (its place measured canonically, in that block's seg), the largest
+function canonicalCell(base, X, c0, c1, yc, gone) {
+  const R = gone == null ? new Set() : reachedFrom(base, gone), x = { ...X, c0, c1 };
+  const inCols = Object.entries(base).filter(([id, b]) => id !== gone && share(b, x));
+  if (inCols.some(([id]) => R.has(id))) return null;
+  let y = yc;
+  for (const c of cols(x)) {
+    const col = inCols.filter(([, b]) => covers(b, c)).map(([, b]) => b);
+    if (col.some((b) => b.yc < yc + x.h && yc < b.yc + b.h)) return null;
+    const above = col.filter((b) => b.yc + b.h <= yc).sort((a, b) => a.yc + a.h - (b.yc + b.h)).pop();
+    if (above) y = Math.max(y, above.y + above.h + above.e + (yc - (above.yc + above.h)));
+  }
+  for (const c of cols(x)) for (const b of inCols.map(([, b]) => b).filter((b) => covers(b, c) && b.yc >= yc + x.h))
+    if (y + x.h + x.e + (b.yc - (yc + x.h)) > b.y) return null;   // it would push the block under it on the screen
+  if (inCols.some(([, b]) => hits(b, { ...x, y }))) return null;
+  return y;
+}
+
+/** One random action on `base` ({id: block}, frame coordinates, every block with its canonical row yc); returns {kind, after, T} (after and
+ *  T.after in frame coordinates) or null when the draw gives no valid transition. A carry away is two RELINKs: `away` takes the block
+ *  away (GAP.6, after without it) and returns `then`, which `putBack` turns, on the layout that RELINK left, into the RELINK that puts it
+ *  where it lands. */
+export function action(r, baseF, opts = {}) {
   const int = (a, b) => a + Math.floor(r() * (b - a + 1)), pick = (a) => a[Math.floor(r() * a.length)];
+  const base = Object.fromEntries(Object.entries(baseF).map(([id, b]) => [id, toExt(b)]));
   const ids = Object.keys(base); if (!ids.length) return null;
-  const kinds = opts.kinds || ['carry', 'carry', 'carry', 'sideways', 'swap', 'swap', 'swap', 'swap', 'width', 'width', 'compose', 'create', 'delete', 'height'];
+  const kinds = opts.kinds || ['carry', 'carry', 'carry', 'sideways', 'press', 'swap', 'swap', 'swap', 'swap', 'width', 'width', 'compose', 'create', 'delete', 'height', 'away', 'back', 'restore'];
   const kind = pick(kinds), after = clone(base), W = opts.W ?? 8, off = opts.off ?? 0;
   const T = { after, steps: [], leave: [], enter: [], pass: [], carried: null };
+  // the heights FOLLOW is given (frame), and its rows back in extent coordinates
+  const followRows = () => { const rows = opts.rowsWith(Object.fromEntries(ids.map((id) => [id, { h: after[id].h - 2 * pad(after[id]), e: after[id].e || 0 }])));
+    for (const id of ids) if (id in rows) after[id].y = rows[id] - pad(after[id]);
+    T.start = Object.fromEntries(ids.map((id) => [id, rows[id]])); };
+  const done = () => {   // back to frame coordinates; only an undo's carried block keeps its canonical target
+    const out = Object.fromEntries(Object.entries(after).map(([id, b]) => { const f = toFrame(b); if (!(T.canonical && id === T.carried)) delete f.yc; return [id, f]; }));
+    T.after = out; return { kind, after: out, T };
+  };
   const reorders = (x, but = null) => {   // the columns where x, which keeps them, changes its order with another block (not `but`) that keeps them
     const out = [];
     for (const id of ids) if (id !== x && id !== but && after[id]) for (const c of cols(base[x])) {
@@ -91,35 +146,60 @@ export function action(r, base, opts = {}) {
     }
     return out;
   };
+  const inside = (b) => b.c0 >= off && b.c1 <= off + W - 1 && b.y >= 0;
   if (kind === 'compose') {
     // a carry and, in the same RELINK, another block narrowed or widened by a column where nothing is: as phase 8 relinks a carry with
-    // the blocks P-ASIDE pressed (pressing itself is not made here)
-    const c = action(r, base, { ...opts, kinds: ['carry'] }); if (!c) return null;
-    const free = ids.filter((id) => id !== c.T.carried && c.after[id] && c.after[id].y === base[id].y); if (!free.length) return null;
-    const k = pick(free), K = c.after[k], a = Math.max(off, K.c0 + pick([-1, 0, 1])), z = Math.min(off + W - 1, Math.max(a, K.c1 + pick([-1, 0, 1])));
+    // the blocks P-ASIDE pressed (pressing itself is `press`)
+    const c = action(r, baseF, { ...opts, kinds: ['carry'] }); if (!c) return null;
+    const ca = Object.fromEntries(Object.entries(c.after).map(([id, b]) => [id, toExt(b)]));
+    const free = ids.filter((id) => id !== c.T.carried && ca[id] && ca[id].y === base[id].y); if (!free.length) return null;
+    const k = pick(free), K = ca[k], a = Math.max(off, K.c0 + pick([-1, 0, 1])), z = Math.min(off + W - 1, Math.max(a + 2 * pad(K), K.c1 + pick([-1, 0, 1])));
     if (a === K.c0 && z === K.c1) return null;
     const was = cols(K), nk = { ...K, c0: a, c1: z };
-    if (ids.some((id) => id !== k && c.after[id] && hits(c.after[id], nk))) return null;
-    c.after[k] = nk;
+    if (!inside(nk) || ids.some((id) => id !== k && ca[id] && hits(ca[id], nk))) return null;
+    ca[k] = nk;
     for (const col of was) if (col < a || col > z) c.T.leave.push([k, col, 'narrow']);
     for (const col of cols(nk)) if (!was.includes(col)) c.T.enter.push([k, col, 'self']);
-    return { kind, after: c.after, T: c.T };
+    const out = Object.fromEntries(Object.entries(ca).map(([id, b]) => [id, toFrame(b)]));
+    c.T.after = out; return { kind, after: out, T: c.T };
   }
   if (kind === 'carry' || kind === 'sideways') {
     const x = pick(ids), X = after[x], k = kind === 'sideways' ? pick([-1, 1]) : 0, d = int(-12, 12);
     if (!d && !k) return null;
-    X.c0 += k; X.c1 += k; X.y += d; if (X.y < 0 || X.c0 < off || X.c1 > off + W - 1) return null;
+    X.c0 += k; X.c1 += k; X.y += d; if (!inside(X)) return null;
     T.carried = x;
     const keepsAny = cols(base[x]).some((c) => c >= X.c0 && c <= X.c1);
-    if (!keepsAny) return null;   // carried away entirely: phase 1b's GAP.6 and a creation, not one RELINK
-    // sideways, it moves only into free room: a block met from the side would be P-ASIDE's, which this generator does not make
+    if (!keepsAny) return null;   // carried away entirely: phase 1b's GAP.6 and a put, two RELINKs (`away`)
+    // sideways, it moves only into free room here: a block met from the side is pressed aside (`press`)
     if (k && ids.some((id) => id !== x && hits(after[id], X) && !cols(X).filter((c) => c >= base[id].c0 && c <= base[id].c1).some((c) => c >= base[x].c0 && c <= base[x].c1))) return null;
     if (!carrySettle(after, base, x)) return null;
     if (!commonParts(T, base, after, x, d)) return null;
     // a carry inside its columns changes no order (DRAG.B2): a case where the pushes did is the generator's, not SETTLE's
     if (ids.some((id) => after[id] && reorders(id).length)) return null;
-    for (const c of cols(base[x])) if (c < X.c0 || c > X.c1) T.leave.push([x, c, 'narrow']);   // keeping some columns, as a narrowing (G8)
+    for (const c of cols(base[x])) if (c < X.c0 || c > X.c1) T.leave.push([x, c, 'narrow']);   // keeping some columns, as a narrowing (M9)
     for (const c of cols(X)) if (c < base[x].c0 || c > base[x].c1) T.enter.push([x, c, 'put']);
+  } else if (kind === 'press') {
+    // a carry sideways by a column that meets blocks from the side, at the same rows: each is pressed aside (P-ASIDE) in the carry's
+    // direction, just clear of the carried block, keeping its rows (a press moves no row and is no step: a leave and an entry, `press` and
+    // `self`), into free room (no chain of presses here); the carried block keeps some of its columns
+    // drawn among the carries that meet a block from the side
+    const meets = []; for (const id of ids) for (const k of [-2, -1, 1, 2]) { const M = { ...base[id], c0: base[id].c0 + k, c1: base[id].c1 + k };
+      if (inside(M) && cols(base[id]).some((c) => covers(M, c)) && ids.some((o) => o !== id && hits(base[o], M) && !share(base[o], base[id]))) meets.push([id, k]); }
+    if (!meets.length) return null;
+    const [x, k] = pick(meets), X = after[x];
+    X.c0 += k; X.c1 += k;
+    const met = ids.filter((id) => id !== x && hits(after[id], X));
+    for (const id of met) {
+      if (share(base[id], base[x])) return null;   // met from above or under, not from the side
+      const K = after[id], s = k > 0 ? X.c1 + 1 - K.c0 : X.c0 - 1 - K.c1; K.c0 += s; K.c1 += s;
+      if (!inside(K)) return null;
+    }
+    for (const id of [x, ...met]) if (ids.some((o) => o !== id && hits(after[o], after[id]))) return null;
+    T.carried = x;
+    for (const c of cols(base[x])) if (!covers(X, c)) T.leave.push([x, c, 'narrow']);
+    for (const c of cols(X)) if (!covers(base[x], c)) T.enter.push([x, c, 'put']);
+    for (const id of met) { for (const c of cols(base[id])) if (!covers(after[id], c)) T.leave.push([id, c, 'press']);
+      for (const c of cols(after[id])) if (!covers(base[id], c)) T.enter.push([id, c, 'self']); }
   } else if (kind === 'swap') {
     // the carried block and the next block under or over it in a column they share (LAYOUT-RULES §5.1b, phase 3, DRAG.B4): the carried
     // block is pinned right against the neighbour, on its touching row; going down, the neighbour takes the carried block's pinned row and
@@ -145,6 +225,7 @@ export function action(r, base, opts = {}) {
     } else xp = down ? N.y - hX : N.y + hN;
     if (down) { ny = xp; xy = ny + hN; } else { xy = N.y; ny = xy + hX; }
     after[x].y = xy; after[n].y = ny;
+    if (!inside(after[x]) || !inside(after[n])) return null;
     if (ids.some((id) => id !== x && id !== n && (hits(after[id], after[n]) || hits(after[id], after[x]) || hits(after[id], { ...X, y: xp })))) return null;
     T.carried = x; T.swap = [x, n];
     if (!push && xp !== X.y) T.steps.push([[x], xp - X.y]);   // the pin
@@ -154,34 +235,67 @@ export function action(r, base, opts = {}) {
     for (const c of reorders(x)) T.pass.push([x, c]);
     for (const c of reorders(n, x)) T.pass.push([n, c]);
   } else if (kind === 'width') {
-    const x = pick(ids), X = after[x], a = Math.max(off, X.c0 + pick([-1, 0, 1])), z = Math.min(off + W - 1, Math.max(a, X.c1 + pick([-1, 0, 1])));
+    const x = pick(ids), X = after[x], a = Math.max(off, X.c0 + pick([-1, 0, 1])), z = Math.min(off + W - 1, Math.max(a + 2 * pad(X), X.c1 + pick([-1, 0, 1])));
     if (a === X.c0 && z === X.c1) return null;
     const was = cols(X); X.c0 = a; X.c1 = z;
     if (r() < 0.3) {   // the re-measure at the new width: the blocks under it follow (FOLLOW, no move), from the rows `start` states
-      X.h = Math.max(1, X.h + pick([-1, 1]));
+      X.h = Math.max(1 + 2 * pad(X), X.h + pick([-1, 1]));
       if (!opts.rowsWith) return null;
-      const rows = opts.rowsWith(Object.fromEntries(ids.map((id) => [id, { h: after[id].h, e: after[id].e || 0 }])));
-      for (const id of ids) if (id in rows) after[id].y = rows[id];
-      T.start = Object.fromEntries(ids.map((id) => [id, after[id].y]));
+      followRows();
     }
     if (ids.some((id) => id !== x && hits(after[id], X))) return null;
     for (const c of was) if (c < a || c > z) T.leave.push([x, c, 'narrow']);
     for (const c of cols(X)) if (!was.includes(c)) T.enter.push([x, c, 'self']);
   } else if (kind === 'create') {
-    const c0 = off + int(0, W - 2), b = { c0, c1: Math.min(off + W - 1, c0 + int(0, 3)), y: int(0, 30), h: int(1, 3), e: 0 };
-    if (Object.values(after).some((o) => hits(o, b))) return null;
+    const area = r() < 0.3, c0 = off + int(0, W - 2), b = { c0, c1: Math.min(off + W - 1, c0 + int(area ? 2 : 0, 3)), y: int(0, 30), h: int(area ? 3 : 1, area ? 5 : 3), e: 0, ...(area ? { area: true } : {}) };
+    if ((area && b.c1 - b.c0 < 2) || Object.values(after).some((o) => hits(o, b))) return null;
     const id = 'n' + Math.floor(r() * 1e6); after[id] = b;
     for (const c of cols(b)) T.enter.push([id, c, 'put']);
   } else if (kind === 'delete') {
     delete after[pick(ids)];
+  } else if (kind === 'away') {
+    // carried away to other columns (DRAG.B1): phase 1b takes it away first (GAP.6), so this RELINK's after does not hold it; the next
+    // RELINK puts it where it lands (putBack), as a block base does not hold
+    const x = pick(ids); delete after[x];
+    const out = done(); out.then = { id: x, block: toFrame(base[x]) }; return out;
+  } else if (kind === 'back' || kind === 'restore') {
+    // an undo placed by its canonical row in every column (LAYOUT-ENGINE-PLAN §6.4): `back`, an undone carry, the block back at an old
+    // cell, leaving every column it had as carried away and coming back into every column it has; `restore`, an undone deletion, a block
+    // base does not hold made again at its old cell. The cell is free in both measures and moves no other block
+    const x = kind === 'back' ? pick(ids) : 'r' + Math.floor(r() * 1e6), area = kind === 'restore' && r() < 0.3;
+    const X = kind === 'back' ? base[x] : { c0: 0, c1: int(area ? 2 : 0, 3), h: int(area ? 3 : 1, area ? 5 : 3), e: 0, ...(area ? { area: true } : {}) };
+    const w = X.c1 - X.c0; if (w > W - 1) return null;
+    const c0 = off + int(0, W - 1 - w), yc = int(0, 30), y = canonicalCell(base, X, c0, c0 + w, yc, kind === 'back' ? x : null);
+    if (y == null) return null;
+    after[x] = { ...X, c0, c1: c0 + w, y, yc };
+    T.carried = x; T.canonical = true;
+    if (kind === 'back') {
+      // the blocks under its old place rise into it (its rows go with it): their rows after are those FOLLOW gives once it is away
+      if (opts.rowsWithout) { const rows = opts.rowsWithout(x); for (const id of reachedFrom(base, x)) if (id in rows) after[id].y = rows[id] - pad(after[id]); }
+      for (const c of cols(base[x])) T.leave.push([x, c, 'away']);
+    }
+    for (const c of cols(after[x])) T.enter.push([x, c, 'back']);
   } else if (kind === 'height') {
     // a real height: the blocks under it follow with their gaps (FOLLOW, no move), so after holds the rows FOLLOW gives over base's
     // stacks with the new height, which are also the rows the first step would start from (`start`); that needs the stacks: `rowsWith`
     if (!opts.rowsWith) return null;
-    const x = pick(ids); after[x].h = Math.max(1, after[x].h + pick([-2, -1, 1, 2]));
-    const rows = opts.rowsWith(Object.fromEntries(ids.map((id) => [id, { h: after[id].h, e: after[id].e || 0 }])));
-    for (const id of ids) if (id in rows) after[id].y = rows[id];
-    T.start = Object.fromEntries(ids.map((id) => [id, after[id].y]));
+    const x = pick(ids); after[x].h = Math.max(1 + 2 * pad(after[x]), after[x].h + pick([-2, -1, 1, 2]));
+    followRows();
   }
-  return { kind, after, T };
+  return done();
+}
+
+/** The RELINK that puts a block carried away where it lands (DRAG.B1, after phase 1b's GAP.6): a free cell on the screen in columns
+ *  off…off+W-1, the block carried, coming in where it is put in every column, as a block base does not hold. */
+export function putBack(r, baseF, then, opts = {}) {
+  const int = (a, b) => a + Math.floor(r() * (b - a + 1)), W = opts.W ?? 8, off = opts.off ?? 0;
+  const base = Object.fromEntries(Object.entries(baseF).map(([id, b]) => [id, toExt(b)])), X = toExt(then.block), w = X.c1 - X.c0;
+  if (w > W - 1) return null;
+  const c0 = off + int(0, W - 1 - w), b = { ...X, c0, c1: c0 + w, y: int(0, 30) };
+  delete b.yc;
+  if (Object.values(base).some((o) => hits(o, b))) return null;
+  const after = Object.fromEntries(Object.entries(baseF).map(([id, f]) => { const g = { ...f }; delete g.yc; return [id, g]; }));
+  after[then.id] = toFrame(b);
+  const T = { after, steps: [], leave: [], enter: cols(b).map((c) => [then.id, c, 'put']), pass: [], carried: then.id };
+  return { kind: 'put', after, T };
 }

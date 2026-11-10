@@ -81,8 +81,10 @@ export function checkDeclaration(base, T) {
       for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
     }
   }
-  // the layout after holds no two blocks on one cell, on the screen (INV-1)
-  { const A = Object.entries(after).map(([id, b]) => [id, extent(b)]);
+  // the layout after holds no two blocks on one cell, on the screen (INV-1); an undo's carried block is placed by its canonical cell, its
+  // displayed row FOLLOW's from there, which RELINK checks in its result
+  const undoneEarly = canonical && carried != null ? carried : null;
+  { const A = Object.entries(after).filter(([id]) => id !== undoneEarly).map(([id, b]) => [id, extent(b)]);
     for (let i = 0; i < A.length; i++) for (let j = i + 1; j < A.length; j++) { const [p, a] = A[i], [q, b] = A[j];
       if (a.c0 <= b.c1 && b.c0 <= a.c1 && a.y < b.y + b.h + b.e && b.y < a.y + a.h + a.e) errs.push(`${p} and ${q} overlap in after`); } }
   // the steps: blocks after holds; from the rows the first step starts from, they bring every block they move to its row in after, and

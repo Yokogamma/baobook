@@ -1,9 +1,10 @@
 // Node: GAP.4 FOLLOW (public/layout/gap.js `follow`, `fromPlaces`; docs/LAYOUT-RULES.md INV-2, §2.1): every row from the stacks, in both
 // measures, in one pass over the column chains: a valid note keeps its places, head rows and gaps included; a temporary height pushes the
 // blocks under it on the screen only; the binding stack decides a row and the others keep their slack; an area stands by its extent.
-import { follow, resize, relink, check } from '../public/layout/gap.js';
+import { follow, resize, check } from '../public/layout/gap.js';
+
 import { DEFAULT } from '../public/layout/rules.js';
-import { ok, eq, done, box, placed, edit, stack, rows, canon, clean } from './lib/gapcase.mjs';
+import { ok, eq, done, box, placed, edit, stack, rows, canon, clean, relink } from './lib/gapcase.mjs';
 
 const L = placed([box('A', 1, 3, 3), box('B', 1, 3, 7, 2), box('C', 5, 6, 2)]);
 eq('1 a valid note opens as stored: its head rows and gaps kept, in both measures (r10.6)', [rows(L), canon(L)], [{ A: 3, B: 7, C: 2 }, { A: 3, B: 7, C: 2 }]);

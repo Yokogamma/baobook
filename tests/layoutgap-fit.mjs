@@ -1,9 +1,10 @@
 // Node: GAP.5 rule 5, fit (public/layout/gap.js `fit`, and the end of `relink`): a block SETTLE put lower than FOLLOW over the stacks puts it
 // gets, in its binding stack, the rows it lacks, owned by that stack's u; no stack is ever cut; blocks are visited in reading order; the
 // carried block is fitted too, with no vertical step of its own.
-import { fit, relink, resize } from '../public/layout/gap.js';
+import { fit, resize } from '../public/layout/gap.js';
+
 import { DEFAULT } from '../public/layout/rules.js';
-import { ok, eq, done, box, placed, edit, stack, rows, canon, clean } from './lib/gapcase.mjs';
+import { ok, eq, done, box, placed, edit, stack, rows, canon, clean, relink } from './lib/gapcase.mjs';
 
 const R = DEFAULT, L = placed([box('A', 1, 1, 0), box('L', 1, 1, 5)]);
 const f = fit(L, { L: 7 }, R);

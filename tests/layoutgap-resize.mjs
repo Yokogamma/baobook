@@ -1,8 +1,9 @@
 // Node: `resize` (public/layout/gap.js), the one writer of a box's height and temporary rows (docs/LAYOUT-ENGINE-PLAN.md §4.3, LAYOUT-RULES
 // GAP.4): it sets h and t together, cuts no lend (G7 is RELINK's), runs no FOLLOW, and refuses a height with no canonical row.
-import { resize, relink, follow } from '../public/layout/gap.js';
+import { resize, follow } from '../public/layout/gap.js';
+
 import { DEFAULT } from '../public/layout/rules.js';
-import { ok, eq, done, box, placed, edit, stack, rows } from './lib/gapcase.mjs';
+import { ok, eq, done, box, placed, edit, stack, rows, relink } from './lib/gapcase.mjs';
 
 const L0 = placed([box('A', 1, 1, 0), box('L', 1, 1, 10)]);
 const X = relink(L0, edit(L0, (m) => m.set('X', box('X', 1, 1, 3, 3))), {}, 'X', DEFAULT);

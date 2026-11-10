@@ -2,9 +2,10 @@
 // any primitive exists. Runs of blocks moved together keep everything inside them; only the gap above and the gap under each run change; a
 // first block moved up owns the free room it leaves (G6, GAP.8, per column); GAP.5.1 off keeps the lengths and changes only owners; several
 // steps in one RELINK are each measured at the rows they start from; a step is rigid.
-import { adjust, relink, remove } from '../public/layout/gap.js';
+import { adjust, remove } from '../public/layout/gap.js';
+
 import { DEFAULT, resolve } from '../public/layout/rules.js';
-import { ok, eq, done, box, placed, edit, stack, rows, steps, clean } from './lib/gapcase.mjs';
+import { ok, eq, done, box, placed, edit, stack, rows, steps, clean, relink } from './lib/gapcase.mjs';
 
 const R = DEFAULT, mv = (L, ids, d, rules = R) => adjust(L, Object.fromEntries(ids.map((id) => [id, steps([1, d])])), rules);
 

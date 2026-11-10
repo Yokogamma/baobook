@@ -2,33 +2,21 @@
 // (docs/LAYOUT-ENGINE-PLAN.md step 1: «gap.js must give the model's results»). Random histories of creations, undos, deletions, heights,
 // temporary heights, widths with and without a new height, moves of one block and of several, carries sideways and away, steps that move
 // and change widths in one RELINK, rule 5 alone, shifts and an area's left side handle, under random sets of the GAP switches: after
-// every event both implementations accept it or both refuse it, and their rows in both measures, owners and lends are the same. Until step
-// 1b's second part the model runs with `screenPut`: a block moved by hand and put at its row under another block's temporary rows measured as the engine
-// still measures it (the internal review of 62433e9 found that this writes their push; the model fixed it, the engine follows), and with
-// `awaySideways`: a carried block leaving a column it no longer covers, while it keeps others, as carried away, as the engine still does
-// (the owner decided on 2026-11-10 that it leaves it as narrowed off).
+// every event both implementations accept it or both refuse it, and their rows in both measures, owners and lends are the same. Among the
+// events are transitions as SETTLE would declare them (tests/lab/gap-model/gen.mjs: swaps with their passes, presses aside, undos, carries
+// with their pushes), each checked by declare.mjs and run by both through relink(T) (step 1b), so no event is left out.
 // node tests/layoutgap-twin.mjs [histories]
 import { createModel } from './lab/gap-model/model.mjs';
 import { createEngineModel } from './lib/gapdriver.mjs';
+import { action } from './lab/gap-model/gen.mjs';
+import { checkDeclaration } from './lab/gap-model/declare.mjs';
 
 let fails = 0; const ok = (n, c) => { if (!c) fails++; console.log((c ? '✓ ' : '✗ ') + n); };
 const N = +process.argv[2] || 400;
 function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const blk = (id, c0, c1, y, h = 1) => ({ id, c0, c1, y, h });
 
-// whether an event's moves carry a block past another in a column both cover before and after it
-function passes(m, kind, moved) {
-  if (!moved) return false;
-  for (const [list, d] of moved) for (const id of list) {
-    const x = m.B.get(id), y2 = x.y + d;
-    for (const b of m.B.values()) {
-      if (list.includes(b.id) || b.c1 < x.c0 || x.c1 < b.c0) continue;
-      if ((x.y < b.y) !== (y2 < b.y) || (x.y > b.y) !== (y2 > b.y)) return true;
-    }
-  }
-  return false;
-}
-let skipped = 0;
+let declared = 0;
 function history(seed) {
   const r = rng(seed), pick = (a) => a[Math.floor(r() * a.length)], int = (a, b) => a + Math.floor(r() * (b - a + 1)), W = 12;
   const opts = { gap51: r() > 0.2, gap52: r() > 0.2, gap53: r() > 0.2, gap8: r() > 0.2, gap9: r() > 0.2 };
@@ -36,13 +24,12 @@ function history(seed) {
     const c0 = int(0, W - 3), b = blk('b' + i, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 24), int(1, 3));
     if (!base.some((o) => o.c0 <= b.c1 && b.c0 <= o.c1 && o.y < b.y + b.h + 1 && b.y < o.y + o.h + 1)) { base.push(b); break; }
   }
-  // the model with `screenPut`: a block put at its row measured as the engine still measures it, until step 1b's second part
-  const m = createModel({ ...opts, screenPut: true, awaySideways: true }).open(base), e = createEngineModel(opts).open(base);
+  const m = createModel(opts).open(base), e = createEngineModel(opts).open(base);
   if (m.snapshot() !== e.snapshot()) return { seed, at: 'open', m: m.snapshot(), e: e.snapshot() };
   let n = 0;
   for (let step = 0; step < 30; step++) {
     const live = [...m.B.keys()]; if (!live.length) break;
-    const id = pick(live), x = { ...m.B.get(id) }, kind = pick(['insert', 'insert', 'restore', 'height', 'show', 'width', 'widthh', 'move', 'moves', 'carry', 'sideways', 'away', 'step', 'fit', 'shift', 'side', 'delete']);
+    const id = pick(live), x = { ...m.B.get(id) }, kind = pick(['insert', 'insert', 'restore', 'height', 'show', 'width', 'widthh', 'move', 'moves', 'carry', 'sideways', 'away', 'step', 'fit', 'shift', 'side', 'delete', 'transition', 'transition', 'transition']);
     let op;
     if (kind === 'insert') { const c0 = int(0, W - 2), b = { ...blk('x' + n++, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 30), int(1, 3)), e: pick([0, 0, 2]) }; op = (q) => q.insert(b); }
     if (kind === 'restore') { const c0 = int(0, W - 2), b = blk('x' + n++, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 30), int(1, 3)); op = (q) => q.restore(b); }
@@ -60,9 +47,12 @@ function history(seed) {
     if (kind === 'shift') { const k = pick([-1, 1]); op = (q) => q.shift(k); }
     if (kind === 'side') { const k = pick([1, 2]); op = (q) => q.side(k, W - k); }
     if (kind === 'delete') op = (q) => q.remove(id);
-    // a block carried or moved past a block of a column it keeps is outside the model, which keeps every chain's order and has no rule for
-    // it: RELINK counts it as leaving its old place and coming in at its new one (LAYOUT-RULES GAP.5), tested by tests/layoutgap-leave.mjs
-    if (passes(m, kind, op.moved)) { skipped++; continue; }
+    if (kind === 'transition') {   // a transition as SETTLE would declare it, drawn on the model's layout; an undrawable one is no event
+      const rowsWithout = (k) => { const s0 = m.save(); m.remove(k); const rows = m.rows(); m.load(s0); return rows; };
+      const a = action(r, m.frames(), { off: 0, W, rowsWith: (h) => m.rowsWith(h), rowsWithout, kinds: ['carry', 'sideways', 'press', 'swap', 'swap', 'width', 'compose', 'height', 'back', 'restore'] });
+      if (!a || checkDeclaration(m.frames(), a.T).length) continue;
+      declared++; op = (q) => q.relink(a.T);
+    }
     let em = null, ee = null;
     try { op(m); } catch (err) { em = err.message; }
     try { op(e); } catch (err) { ee = err.message; }
@@ -71,12 +61,12 @@ function history(seed) {
     const errs = e.check(); if (errs.length) return { seed, step, kind, errs };
   }
   // what 0.1 stores reopens to the same canonical rows in both
-  const pm = createModel({ ...opts, screenPut: true, awaySideways: true }).open(m.places()), pe = createEngineModel(opts).open(e.places());
+  const pm = createModel(opts).open(m.places()), pe = createEngineModel(opts).open(e.places());
   if (pm.snapshot() !== pe.snapshot()) return { seed, at: 'places' };
   return null;
 }
 
 let bad = 0, first = null;
 for (let s = 1; s <= N; s++) { let res; try { res = history(s); } catch (err) { res = { seed: s, error: err.stack }; } if (res) { bad++; first = first || res; } }
-ok(`${N} random histories: the engine accepts and refuses what the model does, with the same rows, owners and lends after every event (${skipped} events outside the model left out; ${bad} differ${first ? '; first: ' + JSON.stringify(first).slice(0, 1500) : ''})`, bad === 0);
+ok(`${N} random histories: the engine accepts and refuses what the model does, with the same rows, owners and lends after every event (${declared} of them declared transitions, none left out; ${bad} differ${first ? '; first: ' + JSON.stringify(first).slice(0, 1500) : ''})`, bad === 0);
 process.exit(fails ? 1 : 0);
