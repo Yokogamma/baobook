@@ -25,6 +25,17 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   ok('2a the steps cut one per common part: B alone 1 row, then A and B 1 row', eq(steps(w), [[['B'], -1, 'up'], [['A', 'B'], -1, 'up']]), steps(w));
 }
 
+/* ── 2b. several blocks above, one over another, and one over two (the internal review of 345ac6f: a block above was dropped once the
+   block under it was lifted, and two blocks ended on one another) ── */
+{
+  const w = ws(20, [set('A', 0, 6, 5, 2), set('B', 0, 8, 5), set('C', 0, 9, 5, 2), set('X', 0, 12, 5, 2)], ctx, 'X', { y: 5 });
+  up(w, new Set(['A', 'B', 'C']));
+  ok('2b three touching blocks over X carried up to row 5: each goes up 6 rows, one step, nothing hits', eq(rows(w), { A: 0, B: 2, C: 3, X: 5 }) && hitting(w) === null && eq(steps(w), [[['A', 'B', 'C'], -6, 'up']]), [rows(w), steps(w)]);
+  const v = ws(20, [set('U', 0, 0, 11), set('A', 0, 2, 11), set('B2', 6, 4, 5, 2), set('B1', 0, 5, 5), set('X', 0, 7, 11)], ctx, 'X', { y: 4 });
+  up(v, new Set(['U', 'A', 'B1', 'B2']));
+  ok('2c A over two blocks in different columns, U over A: B2 needs A one row higher, B1 needs nothing of it; U stays', eq(rows(v), { U: 0, A: 1, B2: 2, B1: 3, X: 4 }) && hitting(v) === null, rows(v));
+}
+
 /* ── 3. no room above: the moved block stands lower ── */
 {
   const w = ws(20, [set('A', 0, 0, 5), set('B', 0, 1, 5, 2), set('X', 0, 6, 5, 3)], ctx, 'X', { y: 2 });

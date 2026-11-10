@@ -37,17 +37,19 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
   // A over X and B under X in X's columns at the start; C beside, in other columns
   const start = sheet(20, [set('A', 0, 0, 5), set('X', 0, 2, 5), set('B', 0, 4, 5, 2), set('C', 8, 3, 4, 3)]);
   const L = at1c(start, 'X', { col: 0, y: 5 });
-  const j = judgeCarry(L, start, 'X', { col: 0, y: 5, frow: 5 }, mem(), ctx);
+  const j = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 } }, mem(), ctx);
   ok('2 a block that stood in its columns keeps its side: B stays below though X was carried past its top', j.side.get('A') === 'above' && j.side.get('B') === 'below', obj(j.side));
   ok('2a a block in other columns is not judged', !j.side.has('C'));
   const L2 = at1c(start, 'X', { col: 6, y: 4 });
-  const j2 = judgeCarry(L2, start, 'X', { col: 6, y: 4, frow: 4.4 }, mem(), ctx);
+  const j2 = judgeCarry(L2, start, { id: 'X', at: { col: 6, y: 4, frow: 4.4 } }, mem(), ctx);
   ok('2b a block it did not stand with, by its middle: C (rows 3–5, middle 4.5) is below frow 4.4', j2.side.get('C') === 'below', obj(j2.side));
-  const j3 = judgeCarry(L2, start, 'X', { col: 6, y: 4, frow: 4.5 }, mem(), ctx);
+  const j3 = judgeCarry(L2, start, { id: 'X', at: { col: 6, y: 4, frow: 4.5 } }, mem(), ctx);
   ok('2c strictly below: at frow 4.5, C\'s middle is not below it, so C is above', j3.side.get('C') === 'above', obj(j3.side));
-  const away = judgeCarry(L, start, 'X', { col: 0, y: 5, frow: 5 }, mem({ away: true }), ctx);
+  const away = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 }, away: true }, mem({ away: true }), ctx);
+  const memOnly = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 } }, mem({ away: true }), ctx);
   ok('2d away, every side by the middle: B (rows 4–5, middle 5) is above at frow 5', away.side.get('B') === 'above' && away.side.get('A') === 'above', obj(away.side));
-  const off = judgeCarry(L, start, 'X', { col: 0, y: 5, frow: 5 }, mem(), ctxOf({}, resolve({ 'DRAG.B2.keep': false })));
+  ok('2d2 the judge reads the change\'s own «away» (its maker set it from the memory), not the memory: the side is kept', memOnly.side.get('B') === 'below', obj(memOnly.side));
+  const off = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 } }, mem(), ctxOf({}, resolve({ 'DRAG.B2.keep': false })));
   ok('2e DRAG.B2.keep off: sides by frow and the middle only, so B is above', off.side.get('B') === 'above', obj(off.side));
 }
 
@@ -56,30 +58,30 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
   const start = sheet(20, [set('A', 6, 0, 5, 3), set('X', 0, 6, 5)]);
   // X (card 1–4, one row) put at col 3, row 1: it overlaps A (card 7–10, rows 0–2) by 1 column and 1 row
   const L = at1c(start, 'X', { col: 3, y: 1 });
-  const v = judgeCarry(L, start, 'X', { col: 3, y: 1, frow: 1 }, mem(), ctx);
+  const v = judgeCarry(L, start, { id: 'X', at: { col: 3, y: 1, frow: 1 } }, mem(), ctx);
   ok('3 equal overlaps and no move yet (vertical): not met from the side', !v.met.has('A'), obj(v.met));
-  const s = judgeCarry(L, start, 'X', { col: 3, y: 1, frow: 1 }, mem({ lastTarget: { col: 1, y: 1, frow: 1, w: 5 } }), ctx);
+  const s = judgeCarry(L, start, { id: 'X', at: { col: 3, y: 1, frow: 1 } }, mem({ lastTarget: { col: 1, y: 1, frow: 1, w: 5 } }), ctx);
   ok('3a equal overlaps and the last move sideways: met from the side, pressed right (its centre to the right of X\'s)', s.met.get('A') === 'right', obj(s.met));
   const L2 = at1c(start, 'X', { col: 2, y: 1 });
-  const across = judgeCarry(L2, start, 'X', { col: 2, y: 1, frow: 1 }, mem(), ctx);
+  const across = judgeCarry(L2, start, { id: 'X', at: { col: 2, y: 1, frow: 1 } }, mem(), ctx);
   ok('3b X\'s card 3–6 and A\'s card 7–10 share no column: nothing hit, nothing met', !across.met.has('A') && !across.side.has('A'));
   const L3 = at1c(start, 'X', { col: 4, y: 0 });   // X card 5–8 over A card 7–10 rows 0–2: across 2, along 1
-  const along = judgeCarry(L3, start, 'X', { col: 4, y: 0, frow: 0 }, mem(), ctx);
+  const along = judgeCarry(L3, start, { id: 'X', at: { col: 4, y: 0, frow: 0 } }, mem(), ctx);
   ok('3c across 2, along 1: not met from the side, judged above or below', !along.met.has('A') && along.side.has('A'), [obj(along.met), obj(along.side)]);
   const tall = sheet(20, [set('A', 6, 0, 5, 3), set('X', 0, 6, 5, 3)]), L4 = at1c(tall, 'X', { col: 4, y: 0 });   // across 2, along 3
-  const side4 = judgeCarry(L4, tall, 'X', { col: 4, y: 0, frow: 0 }, mem(), ctx);
+  const side4 = judgeCarry(L4, tall, { id: 'X', at: { col: 4, y: 0, frow: 0 } }, mem(), ctx);
   ok('3d across 2, along 3: met from the side, pressed right', side4.met.get('A') === 'right', obj(side4.met));
   const left = sheet(20, [set('A', 0, 0, 5, 3), set('X', 8, 6, 5, 3)]), L5 = at1c(left, 'X', { col: 2, y: 0 });   // X card 3–6, A card 1–4
-  const s5 = judgeCarry(L5, left, 'X', { col: 2, y: 0, frow: 0 }, mem(), ctx);
+  const s5 = judgeCarry(L5, left, { id: 'X', at: { col: 2, y: 0, frow: 0 } }, mem(), ctx);
   ok('3e pressed to the side its centre lies on: A to the left', s5.met.get('A') === 'left', obj(s5.met));
   const same = sheet(20, [set('A', 2, 0, 3, 3), set('X', 8, 6, 3, 3)]), L6 = at1c(same, 'X', { col: 2, y: 0 });   // both cards 3–4: across 2, along 3
-  const s6 = judgeCarry(L6, same, 'X', { col: 2, y: 0, frow: 0 }, mem(), ctx);
+  const s6 = judgeCarry(L6, same, { id: 'X', at: { col: 2, y: 0, frow: 0 } }, mem(), ctx);
   ok('3f centres that coincide: to the left', s6.met.get('A') === 'left', obj(s6.met));
-  const sticky = judgeCarry(L3, start, 'X', { col: 4, y: 0, frow: 0 }, mem({ sides: new Map([['A', 'right']]) }), ctx);
+  const sticky = judgeCarry(L3, start, { id: 'X', at: { col: 4, y: 0, frow: 0 } }, mem({ sides: new Map([['A', 'right']]) }), ctx);
   ok('3g sticky: A met from the side before stays so while it shares a row with the target, though the overlaps now judge it above or below', sticky.met.get('A') === 'right' && sticky.sides.get('A') === 'right', obj(sticky.met));
-  const gone = judgeCarry(at1c(start, 'X', { col: 0, y: 8 }), start, 'X', { col: 0, y: 8, frow: 8 }, mem({ sides: new Map([['A', 'right']]) }), ctx);
+  const gone = judgeCarry(at1c(start, 'X', { col: 0, y: 8 }), start, { id: 'X', at: { col: 0, y: 8, frow: 8 } }, mem({ sides: new Map([['A', 'right']]) }), ctx);
   ok('3h and its record is dropped once it shares no row with the target', !gone.sides.has('A'), obj(gone.sides));
-  const off = judgeCarry(L4, tall, 'X', { col: 4, y: 0, frow: 0 }, mem(), ctxOf({}, resolve({ 'DRAG.B3': false })));
+  const off = judgeCarry(L4, tall, { id: 'X', at: { col: 4, y: 0, frow: 0 } }, mem(), ctxOf({}, resolve({ 'DRAG.B3': false })));
   ok('3i DRAG.B3 off: nothing met from the side, every block hit judged above or below', off.met.size === 0 && off.side.has('A'), [obj(off.met), obj(off.side)]);
   ok('3j sideways: more across the columns than along the rows; vertical before any move',
     sideways({ col: 0, y: 0 }, { col: 2, y: 1 }) && !sideways({ col: 0, y: 0 }, { col: 1, y: 1 }) && !sideways(null, { col: 5, y: 0 }));
@@ -88,8 +90,22 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
 /* ── 4. the neighbour letting the block through ── */
 {
   const start = sheet(20, [set('X', 0, 0, 5), set('B', 0, 2, 5, 3)]), L = at1c(start, 'X', { col: 0, y: 3 });
-  const j = judgeCarry(L, start, 'X', { col: 0, y: 3, frow: 3 }, mem({ through: { id: 'B', row: 1, side: 'below' } }), ctx);
-  ok('4 the neighbour in the memory is judged neither way (PR-4)', !j.side.has('B') && !j.met.has('B'), [obj(j.side), obj(j.met)]);
+  const j = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 3, frow: 3 } }, mem({ through: { id: 'B', row: 1, side: 'below' } }), ctx);
+  ok('4 the neighbour in the memory counts in neither judgement (PR-4)', !j.side.has('B') && !j.met.has('B'), [obj(j.side), obj(j.met)]);
+  ok('4a but it is judged apart, for phase 3 to use if it releases it: below, kept from the start, not met from the side', eq(j.held, { side: 'below' }), j.held);
+  const none = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 3, frow: 3 } }, mem(), ctx);
+  ok('4b with no neighbour in the memory nothing is held', none.held === null && none.side.get('B') === 'below');
+}
+
+/* ── 4c. an area as the carried block, and a record of a block no longer hit (the internal review of 345ac6f) ── */
+{
+  // the area X's frame carried to row 5 (its free row above at 4); T, a one-row text on row 4 in its columns, never stood with it
+  const start = sheet(30, [set('T', 2, 4, 4), area('X', 12, 9, 8, 2)]), L = at1c(start, 'X', { col: 0, y: 5 });
+  const j = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 } }, mem(), ctx);
+  ok('4c an area is judged by its frame row, its stored and shown place: T (middle 4.5) is above frow 5', j.side.get('T') === 'above', obj(j.side));
+  const s0 = sheet(20, [set('A', 6, 0, 5, 3), set('X', 0, 6, 5, 3)]), L2 = at1c(s0, 'X', { col: 0, y: 0 });   // X card 1–4, A card 7–10: no hit
+  const k = judgeCarry(L2, s0, { id: 'X', at: { col: 0, y: 0, frow: 0 } }, mem({ sides: new Map([['A', 'right']]) }), ctx);
+  ok('4d a block met from the side earlier and no longer hit keeps its record while it shares a row, though nothing presses it now', k.sides.get('A') === 'right' && !k.met.has('A'), [obj(k.sides), obj(k.met)]);
 }
 
 /* ── 5. the wall's judge ── */

@@ -1,10 +1,12 @@
 // SETTLE's primitives (docs/LAYOUT-RULES.md §5.3; LAYOUT-ENGINE-PLAN §2, §5.2): P-ASIDE with its chain and `far`; `sink`, with its uses
 // P-DOWN, P-SINK and P-SEP; P-UP, its mirror; P-REST; `canMove`. They work on the working state of the phases between two RELINKs: the
 // boxes as the phases move them, the stacks as the last RELINK left them (only RELINK writes stacks, PR-6), and the moved block of the
-// change, which stands at its target and is in no chain until phase 8, so it neither leads nor follows a push. Every vertical move is
-// recorded for the transition: a primitive's steps cut one per common part (`steps`, the Moved of LAYOUT-ENGINE-PLAN §2.1), and the rows a
-// push gave because a height changed apart from them (`follow`), since those are FOLLOW's and no step. A press aside changes columns only.
-// Which primitive runs when, and what a switched-off rule runs in its place, is settle.js's (§5.1, §1.6); here a primitive does its one job.
+// change, which stands at its target and is in no chain until phase 8, so it neither leads nor follows a push and is never moved by a
+// primitive but P-UP's lowering of it. Every vertical move is recorded: each call's steps, cut one per common part within the call (`steps`,
+// the Moved of LAYOUT-ENGINE-PLAN §2.1, for the dev look), and the rows a push gave because a height changed (`follow`), since those are
+// FOLLOW's and no step. The transition's steps are cut once, from what all the phases did (`transitionSteps`): steps recorded call by call
+// hold only inside their call. A press aside changes columns only. Which primitive runs when, and what a switched-off rule runs in its
+// place, is settle.js's (§5.1, §1.6); here a primitive does its one job.
 //
 // Rows and columns are compared by extents (an area's frame with its free cells, LAYOUT-RULES §1.1); a box's `y` is its frame's row, so an
 // area's extent starts a row above it.
@@ -14,11 +16,7 @@ import { minCells, rowsAt, capCells, isElastic } from './size.js';
 import { push, resize } from './gap.js';
 
 /** @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Ctx} Ctx
- *  @typedef {import('./shapes.js').Step} Step
- * @typedef {{L:Layout, moved:?string, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, n:number, order:string[]}} Work
- *   // L: the layout as the phases left it; moved: the moved block of the change (none for a size or a deletion); steps: every step that
- *   // moved a block, in order; follow: the rows pushes gave a block because a height changed; n: the step counter; order: the reading order
- *   // of the layout the current phase started from, which every primitive visits (INV-5) */
+ *  @typedef {import('./shapes.js').Step} Step @typedef {import('./shapes.js').Work} Work @typedef {import('./shapes.js').Obstacle} Obstacle */
 
 /** A working state over a layout, its moved block and the context. @param {Layout} L @param {?string} moved @param {Ctx} ctx @returns {Work} */
 export function working(L, moved, ctx) { return { L, moved, ctx, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
@@ -45,20 +43,41 @@ const visit = (ws) => ws.order.filter((id) => ws.L.boxes.has(id));
 // an extent's top row and its height, and the frame row an extent row gives (an area's frame is a row under its extent's top)
 const top = (b) => extent(b).r0, ext = (b) => { const e = extent(b); return e.r1 - e.r0 + 1; }, pad = (b) => (isArea(b) ? 1 : 0);
 
-/** The blocks that moved between two layouts, recorded as steps cut one per common part (LAYOUT-ENGINE-PLAN §5.2): by direction, and in
- *  each the blocks by how far they went, the furthest alone first and the others joining it for the last rows of the way, so that replayed
- *  in order no step puts a block on another or carries it past one. */
+/** Moves cut one per common part (LAYOUT-ENGINE-PLAN §5.2): [id, rows] by direction, `first` first, and in each the blocks by how far they
+ *  went, the furthest alone first and the others joining it for the last rows of the way (the lab's commonParts). Replayed in order from
+ *  places where nothing hits, to places where nothing hits, no step puts a block on another or carries it past one in a column both keep:
+ *  a block that ends above another in such a column moves down at most by the rows between them more than it, and up at least by as much.
+ *  @param {Array<[string, number]>} d @returns {Array<[string[], number]>} */
+function cut(d, first = 1) {
+  const out = [];
+  for (const sign of [first, -first]) {
+    const group = d.filter(([, e]) => Math.sign(e) === sign); if (!group.length) continue;
+    const levels = [...new Set(group.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
+    levels.forEach((lv, i) => out.push([group.filter(([, e]) => Math.abs(e) >= lv).map(([id]) => id), sign * (lv - (levels[i + 1] || 0))]));
+  }
+  return out;
+}
+/** The blocks that moved between two layouts within one call, recorded as that call's steps (Moved, for the dev look). */
 function record(ws, before, after, by) {
   const d = [];
   for (const [id, b] of after.boxes) { const a = before.boxes.get(id); if (a && b.y !== a.y) d.push([id, b.y - a.y]); }
-  for (const sign of [1, -1]) {
-    const group = d.filter(([, e]) => Math.sign(e) === sign); if (!group.length) continue;
-    const levels = [...new Set(group.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
-    levels.forEach((lv, i) => {
-      const rows = lv - (levels[i + 1] || 0), step = ++ws.n;
-      for (const [id, e] of group) if (Math.abs(e) >= lv) { if (!ws.steps.has(id)) ws.steps.set(id, []); ws.steps.get(id).push({ step, by, rows: sign * rows }); }
-    });
+  for (const [ids, rows] of cut(d)) { const step = ++ws.n; for (const id of ids) { if (!ws.steps.has(id)) ws.steps.set(id, []); ws.steps.get(id).push({ step, by, rows }); } }
+}
+
+/** The steps and the start rows of the transition the next RELINK reads (LAYOUT-RULES GAP's inputs; LAYOUT-ENGINE-PLAN §5.2), cut once
+ *  from what the phases did since `base`, not from the steps each call recorded: those hold only inside their call (phase 1c moves the
+ *  carried block alone all the way to its target, onto the neighbour that a later call pushes). Every block's start row is its row in
+ *  `base` plus the rows pushes gave it because a height changed (`follow`, FOLLOW's: no step); its move is its row now less that, cut one
+ *  per common part, the moved block's direction first (down when it did not move). @param {Work} ws @param {Layout} base
+ *  @returns {{steps:Array<[string[], number]>, start:Record<string, number>}} */
+export function transitionSteps(ws, base) {
+  const start = {}, d = [];
+  for (const id of base.order) {
+    const b = base.boxes.get(id), a = ws.L.boxes.get(id); if (!a) continue;
+    const s = b.y + (ws.follow.get(id) || 0); start[id] = s; if (a.y !== s) d.push([id, a.y - s]);
   }
+  const g = d.find(([id]) => id === ws.moved);
+  return { steps: cut(d, g && g[1] < 0 ? -1 : 1), start };
 }
 /** The rows a push gave because a height changed: FOLLOW's, no step (GAP.5 rule 1). */
 function followed(ws, before, after) {
@@ -105,12 +124,15 @@ const narrowest = (ws, b) => { const m = minCells(b, ws.ctx); return m == null ?
  *  @param {Work} ws @param {{c0:number, c1:number}} by @param {'left'|'right'} side @param {Set<string>} not @returns {boolean} */
 function shove(ws, nId, by, side, not) {
   const n = get(ws, nId), cols = ws.L.cols, r = range(n, cols), min = narrowest(ws, n), right = side === 'right';
+  if (nId === ws.moved) return false;   // the moved block of the change never goes aside: it is the one pressing
   if (right) {
     const need = by.c1 + pad(n); if (n.col >= need) return true;
+    if (!canMove(n, 'right')) return false;   // an obstacle in the chain (LAYOUT-RULES §5.3)
     if (need > r.colMax) { const w = cols - need - pad(n); if (min == null || w < min) return false; reshape(ws, nId, need, w); }
     else reshape(ws, nId, need, n.w);
   } else {
     const need = by.c0 - n.w - pad(n); if (n.col <= need) return true;
+    if (!canMove(n, 'left')) return false;
     if (need < r.colMin) { const w = by.c0 - pad(n); if (min == null || w < min) return false; reshape(ws, nId, 0, w); }
     else reshape(ws, nId, need, n.w);
   }
@@ -142,12 +164,14 @@ function far(ws, mId, of, side, not) {
   }
 }
 
-/** P-ASIDE (LAYOUT-RULES §5.3): `n`, met from the side by `p` (a block's id, or an obstacle's extent), goes aside towards `side`, with the
- *  chain of the blocks it then hits; the moved block never narrows here and is never part of the chain. False when the first block of the
- *  chain cannot get out of the way: the whole chain is put back where it was found, and the caller hands `n` to its change kind's «no room
- *  aside» (or, in phase 9 (b), to P-REST's own rule). @param {Work} ws @param {string|{c0:number, c1:number}} p @returns {boolean} */
+/** P-ASIDE (LAYOUT-RULES §5.3): `n`, met from the side by `p` (a block's id, or an obstacle: a wall or a container's edge), goes aside
+ *  towards `side`, with the chain of the blocks it then hits; the moved block is never pressed aside, never narrows here and is never part
+ *  of the chain. False when the first block of the chain cannot get out of the way: the whole chain is put back where it was found, and the
+ *  caller hands `n` to its change kind's «no room aside» (or, in phase 9 (b), to P-REST's own rule).
+ *  @param {Work} ws @param {string|Obstacle|{c0:number, c1:number}} p @returns {boolean} */
 export function aside(ws, n, p, side) {
-  const by = typeof p === 'string' ? extent(get(ws, p)) : p, not = new Set([...skipOf(ws), ...(typeof p === 'string' ? [p] : [])]);
+  const by = typeof p === 'string' ? extent(get(ws, p)) : p.cols ? { c0: p.cols[0], c1: p.cols[1] } : p;
+  const not = new Set([...skipOf(ws), ...(typeof p === 'string' ? [p] : [])]);
   const s = snapshot(ws);
   if (shove(ws, n, by, side, not)) return true;
   restore(ws, s); return false;
@@ -158,6 +182,7 @@ export function aside(ws, n, p, side) {
  *  (`meets`), repeated until it meets none of them; the blocks under it follow with their gaps. @param {Work} ws
  *  @param {(id:string) => boolean} against @param {(n:Box, a:Box) => boolean} meets */
 export function sink(ws, id, against, meets, by) {
+  if (!canMove(get(ws, id), 'down')) return;
   for (let i = 0; i <= ws.L.boxes.size; i++) {
     const n = get(ws, id); let low = -1;
     for (const a of visit(ws)) if (a !== id && against(a) && meets(n, get(ws, a))) low = Math.max(low, extent(get(ws, a)).r1 + 1);
@@ -204,7 +229,10 @@ export function sep(ws, a, b, sideOf) {
   const A = get(ws, a), B = get(ws, b);
   let low;
   if (a === g) low = b; else if (b === g) low = a;
-  else { const ord = ws.L.order; low = top(A) !== top(B) ? (top(A) > top(B) ? a : b) : A.col !== B.col ? (A.col > B.col ? a : b) : (ord.indexOf(a) > ord.indexOf(b) ? a : b); }
+  else {
+    const ea = extent(A), eb = extent(B), at = (id) => { const i = ws.order.indexOf(id); return i < 0 ? Infinity : i; };
+    low = ea.r0 !== eb.r0 ? (ea.r0 > eb.r0 ? a : b) : ea.c0 !== eb.c0 ? (ea.c0 > eb.c0 ? a : b) : (at(a) > at(b) ? a : b);
+  }
   const other = low === a ? b : a;
   sink(ws, low, (x) => x === other, (n, x) => hits(n, x), 'sep');
 }
@@ -230,13 +258,16 @@ function topmost(ws, b, memo) {
 /** A block's extent to row t and up: the blocks above it that its new extent reaches go up too, each only as far as it must. */
 function upTo(ws, b, t, rows) {
   if (top(b) <= t || !canMove(b, 'up')) return;
-  for (const a of uppers(ws, b)) { const cur = rows.has(a.id) ? { ...a, y: rows.get(a.id) } : a; if (extent(cur).r1 + 1 > t) upTo(ws, cur, t - ext(a), rows); }
+  // the blocks above its place where the phase found it (lifted already, it is above them on its new rows): each goes up only as far as
+  // this block's new top needs
+  for (const a of uppers(ws, get(ws, b.id))) { const cur = rows.has(a.id) ? { ...a, y: rows.get(a.id) } : a; if (extent(cur).r1 + 1 > t) upTo(ws, cur, t - ext(a), rows); }
   rows.set(b.id, t + pad(b));
 }
 
 /** P-UP (phase 5), the mirror of `sink`: every block of `above` (judged above the moved block) that shares a column with it and reaches it
- *  goes up so that its bottom meets the moved block's top: first the gap above it shrinks, then the blocks above it go up too, each as high
- *  as it can, up to row 0. When they cannot all go high enough, the moved block stands under the lowest bottom they could reach [M3].
+ *  goes up so that its bottom meets the moved block's top: first the gap above it shrinks, then the blocks above it go up too, each only as
+ *  far as it must, no higher than row 0, as the mockup's `up` does. When they cannot all go high enough, the moved block stands under the
+ *  lowest bottom they could reach (`topmost`, each as high as it can) [M3].
  *  @param {Work} ws @param {Set<string>} above */
 export function up(ws, above) {
   if (ws.moved == null) return;
@@ -259,7 +290,7 @@ export function rest(ws, a, b) {
   const pair = [[a, b], [b, a]].find(([p, q]) => { const P = get(ws, p), Q = get(ws, q); return p !== ws.moved && narrowest(ws, P) === P.w && Q.col > P.col; });
   if (!pair) return false;
   const [p, q] = pair;
-  if (aside(ws, q, p, 'right')) return true;
+  if (q !== ws.moved && aside(ws, q, p, 'right')) return true;   // the moved block never goes aside: the elastic one goes down under it
   sink(ws, p, (x) => x === q, (n, x) => hits(n, x), 'rest');
   return true;
 }

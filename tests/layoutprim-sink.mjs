@@ -12,8 +12,10 @@
 // The switches that choose between these uses (P-SINK, P-UP) are read by settle.js; their off forms are tests/layoutsettle's.
 import { down, sink, sinkAside, sep, sinkTo } from '../public/layout/primitives.js';
 import { push } from '../public/layout/gap.js';
+import { DEFAULT } from '../public/layout/rules.js';
+import { box, placed, edit, relink, stack } from './lib/gapcase.mjs';
 import { hits } from '../public/layout/geometry.js';
-import { set, text, area, chars, ctxOf, ws, sheet, over, grown, rows, places, steps, followed, hitting, eq, tally } from './lib/primcase.mjs';
+import { set, text, area, chars, ctxOf, ws, sheet, over, grown, place, rows, places, steps, followed, hitting, eq, tally } from './lib/primcase.mjs';
 
 const t = tally(), ok = t.ok, ctx = ctxOf();
 
@@ -64,6 +66,23 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   ok('3d a block no longer under its upper element on the screen does not follow it: A sunk to row 3, B (put on A\'s rows) stays at 1', u.boxes.get('B').y === 1, [...u.boxes].map(([k, b]) => [k, b.y]));
 }
 
+/* ── 3e. the push through a standing block and areas (pinned after the internal review of 345ac6f) ── */
+{
+  const mv = (L, id, patch) => ({ ...L, boxes: new Map([...L.boxes].map(([k, b]) => [k, k === id ? { ...b, ...patch } : b])) });
+  const ys = (L) => Object.fromEntries([...L.boxes].map(([k, b]) => [k, b.y]));
+  // X put into A's gap over L: it stands in L's stack, A | A3 [X:A1] A5
+  let H = placed([box('A', 1, 1, 0), box('L', 1, 1, 10)]);
+  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 1, 4))), {}, 'X', DEFAULT);
+  ok('3e (X stands in L\'s stack under A)', stack(H, 'L', 1) === 'A | A3 [X:A1] A5 |' && eq(ys(H), { A: 0, X: 4, L: 10 }), [stack(H, 'L', 1), ys(H)]);
+  ok('3f A down 2: the standing block and the anchor under it follow with their rows', eq(ys(push(H, mv(H, 'A', { y: 2 }))), { A: 2, X: 6, L: 12 }));
+  ok('3g the standing block down 2: L under it follows', eq(ys(push(H, mv(H, 'X', { y: 6 }))), { A: 0, X: 6, L: 12 }));
+  ok('3h with the standing block the moved one: A down 2 pushes neither it nor what is under it', eq(ys(push(H, mv(H, 'A', { y: 2 }), new Set(['X']))), { A: 2, X: 4, L: 10 }));
+  const S = sheet(20, [set('A', 0, 0, 5, 2), area('B', 0, 4, 6, 2), set('C', 0, 9, 5)]);
+  ok('3i an area follows by its extent, and the block under it follows the area', eq(ys(push(S, mv(S, 'A', { y: 1 }))), { A: 1, B: 5, C: 10 }) && eq(ys(push(S, mv(S, 'B', { y: 6 }))), { A: 0, B: 6, C: 11 }));
+  const T = sheet(20, [set('A', 0, 0, 5, 2), area('B', 0, 3, 6, 2)]);
+  ok('3j an area whose free row touches the block above it (no rows between) follows it row for row', eq(ys(push(T, mv(T, 'A', { y: 2 }))), { A: 2, B: 5 }));
+}
+
 /* ── 4. P-SINK ── */
 {
   const w = ws(20, [set('A', 0, 0, 5), set('D', 2, 3, 5, 2), set('X', 10, 5, 5, 2)], ctx, 'X', { col: 0, y: 0 });
@@ -79,11 +98,22 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   const c = ctxOf({ A: { text: chars(40) } });
   const e = ws(12, [text('A', 2, 0, 8, 2), set('X', 0, 5, 6, 2)], c, 'X', { col: 0, y: 0 });
   sinkAside(e, 'A');
-  ok('4c an elastic block sinks at its natural width clamped to the container (10 cells, w 10, at col 2) and its height there (2 rows)', eq(places(e).A, [2, 2, 10, 2]), places(e));
+  ok('4c an elastic block sinks at its natural width clamped to the container (9 cells, w 10, at col 2) and its height there (2 rows)', eq(places(e).A, [2, 2, 10, 2]), places(e));
   const in_ = ws(10, [set('A', 7, 0, 4), set('X', 0, 4, 6, 2)], ctx, 'X', { col: 0, y: 0, w: 9 });
   in_.L = { ...in_.L, boxes: new Map(in_.L.boxes) };
   sinkAside(in_, 'A', { inside: true });
   ok('4d under a wall it first moves inside the container (a 10-column area: col 6, its card ending at the last column), then sinks', eq(places(in_).A, [6, 2, 4, 1]), places(in_));
+}
+
+/* ── 4e. P-SINK inside an area's columns (pinned after the internal review of 345ac6f) ── */
+{
+  const c = ctxOf({ A: { text: chars(15) } });   // natural 5 cells, one row
+  const e = ws(10, [text('A', 6, 3, 6), set('X', 0, 6, 4)], c);
+  sinkAside(e, 'A', { inside: true });
+  ok('4e an elastic block sticking out past an area\'s last column comes inside at its width (col 4, card 5–9)', eq(places(e).A, [4, 3, 6, 1]), places(e));
+  const l = place(ws(10, [set('A', 2, 0, 4), set('B', 0, 3, 5)], ctx), 'A', { col: -2 });
+  sinkAside(l, 'A', { inside: true });
+  ok('4f a handle left of column 0 after the left edge\'s shift comes in at column 0', eq(places(l).A, [0, 0, 4, 1]), places(l));
 }
 
 /* ── 5. P-SEP ── */
@@ -99,6 +129,12 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   const g = ws(20, [set('A', 0, 0, 5, 2), set('X', 2, 4, 5, 2)], ctx, 'X', { y: 1 });
   sep(g, 'X', 'A');
   ok('5b the moved block never moves: X lower, A still sinks under it', eq(rows(g), { X: 1, A: 3 }), rows(g));
+  const same = place(ws(20, [set('A', 0, 0, 5), set('B', 0, 4, 3)], ctx), 'B', { y: 0 });
+  sep(same, 'B', 'A');
+  ok('5d on the same row and column the later in the reading order of the phase\'s start sinks (B after A)', eq(rows(same), { A: 0, B: 1 }), rows(same));
+  const und = ws(20, [set('A', 0, 0, 5, 2), set('X', 0, 4, 5, 2)], ctx, 'X', { y: 1 });
+  sep(und, 'A', 'X', () => undefined);
+  ok('5e in phase 7 a block with no side judged against the moved block is taken as below: it sinks', eq(rows(und), { X: 1, A: 3 }), rows(und));
   const p7 = ws(20, [set('A', 0, 0, 5, 1), set('X', 0, 4, 5, 2)], ctx, 'X', { y: 0 });
   sep(p7, 'A', 'X', (id) => (id === 'A' ? 'above' : undefined));
   ok('5c in phase 7, against the moved block, one judged above goes up by P-UP: A at row 0 cannot, so X stands under it', eq(rows(p7), { A: 0, X: 1 }), rows(p7));

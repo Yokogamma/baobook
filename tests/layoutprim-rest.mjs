@@ -25,6 +25,12 @@ const ctx = ctxOf({ A: { text: chars(30) } });
   ok('2 B has a set width and no room on its right: A goes down under B', rest(w, 'A', 'B') && eq(places(w), { A: [0, 1, 7, 2], B: [5, 0, 4, 1] }) && hitting(w) === null, places(w));
 }
 
+/* ── 2b. the moved block never goes aside (the internal review of 345ac6f) ── */
+{
+  const w = ws(20, [text('A', 0, 0, 7, 2), set('X', 5, 4, 4)], ctx, 'X', { col: 5, y: 0 });
+  ok('2b the neighbour on its right is the moved block: it stays, and A goes down under it', rest(w, 'A', 'X') && eq(places(w), { A: [0, 1, 7, 2], X: [5, 0, 4, 1] }) && hitting(w) === null, places(w));
+}
+
 /* ── 3. not P-REST's ── */
 {
   const w = place(ws(20, [text('A', 0, 0, 9, 1), set('B', 7, 4, 4)], ctx), 'B', { y: 0 });

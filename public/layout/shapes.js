@@ -107,6 +107,20 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  * @typedef {{cols:[number,number], rows:[number,number], pushes:'left'|'right'|'none'}} Obstacle
  */
 
+/** The working state of SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2; primitives.js).
+ * @typedef {{L:Layout, moved:?string, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, n:number, order:string[]}} Work
+ *   // L: the layout as the phases left it, its stacks as the last RELINK left them; moved: the moved block of the change, in no chain until
+ *   // phase 8 (none for a size or a deletion); steps: every step a call moved a block by, cut within the call (Moved, for the dev look);
+ *   // follow: the rows pushes gave a block because a height changed (FOLLOW's, no step); n: the step counter; order: the reading order of
+ *   // the layout the current phase started from, which every primitive visits (INV-5)
+ */
+
+/** What phase 2 judged (changes.js, LAYOUT-RULES §5.1 phase 2).
+ * @typedef {{side:Map<string,'above'|'below'>, met:Map<string,'left'|'right'>}} Judged
+ *   // side: every block that shares a column with the moved block, above or below it; met: every block met from the side, and where it is
+ *   // pressed; a block may be in both
+ */
+
 /** The carry memory (LAYOUT-RULES §6.D): only what SETTLE reads.
  * @typedef {{away:boolean, sides:Map<string,'left'|'right'>, through:?{id:string, row:number, side:'below'|'above'}, areaBottoms:Map<string,number>, lastTarget:?Target, dir:'up'|'down'}} Memory
  */
