@@ -2,9 +2,10 @@
 // holds the nearest block below it, in the seg above that block; created or carried there, at its displayed target; come in by itself, at its
 // canonical row, so a temporary height pushes it on the screen only; an undo by its canonical row in every column; put lower than the gap
 // reaches, the rows between are its room; several at once stand one after another in one path; with GAP.5.3 off it cuts the stack.
-import { relink, remove, resize } from '../public/layout/gap.js';
+import { remove, resize } from '../public/layout/gap.js';
+
 import { DEFAULT, resolve } from '../public/layout/rules.js';
-import { eq, done, box, placed, edit, stack, rows, canon, steps, clean } from './lib/gapcase.mjs';
+import { eq, done, box, placed, edit, stack, rows, canon, steps, clean, relink } from './lib/gapcase.mjs';
 
 const R = DEFAULT, ins = (L, b, rules = R, carried = b.id) => relink(L, edit(L, (m) => m.set(b.id, b)), {}, carried, rules);
 const H = ins(placed([box('H', 1, 3, 10)]), box('X', 1, 3, 5));

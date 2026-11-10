@@ -1,9 +1,10 @@
 // Node: GAP.10, `shift` (public/layout/gap.js): every block's columns and every stack move by the same columns, so owners and lends stay; it
 // checks no containment, so an area's left side handle passes through columns left of 0, and its wall then presses the children back in one
 // RELINK, each coming into its new column by itself (docs/LAYOUT-RULES.md GAP.10, §5.6).
-import { shift, relink, adjust } from '../public/layout/gap.js';
+import { shift, adjust } from '../public/layout/gap.js';
+
 import { DEFAULT } from '../public/layout/rules.js';
-import { eq, done, box, placed, edit, stack, rows, steps, clean } from './lib/gapcase.mjs';
+import { eq, done, box, placed, edit, stack, rows, steps, clean, relink } from './lib/gapcase.mjs';
 
 const R = DEFAULT;
 let U = placed([box('U', 2, 4, 0), box('A', 2, 4, 5), box('B', 2, 4, 6), box('L', 2, 4, 12)]);

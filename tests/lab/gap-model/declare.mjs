@@ -62,6 +62,7 @@ export function checkDeclaration(base, T) {
   if (T.swap) {
     const [x, n] = T.swap, X = base[x] && extent(base[x]), N = base[n] && extent(base[n]);
     if (x !== carried) errs.push(`swap ${x}/${n}: its first block is not the carried one`);
+    else if (!X || !after[x]) errs.push(`swap ${x}/${n}: base or after does not hold the carried block`);
     else if (!N || !after[n] || !after[x]) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
       const shared = cols(X).filter((c) => covers(N, c)), AX = extent(after[x]), AN = extent(after[n]), hX = X.h + X.e, hN = N.h + N.e;
@@ -81,8 +82,12 @@ export function checkDeclaration(base, T) {
       for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
     }
   }
-  // the layout after holds no two blocks on one cell, on the screen (INV-1)
-  { const A = Object.entries(after).map(([id, b]) => [id, extent(b)]);
+  // every block of after has a card column at least
+  for (const [id, b] of Object.entries(after)) if (!(b.c0 <= b.c1)) errs.push(`${id} has no column in after`);
+  // the layout after holds no two blocks on one cell, on the screen (INV-1); an undo's carried block is placed by its canonical cell, its
+  // displayed row FOLLOW's from there, which RELINK checks in its result
+  const undoneEarly = canonical && carried != null ? carried : null;
+  { const A = Object.entries(after).filter(([id]) => id !== undoneEarly).map(([id, b]) => [id, extent(b)]);
     for (let i = 0; i < A.length; i++) for (let j = i + 1; j < A.length; j++) { const [p, a] = A[i], [q, b] = A[j];
       if (a.c0 <= b.c1 && b.c0 <= a.c1 && a.y < b.y + b.h + b.e && b.y < a.y + a.h + a.e) errs.push(`${p} and ${q} overlap in after`); } }
   // the steps: blocks after holds; from the rows the first step starts from, they bring every block they move to its row in after, and
@@ -102,12 +107,12 @@ export function checkDeclaration(base, T) {
   const origin = (id) => (T.start && id in T.start ? extent({ ...after[id], y: T.start[id] }).y : reached.has(id) ? null : extent(base[id]).y);
   const moved = new Map();
   for (const [ids, d] of T.steps || []) for (const id of ids) { if (!after[id]) errs.push(`step of ${id}, which after does not hold`); moved.set(id, (moved.get(id) || 0) + d); }
-  for (const [id, d] of moved) if (after[id] && origin(id) != null && origin(id) + d !== extent(after[id]).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
+  for (const [id, d] of moved) if (after[id] && base[id] && origin(id) != null && origin(id) + d !== extent(after[id]).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
   // with nothing taken away, nothing leaving a column and no undo, a block no step moves keeps its row: every other change of row is a move
   if (Object.keys(base).every((id) => after[id]) && !(T.leave || []).length && undone == null)
     for (const id of Object.keys(base)) if (!moved.has(id) && origin(id) != null && origin(id) !== extent(after[id]).y) errs.push(`${id} is at another row in after with no step that moves it`);
-  { const passing = (p, q) => [...PS.keys()].some((k) => { const id = k.slice(0, k.lastIndexOf('|')), c = +k.slice(k.lastIndexOf('|') + 1);
-      const o = id === p ? q : id === q ? p : null; return o != null && base[o] && covers(extent(base[o]), c); });
+  { // a block and the one it is declared to pass: the two change their order in a column where one of them is declared to pass
+    const passing = (p, q) => g.reordered.some(([c, a, b]) => ((a === p && b === q) || (a === q && b === p)) && (PS.has(kc(p, c)) || PS.has(kc(q, c))));
     const pair = (p, q) => (swap.includes(p) && swap.includes(q)) || passing(p, q);
     const y = new Map(Object.keys(base).filter((id) => after[id] && id !== undone && origin(id) != null).map((id) => [id, origin(id)]));
     const keptCols = (id) => { const a = extent(base[id]), b = extent(after[id]); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
@@ -143,7 +148,8 @@ export function checkDeclaration(base, T) {
   const FALLBACKS = ['P-UP', 'DRAG.B2.keep'];
   if (T.fallback != null && !FALLBACKS.includes(T.fallback)) errs.push(`no such fallback, ${T.fallback}`);
   for (const k of PS.keys()) { const id = k.slice(0, k.lastIndexOf('|'));
-    if (!(swap.includes(id) || (T.fallback != null && id === carried))) errs.push(`${k}: only a block of a swap, or the carried block under a fallback, changes its order`); }
+    if (!(swap.includes(id) || (T.fallback != null && id === carried))) errs.push(`${k}: only a block of a swap, or the carried block under a fallback, changes its order`);
+    if (id === undone) errs.push(`${k}: an undo's carry back keeps no place in any chain and passes nothing`); }
   for (const [ids, d] of T.steps || []) { if (!Number.isInteger(d) || d === 0) errs.push(`a step of ${d} rows`); for (const id of ids) if (!base[id]) errs.push(`step of ${id}, not in base`); }
   return errs;
 }

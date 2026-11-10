@@ -1,9 +1,10 @@
 // Node: G7, `cap` (public/layout/gap.js, docs/LAYOUT-RULES.md GAP.4, GAP.5): a standing block's lend is never longer than its canonical
 // height, judged by each RELINK against the heights it ends with, after the blocks that left a column gave back what they had there. A
 // shrink a RELINK sees is real; one undone before the RELINK (inside phase 9) leaves no trace; a temporary height that ends is no shrink.
-import { relink, resize, remove } from '../public/layout/gap.js';
+import { resize, remove } from '../public/layout/gap.js';
+
 import { DEFAULT } from '../public/layout/rules.js';
-import { eq, done, box, placed, edit, stack, rows, canon, clean } from './lib/gapcase.mjs';
+import { eq, done, box, placed, edit, stack, rows, canon, clean, relink } from './lib/gapcase.mjs';
 
 const R = DEFAULT;
 const L0 = placed([box('A', 1, 1, 0), box('L', 1, 1, 10)]);

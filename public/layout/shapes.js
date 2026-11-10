@@ -56,8 +56,18 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  *   // between two of them) returns one step per common part, in order (B up 3, then A and B up 2), so one call can take several steps
  * @typedef {Step[]} Moved   // every step that moved the block, in order (a rigid step moves it whole; a height is never a move); for each step,
  *   // rule 1 groups the blocks it moved that are next to one another in a column's chain into runs and changes only the gap above each run and the gap under it
- * @typedef {{id:string, canonical?:boolean}} Carried   // RELINK's carried block (GAP.5 rule 2 and 3): it leaves as carried away and comes in at its
- *   // displayed target; canonical: an undo putting it back at an old cell, placed by its canonical row in every column (LAYOUT-ENGINE-PLAN §6.4)
+ * @typedef {{base:Layout, after:Layout, steps?:Array<[string[], number]>, start?:Record<string, number>, carried?:?string, canonical?:boolean,
+ *            leave?:Array<[string, number, 'away'|'narrow'|'press']>, enter?:Array<[string, number, 'put'|'self'|'back']>,
+ *            pass?:Array<[string, number]>, swap?:[string, string], fallback?:'P-UP'|'DRAG.B2.keep'}} Transition
+ *   // what SETTLE declares it did between two RELINKs (LAYOUT-RULES §4, GAP's inputs): base and after, both displayed (the rows of after are
+ *   // targets; an undo's carried block also has its canonical target, its yc); steps: [ids, rows] in order, each rigid, one per common part,
+ *   // cut from the blocks' Moved after the phases; start: the box rows the first step starts from, for every block a change of height or of
+ *   // temporary rows reaches; carried, with canonical for an undo's carry back or a deleted block made again (LAYOUT-ENGINE-PLAN §6.4);
+ *   // leave and enter: [id, column, why or how] for every column a block leaves or comes into, in GAP's columns (an area's extent); swap: the
+ *   // carried block and its neighbour; pass: [id, column] for a block of a swap passing another in a column it keeps; fallback: the
+ *   // switched-off rule that put a neighbour on the carried block's other side
+ * @typedef {{ok:true, layout:Layout}|{ok:false, why:'failed', errors:string[]}} Relinked   // RELINK's answer: the layout with its stacks, or
+ *   // the refusal of a transition that does not match its geometry, an internal error of SETTLE (LAYOUT-RULES §5.5)
  */
 
 /** One per row of LAYOUT-RULES §5.2 «Change kinds», as data in changes.js, keyed by Change.type; settle.js reads it.

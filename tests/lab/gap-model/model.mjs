@@ -32,12 +32,8 @@ const len = (seg) => seg.length;
 
 export function createModel(opts = {}) {
   // the switches, on by default: GAP.5.1 (rule 1's owners), GAP.5.2 (leave gives back), GAP.5.3 (stand), GAP.8 (G6), GAP.9 (G8);
-  // GAP.2, the owners of rows, is core (the owner, 2026-11-05). `screenPut`, not a rule: a block moved by hand and put at its row has under it the rest of
-  // the seg, as the model had it before the internal review of 62433e9 and as the engine still has it, so that the twin can compare them
-  // until step 1b's second part ports the canonical measure to the engine
-  // `awaySideways`, not a rule either: the carried block leaves a column it no longer covers, while it keeps others, as carried away, as the
-  // model did before the owner's decision of 2026-11-10 and as the engine still does; only the twin sets it, until step 1b's second part
-  const O = { gap8: true, gap9: true, gap51: true, gap52: true, gap53: true, screenPut: false, awaySideways: false, ...opts };
+  // GAP.2, the owners of rows, is core (the owner, 2026-11-05)
+  const O = { gap8: true, gap9: true, gap51: true, gap52: true, gap53: true, ...opts };
   if (!O.gap51) O.gap8 = false;   // GAP.8 needs GAP.5.1
   if (!O.gap52) O.gap9 = false;   // GAP.9 needs GAP.5.2: with nothing given back there is nothing to keep
   const padOf = (b) => (b.area ? 1 : 0);
@@ -127,7 +123,7 @@ export function createModel(opts = {}) {
   // resident: a block of a swap that was an anchor in this column comes back as one (the owner, 2026-11-10): it cuts the stack, the rows
   // above it and under it keeping their owners, so that taking it away later closes its place as in a document (G2) and every block keeps
   // its own gaps (G4)
-  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
+  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
     const Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
     const inChain = new Set(seq(c).map((el) => el.id));   // the neighbours are those already in the column's chain (rule 3), not every block over it
     const others = [...B.values()].filter((b) => b.id !== x.id && inChain.has(b.id)).sort((a, b) => (byCanon ? Y(a) - Y(b) : a.y - b.y) || (a.id < b.id ? -1 : 1));
@@ -143,7 +139,13 @@ export function createModel(opts = {}) {
     if (st) i = st.parts.length - 1; else { const f = seq(c).find((el) => el.id === below.id); st = f.st; i = f.i - 1; }
     const bC = canon != null ? yc.get(below.id) : null;
     let [before, entry, after] = place(st.parts[i], Math.max(0, Y(x) - spans(st, ys ? 'canonical' : 'shown', ys)[i][0]), x);
-    if (canon != null) after = after.slice(len(after) - Math.min(len(after), Math.max(0, bC - (canon + x.h))));
+    if (canon != null) {
+      // and no more than keep it at its target on the screen when SETTLE moved it: the put block's own temporary rows push it there, and
+      // the rows that would keep its canonical row in this column too would push it past it (its canonical row is then another column's)
+      let keep = Math.max(0, bC - (canon + x.h)); const t = targetOf ? targetOf(below.id) : null;
+      if (t != null) keep = Math.min(keep, Math.max(0, t - (x.y + shownH(x))));
+      after = after.slice(len(after) - Math.min(len(after), keep));
+    }
     if (resident) { S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before] }); st.u = x.id; st.parts = [after, ...st.parts.slice(i + 1)]; return; }
     if (!O.gap53) {   // GAP.5.3 off: it cuts the stack, an anchor over the rows above it, the rows under it its own, no lend (lesson 17)
       S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before.map((o) => (o === x.id ? heirOf(st) : o))] });
@@ -256,7 +258,9 @@ export function createModel(opts = {}) {
       const top = q[a], bot = q[z], ust = top.st, ui = top.i >= 0 ? top.i - 1 : ust.parts.length - 1;
       const [lst, li] = bot.i >= 0 ? [bot.st, bot.i + 1] : [lowerOf(bot.id, c), 0];
       const slack = B.get(top.id).y - spans(ust)[ui][1];
-      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack === 0, slack });
+      // a gap that reaches past the row the step starts from (a departure of rule 2 made a temporary height above push the block through the
+      // rows it kept) has no slack: the step moves the block by its rows from where the gap holds it, the push staying on the screen (O-23)
+      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack <= 0, slack: Math.max(0, slack) });
       a = z;
     }
     for (const { r, head, run, ust, ui, lst, li, sameStack, holds, slack } of runs) {
@@ -316,7 +320,7 @@ export function createModel(opts = {}) {
     for (const [id, [f0, f1]] of Object.entries(widths)) {
       const x = B.get(id), p = padOf(x), was = cols(x), will = cols({ c0: f0 - p, c1: f1 + p });
       // a block that keeps some of its columns leaves the others as narrowed off, the carried one too (the owner, 2026-11-10, G8)
-      for (const c of was) if (!will.includes(c)) leave.push([id, c, O.awaySideways && id === carried ? 'away' : 'narrow']);
+      for (const c of was) if (!will.includes(c)) leave.push([id, c, 'narrow']);
       for (const c of will) if (!was.includes(c)) enter.push([id, c, id === carried ? 'put' : 'self']);
       a[id] = { ...a[id], c0: f0, c1: f1 };
     }
@@ -406,7 +410,12 @@ export function createModel(opts = {}) {
         if (id !== carried) for (const b of seen.values()) if (b.id !== id && b.c0 <= at.c1 && at.c0 <= b.c1 && b.y < at.y + shownH(at) && at.y < b.y + shownH(b)) throw new Error('width overlaps');
         seen.set(id, { ...x, c0, c1 });
       }
-      return raw.relink(widthsT(moves, widths, carried));
+      // a step that puts a block on another on the screen is no transition SETTLE declares (its push would be a step): refused, as RELINK's
+      // check refuses it (INV-1 in after)
+      const T = widthsT(moves, widths, carried), ex = Object.entries(T.after).map(([id, f]) => [id, inside(f)]);
+      for (let i = 0; i < ex.length; i++) for (let j = i + 1; j < ex.length; j++) { const [, a] = ex[i], [, b] = ex[j];
+        if (a.c0 <= b.c1 && b.c0 <= a.c1 && a.y < b.y + b.h + (b.e || 0) && b.y < a.y + a.h + (a.e || 0)) throw new Error('step overlaps'); }
+      return raw.relink(T);
     },
     _fit(targets) {   // rule 5: a block SETTLE put lower than FOLLOW over the stacks puts it (targets: id → displayed row) gets, in its
       // binding stack, the rows it lacks, owned by that stack's u; a block FOLLOW puts lower than its target stays there: no stack is cut
@@ -504,12 +513,13 @@ export function createModel(opts = {}) {
       // rest of the seg under it, as on the screen, so that taking it away gives every row back (INV-7 b)
       const putIn = (id, cs, passes = () => false) => {
         const res = (c) => passes(c) && anchoredIn.has(key(id, c));
-        if (!ys.has(id) || O.screenPut) { for (const c of cs) enter(B.get(id), c, null, false, null, null, res(c)); return; }
+        if (!ys.has(id)) { for (const c of cs) enter(B.get(id), c, null, false, null, null, res(c)); return; }
         const s0 = copy(); follow(); raw.fit(Object.fromEntries(Object.entries(fits).filter(([k]) => k !== id && B.has(k)))); const yc = rowsIn('canonical'); put(s0); atTargets();
         const x = B.get(id), inChain = (c) => seq(c).some((el) => el.id === id);
         let canon = cols(x).some(inChain) ? yc.get(id) : 0;
         for (const c of cs) canon = Math.max(canon, slot(x, c, yc));
-        for (const c of cs) enter(x, c, null, false, canon, yc, res(c));
+        const targetOf = (k) => (k in fits && B.has(k) ? fits[k] - padOf(B.get(k)) : null);
+        for (const c of cs) enter(x, c, null, false, canon, yc, res(c), targetOf);
       };
       const atTargets = () => { for (const b of B.values()) if (tg.has(b.id)) b.y = tg.get(b.id).y; };
       // R, the reference: every block keeps the columns of base, an undo's carry back out of all of them; a declared passer leaves every
@@ -518,7 +528,7 @@ export function createModel(opts = {}) {
       const W0 = copy();
       // the carried block leaves in R the columns it leaves, as carried away (all of them for an undo's carry back, which is then out)
       if (carried != null && B.has(carried)) {
-        const x = B.get(carried), t = tg.get(carried); for (const c of cols(x)) if (canonical || !covers(t, c)) leave(x, c, canonical || O.awaySideways ? 'away' : 'narrow', ys);
+        const x = B.get(carried), t = tg.get(carried); for (const c of cols(x)) if (canonical || !covers(t, c)) leave(x, c, canonical ? 'away' : 'narrow', ys);
         const k0 = Math.max(x.c0, t.c0), k1 = Math.min(x.c1, t.c1);   // the columns it keeps
         if (canonical || k0 > k1) B.delete(carried); else { x.c0 = k0; x.c1 = k1; }
       }
@@ -578,6 +588,8 @@ export function createModel(opts = {}) {
       for (const [id, v] of Object.entries(heights)) { const b = B.get(id); if (!b) continue; b.h = v.h + 2 * padOf(b); b.e = v.e || 0; }
       follow(); const r = Object.fromEntries([...B.values()].map((b) => [b.id, frameRow(b, b.y)])); put(s0); follow(); return r;
     },
+    // every block in frame coordinates, as SETTLE reads a layout: its columns, its displayed and canonical rows, its height and temporary rows
+    frames() { const yc = rowsIn('canonical'); return Object.fromEntries([...B.values()].map((b) => { const p = padOf(b); return [b.id, { c0: b.c0 + p, c1: b.c1 - p, y: b.y + p, yc: yc.get(b.id) + p, h: b.h - 2 * p, e: b.e, ...(b.area ? { area: true } : {}) }]; })); },
     rows(measure = 'shown') { const y = measure === 'shown' ? new Map([...B.values()].map((b) => [b.id, b.y])) : rowsIn('canonical'); return Object.fromEntries([...B.keys()].sort().map((id) => [id, frameRow(B.get(id), y.get(id))])); },
     stack(l, c) { const st = S.get(key(l, c)); return st ? show(st) : null; },
     save() { return copy(); },                                   // the whole state, temporaries included

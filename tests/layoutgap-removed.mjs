@@ -1,9 +1,10 @@
 // Node: GAP.6, a block taken away (public/layout/gap.js `remove`): rule 2 in every column it covered, then FOLLOW; the blocks under it rise
 // by its height and its own rows wherever those lie; unowned rows and rows of others stay; a deletion never moves a block down.
-import { remove, relink } from '../public/layout/gap.js';
+import { remove } from '../public/layout/gap.js';
+
 import { DEFAULT } from '../public/layout/rules.js';
 import { createEngineModel } from './lib/gapdriver.mjs';
-import { ok, eq, done, box, placed, edit, stack, rows } from './lib/gapcase.mjs';
+import { ok, eq, done, box, placed, edit, stack, rows, relink } from './lib/gapcase.mjs';
 
 const R = DEFAULT;
 const a = remove(placed([box('A', 1, 1, 0), box('X', 1, 1, 4), box('L', 1, 1, 8)]), 'X', R);
