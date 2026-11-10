@@ -9,7 +9,9 @@
 //   4. landing: the blocks the steps move and the carried block stand where SETTLE put them, lower only where a block that came in by
 //      itself pushes them on the screen, directly or through the blocks it pushes, shown by the same transition without that entry;
 //   5. untouched: with no temporary rows, heights, deletions, departures but passes, or entries by themselves in a part, the blocks of
-//      that part no step moves keep their rows in both measures.
+//      that part no step moves keep their rows in both measures;
+//   6. split: two steps next to each other that move the same blocks, made one, give the same rows, owners and lends, and the same after
+//      a moved block is taken away.
 // The states have standing blocks: some blocks are inserted after the others are opened. A failure is shrunk (fewer blocks, fewer inserted
 // ones, fewer temporary heights, the far transition dropped), keeping the declaration valid and the failure, and returned whole: the
 // generator's version, the switches, the blocks, the inserted ones, the temporary heights and the declaration.
@@ -76,6 +78,21 @@ export function runCase(c) {
       return (without = m.rows());
     };
     const f = landing(T, m1.rows(), { withoutSelf }); if (f) return f; }
+  // split: the same transition with two steps next to each other that move the same blocks made one step gives the same layout, rows,
+  // owners and lends, and the same after a moved block is taken away (rule 1 does not depend on how a move is cut)
+  { const merged = []; for (const [ids, d] of T.steps) { const p = merged[merged.length - 1];
+      if (p && p[0].length === ids.length && p[0].every((v, i) => v === ids[i])) p[1] += d; else merged.push([ids.slice(), d]); }
+    if (merged.length < T.steps.length && merged.every(([, d]) => d !== 0)) {
+      const T2 = { ...T, steps: merged };
+      if (!checkDeclaration(base, T2).length) {
+        const m2 = mk(); try { m2.relink(T2); } catch (e) { return { law: 'split', err: e.message }; }
+        if (m2.snapshot() !== m1.snapshot()) return { law: 'split', cut: m1.snapshot(), whole: m2.snapshot() };
+        const id = merged.flatMap(([ids]) => ids).find((k) => m1.B.has(k));
+        if (id) { const s1 = m1.save(), s2 = m2.save(); let a = null, b = null;
+          try { m1.remove(id); a = m1.snapshot(); } catch (e) { a = 'refused'; } try { m2.remove(id); b = m2.snapshot(); } catch (e) { b = 'refused'; }
+          m1.load(s1); m2.load(s2);
+          if (a !== b) return { law: 'split', what: 'remove ' + id, cut: a, whole: b }; }
+      } } }
   // untouched: with no temporary rows, no change of height, nothing taken away, no block leaving a column but by a pass and none coming in
   // by itself, in the blocks of a part, every block of that part no step moves keeps its row in both measures (a pass frees nothing, a move
   // changes only the gaps round what it moves)

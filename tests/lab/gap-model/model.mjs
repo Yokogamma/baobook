@@ -175,8 +175,9 @@ export function createModel(opts = {}) {
     const f = seq(c).find((el) => el.id === x.id); if (!f) return;
     // a pass (a block of a swap changing its place in the chain of a column it keeps) frees nothing, whatever the switches: its rows
     // above it and under it stay, and its place stays as rows, its canonical body and the slack above it (the rows by which its stack
-    // did not hold it), measured on the canonical rows as they are when it leaves, after the other departures of its column; so the
-    // blocks under its place do not move. The carried block of a swap keeps there its temporary rows too (`shown`), as the screen has
+    // did not hold it, in both measures: the smaller of its canonical and its displayed slack, as they are when it leaves, after the
+    // other departures of its column); so the blocks under its place go down in neither measure (where the two slacks differ they may
+    // rise in one, and rule 5 brings a block the steps moved to its target). The carried block of a swap keeps there its temporary rows too (`shown`), as the screen has
     // them, so that the blocks under its place do not move on the screen either until it comes back (O-21)
     const pass = why === 'pass', g52 = pass || O.gap52, tmpRows = pass ? Array(shown).fill(heirOf(f.st)) : [];
     const keep = pass || ((why === 'narrow' || why === 'press') && O.gap9);   // G8: narrowing or pressing aside is not deleting (GAP.9)
@@ -185,7 +186,7 @@ export function createModel(opts = {}) {
     if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8); with GAP.5.2 off it goes with it
       const { st, i } = f;
       if (pass) {
-        const sl = Math.max(0, yc.get(x.id) - spans(st, 'canonical', yc)[i - 1][1]);
+        const sl = Math.max(0, Math.min(yc.get(x.id) - spans(st, 'canonical', yc)[i - 1][1], x.y - spans(st)[i - 1][1]));
         st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...Array(x.h + sl).fill(heirOf(st)), ...tmpRows, ...st.parts[i + 1]]);
       } else st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...(g52 ? st.parts[i].lend : []), ...st.parts[i + 1]]);
       return;
@@ -200,7 +201,7 @@ export function createModel(opts = {}) {
       // narrowed off: what its body stood on and its slack there (the rows by which its stack did not hold it) stay, measured
       // canonically, so that no temporary height is written; on the screen a temporary height that no longer reaches the block
       // under it through this one stops pushing it
-      const slack = !keep ? 0 : pass ? Math.max(0, yc.get(x.id) - spans(mine, 'canonical', yc)[mine.parts.length - 1][1])
+      const slack = !keep ? 0 : pass ? Math.max(0, Math.min(yc.get(x.id) - spans(mine, 'canonical', yc)[mine.parts.length - 1][1], x.y - spans(mine)[mine.parts.length - 1][1]))
         : ys.get(x.id) - spans(mine, 'canonical', ys)[mine.parts.length - 1][1];
       const body = keep ? [...Array(x.h + slack).fill(heirOf(mine)), ...tmpRows] : [];
       L.u = mine.u; L.parts = [...up.map(gone), [...gone(last, 0), ...body, ...L.parts[0]], ...L.parts.slice(1)];
@@ -237,6 +238,10 @@ export function createModel(opts = {}) {
   // its own, both gaps change by the step less them, as any move but for the carried block's temporary rows; going down, in
   // a column the carried block comes into under it (`under`), the rows that come under the neighbour are that many fewer, the carried
   // block's temporary rows its pass kept at its old place (rule 2) coming out as it comes back under the neighbour.
+  // the rows the steps of this RELINK put round a run, so that a move cut into steps gives what one step gives, owners included: under a
+  // run moved up, the slack used by all its steps comes first, then the rows they left, in order (`own`); over a run moved down in one
+  // stack with the gap under it, the rows of u come first, then its room (`room`). Reset by each rule 1 (ruleOne)
+  const added = { own: new Map(), room: new Map() };
   function moveIn(c, ids, d, sw = null) {
     const q = seq(c), moved = q.map((el) => ids.has(el.id)), runs = [];
     for (let a = 0; a < q.length; a++) {   // every run, with its two gaps and its slack, read before anything changes
@@ -263,7 +268,12 @@ export function createModel(opts = {}) {
         }
         const grow = sameStack ? [...Array(got).fill(heirOf(ust)), ...Array(holds ? dd - got : 0).fill(r)] : Array(holds ? dd : 0).fill(heirOf(ust));
         if (cut) grow.splice(Math.max(0, grow.length - sw.tmp));
-        ust.parts[ui] = [...ust.parts[ui], ...grow];
+        // the room this RELINK's earlier steps gave the run's top stays after the rows of u this step adds
+        const kr = key(r, c), seg = ust.parts[ui];
+        let prevRoom = added.room.get(kr) || 0; while (prevRoom > 0 && seg[len(seg) - prevRoom] !== r) prevRoom--;
+        const newU = grow.filter((o) => o !== r), newRoom = grow.filter((o) => o === r);
+        ust.parts[ui] = [...seg.slice(0, len(seg) - prevRoom), ...newU, ...seg.slice(len(seg) - prevRoom), ...newRoom];
+        added.room.set(kr, prevRoom + newRoom.length);
       } else {
         const k = -d, used = Math.min(k, slack), n = Math.min(len(ust.parts[ui]), k - used);
         const left = ust.parts[ui].slice(len(ust.parts[ui]) - n); ust.parts[ui] = ust.parts[ui].slice(0, len(ust.parts[ui]) - n);
@@ -274,7 +284,11 @@ export function createModel(opts = {}) {
           const owner = (o) => (!O.gap51 ? (o === '' ? '' : into) : o === '' && head ? mine : o);
           let cut = sw && sw.under.has(c) ? sw.tmp : 0;
           const own = used - Math.min(used, cut); cut -= used - own;
-          lst.parts[li] = [...Array(own).fill(mine), ...left.slice(cut).map(owner), ...lst.parts[li]];
+          // the slack this RELINK's earlier steps put under the run stays first, before the rows this step leaves
+          const ko = key(r, c), seg = lst.parts[li];
+          let prevOwn = added.own.get(ko) || 0; while (prevOwn > 0 && !seg.slice(0, prevOwn).every((o) => o === mine)) prevOwn--;
+          lst.parts[li] = [...Array(own).fill(mine), ...seg.slice(0, prevOwn), ...left.slice(cut).map(owner), ...seg.slice(prevOwn)];
+          added.own.set(ko, prevOwn + own);
         }
       }
     }
@@ -345,6 +359,7 @@ export function createModel(opts = {}) {
       for (const id of ids) if (overlaps({ ...B.get(id), y: B.get(id).y + d }, id, ids)) throw new Error('move overlaps');
       const want = new Map([...B.values()].map((b) => [b.id, b.y + d])), yc = rowsIn('canonical');
       const cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c);
+      added.own.clear(); added.room.clear();
       for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d);
       follow(); const yc2 = rowsIn('canonical');
       for (const id of ids) {
@@ -460,6 +475,7 @@ export function createModel(opts = {}) {
       const swapOf = swapStep >= 0 && tg.has(T.swap[0]) ? { tmp: tg.get(T.swap[0]).e, under: new Set(cols(tg.get(T.swap[0]))) } : null;
       const ruleOne = () => {   // the model's step: each step's slacks at the rows it starts from, FOLLOW after each
         const row = new Map(start); for (const b of B.values()) if (row.has(b.id)) b.y = row.get(b.id);
+        added.own.clear(); added.room.clear();
         steps.forEach(([list, d], si) => {
           const ids = new Set(list.filter((id) => B.has(id))), cs = new Set(); for (const id of ids) for (const c of cols(B.get(id))) cs.add(c);
           const sw = si === swapStep ? swapOf : null;

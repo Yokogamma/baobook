@@ -138,6 +138,23 @@ export function transitionCases() {
       T(m, { X: { y: 0 }, N: { y: 2 } }, { steps: [[['X'], -3], [['X'], -2], [['N'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
       [{ E: 9, N: 2, X: 0 }, { E: 8, N: 1, X: 0 }, { E: 8, N: 1, X: 0 }]); }
+  // the independent review of b3351f4
+  { const m = createModel().open([blk('A', 0, 0, 0), blk('H', 1, 1, 0), blk('X', 0, 1, 4), blk('N', 0, 0, 8)]); m.height('H', 3); m.show('A', 2);
+    // X, held at 6 by H's growth in column 1, has slack in column 0 canonically that A's temporary rows take on the screen; swapped down
+    // with N, its pass keeps the smaller of its two slacks, none, so A's temporary rows do not push N past the swap: N lands at 9, X at 10
+    run('a pass keeps the smaller of its canonical and displayed slack: under another block\'s temporary rows the swap lands', m,
+      T(m, { X: { y: 10 }, N: { y: 9 } }, { steps: [[['X'], 3], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 0]] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ A: 0, H: 0, N: 9, X: 10 }, { A: 0, H: 0, N: 7, X: 10 }]); }
+  { const res = [];
+    for (const st of [[[['X'], -4], [['X'], -4], [['N'], 1]], [[['X'], -8], [['N'], 1]]]) {
+      const m = createModel().open([blk('U', 0, 0, 0), blk('N', 1, 1, 3), blk('X', 0, 1, 8), blk('D', 0, 0, 13)]); m.height('N', 4);
+      const a = frames(m); a.X = { ...a.X, y: 3 }; a.N = { ...a.N, y: 4 };
+      m.relink({ after: a, steps: st, carried: 'X', swap: ['X', 'N'], pass: [['X', 1]], leave: [], enter: [] });
+      const r = [m.stack('D', 0)]; m.insert(blk('Z', 0, 0, 6)); m.remove('X'); r.push(m.rows()); res.push(r);
+    }
+    // X pinned under N (4 rows up) and swapped (4 more) as two steps, or moved 8 in one: in column 0 the slack it used comes first under
+    // it, then U's rows it left, in order, either way; a block put in that gap and X taken away leave D where they leave it either way
+    out.push(['a move cut into steps gives the owners one step gives, and the same after an insertion and a deletion', res[0], res[1], []]); }
   // O-21 (decided 2026-11-09): a swap's neighbour moves by the carried block's height on the screen, its temporary rows included, and
   // lands exactly where the swap put it; that displacement is structural and writes none of the carried block's temporary rows, so when
   // they end the neighbour follows the carried block
