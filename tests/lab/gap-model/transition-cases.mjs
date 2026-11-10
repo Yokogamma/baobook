@@ -342,7 +342,7 @@ export function transitionCases(make = createModel) {
   // the internal review of c05fb1e: K, held at 5 by C's growth in column 2, has two rows of slack in column 1 that A's two temporary rows take
   // on the screen; narrowed off column 1, it leaves its body and that slack as rows (GAP.9), through which A's temporary rows now push D on
   // the screen, to 10. D, carried in the same RELINK, moves by its step from where the gap holds it, its canonical row changing by the step
-  // and the push staying on the screen, D at its moved row when A folds (O-23, proposed)
+  // and the push staying on the screen, D at its moved row when A folds (O-23, decided as G13)
   for (const d of [-1, 1]) {
     const m = make().open([blk('A', 1, 1, 0), blk('C', 2, 2, 0), blk('K', 1, 2, 3), blk('D', 1, 1, 6)]); m.height('C', 3); m.show('A', 2);
     run(`a block narrowed off above a moved one under a temporary height: the move by its step, the push on the screen only (D by ${d})`, m,
@@ -350,17 +350,17 @@ export function transitionCases(make = createModel) {
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('A', 0); return [...r, m.rows()]; },
       [{ A: 0, C: 0, D: 10 + d, K: 5 }, { A: 0, C: 0, D: 8 + d, K: 5 }, { A: 0, C: 0, D: 8 + d, K: 5 }]);
   }
-  // the independent review of f66efb3, the two open questions as the code has them (LAYOUT-RULES §15.1): O-23, the same in two columns, D's
+  // the independent review of f66efb3, the two owner questions, decided as the code has them (LAYOUT-RULES §15.1, LAYOUT-MODEL G13 and G14): O-23, the same in two columns, D's
   // canonical row changes by its step, 8 to 7, though as the narrowing and then the move in two RELINKs it would stay at 8
   { const m = make().open([blk('A', 1, 1, 0), blk('C', 2, 2, 0), blk('K', 1, 2, 3), blk('D', 1, 2, 7)]); m.height('C', 2); m.show('A', 1);
-    run('a block narrowed off above a moved one in two columns: the move by its step, the push on the screen only (O-23, proposed)', m,
+    run('a block narrowed off above a moved one in two columns: the move by its step, the push on the screen only (O-23)', m,
       T(m, { K: { c0: 2 }, D: { y: 7 } }, { steps: [[['D'], -1]], carried: 'D', leave: [['K', 1, 'narrow']] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('A', 0); return [...r, m.rows()]; },
       [{ A: 0, C: 0, D: 8, K: 4 }, { A: 0, C: 0, D: 7, K: 4 }, { A: 0, C: 0, D: 7, K: 4 }]); }
   // O-24: X, three rows temporary, carried into Y's only column, pushing Y to 7: Y lands there, canonically right under X, and follows X
   // when it folds, a row above where it was
   { const m = make().open([blk('X', 0, 1, 0), blk('Y', 2, 2, 5)]); m.show('X', 3);
-    run('a put block\'s own temporary rows push the only column of the block under it: it lands at its target and follows (O-24, proposed)', m,
+    run('a put block\'s own temporary rows push the only column of the block under it: it lands at its target and follows (O-24)', m,
       T(m, { X: { c0: 1, c1: 2, y: 3 }, Y: { y: 7 } }, { steps: [[['X'], 1], [['X', 'Y'], 2]], carried: 'X', leave: [['X', 0, 'narrow']], enter: [['X', 2, 'put']] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
       [{ X: 3, Y: 7 }, { X: 3, Y: 4 }, { X: 3, Y: 4 }]); }
