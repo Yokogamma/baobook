@@ -89,14 +89,16 @@ export function checkDeclaration(base, T) {
   // replayed in order they put no block on another nor carry it past one in a column both keep (a block a move pushes moves with it, in
   // the same step: one step per common part); the two blocks of a swap, and a block and the one it is declared to pass, go through each
   // other by definition. The first step starts from the rows FOLLOW gives over base's stacks with after's heights: a block no height change
-  // reaches starts from its row in base; one under a block whose height or temporary rows changed starts from `T.start` when the
-  // transition gives it (GAP checks it against its stacks), and is left out of these checks when it does not
+  // reaches starts from its row in base; one under a block whose height or temporary rows changed starts from `T.start`, which the
+  // transition must give for it (GAP checks it against its stacks): with no start for a block a change of height reaches, the steps
+  // could not be checked, so the transition is refused
   const H = (id) => { const b = extent(after[id]); return b.h + b.e; };
   const changed = Object.keys(base).filter((id) => after[id] && (base[id].h !== after[id].h || (base[id].e || 0) !== (after[id].e || 0)));
   const reached = new Set(), queue = [...changed];
   while (queue.length) { const k = queue.pop(), K = extent(base[k]);
     for (const id of Object.keys(base)) { if (reached.has(id) || id === k) continue; const b = extent(base[id]);
       if (b.c0 <= K.c1 && K.c0 <= b.c1 && b.y >= K.y + K.h + K.e) { reached.add(id); queue.push(id); } } }
+  for (const id of reached) if (after[id] && !(T.start && id in T.start)) errs.push(`a change of height reaches ${id} and the transition gives no start for it`);
   const origin = (id) => (T.start && id in T.start ? extent({ ...after[id], y: T.start[id] }).y : reached.has(id) ? null : extent(base[id]).y);
   const moved = new Map();
   for (const [ids, d] of T.steps || []) for (const id of ids) { if (!after[id]) errs.push(`step of ${id}, which after does not hold`); moved.set(id, (moved.get(id) || 0) + d); }

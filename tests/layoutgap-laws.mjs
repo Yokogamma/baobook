@@ -4,7 +4,7 @@
 // away changes nothing; deleting or narrowing any block afterwards, or ending the temporary heights, keeps the invariants. A failure prints
 // its case shrunk, with the generator's version. The engine joins in the second part of step 1b.
 // node tests/layoutgap-laws.mjs [random cases]
-import { transitionCases, declarationCases } from './lab/gap-model/transition-cases.mjs';
+import { transitionCases, declarationCases, landingCases } from './lab/gap-model/transition-cases.mjs';
 import { runLaws } from './lab/gap-model/laws.mjs';
 import { FIXED, stateOf } from './lab/gap-model/fixed-cases.mjs';
 import { createModel } from './lab/gap-model/model.mjs';
@@ -20,6 +20,7 @@ for (const c of FIXED) {   // the state of each, the operation, and the model's 
   ok(`fixed: ${c.name}${m.snapshot() === c.expect ? '' : ': got ' + m.snapshot()}`, m.snapshot() === c.expect);
 }
 for (const [name, errs, want] of declarationCases()) ok(name + (errs.length === 0 === !want ? '' : `: got ${JSON.stringify(errs)}`), want ? errs.some((e) => e.includes(want)) : !errs.length);
+for (const [name, f, fails] of landingCases()) ok(name + (!!f === fails ? '' : `: got ${JSON.stringify(f)}`), !!f === fails);
 {
   const { tried, counts, failure } = runLaws(N);
   ok(`${tried} random transitions: valid, local, and the invariants kept after deleting, narrowing and ending temporary heights (${JSON.stringify(counts)})` +

@@ -3,7 +3,7 @@
 // with the neighbour right under the carried block, a width change (narrowed, widened, shifted), a block created or deleted, a height,
 // under temporary heights. Each gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the
 // declaration explains the geometry. Text blocks only (areas: next). The generator's version goes with every saved example.
-export const GEN_VERSION = 6;
+export const GEN_VERSION = 7;
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
@@ -157,7 +157,13 @@ export function action(r, base, opts = {}) {
     const x = pick(ids), X = after[x], a = Math.max(off, X.c0 + pick([-1, 0, 1])), z = Math.min(off + W - 1, Math.max(a, X.c1 + pick([-1, 0, 1])));
     if (a === X.c0 && z === X.c1) return null;
     const was = cols(X); X.c0 = a; X.c1 = z;
-    if (r() < 0.3) X.h = Math.max(1, X.h + pick([-1, 1]));   // the re-measure at the new width
+    if (r() < 0.3) {   // the re-measure at the new width: the blocks under it follow (FOLLOW, no move), from the rows `start` states
+      X.h = Math.max(1, X.h + pick([-1, 1]));
+      if (!opts.rowsWith) return null;
+      const rows = opts.rowsWith(Object.fromEntries(ids.map((id) => [id, { h: after[id].h, e: after[id].e || 0 }])));
+      for (const id of ids) if (id in rows) after[id].y = rows[id];
+      T.start = Object.fromEntries(ids.map((id) => [id, after[id].y]));
+    }
     if (ids.some((id) => id !== x && hits(after[id], X))) return null;
     for (const c of was) if (c < a || c > z) T.leave.push([x, c, 'narrow']);
     for (const c of cols(X)) if (!was.includes(c)) T.enter.push([x, c, 'self']);

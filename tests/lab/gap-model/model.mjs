@@ -209,8 +209,9 @@ export function createModel(opts = {}) {
   // their owners (G5). In a column where the run's top is the first block, the free room it leaves and the slack it used become
   // its own (G6, GAP.8; with GAP.8 off they stay free room); with nothing under the run they go (G5).
   // A swap's neighbour (§5.1b) moves by the carried block's height on the screen, its temporary rows included; that displacement is
-  // structural and writes none of them (O-21): `tmp`, the carried block's temporary rows. Going up, the gap above the neighbour, where it
-  // holds it, grows by the step less them, so that the carried block coming in there pushes it by them on the screen only; going down, in
+  // structural and writes none of them (O-21): `tmp`, the carried block's temporary rows. Going up, what the gap above the neighbour gains,
+  // the step where it holds it or the rows its stack keeps where it stands in one stack with the gap under it, is less by them, so that the
+  // carried block coming in there pushes it by them on the screen only; going down, in
   // a column the carried block comes into under it (`under`), the rows that come under the neighbour are that many fewer, the carried
   // block's temporary rows its pass kept at its old place (rule 2) coming out as it comes back under the neighbour.
   function moveIn(c, ids, d, sw = null) {
@@ -233,7 +234,7 @@ export function createModel(opts = {}) {
           const t = Math.min(k, seg.length); lst.parts[li] = seg.slice(t); got += t;
         }
         const grow = sameStack ? [...Array(got).fill(heirOf(ust)), ...Array(holds ? d - got : 0).fill(r)] : Array(holds ? d : 0).fill(heirOf(ust));
-        if (sw && holds) grow.splice(Math.max(0, grow.length - sw.tmp));
+        if (sw) grow.splice(Math.max(0, grow.length - sw.tmp));
         ust.parts[ui] = [...ust.parts[ui], ...grow];
       } else {
         const k = -d, used = Math.min(k, slack), n = Math.min(len(ust.parts[ui]), k - used);

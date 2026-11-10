@@ -4,6 +4,7 @@
 // so); they stay as cases of the executor, which runs any declared pass, and their expectations are those of the reviews.
 import { createModel } from './model.mjs';
 import { checkDeclaration } from './declare.mjs';
+import { landing, runCase, build } from './laws.mjs';
 
 const blk = (id, c0, c1, y, h = 1) => ({ id, c0, c1, y, h });
 const frames = (m) => Object.fromEntries([...m.B.values()].map((b) => [b.id, { c0: b.c0, c1: b.c1, y: b.y, h: b.h, e: b.e }]));
@@ -120,6 +121,15 @@ export function transitionCases() {
       T(m, { X: { y: 7 }, N: { y: 5 }, F: { y: 10 } }, { steps: [[['X'], 3], [['X', 'N', 'F'], 2], [['N'], -2], [['X'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
       [{ F: 10, N: 5, X: 7 }, { F: 9, N: 5, X: 7 }, { F: 9, N: 5, X: 7 }]); }
+  { const m = createModel().open([blk('U', 1, 1, 0), blk('B', 1, 2, 7)]); m.insert(blk('N', 1, 2, 2)); m.insert(blk('X', 1, 2, 4)); m.show('U', 1); m.show('X', 2);
+    // found by the independent review of 989243c: N and X stand in the gaps over B; X (two temporary rows) carried up and swapped with N,
+    // which U's temporary row holds on the screen through column 1, so in column 2 it has slack and its gap above grows by the rows its
+    // stack keeps, not by the step: those too are less the carried block's temporary rows. N lands right under X, 6, and stays right under
+    // it when the temporary rows end; X stands canonically at 3, where column 2, with no temporary row above it, holds the row it was put at
+    run('O-21: a standing neighbour with slack in one column lands right under the carried block, and stays there when the temporary rows end', m,
+      T(m, { X: { y: 3 }, N: { y: 6 } }, { steps: [[['X'], -1], [['X'], -1], [['N'], 3]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1], ['X', 2]] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('U', 0); m.show('X', 0); return [...r, m.rows()]; },
+      [{ B: 10, N: 6, U: 0, X: 3 }, { B: 8, N: 4, U: 0, X: 3 }, { B: 8, N: 4, U: 0, X: 3 }]); }
   { const m = createModel().open([blk('X', 1, 1, 0), blk('N', 1, 2, 4, 2), blk('E', 2, 2, 8), blk('B', 1, 2, 12)]); m.show('X', 1);
     // the boundary of O-21: going down, a wide N moves up by X's 2 rows on the screen; in column 2, which X does not come into, the row of
     // X's temporary push that N moves up through stays its own rows under it, as in any move (rule 1, O-22), so E and B keep their rows on
@@ -175,5 +185,38 @@ export function declarationCases() {
     ['a block under one that grew starts from the row FOLLOW gives, which the transition states', checkDeclaration({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 2, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 0, h: 3, e: 0 }, B: { c0: 1, c1: 1, y: 4, h: 1, e: 0 } }, start: { A: 0, B: 4 }, steps: [], carried: null, leave: [], enter: [], pass: [] }), null],
     ['the same with a step from a start that is not FOLLOW\'s, which does not add up, is refused', checkDeclaration({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 2, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 0, h: 3, e: 0 }, B: { c0: 1, c1: 1, y: 6, h: 1, e: 0 } }, start: { A: 0, B: 4 }, steps: [[['B'], 4]], carried: null, leave: [], enter: [], pass: [] }), 'add up to 4 rows'],
     ['the same push as one step per common part is accepted', D({ b3: { ...base.b3, y: 7 }, b1: { ...base.b1, y: 8 } }, { steps: [[['b3'], 3], [['b3', 'b1'], 4]], carried: 'b3' }), null],
+    (() => { // the review of 989243c: U grows from 1 row to 2, FOLLOW starts A at 4 and B at 8; a wrong split, A +7 and B +4, with no start
+      const b = (y, h = 1) => ({ c0: 1, c1: 1, y, h, e: 0 }), base = { U: b(0), A: b(3), B: b(7) }, after = { U: b(0, 2), A: b(11), B: b(12) };
+      return ['a change of height with no start for the blocks it reaches is refused: the steps could not be checked',
+        checkDeclaration(base, { after, steps: [[['A'], 7], [['B'], 4]], carried: 'A', leave: [], enter: [], pass: [] }), 'gives no start for it']; })(),
+    (() => {
+      const b = (y, h = 1) => ({ c0: 1, c1: 1, y, h, e: 0 }), base = { U: b(0), A: b(3), B: b(7) }, after = { U: b(0, 2), A: b(11), B: b(12) };
+      return ['the same with its start: the wrong split carries A through B and is refused',
+        checkDeclaration(base, { after, start: { U: 0, A: 4, B: 8 }, steps: [[['A'], 7], [['B'], 4]], carried: 'A', leave: [], enter: [], pass: [] }), 'carries A past B']; })(),
   ];
+}
+
+/** [name, the landing law's failure or null, whether it must fail]: the law excuses a block lower than its target only where a block that
+ *  came in by itself is shown to push it (laws.mjs). */
+export function landingCases() {
+  const out = [];
+  // the review of 989243c: the swap of the standing neighbour with, in the same RELINK, S widened by itself into column 2 over it, a free
+  // cell, with no temporary row: S pushes nothing, so a neighbour a row lower than the swap put it must fail, even under S (the rows are
+  // those the model gave before the fix)
+  { const T = { after: { N: { c0: 1, c1: 2, y: 6, h: 1, e: 0 }, X: { c0: 1, c1: 2, y: 3, h: 1, e: 2 } }, steps: [[['X'], -1], [['X'], -1], [['N'], 3]], carried: 'X', enter: [['S', 2, 'self']] };
+    const wrong = { N: 7, X: 3 };
+    out.push(['a block a row lower than its target under a block that came in by itself and pushes nothing fails the landing law',
+      landing(T, wrong, { withoutSelf: () => wrong, unshownSelf: () => wrong }), true]); }
+  // the same case on the model as it is: the neighbour lands where the swap put it, and the law passes
+  { const blocks = [blk('U', 1, 1, 0), blk('B', 1, 2, 7), blk('N', 1, 2, 2), blk('X', 1, 2, 4), blk('S', 3, 3, 0)], ins = ['N', 'X'], temps = [['U', 1], ['X', 2]];
+    const a = frames(build({}, blocks, ins, temps)); a.X = { ...a.X, y: 3 }; a.N = { ...a.N, y: 6 }; a.S = { ...a.S, c0: 2 };
+    const near = { after: a, steps: [[['X'], -1], [['X'], -1], [['N'], 3]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1], ['X', 2]], leave: [], enter: [['S', 2, 'self']] };
+    out.push(['the same swap with S widened into column 2 on the model: every law holds', runCase({ opts: {}, blocks, ins, temps, near, far: null }), false]); }
+  // seed 11225: a block that came in by itself pushes, by its temporary row, a block through another: excused, since with its temporary
+  // rows ended the moved blocks stand where SETTLE put them
+  { const blocks = [blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)], temps = [['a0', 2], ['a3', 1]], opts = { gap8: false };
+    const a = frames(build(opts, blocks, [], temps)); a.a0 = { ...a.a0, y: 8 }; a.a1 = { ...a.a1, y: 13 }; a.a2 = { ...a.a2, y: 10 }; a.a3 = { ...a.a3, c0: 1 };
+    const near = { after: a, steps: [[['a1'], -4], [['a1', 'a0'], -3], [['a1', 'a0', 'a2'], -1]], carried: 'a1', leave: [], enter: [['a3', 1, 'self']], pass: [] };
+    out.push(['seed 11225: a push by the temporary row of a block that came in by itself, through a block it pushes, is excused', runCase({ opts, blocks, ins: [], temps, near, far: null }), false]); }
+  return out;
 }
