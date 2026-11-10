@@ -19,7 +19,7 @@ const WEIGHTS = {
   // the layout engine's Node tests (steps 1 and 1b): no browser, a second or so each, the model's suite, the twin and the laws on both more
   'layoutgap-oracle': 40, 'layoutgap-twin': 35, layoutrules: 1, layoutgeometry: 1, layoutsize: 1, 'layoutgap-follow': 1, 'layoutgap-resize': 1,
   'layoutgap-cap': 1, 'layoutgap-adjust': 1, 'layoutgap-leave': 1, 'layoutgap-stand': 1, 'layoutgap-fresh': 1, 'layoutgap-fit': 1,
-  'layoutgap-removed': 2, 'layoutgap-shift': 1, 'layoutgap-laws': 40,
+  'layoutgap-removed': 2, 'layoutgap-shift': 1, 'layoutgap-laws': 65,
 };
 const DEFAULT = 12;
 const SHARDS = 8;   // as the matrix in .github/workflows/tests.yml

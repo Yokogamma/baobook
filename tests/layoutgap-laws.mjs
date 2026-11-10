@@ -46,4 +46,12 @@ for (const [name, f, must] of landingCases(createEngineModel)) ok('engine: ' + n
   ok(`engine: ${tried} random transitions after a history: the same laws, and the same layout as the model's (${JSON.stringify(counts)})` +
     (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= N && !failure);
 }
+// the carries under a switched-off rule's fallback, alone: the mix above draws them seldom (one in fifty or so), and a weight does not
+// promise how many survive the filters, so a targeted run gives each fallback a floor (the independent review of a27021f)
+for (const [side, o] of [['model', { seed0: 2000001 }], ['engine', { make: createEngineModel, twin: createModel, seed0: 3000001 }]]) {
+  const FB = 40, FLOOR = 10, { tried, counts, failure } = runLaws(FB, { kinds: ['fallback'], ...o });
+  const pu = counts['fallback P-UP'] || 0, dk = counts['fallback DRAG.B2.keep'] || 0;
+  ok(`${side}: ${tried} carries under a fallback only, after a history: every law${side === 'engine' ? ', and the model\'s layout' : ''}, at least ${FLOOR} of each (P-UP ${pu}, DRAG.B2.keep ${dk})` +
+    (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= FB && pu >= FLOOR && dk >= FLOOR && !failure);
+}
 process.exit(fails ? 1 : 0);

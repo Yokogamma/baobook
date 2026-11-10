@@ -182,7 +182,7 @@ export function shrink(c, law, judge = (t) => runCase(t)) {
 
 // the next transition of a history on m, near and far: a carry away is two RELINKs, the taking away (with the far part) and then the put
 // alone, drawn on the layout the first left (`pending`)
-function draw(r, m, pending, { areas }) {
+function draw(r, m, pending, { areas, kinds }) {
   const base = frames(m), part = (p) => Object.fromEntries(Object.entries(base).filter(([, b]) => partOf(b) === p));
   if (pending.then) { const t = pending.then; pending.then = null; const near = putBack(r, part('a'), t, { off: 0 }); return near ? { near: { ...near.T }, far: null, kind: 'away' } : null; }
   // the rows FOLLOW gives over the stacks with other heights, for a height change; the far part's own blocks only, so that its `start`
@@ -190,7 +190,7 @@ function draw(r, m, pending, { areas }) {
   const only = (p, rows) => Object.fromEntries(Object.entries(rows).filter(([id]) => id in part(p)));
   const rowsWith = (p) => (hs) => only(p, m.rowsWith(hs));
   const rowsWithout = (p) => (id) => { const s = m.save(); m.remove(id); const rows = m.rows(); m.load(s); return only(p, rows); };
-  const ea = action(r, part('a'), { off: 0, rowsWith: rowsWith('a'), rowsWithout: rowsWithout('a') });
+  const ea = action(r, part('a'), { off: 0, kinds, rowsWith: rowsWith('a'), rowsWithout: rowsWithout('a') });
   const ez = action(r, part('z'), { off: 20, rowsWith: rowsWith('z'), rowsWithout: rowsWithout('z'), kinds: ['carry', 'carry', 'swap', 'width', 'create', 'delete', 'height', 'press', 'back'] });
   if (!ea || !ez) return null;
   if (ea.T.carried && ez.T.carried) return { skip: 'two carried blocks drawn' };
@@ -209,10 +209,12 @@ export function runTwin(c, make, twin) {
 
 /** N random cases; returns the counts and the first failure, shrunk. Each case has a history of up to `deep` transitions and temporary
  *  heights before the transition the laws judge; `make` the implementation they run on, and with `twin` a second one compared with it. */
-export function runLaws(N, { seed0 = 1, deep = 3, areas = 0.2, make = createModel, twin = null } = {}) {
+// `kinds`, when given, the kinds the near part draws from, for a targeted run (the far part keeps its own); such a run tries more seeds,
+// most draws of a narrow kind giving no valid action
+export function runLaws(N, { seed0 = 1, deep = 3, areas = 0.2, make = createModel, twin = null, kinds } = {}) {
   const counts = {}, inc = (k) => (counts[k] = (counts[k] || 0) + 1);
   let tried = 0, failure = null;
-  for (let seed = seed0; tried < N && seed < seed0 + N * 40; seed++) {
+  for (let seed = seed0; tried < N && seed < seed0 + N * (kinds ? 200 : 40); seed++) {
     const r = rng(seed);
     const opts = { gap51: r() > 0.2, gap52: r() > 0.2, gap53: r() > 0.2, gap8: r() > 0.2, gap9: r() > 0.2 };
     const A = sheet(r, 5, { off: 0, pre: 'a', areas }), Z = sheet(r, 4, { off: 20, pre: 'z', areas });
@@ -228,7 +230,7 @@ export function runLaws(N, { seed0 = 1, deep = 3, areas = 0.2, make = createMode
         const ids = [...m.B.keys()], id = ids[Math.floor(r() * ids.length)], e = r() < 0.5 ? 0 : 1 + Math.floor(r() * 3);
         m.show(id, e); history.push({ show: [id, e] }); continue;
       }
-      const d = draw(r, m, pending, { areas }); if (!d || d.skip) { inc(d ? d.skip : 'no valid action drawn'); broke = true; break; }
+      const d = draw(r, m, pending, { areas, kinds }); if (!d || d.skip) { inc(d ? d.skip : 'no valid action drawn'); broke = true; break; }
       if (i >= L && !pending.then) { next = d; break; }
       // a transition of the history: it must be valid; one that is not is the case the laws judge
       const T = merge(d.near, d.far); let bad = checkDeclaration(frames(m), T).length > 0;
@@ -241,6 +243,7 @@ export function runLaws(N, { seed0 = 1, deep = 3, areas = 0.2, make = createMode
     tried++; inc(next.kind); const near = next.near, far = next.far, base = frames(m);
     if (history.length) inc('after a history'); if (history.some((h) => h.T)) inc('after a move in the history');
     if (Object.values(base).some((b) => b.area)) inc('with areas');
+    if (near.fallback) inc('fallback ' + near.fallback);
     if (near.pass.length) inc('with passes'); if (near.swap && near.pass.some(([id]) => id === near.swap[1])) inc('a swap neighbour passing'); if (near.swap && near.steps.some(([ids]) => ids.includes(near.swap[0]) && ids.includes(near.swap[1]))) inc('a swap after a push'); if (temps.length || history.some((h) => h.show)) inc('under temporary heights'); if (standing) inc('with standing blocks'); if (near.swap && near.swap.some((id) => base[id].e)) inc('a swap of a block with a temporary height');
     const c = { seed, opts, blocks, ins, temps, history, near, far }, f = runCase(c, make) || (twin && runTwin(c, make, twin));
     if (f) { inc('failed: ' + f.law); if (!failure) failure = { GEN_VERSION, seed, failure: f, case: shrink(c, f.law, (t) => runCase(t, make) || (twin && runTwin(t, make, twin))) }; }
