@@ -132,7 +132,7 @@ export function transitionCases() {
       T(m, { X: { c0: 0, c1: 1, y: 5 } }, { steps: [[['X'], 5]], carried: 'X', leave: [['X', 2, 'away']], enter: [['X', 0, 'put']] }),
       (m) => [m.rows(), m.rows('canonical')], [{ A: 0, B: 10, X: 5 }, { A: 0, B: 8, X: 5 }]); }
   { const m = createModel().open([blk('N', 1, 2, 0, 2), blk('X', 1, 1, 5), blk('E', 2, 2, 8)]); m.show('X', 1);
-    // going up with a wide N (proposed, 2026-11-10): in column 2, which X does not come into, both gaps round N change by X's canonical
+    // going up with a wide N (the owner, 2026-11-10): in column 2, which X does not come into, both gaps round N change by X's canonical
     // height, so E keeps its canonical row 8, is pushed to 9 on the screen while X's temporary row lasts, and is back at 8 when it ends
     run('O-21 going up, a wide neighbour: a block under it in a column of its own keeps its canonical row', m,
       T(m, { X: { y: 0 }, N: { y: 2 } }, { steps: [[['X'], -3], [['X'], -2], [['N'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
