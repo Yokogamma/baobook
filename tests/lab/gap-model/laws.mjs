@@ -146,8 +146,9 @@ export function runCase(c, make = createModel) {
     const s = m1.save();
     try { m1.remove(id); } catch (e) { m1.load(s); return { law: 'after-effects', what: 'delete ' + id, err: e.message }; }
     m1.load(s);
-    const b = m1.B.get(id);
-    if (b && b.c1 > b.c0) { try { m1.width(id, b.c0, b.c1 - 1); } catch (e) { if (!/overlaps/.test(e.message)) { m1.load(s); return { law: 'after-effects', what: 'narrow ' + id, err: e.message }; } } m1.load(s); }
+    // narrowed by one column of its frame (an area's frame, not its extent), which must then be gone
+    const f = frames(m1)[id];
+    if (f && f.c1 > f.c0) { try { m1.width(id, f.c0, f.c1 - 1); const g = frames(m1)[id]; if (g.c0 !== f.c0 || g.c1 !== f.c1 - 1) { m1.load(s); return { law: 'after-effects', what: 'narrow ' + id, err: `frame ${f.c0}–${f.c1} became ${g.c0}–${g.c1}` }; } } catch (e) { if (!/overlaps/.test(e.message)) { m1.load(s); return { law: 'after-effects', what: 'narrow ' + id, err: e.message }; } } m1.load(s); }
   }
   for (const b of [...m1.B.values()]) if (b.e) m1.show(b.id, 0);
   const inv = m1.check(); if (inv.length) return { law: 'after-effects', what: 'temporary heights ended', err: inv[0] };

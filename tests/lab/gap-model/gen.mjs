@@ -11,7 +11,7 @@
 // Blocks come and go in frame coordinates ({c0, c1, y, h, e, yc, area}: an area by its frame, y its displayed row, yc its canonical one);
 // inside, every block is its extent (LAYOUT-RULES §1.1: an area's frame with one free cell on every side), as GAP counts it, and the
 // columns a declaration names are GAP's, the extent's.
-export const GEN_VERSION = 10;
+export const GEN_VERSION = 11;
 import { checkDeclaration } from './declare.mjs';
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
@@ -45,7 +45,9 @@ export function sheet(r, n, { off = 0, W = 8, rows = 24, pre = 'b', areas = 0 } 
 // below x's top) goes up right over it, its gap above shrinking first and the blocks above it going up only as far as they must (P-UP).
 // Then every pair that still hits: the lower one sinks against the other, with its lower neighbours, the order two blocks had in a column
 // they shared in base kept (P-SEP). Returns false when a block would go above row 0 (P-UP would then lower x) or it does not settle.
-function carrySettle(after, base, x) {
+// `off`, a switched-off rule (LAYOUT-RULES §1.6) and its fallback: 'P-UP', a block judged above that reaches x is pushed down under it
+// instead; 'DRAG.B2.keep', every block's side is judged by frow and the middle, the side it had in base not kept
+function carrySettle(after, base, x, off = null) {
   const X = after[x], others = Object.keys(after).filter((id) => id !== x), bottom = (b) => b.y + b.h + (b.e || 0);
   const wasOver = (a, b) => (base[a] && base[b] && share(base[a], base[b]) ? base[a].y < base[b].y : null);
   // the nearest block above `id` in one of its columns is its upper neighbour there (LAYOUT-RULES §1.3)
@@ -64,9 +66,9 @@ function carrySettle(after, base, x) {
   };
   for (const id of others.slice().sort()) {
     if (!share(after[id], X)) continue;
-    const K = after[id], over = wasOver(id, x) ?? !(2 * K.y + K.h + (K.e || 0) > 2 * X.y);
+    const K = after[id], byMiddle = !(2 * K.y + K.h + (K.e || 0) > 2 * X.y), over = off === 'DRAG.B2.keep' ? byMiddle : wasOver(id, x) ?? byMiddle;
     if (!over && K.y < bottom(X)) sink(id, bottom(X) - K.y);
-    else if (over && bottom(K) > X.y) { if (!rise(id, bottom(K) - X.y)) return false; }
+    else if (over && bottom(K) > X.y) { if (off === 'P-UP') sink(id, bottom(X) - K.y); else if (!rise(id, bottom(K) - X.y)) return false; }
   }
   for (let round = 0; round < 80; round++) {
     let pair = null;
@@ -150,11 +152,10 @@ export function action(r, baseF, opts = {}) {
     return out;
   };
   const inside = (b) => b.c0 >= off && b.c1 <= off + W - 1 && b.y >= 0;
-  // a swap made otherwise: its carried block also shifting its columns by one (`swapshift`), the same geometry declared as the pass of a
-  // switched-off rule's fallback (`fallback`: P-UP off pushing a block judged above under the carried block, DRAG.B2.keep off judging
-  // sides by frow and the middle), or another block's height changed in the same RELINK (`swapheight`, the blocks under it following by
-  // FOLLOW, `start` given); kept only when declare.mjs accepts the result, a combination the geometry does not allow being no draw
-  if (kind === 'swapshift' || kind === 'fallback' || kind === 'swapheight') {
+  // a swap made otherwise: its carried block also shifting its columns by one (`swapshift`), or another block's height changed in the same
+  // RELINK (`swapheight`, the blocks under it following by FOLLOW, `start` given); kept only when declare.mjs accepts the result, a
+  // combination the geometry does not allow being no draw
+  if (kind === 'swapshift' || kind === 'swapheight') {
     const c = action(r, baseF, { ...opts, kinds: ['swap'] }); if (!c) return null;
     const T2 = JSON.parse(JSON.stringify(c.T)), ca = Object.fromEntries(Object.entries(T2.after).map(([id, b]) => [id, toExt(b)]));
     if (kind === 'swapshift') {
@@ -164,9 +165,6 @@ export function action(r, baseF, opts = {}) {
       for (const cc of cols(base[x])) if (!covers(nx, cc)) T2.leave.push([x, cc, 'narrow']);
       for (const cc of cols(nx)) if (!covers(base[x], cc)) T2.enter.push([x, cc, 'put']);
       T2.pass = T2.pass.filter(([id, cc]) => covers(nx, cc) || id !== x);
-    } else if (kind === 'fallback') {
-      if (T2.pass.some(([id]) => id !== T2.carried)) return null;
-      delete T2.swap; T2.fallback = pick(['P-UP', 'DRAG.B2.keep']);
     } else {
       if (!opts.rowsWith) return null;
       const k = pick(ids.filter((id) => !T2.swap.includes(id))); if (!k) return null;
@@ -199,6 +197,29 @@ export function action(r, baseF, opts = {}) {
     for (const col of cols(nk)) if (!was.includes(col)) c.T.enter.push([k, col, 'self']);
     const out = Object.fromEntries(Object.entries(ca).map(([id, b]) => [id, toFrame(b)]));
     c.T.after = out; return { kind, after: out, T: c.T };
+  }
+  if (kind === 'fallback') {
+    // a carry under a switched-off rule whose fallback puts a neighbour on the carried block's other side (LAYOUT-RULES GAP's inputs): with
+    // P-UP off a block judged above that the carry reaches is pushed down under it; with DRAG.B2.keep off sides are judged by frow and the
+    // middle, so a block that was under it can be judged above and go up over it. The carried block passes that neighbour, declared with
+    // the fallback; the carried block's move first, then the blocks pushed, one step per displacement, the other way included
+    const off = pick(['P-UP', 'DRAG.B2.keep']), x = pick(ids), X = after[x], d = off === 'P-UP' ? -int(1, 12) : int(1, 12);
+    X.y += d; if (!inside(X)) return null;
+    if (!carrySettle(after, base, x, off)) return null;
+    if (ids.some((id) => id !== x && after[id] && reorders(id, x).length)) return null;   // only the carried block changes an order
+    const passes = reorders(x); if (!passes.length) return null;   // no neighbour on the other side: a plain carry
+    T.carried = x; T.fallback = off;
+    // the blocks pushed the way the carried block moves go with it over the last rows of its way, one step per common part; those pushed
+    // the other way (under it, or over it) after it, one step per displacement
+    const disp = ids.filter((id) => id !== x && after[id].y !== base[id].y).map((id) => [id, after[id].y - base[id].y]);
+    const same = disp.filter(([, e]) => Math.sign(e) === Math.sign(d)), other = disp.filter(([, e]) => Math.sign(e) !== Math.sign(d));
+    if (same.some(([, e]) => Math.abs(e) > Math.abs(d))) return null;
+    const levels = [...new Set(same.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p); let doneRows = 0;
+    for (const L of [...levels, 0].map((v) => Math.abs(d) - v)) if (L > doneRows) { T.steps.push([[x, ...same.filter(([, e]) => Math.abs(d) - Math.abs(e) < L).map(([id]) => id)], Math.sign(d) * (L - doneRows)]); doneRows = L; }
+    const byD = new Map(); for (const [id, e] of other) { if (!byD.has(e)) byD.set(e, []); byD.get(e).push(id); }
+    for (const [e, list] of [...byD].sort((p, q) => Math.abs(p[0]) - Math.abs(q[0]))) T.steps.push([list, e]);
+    for (const c of passes) T.pass.push([x, c]);
+    const out = done(); if (checkDeclaration(baseF, out.T).length) return null; return out;
   }
   if (kind === 'carry' || kind === 'sideways') {
     const x = pick(ids), X = after[x], k = kind === 'sideways' ? pick([-1, 1]) : 0, d = int(-12, 12);

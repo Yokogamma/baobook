@@ -259,7 +259,7 @@ function moveIn(W, c, ids, d, sw = null, added = { own: new Map(), room: new Map
     const [lst, li] = bot.i >= 0 ? [bot.st, bot.i + 1] : [lowerOf(W, bot.id, c), 0];
     const slack = W.B.get(top.id).y - spans(W, ust)[ui][1];
     // a gap that reaches past the row the step starts from (a departure of rule 2 made a temporary height above push the block through the
-    // rows it kept) has no slack: the step moves the block by its rows from where the gap holds it, the push staying on the screen (O-22)
+    // rows it kept) has no slack: the step moves the block by its rows from where the gap holds it, the push staying on the screen (O-23)
     runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack <= 0, slack: Math.max(0, slack) });
     a = z;
   }

@@ -116,7 +116,8 @@ export function checkTransition(T) {
   // with nothing taken away, nothing leaving a column and no undo, a block no step moves keeps its row: every other change of row is a move
   if ([...B.keys()].every((id) => A.has(id)) && !leaveL.length && undone == null)
     for (const id of B.keys()) if (!moved.has(id) && origin(id) != null && origin(id) !== A.get(id).y) errs.push(`${id} is at another row in after with no step that moves it`);
-  { const passing = (p, q) => [...PS].some((k) => { const id = idOf(k), c = colOf(k), o = id === p ? q : id === q ? p : null; return o != null && B.has(o) && covers(B.get(o), c); });
+  { // a block and the one it is declared to pass: the two change their order in a column where one of them is declared to pass
+    const passing = (p, q) => g.reordered.some(([c, a, b]) => ((a === p && b === q) || (a === q && b === p)) && (PS.has(kc(p, c)) || PS.has(kc(q, c))));
     const pair = (p, q) => (swap.includes(p) && swap.includes(q)) || passing(p, q);
     const y = new Map([...B.keys()].filter((id) => A.has(id) && id !== undone && origin(id) != null).map((id) => [id, origin(id)]));
     const keptCols = (id) => { const a = B.get(id), b = A.get(id); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
@@ -150,7 +151,8 @@ export function checkTransition(T) {
   // rule that puts a neighbour on the carried block's other side, declared as `fallback`, where the carried block passes it
   if (T.fallback != null && !FALLBACKS.includes(T.fallback)) errs.push(`no such fallback, ${T.fallback}`);
   for (const k of PS) { const id = idOf(k);
-    if (!(swap.includes(id) || (T.fallback != null && id === carried))) errs.push(`${k}: only a block of a swap, or the carried block under a fallback, changes its order`); }
+    if (!(swap.includes(id) || (T.fallback != null && id === carried))) errs.push(`${k}: only a block of a swap, or the carried block under a fallback, changes its order`);
+    if (id === undone) errs.push(`${k}: an undo's carry back keeps no place in any chain and passes nothing`); }
   for (const [ids, d] of steps) { if (!Number.isInteger(d) || d === 0) errs.push(`a step of ${d} rows`); for (const id of ids) if (!B.has(id)) errs.push(`step of ${id}, not in base`); }
   return errs;
 }
