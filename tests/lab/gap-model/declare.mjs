@@ -62,6 +62,7 @@ export function checkDeclaration(base, T) {
   if (T.swap) {
     const [x, n] = T.swap, X = base[x] && extent(base[x]), N = base[n] && extent(base[n]);
     if (x !== carried) errs.push(`swap ${x}/${n}: its first block is not the carried one`);
+    else if (!X || !after[x]) errs.push(`swap ${x}/${n}: base or after does not hold the carried block`);
     else if (!N || !after[n] || !after[x]) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
       const shared = cols(X).filter((c) => covers(N, c)), AX = extent(after[x]), AN = extent(after[n]), hX = X.h + X.e, hN = N.h + N.e;
@@ -81,6 +82,8 @@ export function checkDeclaration(base, T) {
       for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
     }
   }
+  // every block of after has a card column at least
+  for (const [id, b] of Object.entries(after)) if (!(b.c0 <= b.c1)) errs.push(`${id} has no column in after`);
   // the layout after holds no two blocks on one cell, on the screen (INV-1); an undo's carried block is placed by its canonical cell, its
   // displayed row FOLLOW's from there, which RELINK checks in its result
   const undoneEarly = canonical && carried != null ? carried : null;
@@ -104,7 +107,7 @@ export function checkDeclaration(base, T) {
   const origin = (id) => (T.start && id in T.start ? extent({ ...after[id], y: T.start[id] }).y : reached.has(id) ? null : extent(base[id]).y);
   const moved = new Map();
   for (const [ids, d] of T.steps || []) for (const id of ids) { if (!after[id]) errs.push(`step of ${id}, which after does not hold`); moved.set(id, (moved.get(id) || 0) + d); }
-  for (const [id, d] of moved) if (after[id] && origin(id) != null && origin(id) + d !== extent(after[id]).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
+  for (const [id, d] of moved) if (after[id] && base[id] && origin(id) != null && origin(id) + d !== extent(after[id]).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
   // with nothing taken away, nothing leaving a column and no undo, a block no step moves keeps its row: every other change of row is a move
   if (Object.keys(base).every((id) => after[id]) && !(T.leave || []).length && undone == null)
     for (const id of Object.keys(base)) if (!moved.has(id) && origin(id) != null && origin(id) !== extent(after[id]).y) errs.push(`${id} is at another row in after with no step that moves it`);

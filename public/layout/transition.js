@@ -72,6 +72,7 @@ export function checkTransition(T) {
   if (T.swap) {
     const [x, n] = T.swap, X = B.get(x), N = B.get(n);
     if (x !== carried) errs.push(`swap ${x}/${n}: its first block is not the carried one`);
+    else if (!X || !A.has(x)) errs.push(`swap ${x}/${n}: base or after does not hold the carried block`);
     else if (!N || !A.has(n) || !A.has(x)) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
       const shared = cols(X).filter((c) => covers(N, c)), AX = A.get(x), AN = A.get(n), hX = X.h + X.e, hN = N.h + N.e;
@@ -90,6 +91,8 @@ export function checkTransition(T) {
       for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
     }
   }
+  // every block of after has a card column at least
+  for (const id of T.after.order) { const b = T.after.boxes.get(id); if (!(b.col + 1 <= b.col + b.w - 1)) errs.push(`${id} has no column in after`); }
   // the layout after holds no two blocks on one cell, on the screen (INV-1); an undo's carried block is placed by its canonical cell, its
   // displayed row FOLLOW's from there, which RELINK checks in its result
   { const L = [...A].filter(([id]) => !(canonical && id === carried));

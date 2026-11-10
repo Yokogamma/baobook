@@ -258,7 +258,9 @@ export function createModel(opts = {}) {
       const top = q[a], bot = q[z], ust = top.st, ui = top.i >= 0 ? top.i - 1 : ust.parts.length - 1;
       const [lst, li] = bot.i >= 0 ? [bot.st, bot.i + 1] : [lowerOf(bot.id, c), 0];
       const slack = B.get(top.id).y - spans(ust)[ui][1];
-      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack === 0, slack });
+      // a gap that reaches past the row the step starts from (a departure of rule 2 made a temporary height above push the block through the
+      // rows it kept) has no slack: the step moves the block by its rows from where the gap holds it, the push staying on the screen (O-22)
+      runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack <= 0, slack: Math.max(0, slack) });
       a = z;
     }
     for (const { r, head, run, ust, ui, lst, li, sameStack, holds, slack } of runs) {

@@ -45,7 +45,12 @@ export function transition(base, after, moves = {}, carried = null, x = {}, rule
   const start = Object.fromEntries([...follow(hs).boxes].filter(([id]) => after.boxes.has(id)).map(([id, b]) => [id, b.y]));
   // as SETTLE's layout has them: a block no step moves, not carried, at the row FOLLOW gives it with after's heights
   const moved = new Set(stepsT.flatMap(([ids]) => ids)), boxes = new Map(after.boxes);
-  for (const [id, y] of Object.entries(start)) if (!moved.has(id) && id !== cid) boxes.set(id, { ...boxes.get(id), y });
+  for (const [id, y] of Object.entries(start)) if (!moved.has(id) && id !== cid) {
+    // a row a test wrote for a block no step moves must be the one FOLLOW gives; one it left as base had it is set to that
+    const was = base.boxes.get(id), now = boxes.get(id);
+    if (was && now.y !== was.y && now.y !== y) throw new Error(`transition: ${id} is at row ${now.y} with no step that moves it; FOLLOW gives ${y}`);
+    boxes.set(id, { ...now, y });
+  }
   return { base, after: { ...after, boxes }, steps: stepsT, start, carried: cid, canonical, leave, enter, pass: [], ...x };
 }
 /** RELINK written the short way: the layout, or a thrown refusal with its reasons. */

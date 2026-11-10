@@ -339,6 +339,17 @@ export function transitionCases(make = createModel) {
       { after: { a1: f(0, 2, 0, 3, 1), a4: f(2, 4, 25, 3, 3), a3: f(1, 4, 31, 2, 0) }, steps: [[['a4', 'a3'], 12]], leave: [['a4', 5, 'narrow']], enter: [['a4', 2, 'put']], pass: [], carried: 'a4' },
       (m) => { const r = [m.rows(), m.rows('canonical'), m.stack('a3', 2)]; m.show('a4', 0); m.show('a1', 0); return [...r, m.rows()]; },
       [{ a1: 0, a3: 31, a4: 25 }, { a1: 0, a3: 30, a4: 25 }, 'a1 | a121 [a4:a13] · |', { a1: 0, a3: 30, a4: 25 }]); }
+  // the internal review of c05fb1e: K, held at 5 by C's growth in column 2, has two rows of slack in column 1 that A's two temporary rows take
+  // on the screen; narrowed off column 1, it leaves its body and that slack as rows (GAP.9), through which A's temporary rows now push D on
+  // the screen, to 10. D, carried in the same RELINK, moves by its step from where the gap holds it, the push staying on the screen: one
+  // RELINK gives what the narrowing and then the carry give as two (O-22), D at its moved row when A folds
+  for (const d of [-1, 1]) {
+    const m = make().open([blk('A', 1, 1, 0), blk('C', 2, 2, 0), blk('K', 1, 2, 3), blk('D', 1, 1, 6)]); m.height('C', 3); m.show('A', 2);
+    run(`a block narrowed off above a moved one under a temporary height: the move by its step, the push on the screen only (D by ${d})`, m,
+      T(m, { K: { c0: 2 }, D: { y: 8 + d } }, { steps: [[['D'], d]], carried: 'D', leave: [['K', 1, 'narrow']] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('A', 0); return [...r, m.rows()]; },
+      [{ A: 0, C: 0, D: 10 + d, K: 5 }, { A: 0, C: 0, D: 8 + d, K: 5 }, { A: 0, C: 0, D: 8 + d, K: 5 }]);
+  }
   return out;
 }
 
@@ -385,6 +396,10 @@ export function declarationCases() {
       const b = (y, h = 1) => ({ c0: 1, c1: 1, y, h, e: 0 }), base = { U: b(0), A: b(3), B: b(7) }, after = { U: b(0, 2), A: b(11), B: b(12) };
       return ['the same with its start: the wrong split carries A through B and is refused',
         chk(base, { after, start: { U: 0, A: 4, B: 8 }, steps: [[['A'], 7], [['B'], 4]], carried: 'A', leave: [], enter: [], pass: [] }), 'carries A past B']; })(),
+    // the internal review of c05fb1e: inputs that once made a check throw, or the two checks disagree, and a block with no column
+    ['a swap whose carried block base does not hold is refused, not thrown', D({ x9: { c0: 3, c1: 3, y: 9, h: 1, e: 0 } }, { carried: 'x9', swap: ['x9', 'b1'], enter: [['x9', 3, 'put']] }), 'does not hold the carried block'],
+    ['a step of a block after creates is refused, not thrown', D({ x9: { c0: 3, c1: 3, y: 9, h: 1, e: 0 } }, { steps: [[['x9'], 1]], enter: [['x9', 3, 'put']] }), 'not in base'],
+    ['a block with no column in after is refused', D({ b1: { ...base.b1, c0: 4, c1: 3 } }, { leave: [['b1', 3, 'narrow']] }), 'has no column in after'],
   ].map(([name, errs, want]) => [name, errs, want, errs.T, errs.base]);
 }
 
@@ -398,7 +413,7 @@ export function landingCases(make = createModel) {
   { const T = { after: { N: { c0: 1, c1: 2, y: 6, h: 1, e: 0 }, X: { c0: 1, c1: 2, y: 3, h: 1, e: 2 } }, steps: [[['X'], -1], [['X'], -1], [['N'], 3]], carried: 'X', enter: [['S', 2, 'self']] };
     const wrong = { N: 7, X: 3 };
     out.push(['a block a row lower than its target under a block that came in by itself and pushes nothing fails the landing law',
-      landing(T, wrong, { withoutSelf: () => wrong }), true]); }
+      landing(T, wrong, { without: () => wrong }), true]); }
   // the same case on the model as it is: the neighbour lands where the swap put it, and the law passes
   { const blocks = [blk('U', 1, 1, 0), blk('B', 1, 2, 7), blk('N', 1, 2, 2), blk('X', 1, 2, 4), blk('S', 3, 3, 0)], ins = ['N', 'X'], temps = [['U', 1], ['X', 2]];
     const a = frames(build({}, blocks, ins, temps, [], make)); a.X = { ...a.X, y: 3 }; a.N = { ...a.N, y: 6 }; a.S = { ...a.S, c0: 2 };

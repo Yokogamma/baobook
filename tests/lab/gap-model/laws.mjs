@@ -1,13 +1,14 @@
 // The laws of a transition (step 1b of docs/LAYOUT-ENGINE-PLAN.md), checked on random transitions from gen.mjs, each first checked by
-// declare.mjs: a declaration that does not explain its geometry is the generator's fault and fails the run. On the model for now; step 1b's
-// second part runs them on the engine too, against the model.
+// declare.mjs: a declaration that does not explain its geometry is the generator's fault and fails the run. On the model, and, given a
+// factory with its API (`make`, `twin`), on the engine through tests/lib/gapdriver.mjs, compared with the model case by case.
 //   1. valid: a valid base and an admissible declaration give a valid result, no exception and no broken invariant;
 //   2. local: a transition in columns far away, in the same RELINK, changes nothing of the others: rows in both measures, columns,
 //      heights and stacks with their owners and lends;
 //   3. after-effects: from the result, deleting any block, narrowing any block by a column and ending every temporary height keep the
 //      invariants;
-//   4. landing: the blocks the steps move and the carried block stand where SETTLE put them, lower only where a block that came in by
-//      itself pushes them on the screen, directly or through the blocks it pushes, shown by the same transition without that entry;
+//   4. landing: the blocks the steps move and the carried block stand where SETTLE put them, lower only where another block's change of
+//      columns pushes them on the screen (a block that came in by itself, or a temporary height through the rows a narrowed or pressed
+//      block kept), directly or through the blocks it pushes, shown by the same transition without those changes;
 //   5. untouched: with no temporary rows, heights, deletions, departures but passes, or entries by themselves in a part, the blocks of
 //      that part no step moves keep their rows in both measures;
 //   6. split: two steps next to each other that move the same blocks, made one, give the same rows, owners and lends, and the same after
@@ -35,13 +36,15 @@ export function projection(m, ids) {
 }
 
 /** Landing: every block the steps move and the carried block stand where SETTLE put them (`rows`, the result on the screen); lower only
- *  where a block that came in by itself pushes it on the screen (rule 5 never cuts a stack). That is shown, not assumed: the same
- *  transition without those entries (`withoutSelf()`: such a block keeps only the columns it kept, or, keeping none, stays in the columns
- *  it had) lands it where SETTLE put it, or higher. Being under such a block is not enough: one that comes into a free column by itself,
- *  with no temporary rows, pushes nothing. Returns the failure or null. */
-export function landing(T, rows, { withoutSelf = () => null, canon = null } = {}) {
-  const a = T.after, self = T.enter.some(([, , h]) => h === 'self');
-  const pushed = (id, want) => self && withoutSelf() != null && withoutSelf()[id] <= want;
+ *  where another block's change of columns pushes it on the screen (rule 5 never cuts a stack): a block that came in by itself, or a
+ *  temporary height reaching it through the rows a block narrowed or pressed off kept (rule 2, rule 1). That is shown, not assumed: the
+ *  same transition without those changes (`without()`: a block narrowed or pressed off keeps the columns it had; one that only came in by
+ *  itself keeps only the columns it kept, or, keeping none, stays in the columns it had) lands it where SETTLE put it, or higher. Being
+ *  under such a block is not enough: one that comes into a free column by itself, with no temporary rows, pushes nothing. Returns the
+ *  failure or null. */
+export function landing(T, rows, { without = () => null, canon = null } = {}) {
+  const a = T.after, changes = T.enter.some(([, , h]) => h === 'self') || T.leave.some(([id, , w]) => id !== T.carried && (w === 'narrow' || w === 'press'));
+  const pushed = (id, want) => changes && without() != null && without()[id] <= want;
   for (const id of new Set([...T.steps.flatMap(([ids]) => ids), ...(T.carried != null ? [T.carried] : [])])) {
     if (!(id in a) || !(id in rows)) continue;
     // an undo's carry back is placed by its canonical row (its displayed row is FOLLOW's from there)
@@ -81,20 +84,23 @@ export function runCase(c, make = createModel) {
   const T = merge(near, far);
   const errs = checkDeclaration(base, T); if (errs.length) return { law: 'declaration', errs };
   try { m1.relink(T); } catch (e) { return { law: 'valid', err: e.message }; }
-  // landing: the run without the entries by themselves is made only when needed
+  // landing: the run without the other blocks' changes of columns is made only when needed
   { const self = [...new Set(T.enter.filter(([, , h]) => h === 'self').map(([s]) => s))];
-    let without;
-    const withoutSelf = () => {
-      if (without !== undefined) return without;
-      without = null;
-      const a2 = { ...T.after }; let leave = T.leave;
-      for (const s of self) { if (!(s in base) || !(s in a2)) return null; const k0 = Math.max(base[s].c0, a2[s].c0), k1 = Math.min(base[s].c1, a2[s].c1);
+    const off = [...new Set(T.leave.filter(([id, , w]) => id !== T.carried && (w === 'narrow' || w === 'press')).map(([s]) => s))];
+    let done;
+    const without = () => {
+      if (done !== undefined) return done;
+      done = null;
+      const a2 = { ...T.after }; let leave = T.leave, enter = T.enter;
+      for (const s of off) { if (!(s in base) || !(s in a2)) return null; a2[s] = { ...a2[s], c0: base[s].c0, c1: base[s].c1 };
+        leave = leave.filter(([id]) => id !== s); enter = enter.filter(([id]) => id !== s); }
+      for (const s of self) { if (off.includes(s)) continue; if (!(s in base) || !(s in a2)) return null; const k0 = Math.max(base[s].c0, a2[s].c0), k1 = Math.min(base[s].c1, a2[s].c1);
         if (k0 <= k1) a2[s] = { ...a2[s], c0: k0, c1: k1 };
         else { a2[s] = { ...a2[s], c0: base[s].c0, c1: base[s].c1 }; leave = leave.filter(([id]) => id !== s); } }
-      const m = mk(); try { m.relink({ ...T, after: a2, leave, enter: T.enter.filter(([, , h]) => h !== 'self') }); } catch (e) { return null; }
-      return (without = m.rows());
+      const m = mk(); try { m.relink({ ...T, after: a2, leave, enter: enter.filter(([, , h]) => h !== 'self') }); } catch (e) { return null; }
+      return (done = m.rows());
     };
-    const f = landing(T, m1.rows(), { withoutSelf, canon: m1.rows('canonical') }); if (f) return f; }
+    const f = landing(T, m1.rows(), { without, canon: m1.rows('canonical') }); if (f) return f; }
   // split: the same transition with two steps next to each other that move the same blocks made one step gives the same layout, rows,
   // owners and lends, and the same after a moved block is taken away (rule 1 does not depend on how a move is cut)
   { const merged = []; for (const [ids, d] of T.steps) { const p = merged[merged.length - 1];

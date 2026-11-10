@@ -258,7 +258,9 @@ function moveIn(W, c, ids, d, sw = null, added = { own: new Map(), room: new Map
     const top = q[a], bot = q[z], ust = top.st, ui = top.i >= 0 ? top.i - 1 : ust.parts.length - 1;
     const [lst, li] = bot.i >= 0 ? [bot.st, bot.i + 1] : [lowerOf(W, bot.id, c), 0];
     const slack = W.B.get(top.id).y - spans(W, ust)[ui][1];
-    runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack === 0, slack });
+    // a gap that reaches past the row the step starts from (a departure of rule 2 made a temporary height above push the block through the
+    // rows it kept) has no slack: the step moves the block by its rows from where the gap holds it, the push staying on the screen (O-22)
+    runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack <= 0, slack: Math.max(0, slack) });
     a = z;
   }
   const gap51 = on(W.rules, 'GAP.5.1'), gap8 = on(W.rules, 'GAP.8');
@@ -419,9 +421,12 @@ function departAll(W, out, ys, swap) {
  *  and M, W with rule 5 made, where the blocks that come in by themselves are measured, each at its reference. Then rule 5 and FOLLOW,
  *  whose rows are the result. @param {Transition} T @param {Rules} rules @returns {Relinked} */
 export function relink(T, rules) {
-  const errors = checkTransition(T);
-  if (errors.length) return { ok: false, why: 'failed', errors };
-  let layout; try { layout = relinkWork(T, rules); } catch (e) { return { ok: false, why: 'failed', errors: [e.message] }; }
+  let layout;
+  try {
+    const errors = checkTransition(T);
+    if (errors.length) return { ok: false, why: 'failed', errors };
+    layout = relinkWork(T, rules);
+  } catch (e) { return { ok: false, why: 'failed', errors: [e.message] }; }
   const errs = check(layout);
   return errs.length ? { ok: false, why: 'failed', errors: errs } : { ok: true, layout };
 }

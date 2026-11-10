@@ -50,7 +50,9 @@ function history(seed) {
     if (kind === 'transition') {   // a transition as SETTLE would declare it, drawn on the model's layout; an undrawable one is no event
       const rowsWithout = (k) => { const s0 = m.save(); m.remove(k); const rows = m.rows(); m.load(s0); return rows; };
       const a = action(r, m.frames(), { off: 0, W, rowsWith: (h) => m.rowsWith(h), rowsWithout, kinds: ['carry', 'sideways', 'press', 'swap', 'swap', 'width', 'compose', 'height', 'back', 'restore'] });
-      if (!a || checkDeclaration(m.frames(), a.T).length) continue;
+      if (!a) continue;
+      const errs = checkDeclaration(m.frames(), a.T);   // the generator's declaration must explain its geometry: a fault of it fails
+      if (errs.length) return { seed, step, kind, generator: errs[0], T: a.T };
       declared++; op = (q) => q.relink(a.T);
     }
     let em = null, ee = null;
