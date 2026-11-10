@@ -326,6 +326,19 @@ export function transitionCases(make = createModel) {
       T(m, { Y: { c0: 1, c1: 2, y: 5 } }, { steps: [[['Y'], 2]], carried: 'Y', enter: [['Y', 1, 'put']] }),
       (m) => { const r = [m.rows(), m.stack('N', 1)]; m.show('A', 0); m.show('S', 0); m.remove('X'); return [...r, m.rows()]; },
       [{ A: 0, N: 15, S: 0, X: 13, Y: 5 }, 'A | A2 [Y:A1] A4+X3 [X:A2] · |', { A: 0, N: 12, S: 0, Y: 5 }]); }
+  // the generator's histories (GEN_VERSION 9, seed 2003655, found on step 1b's second part, the model and the engine alike): a3 widened
+  // into columns 1 and 4 and then swapped down under a4; a4, three of its rows temporary, carried one column left and down 12, pushing a3
+  // to 31 on the screen, where a1's gap in column 1 holds a3 at 30 canonically. In column 2 a4 comes in over a3: the two rows that would
+  // keep a3 at 30 in that column too would push it, under a4's temporary rows, to 33, past its target; a block put by hand keeps under it
+  // no more than holds a block SETTLE moved at its target on the screen, so a3 lands at 31, and at 30 when the temporary rows end
+  { const blocks = [blk('a1', 0, 2, 0, 3), blk('a3', 2, 3, 4, 2), blk('a4', 3, 5, 13, 3)], f = (c0, c1, y, h, e) => ({ c0, c1, y, h, e });
+    const history = [{ T: { after: { a1: f(0, 2, 0, 3, 1), a4: f(3, 5, 14, 3, 3), a3: f(1, 4, 5, 2, 0) }, steps: [], leave: [], enter: [['a3', 1, 'self'], ['a3', 4, 'self']], pass: [], carried: null } },
+      { T: { after: { a1: f(0, 2, 0, 3, 1), a4: f(3, 5, 13, 3, 3), a3: f(1, 4, 19, 2, 0) }, steps: [[['a3'], 7], [['a3', 'a4'], 1], [['a4'], -2], [['a3'], 6]], leave: [], enter: [], pass: [['a3', 3], ['a3', 4]], carried: 'a3', swap: ['a3', 'a4'] } }];
+    const m = build({}, blocks, [], [['a1', 1], ['a4', 3]], history, make);
+    run('a block put by hand over a block it pushes keeps under it no more than holds that block at its target on the screen', m,
+      { after: { a1: f(0, 2, 0, 3, 1), a4: f(2, 4, 25, 3, 3), a3: f(1, 4, 31, 2, 0) }, steps: [[['a4', 'a3'], 12]], leave: [['a4', 5, 'narrow']], enter: [['a4', 2, 'put']], pass: [], carried: 'a4' },
+      (m) => { const r = [m.rows(), m.rows('canonical'), m.stack('a3', 2)]; m.show('a4', 0); m.show('a1', 0); return [...r, m.rows()]; },
+      [{ a1: 0, a3: 31, a4: 25 }, { a1: 0, a3: 30, a4: 25 }, 'a1 | a121 [a4:a13] · |', { a1: 0, a3: 30, a4: 25 }]); }
   return out;
 }
 

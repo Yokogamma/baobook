@@ -144,7 +144,7 @@ function slot(W, x, c, yc) {
 // that keep the block under it at its canonical row, so that no temporary push of another block is written (§2.1), and the rest of the
 // seg goes. resident: a block of a swap that was an anchor in this column comes back as one (G11): it cuts the stack, the rows above it and
 // under it keeping their owners
-function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false) {
+function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null) {
   const shownH = (b) => b.h + b.e, Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
   const inChain = new Set(seq(W, c).map((el) => el.id));   // the neighbours are those already in the column's chain (rule 3)
   const others = [...W.B.values()].filter((b) => b.id !== x.id && inChain.has(b.id))
@@ -160,7 +160,13 @@ function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, res
   let st = W.S.get(key(below.id, c)), i;
   if (st) i = st.parts.length - 1; else { const f = seq(W, c).find((el) => el.id === below.id); st = f.st; i = f.i - 1; }
   let [before, entry, after] = place(st.parts[i], Math.max(0, Y(x) - spans(W, st, ys ? 'canonical' : 'shown', ys)[i][0]), x);
-  if (canon != null) after = slice(after, rlen(after) - Math.min(rlen(after), Math.max(0, yc.get(below.id) - (canon + x.h))));
+  if (canon != null) {
+    // and no more than keep it at its target on the screen when SETTLE moved it: the put block's own temporary rows push it there, and the
+    // rows that would keep its canonical row in this column too would push it past it (its canonical row is then another column's)
+    let keep = Math.max(0, yc.get(below.id) - (canon + x.h)); const t = targetOf ? targetOf(below.id) : null;
+    if (t != null) keep = Math.min(keep, Math.max(0, t - (x.y + shownH(x))));
+    after = slice(after, rlen(after) - Math.min(rlen(after), keep));
+  }
   if (resident) { W.S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before] }); st.u = x.id; st.parts = [after, ...st.parts.slice(i + 1)]; return; }
   if (!on(W.rules, 'GAP.5.3')) {   // GAP.5.3 off: it cuts the stack, an anchor over the rows above it, the rows under it its own, no lend
     W.S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), remap(before, (o) => (o === x.id ? heirOf(st) : o))] });
@@ -468,7 +474,7 @@ function relinkWork(T, rules) {
     const x = W.B.get(id);
     let canon = cols(x).some((c) => seq(W, c).some((el) => el.id === id)) ? yc.get(id) : 0;
     for (const c of cs) canon = Math.max(canon, slot(W, x, c, yc));
-    for (const c of cs) enter(W, x, c, null, false, canon, yc, res(c));
+    for (const c of cs) enter(W, x, c, null, false, canon, yc, res(c), (k) => (fits.has(k) && W.B.has(k) ? fits.get(k) : null));
   };
   // R, the reference: every block keeps the columns of base, the carried block those it keeps (an undo's carry back none); a declared passer
   // leaves every column of base where its order changes and comes back there at its displayed target; the heights of after, cap, rule 1,

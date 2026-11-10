@@ -123,7 +123,7 @@ export function createModel(opts = {}) {
   // resident: a block of a swap that was an anchor in this column comes back as one (the owner, 2026-11-10): it cuts the stack, the rows
   // above it and under it keeping their owners, so that taking it away later closes its place as in a document (G2) and every block keeps
   // its own gaps (G4)
-  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
+  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
     const Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
     const inChain = new Set(seq(c).map((el) => el.id));   // the neighbours are those already in the column's chain (rule 3), not every block over it
     const others = [...B.values()].filter((b) => b.id !== x.id && inChain.has(b.id)).sort((a, b) => (byCanon ? Y(a) - Y(b) : a.y - b.y) || (a.id < b.id ? -1 : 1));
@@ -139,7 +139,13 @@ export function createModel(opts = {}) {
     if (st) i = st.parts.length - 1; else { const f = seq(c).find((el) => el.id === below.id); st = f.st; i = f.i - 1; }
     const bC = canon != null ? yc.get(below.id) : null;
     let [before, entry, after] = place(st.parts[i], Math.max(0, Y(x) - spans(st, ys ? 'canonical' : 'shown', ys)[i][0]), x);
-    if (canon != null) after = after.slice(len(after) - Math.min(len(after), Math.max(0, bC - (canon + x.h))));
+    if (canon != null) {
+      // and no more than keep it at its target on the screen when SETTLE moved it: the put block's own temporary rows push it there, and
+      // the rows that would keep its canonical row in this column too would push it past it (its canonical row is then another column's)
+      let keep = Math.max(0, bC - (canon + x.h)); const t = targetOf ? targetOf(below.id) : null;
+      if (t != null) keep = Math.min(keep, Math.max(0, t - (x.y + shownH(x))));
+      after = after.slice(len(after) - Math.min(len(after), keep));
+    }
     if (resident) { S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before] }); st.u = x.id; st.parts = [after, ...st.parts.slice(i + 1)]; return; }
     if (!O.gap53) {   // GAP.5.3 off: it cuts the stack, an anchor over the rows above it, the rows under it its own, no lend (lesson 17)
       S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before.map((o) => (o === x.id ? heirOf(st) : o))] });
@@ -510,7 +516,8 @@ export function createModel(opts = {}) {
         const x = B.get(id), inChain = (c) => seq(c).some((el) => el.id === id);
         let canon = cols(x).some(inChain) ? yc.get(id) : 0;
         for (const c of cs) canon = Math.max(canon, slot(x, c, yc));
-        for (const c of cs) enter(x, c, null, false, canon, yc, res(c));
+        const targetOf = (k) => (k in fits && B.has(k) ? fits[k] - padOf(B.get(k)) : null);
+        for (const c of cs) enter(x, c, null, false, canon, yc, res(c), targetOf);
       };
       const atTargets = () => { for (const b of B.values()) if (tg.has(b.id)) b.y = tg.get(b.id).y; };
       // R, the reference: every block keeps the columns of base, an undo's carry back out of all of them; a declared passer leaves every
