@@ -97,6 +97,47 @@ export function transitionCases() {
       T(m, { a0: { y: 8 }, a1: { y: 13 }, a2: { y: 10 }, a3: { c0: 1 } }, { steps: [[['a1'], -4], [['a1', 'a0'], -3], [['a1', 'a0', 'a2'], -1]], carried: 'a1', enter: [['a3', 1, 'self']] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('a0', 0); m.show('a3', 0); return [...r, m.rows()]; },
       [{ a0: 8, a1: 14, a2: 11, a3: 4 }, { a0: 8, a1: 13, a2: 10, a3: 4 }, { a0: 8, a1: 13, a2: 10, a3: 4 }]); }
+  // the internal review of 62433e9 (Fable): a pass frees nothing, a step's slack is measured at the rows the steps give, a block put at its
+  // row writes no temporary push of another block
+  { const m = createModel().open([blk('N', 0, 0, 0), blk('B', 0, 0, 8)]); m.insert(blk('X', 0, 0, 3)); m.height('X', 3);
+    // X stands in N's gap with a lend of one row and grew to three, pushing B to 10; swapped up with N, its place stays as rows, its body
+    run('a standing carried block that grew passes its neighbour: its place stays, its whole body, and the block under it does not move', m,
+      T(m, { X: { y: 0 }, N: { y: 3 } }, { steps: [[['X'], -2], [['X'], -1], [['N'], 3]], carried: 'X', swap: ['X', 'N'], pass: [['X', 0]] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ B: 10, N: 3, X: 0 }, { B: 10, N: 3, X: 0 }]); }
+  { const steps = [[[['X'], -2], [['X'], -4], [['N'], 1]], [[['X'], -6], [['N'], 1]]];
+    for (const st of steps) {
+      const m = createModel().open([blk('N', 1, 1, 0), blk('X', 0, 1, 3), blk('D', 0, 0, 6)]); m.height('N', 4);
+      // X, wider than N and held at 6 by N in column 1, swapped up; out of column 1 after its first step, it stands between the steps at the
+      // row they gave it, so its slack in column 0 is the same however the move is cut, and D, which nothing moves, stays at 9
+      run(`a carried block that passed out of one of its columns keeps, between its steps, the row they give it: ${st.length} steps, D stays`, m,
+        T(m, { X: { y: 0 }, N: { y: 1 } }, { steps: st, carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+        (m) => [m.rows(), m.rows('canonical')], [{ D: 9, N: 1, X: 0 }, { D: 9, N: 1, X: 0 }]);
+    } }
+  { const m = createModel({ gap52: false }).open([blk('N', 0, 0, 0), blk('X', 0, 0, 3), blk('A', 0, 1, 5)]); m.insert(blk('B', 0, 0, 4));
+    // GAP.5.2 off: X passes N while A, the anchor under X's gap, is narrowed off column 0 in the same RELINK; the pass is made after A's
+    // departure, so A's stack losing its rows does not take what the pass keeps: B stays at 4, as with the narrowing first
+    run('GAP.5.2 off: a pass and the anchor under it leaving in one RELINK keep what the pass keeps', m,
+      T(m, { X: { y: 0 }, N: { y: 1 }, A: { c0: 1 } }, { steps: [[['X'], -2], [['X'], -1], [['N'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 0]], leave: [['A', 0, 'narrow']] }),
+      (m) => m.rows(), { A: 5, B: 4, N: 1, X: 0 }); }
+  { const m = createModel({ gap8: false }).open([blk('a1', 5, 5, 5), blk('a3', 5, 6, 16, 3), blk('a4', 6, 7, 11, 2)]); m.show('a1', 3); m.show('a4', 3);
+    // seed 503898: a4 (three temporary rows) carried down and one column left, pushing a3; in column 5 it comes in under a1's temporary
+    // rows, while column 6 holds it canonically at 16: the rows under it there keep a3 at its canonical row, so a3 lands where SETTLE put it
+    run('a block put under another block\'s temporary rows, held by its other column: the block it pushed lands where SETTLE put it', m,
+      T(m, { a4: { c0: 5, c1: 6, y: 16 }, a3: { y: 21 } }, { steps: [[['a4'], 3], [['a4', 'a3'], 2]], carried: 'a4', leave: [['a4', 7, 'away']], enter: [['a4', 5, 'put']] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ a1: 5, a3: 21, a4: 16 }, { a1: 5, a3: 18, a4: 16 }]); }
+  { const m = createModel().open([blk('A', 0, 0, 0), blk('X', 1, 2, 0), blk('B', 0, 1, 8)]); m.show('A', 2); m.show('X', 2);
+    // X carried into column 0 under A's temporary rows, column 1 holding it at 5: B, which nothing moves, keeps its canonical row 8 and is
+    // pushed on the screen by X's temporary rows only, as before
+    run('a block put under another block\'s temporary rows writes no push of them under it: B keeps its canonical row', m,
+      T(m, { X: { c0: 0, c1: 1, y: 5 } }, { steps: [[['X'], 5]], carried: 'X', leave: [['X', 2, 'away']], enter: [['X', 0, 'put']] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ A: 0, B: 10, X: 5 }, { A: 0, B: 8, X: 5 }]); }
+  { const m = createModel().open([blk('N', 1, 2, 0, 2), blk('X', 1, 1, 5), blk('E', 2, 2, 8)]); m.show('X', 1);
+    // going up with a wide N (proposed, 2026-11-10): in column 2, which X does not come into, both gaps round N change by X's canonical
+    // height, so E keeps its canonical row 8, is pushed to 9 on the screen while X's temporary row lasts, and is back at 8 when it ends
+    run('O-21 going up, a wide neighbour: a block under it in a column of its own keeps its canonical row', m,
+      T(m, { X: { y: 0 }, N: { y: 2 } }, { steps: [[['X'], -3], [['X'], -2], [['N'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+      (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
+      [{ E: 9, N: 2, X: 0 }, { E: 8, N: 1, X: 0 }, { E: 8, N: 1, X: 0 }]); }
   // O-21 (decided 2026-11-09): a swap's neighbour moves by the carried block's height on the screen, its temporary rows included, and
   // lands exactly where the swap put it; that displacement is structural and writes none of the carried block's temporary rows, so when
   // they end the neighbour follows the carried block
@@ -206,14 +247,14 @@ export function landingCases() {
   { const T = { after: { N: { c0: 1, c1: 2, y: 6, h: 1, e: 0 }, X: { c0: 1, c1: 2, y: 3, h: 1, e: 2 } }, steps: [[['X'], -1], [['X'], -1], [['N'], 3]], carried: 'X', enter: [['S', 2, 'self']] };
     const wrong = { N: 7, X: 3 };
     out.push(['a block a row lower than its target under a block that came in by itself and pushes nothing fails the landing law',
-      landing(T, wrong, { withoutSelf: () => wrong, unshownSelf: () => wrong }), true]); }
+      landing(T, wrong, { withoutSelf: () => wrong }), true]); }
   // the same case on the model as it is: the neighbour lands where the swap put it, and the law passes
   { const blocks = [blk('U', 1, 1, 0), blk('B', 1, 2, 7), blk('N', 1, 2, 2), blk('X', 1, 2, 4), blk('S', 3, 3, 0)], ins = ['N', 'X'], temps = [['U', 1], ['X', 2]];
     const a = frames(build({}, blocks, ins, temps)); a.X = { ...a.X, y: 3 }; a.N = { ...a.N, y: 6 }; a.S = { ...a.S, c0: 2 };
     const near = { after: a, steps: [[['X'], -1], [['X'], -1], [['N'], 3]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1], ['X', 2]], leave: [], enter: [['S', 2, 'self']] };
     out.push(['the same swap with S widened into column 2 on the model: every law holds', runCase({ opts: {}, blocks, ins, temps, near, far: null }), false]); }
-  // seed 11225: a block that came in by itself pushes, by its temporary row, a block through another: excused, since with its temporary
-  // rows ended the moved blocks stand where SETTLE put them
+  // seed 11225: a block that came in by itself pushes, by its temporary row, a block through another: excused, since without that entry
+  // the moved blocks stand where SETTLE put them
   { const blocks = [blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)], temps = [['a0', 2], ['a3', 1]], opts = { gap8: false };
     const a = frames(build(opts, blocks, [], temps)); a.a0 = { ...a.a0, y: 8 }; a.a1 = { ...a.a1, y: 13 }; a.a2 = { ...a.a2, y: 10 }; a.a3 = { ...a.a3, c0: 1 };
     const near = { after: a, steps: [[['a1'], -4], [['a1', 'a0'], -3], [['a1', 'a0', 'a2'], -1]], carried: 'a1', leave: [], enter: [['a3', 1, 'self']], pass: [] };

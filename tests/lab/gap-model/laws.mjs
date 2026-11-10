@@ -7,7 +7,9 @@
 //   3. after-effects: from the result, deleting any block, narrowing any block by a column and ending every temporary height keep the
 //      invariants;
 //   4. landing: the blocks the steps move and the carried block stand where SETTLE put them, lower only where a block that came in by
-//      itself pushes them on the screen, directly or through the blocks it pushes, shown by the same transition without that entry.
+//      itself pushes them on the screen, directly or through the blocks it pushes, shown by the same transition without that entry;
+//   5. untouched: with no temporary rows, heights, deletions, departures but passes, or entries by themselves in a part, the blocks of
+//      that part no step moves keep their rows in both measures.
 // The states have standing blocks: some blocks are inserted after the others are opened. A failure is shrunk (fewer blocks, fewer inserted
 // ones, fewer temporary heights, the far transition dropped), keeping the declaration valid and the failure, and returned whole: the
 // generator's version, the switches, the blocks, the inserted ones, the temporary heights and the declaration.
@@ -26,13 +28,13 @@ export function projection(m, ids) {
 }
 
 /** Landing: every block the steps move and the carried block stand where SETTLE put them (`rows`, the result on the screen); lower only
- *  where a block that came in by itself pushes it on the screen (rule 5 never cuts a stack). That is shown, not assumed: either the same
- *  transition with those blocks keeping only the columns they kept (`withoutSelf()`, no entry by itself) lands it where SETTLE put it, or
- *  higher, or the result with their temporary rows ended (`unshownSelf()`) does. Being under such a block is not enough: one that comes
- *  into a free column by itself, with no temporary rows, pushes nothing. Returns the failure or null. */
-export function landing(T, rows, { withoutSelf = () => null, unshownSelf = () => rows } = {}) {
+ *  where a block that came in by itself pushes it on the screen (rule 5 never cuts a stack). That is shown, not assumed: the same
+ *  transition without those entries (`withoutSelf()`: such a block keeps only the columns it kept, or, keeping none, stays in the columns
+ *  it had) lands it where SETTLE put it, or higher. Being under such a block is not enough: one that comes into a free column by itself,
+ *  with no temporary rows, pushes nothing. Returns the failure or null. */
+export function landing(T, rows, { withoutSelf = () => null } = {}) {
   const a = T.after, self = T.enter.some(([, , h]) => h === 'self');
-  const pushed = (id, want) => self && ((withoutSelf() != null && withoutSelf()[id] <= want) || unshownSelf()[id] <= want);
+  const pushed = (id, want) => self && withoutSelf() != null && withoutSelf()[id] <= want;
   for (const id of new Set([...T.steps.flatMap(([ids]) => ids), ...(T.carried != null ? [T.carried] : [])])) {
     if (!(id in a) || !(id in rows)) continue;
     const want = a[id].y, got = rows[id];
@@ -60,23 +62,32 @@ export function runCase(c) {
     : near;
   const errs = checkDeclaration(base, T); if (errs.length) return { law: 'declaration', errs };
   try { m1.relink(T); } catch (e) { return { law: 'valid', err: e.message }; }
-  // landing: what makes the run without the entries by themselves, and the result with their temporary rows ended, are asked only when needed
+  // landing: the run without the entries by themselves is made only when needed
   { const self = [...new Set(T.enter.filter(([, , h]) => h === 'self').map(([s]) => s))];
-    let without, unshown;
+    let without;
     const withoutSelf = () => {
       if (without !== undefined) return without;
       without = null;
-      const a2 = { ...T.after };
+      const a2 = { ...T.after }; let leave = T.leave;
       for (const s of self) { if (!(s in base) || !(s in a2)) return null; const k0 = Math.max(base[s].c0, a2[s].c0), k1 = Math.min(base[s].c1, a2[s].c1);
-        if (k0 > k1) return null; a2[s] = { ...a2[s], c0: k0, c1: k1 }; }
-      const m = mk(); try { m.relink({ ...T, after: a2, enter: T.enter.filter(([, , h]) => h !== 'self') }); } catch (e) { return null; }
+        if (k0 <= k1) a2[s] = { ...a2[s], c0: k0, c1: k1 };
+        else { a2[s] = { ...a2[s], c0: base[s].c0, c1: base[s].c1 }; leave = leave.filter(([id]) => id !== s); } }
+      const m = mk(); try { m.relink({ ...T, after: a2, leave, enter: T.enter.filter(([, , h]) => h !== 'self') }); } catch (e) { return null; }
       return (without = m.rows());
     };
-    const unshownSelf = () => {
-      if (unshown !== undefined) return unshown;
-      const sv = m1.save(); for (const s of self) if (m1.B.has(s)) m1.show(s, 0); unshown = m1.rows(); m1.load(sv); return unshown;
-    };
-    const f = landing(T, m1.rows(), { withoutSelf, unshownSelf }); if (f) return f; }
+    const f = landing(T, m1.rows(), { withoutSelf }); if (f) return f; }
+  // untouched: with no temporary rows, no change of height, nothing taken away, no block leaving a column but by a pass and none coming in
+  // by itself, in the blocks of a part, every block of that part no step moves keeps its row in both measures (a pass frees nothing, a move
+  // changes only the gaps round what it moves)
+  { const yc = m1.rows('canonical'), y = m1.rows(), moved = new Set([...T.steps.flatMap(([ids]) => ids), ...(T.carried != null ? [T.carried] : [])]);
+    const bcanon = mk().rows('canonical');
+    for (const p of ['a', 'z']) {
+      const ids = Object.keys(base).filter((id) => id[0] === p);
+      const quiet = ids.every((id) => id in T.after && !base[id].e && !(T.after[id].e || 0) && base[id].h === T.after[id].h)
+        && !T.leave.some(([id]) => id[0] === p) && !T.enter.some(([id, , h]) => id[0] === p && h === 'self');
+      if (!quiet) continue;
+      for (const id of ids) if (!moved.has(id) && (y[id] !== base[id].y || yc[id] !== bcanon[id])) return { law: 'untouched', id, was: [base[id].y, bcanon[id]], got: [y[id], yc[id]] };
+    } }
   if (far) {
     // the same near transition with the far blocks left as they were
     const m2 = mk(), alone = { ...near, after: { ...Object.fromEntries(Object.entries(base).filter(([id]) => id[0] === 'z')), ...near.after } };
