@@ -5,11 +5,12 @@
 // transition passes transition.js `checkTransition` and gap.js `relink` takes it. The steps the primitives record call by call (Moved, for
 // the dev look) are not that input: phase 1c's step carries the moved block alone onto the neighbour that a later call pushes, and the check
 // refuses them in order.
-import { down, up, reshape, transitionSteps } from '../public/layout/primitives.js';
+import { down, up, aside, reshape, transitionSteps } from '../public/layout/primitives.js';
 import { checkTransition } from '../public/layout/transition.js';
 import { relink } from '../public/layout/gap.js';
 import { DEFAULT } from '../public/layout/rules.js';
-import { set, text, chars, ctxOf, sheet, over, rows, steps, eq, tally } from './lib/primcase.mjs';
+import { set, text, chars, ctxOf, sheet, over, place, rows, steps, eq, tally } from './lib/primcase.mjs';
+import { readingOrder } from '../public/layout/geometry.js';
 
 const t = tally(), ok = t.ok, ctx = ctxOf();
 /** The transition of a vertical carry of X (it keeps its columns): base, the layout after the phases, the cut steps and start rows. */
@@ -60,6 +61,39 @@ function naive(base, w) { const d = w.L.boxes.get('X').y - base.boxes.get('X').y
   ok('3a checkTransition and RELINK take it, C\'s narrowing declared', eq(checkTransition(tr), []) && relink(tr, DEFAULT).ok, checkTransition(tr));
   const noStart = checkTransition({ ...tr, start: undefined });
   ok('3b without the start rows the check refuses it: the change of height reaches D', noStart.some((e) => /reaches D/.test(e)), noStart);
+}
+
+/* ── 4. the start rows are GAP's (the independent review of 88f7ba3) ── */
+{
+  // A, an elastic text of 30 characters on 10 cells (one row), and B under it in A's first column; a new block X at A's left presses A
+  // right: A narrows to 9 cells and takes two rows, and leaves column 1, so B, which only that column held, stays at row 2 on the screen
+  const c = ctxOf({ A: { text: chars(30) } }), base = sheet(11, [text('A', 0, 0, 11), set('B', 0, 2, 2)]);
+  const boxes = new Map([...base.boxes, ['X', set('X', 0, 0, 2)]]), order = readingOrder(boxes.values());
+  const w = over({ ...base, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }, c, 'X');
+  aside(w, 'A', 'X', 'right');
+  const tr = { ...T(base, w), leave: [['A', 1, 'press']], enter: [['X', 1, 'put']] };
+  ok('4 A pressed right (col 1, w 10, two rows); B stays at row 2', eq(w.L.boxes.get('A').col, 1) && w.L.boxes.get('A').h === 2 && rows(w).B === 2, rows(w));
+  ok('4a B starts where GAP counts it from, FOLLOW over base\'s stacks with A\'s new height (row 3), and no step moves it', tr.start.B === 3 && !tr.steps.some(([ids]) => ids.includes('B')), [tr.start, tr.steps]);
+  const r = relink(tr, DEFAULT);
+  ok('4b checkTransition and RELINK take it, and B stays at row 2 (GAP.9: A\'s body and gap stay as rows in column 1)', eq(checkTransition(tr), []) && r.ok && r.layout.boxes.get('B').y === 2, [checkTransition(tr), r.ok ? r.layout.boxes.get('B').y : r]);
+}
+
+/* ── 5. a swap keeps its structural steps (the independent review of 88f7ba3) ── */
+{
+  // X at row 0 carried down; N at row 4 pushed to 8, X pinned against it at 7; past N's middle they swap: N at 7, X right under it at 8
+  const base = sheet(20, [set('X', 0, 0, 5), set('N', 0, 4, 5)]), w = over(base, ctx, 'X', { y: 8 });
+  place(w, 'N', { y: 7 });
+  const sw = transitionSteps(w, base, { swap: ['X', 'N'] });
+  const tr = { base, after: w.L, steps: sw.steps, start: sw.start, carried: 'X', swap: ['X', 'N'], leave: [], enter: [], pass: [1, 2, 3, 4].map((col) => ['X', col]) };
+  ok('5 the moves up to the pin, then the neighbour alone by the carried block\'s height, then the carried block: X +3, X and N +4, N −1, X +1', eq(sw.steps.map(([ids, r]) => [ids.sort(), r]), [[['X'], 3], [['N', 'X'], 4], [['N'], -1], [['X'], 1]]), sw.steps);
+  ok('5a checkTransition and RELINK take it', eq(checkTransition(tr), []) && relink(tr, DEFAULT).ok, checkTransition(tr));
+  const flat = transitionSteps(w, base);
+  ok('5b cut from the net moves alone, the swap\'s step is lost and the check refuses it', checkTransition({ ...tr, steps: flat.steps }).some((e) => /not at the rows the swap gives/.test(e)), checkTransition({ ...tr, steps: flat.steps }));
+  const up = sheet(20, [set('N', 0, 0, 5), set('X', 0, 4, 5, 2)]), v = over(up, ctx, 'X', { y: 0 });
+  place(v, 'N', { y: 2 });
+  const su = transitionSteps(v, up, { swap: ['X', 'N'] });
+  const tu = { base: up, after: v.L, steps: su.steps, start: su.start, carried: 'X', swap: ['X', 'N'], leave: [], enter: [], pass: [1, 2, 3, 4].map((col) => ['X', col]) };
+  ok('5c going up: X (two rows) takes N\'s top row, N right under it; the neighbour\'s step is the carried block\'s height, +2', su.steps[su.steps.length - 2][1] === 2 && eq(checkTransition(tu), []) && relink(tu, DEFAULT).ok, [su.steps, checkTransition(tu)]);
 }
 
 process.exit(t.fails ? 1 : 0);

@@ -377,11 +377,15 @@ export function follow(layout) { return toLayout(work(layout, null), layout); }
  *  a chain, under the element above it there, at most the stack's rows and at most the distance it had in `before`, so a gap P-UP closed
  *  stays closed and a column with slack takes the push into its slack first. An element leads the next one of its chain in a column only
  *  while both still cover that column (a block pressed aside or narrowed off a column pushes nothing there, GAP.9) and the next one still
- *  stands under it on the screen (an earlier phase may have put it beside or over it, for P-SEP to settle); the blocks of `skip`
- *  (the moved block of the change, in no chain until phase 8) neither lead nor follow. Blocks only go down; no stack changes, RELINK's
- *  alone. @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @returns {Layout} */
-export function push(before, after, skip = new Set()) {
-  const W = toWork(after), W0 = toWork(before), H = (b) => b.h + b.e;
+ *  stands under it on the screen (an earlier phase may have put it beside or over it, for P-SEP to settle). A block that left a column
+ *  (narrowed or pressed off it) leads nothing there, but the chain goes on through it: the next element follows the one above it with
+ *  the rows the departure leaves there, as RELINK's rule 2 will (GAP.9: its body, by its canonical height, and every row of the gap
+ *  stay; with GAP.9 off its own rows go with it and an anchor's body leaves none; a standing block leaves its lend either way). The
+ *  blocks of `skip` (the moved block of the change, in no chain until phase 8) neither lead nor follow, and the chain stops at them, its
+ *  held place keeping the blocks under it where they are (DRAG.B1). Blocks only go down; no stack changes, RELINK's alone.
+ *  @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @param {?Rules} [rules] @returns {Layout} */
+export function push(before, after, skip = new Set(), rules = null) {
+  const W = toWork(after), W0 = toWork(before), H = (b) => b.h + b.e, keep9 = !rules || on(rules, 'GAP.9');
   const preds = new Map([...W.B.keys()].map((id) => [id, []])), succs = new Map([...W.B.keys()].map((id) => [id, []]));
   const lead = (p, q, gap, c) => {
     if (p == null || skip.has(p) || skip.has(q) || !W.B.has(p) || !W.B.has(q)) return;
@@ -392,10 +396,17 @@ export function push(before, after, skip = new Set()) {
   };
   const columns = [...new Set([...W.S.keys()].map(colOf))].sort((a, b) => a - b);
   for (const c of columns) {
-    let prev = null, gap = 0;
+    // since the last element that leads here: the rows of the gap, the elements that left the column, and the rows their bodies leave
+    let prev = null, runs = [], gone = new Set(), bodies = 0;
+    const at = (id, lend) => {
+      if (skip.has(id)) { prev = null; runs = []; gone = new Set(); bodies = 0; return; }
+      if (!covers(W.B.get(id), c)) { gone.add(id); bodies += lend != null ? lend : keep9 ? W.B.get(id).h : 0; return; }
+      lead(prev, id, runs.reduce((n, r) => n + (keep9 || !gone.has(r.o) ? r.n : 0), 0) + bodies, c);
+      prev = id; runs = []; gone = new Set(); bodies = 0;
+    };
     for (const l of chain(W, c)) {
-      W.S.get(key(l, c)).parts.forEach((p, i) => { if (!isStand(i)) { gap += rlen(p); return; } lead(prev, p.id, gap, c); prev = p.id; gap = 0; });
-      lead(prev, l, gap, c); prev = l; gap = 0;
+      W.S.get(key(l, c)).parts.forEach((p, i) => { if (!isStand(i)) runs.push(...p); else at(p.id, rlen(p.lend)); });
+      at(l, null);
     }
   }
   const indeg = new Map([...preds].map(([id, ps]) => [id, ps.length])), ready = [...indeg].filter(([, n]) => n === 0).map(([id]) => id), y = new Map();
@@ -469,6 +480,25 @@ export function relink(T, rules) {
   return errs.length ? { ok: false, why: 'failed', errors: errs } : { ok: true, layout };
 }
 
+/** FOLLOW over a working state's stacks with the heights of `tg` (after, in GAP's coordinates): the rows a transition's first step starts
+ *  from, a height a phase changed being no move. */
+function projected(W, tg) {
+  const V = copyWork(W);
+  for (const [id, t] of tg) if (V.B.has(id)) { const b = V.B.get(id); b.h = t.h; b.e = t.e; }
+  followWork(V); return new Map([...V.B.values()].map((b) => [b.id, b.y]));
+}
+/** The rows the first step of a transition starts from (LAYOUT-RULES GAP's inputs), as RELINK checks a transition's `start`: FOLLOW over
+ *  `base`'s stacks, the blocks `after` does not hold taken away first (GAP.6), with `after`'s heights. Box rows by id, for the blocks both
+ *  hold. SETTLE gives these as `start` (LAYOUT-ENGINE-PLAN §5.2), so a block a narrowing pushed on the screen, or did not push because
+ *  the block over it left its column, starts where GAP counts it from. @param {Layout} base @param {Layout} after @param {Rules} rules
+ *  @returns {Map<string, number>} */
+export function startRows(base, after, rules) {
+  const gb = new Map(base.order.map((id) => [id, gapBlock(base.boxes.get(id))]));
+  let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id, rules);
+  const W = work(b0, rules), tg = new Map(after.order.filter((id) => W.B.has(id)).map((id) => [id, gapBlock(after.boxes.get(id))]));
+  return new Map([...projected(W, tg)].map(([id, y]) => [id, y + (isArea(after.boxes.get(id)) ? 1 : 0)]));
+}
+
 function relinkWork(T, rules) {
   const { base, after } = T, steps = T.steps || [], carried = T.carried ?? null, canonical = !!T.canonical;
   const kv = (list) => new Map((list || []).map(([id, c, w]) => [key(id, c), w]));
@@ -485,7 +515,7 @@ function relinkWork(T, rules) {
   const anchoredIn = new Set(W.S.keys());   // the (block, column) where a block is an anchor in base: a passer comes back there as one (G11)
   // the rows the first step starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move; a start
   // the transition gives must be those rows
-  const start = (() => { const V = copyWork(W); for (const [id, t] of tg) if (V.B.has(id)) { const b = V.B.get(id); b.h = t.h; b.e = t.e; } followWork(V); return new Map([...V.B.values()].map((b) => [b.id, b.y])); })();
+  const start = projected(W, tg);
   for (const [id, y] of Object.entries(T.start || {})) if (W.B.has(id) && tg.has(id) && start.get(id) + padOf(id) !== y) throw new Error(`gap: ${id} starts at ${y}, FOLLOW gives ${start.get(id) + padOf(id)}`);
   const fits = new Map(); for (const [list] of steps) for (const id of list) if (tg.has(id)) fits.set(id, tg.get(id).y);
   if (carried != null && !canonical && tg.has(carried)) fits.set(carried, tg.get(carried).y);

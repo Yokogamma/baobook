@@ -12,7 +12,7 @@
 // The switches that choose between these uses (P-SINK, P-UP) are read by settle.js; their off forms are tests/layoutsettle's.
 import { down, sink, sinkAside, sep, sinkTo } from '../public/layout/primitives.js';
 import { push } from '../public/layout/gap.js';
-import { DEFAULT } from '../public/layout/rules.js';
+import { DEFAULT, resolve } from '../public/layout/rules.js';
 import { box, placed, edit, relink, stack } from './lib/gapcase.mjs';
 import { hits } from '../public/layout/geometry.js';
 import { set, text, area, chars, ctxOf, ws, sheet, over, grown, place, rows, places, steps, followed, hitting, eq, tally } from './lib/primcase.mjs';
@@ -81,6 +81,24 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   ok('3i an area follows by its extent, and the block under it follows the area', eq(ys(push(S, mv(S, 'A', { y: 1 }))), { A: 1, B: 5, C: 10 }) && eq(ys(push(S, mv(S, 'B', { y: 6 }))), { A: 0, B: 6, C: 11 }));
   const T = sheet(20, [set('A', 0, 0, 5, 2), area('B', 0, 3, 6, 2)]);
   ok('3j an area whose free row touches the block above it (no rows between) follows it row for row', eq(ys(push(T, mv(T, 'A', { y: 2 }))), { A: 2, B: 5 }));
+}
+
+/* ── 3k. the chain goes on through a block that left the column (the independent review of 88f7ba3) ── */
+{
+  // B, between A and C in column 1, narrowed off it: A sunk by 1 still pushes C, by the rows B's departure leaves there (GAP.9)
+  const w = ws(20, [set('A', 0, 0, 2), set('B', 0, 2, 3), set('C', 0, 4, 2)], ctx);
+  place(w, 'B', { col: 1 }); sinkTo(w, 'A', 1, 'down');
+  ok('3k GAP.9: B\'s body and its gap stay as rows, so C keeps its three rows under A: C to 5', eq(rows(w), { A: 1, B: 2, C: 5 }), rows(w));
+  const off = ws(20, [set('A', 0, 0, 2), set('B', 0, 2, 3), set('C', 0, 4, 2)], ctxOf({}, resolve({ 'GAP.9': false })));
+  place(off, 'B', { col: 1 }); sinkTo(off, 'A', 1, 'down');
+  ok('3l GAP.9 off: B\'s own rows go with it and its body leaves none, so C has one row under A and two of slack: C stays at 4', eq(rows(off), { A: 1, B: 2, C: 4 }), rows(off));
+  // X stands in L's stack in column 1 (and anchors under A in column 2); narrowed to column 2, it leaves its lend in column 1 either way
+  let H = placed([box('A', 1, 2, 0), box('L', 1, 1, 10)]);
+  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 2, 4))), {}, 'X', DEFAULT);
+  for (const rules of [DEFAULT, resolve({ 'GAP.9': false })]) {
+    const s2 = over(H, ctxOf({}, rules)); place(s2, 'X', { col: 1, w: 2 }); sinkTo(s2, 'A', 2, 'down');
+    ok(`3m a standing block narrowed off leaves its lend: L follows A by 2 through it in column 1 (GAP.9 ${rules === DEFAULT ? 'on' : 'off'})`, rows(s2).L === 12, rows(s2));
+  }
 }
 
 /* ── 4. P-SINK ── */
