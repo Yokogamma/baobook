@@ -372,6 +372,44 @@ export function fromPlaces(layout) {
 /** FOLLOW: every row from the stacks (INV-2), y in the layout's measure and yc in the canonical one; no stack changes. @returns {Layout} */
 export function follow(layout) { return toLayout(work(layout, null), layout); }
 
+/** A push with its followers, for SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2): `after` is `before` with some blocks moved
+ *  down or grown; every block they reach is pushed down so that it keeps its gap under them, in the order of the chains: in each column of
+ *  a chain, under the element above it there, at most the stack's rows and at most the distance it had in `before`, so a gap P-UP closed
+ *  stays closed and a column with slack takes the push into its slack first. An element leads the next one of its chain in a column only
+ *  while both still cover that column (a block pressed aside or narrowed off a column pushes nothing there, GAP.9) and the next one still
+ *  stands under it on the screen (an earlier phase may have put it beside or over it, for P-SEP to settle); the blocks of `skip`
+ *  (the moved block of the change, in no chain until phase 8) neither lead nor follow. Blocks only go down; no stack changes, RELINK's
+ *  alone. @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @returns {Layout} */
+export function push(before, after, skip = new Set()) {
+  const W = toWork(after), W0 = toWork(before), H = (b) => b.h + b.e;
+  const preds = new Map([...W.B.keys()].map((id) => [id, []])), succs = new Map([...W.B.keys()].map((id) => [id, []]));
+  const lead = (p, q, gap, c) => {
+    if (p == null || skip.has(p) || skip.has(q) || !W.B.has(p) || !W.B.has(q)) return;
+    const P = W.B.get(p), Q = W.B.get(q); if (!covers(P, c) || !covers(Q, c)) return;
+    const P0 = W0.B.get(p), Q0 = W0.B.get(q), was = P0 && Q0 ? Q0.y - (P0.y + H(P0)) : gap;
+    if (was < 0) return;   // not under it on the screen any more (a phase moved one of them): it does not follow it
+    preds.get(q).push([p, Math.min(gap, was)]); succs.get(p).push(q);
+  };
+  const columns = [...new Set([...W.S.keys()].map(colOf))].sort((a, b) => a - b);
+  for (const c of columns) {
+    let prev = null, gap = 0;
+    for (const l of chain(W, c)) {
+      W.S.get(key(l, c)).parts.forEach((p, i) => { if (!isStand(i)) { gap += rlen(p); return; } lead(prev, p.id, gap, c); prev = p.id; gap = 0; });
+      lead(prev, l, gap, c); prev = l; gap = 0;
+    }
+  }
+  const indeg = new Map([...preds].map(([id, ps]) => [id, ps.length])), ready = [...indeg].filter(([, n]) => n === 0).map(([id]) => id), y = new Map();
+  while (ready.length) {
+    const id = ready.pop(), b = W.B.get(id);
+    y.set(id, preds.get(id).reduce((m, [p, gap]) => Math.max(m, y.get(p) + H(W.B.get(p)) + gap), b.y));
+    for (const s of succs.get(id)) { indeg.set(s, indeg.get(s) - 1); if (indeg.get(s) === 0) ready.push(s); }
+  }
+  if (y.size !== W.B.size) throw new Error('gap: push found a cycle');
+  const boxes = new Map();
+  for (const [id, b] of after.boxes) { const g = W.B.get(id); boxes.set(id, y.get(id) === g.y ? b : { ...b, y: y.get(id) + (isArea(b) ? 1 : 0) }); }
+  return layoutOf(after, boxes);
+}
+
 /** The one writer of a box's height: h its rows in the layout's measure, t those of them that are temporary (h − t its canonical height).
  *  It cuts no lend: G7 is RELINK's, against the heights it ends with (GAP.4). No FOLLOW. @returns {Layout} */
 export function resize(layout, id, h, t = 0) {
