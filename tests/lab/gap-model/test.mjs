@@ -355,11 +355,14 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
 }
 // ---- the final review: a carry that keeps some columns, the switches GAP.5.2 and GAP.5.3, a uniform shift of the columns
 {
-  // a carry one column sideways keeps two columns: in the one it leaves it is carried away (G2, GAP.7), not narrowed off (GAP.9)
+  // a carry one column sideways keeps two columns: the one it leaves it leaves as a narrowing does (the owner, 2026-11-10, M9, refining
+  // the final review's G2 reading), so its rows stay there and L stays when X is deleted. The engine still carries it away from that
+  // column until step 1b's second part: run on it (tests/layoutgap-oracle.mjs) the old expectation holds
+  const ENGINE = !!globalThis.GAP_MODEL_FACTORY;
   const start = () => createModel().open([blk('A', 1, 3, 0), blk('X', 1, 3, 2), blk('L', 1, 3, 6)]);
   const c = start().carryTo('X', 2, 4, 2);
-  eq([c.rows().L, c.stack('L', 1), c.stack('L', 2), c.stack('X', 4)], [6, 'A | A1 |', 'X | X3 |', 'top | _2 |'], 'final.1: X carried one column sideways: its rows leave column 1 with it, L held by columns 2 and 3');
-  eq(c.remove('X').rows().L, 2, 'final.1: X deleted then: L rises to its place (G2)');
+  eq([c.rows().L, c.stack('L', 1), c.stack('L', 2), c.stack('X', 4)], [6, ENGINE ? 'A | A1 |' : 'A | A5 |', 'X | X3 |', 'top | _2 |'], 'final.1: X carried one column sideways: it leaves column 1 as a narrowing does (M9), L held by columns 2 and 3');
+  eq(c.remove('X').rows().L, ENGINE ? 2 : 6, 'final.1: X deleted then: L stays, its rows in column 1 kept (M9, G8)');
   const n = start().width('X', 2, 4);
   eq([n.stack('L', 1), n.remove('X').rows().L], ['A | A5 |', 6], 'final.1: X narrowed off column 1 instead keeps its rows there (GAP.9): L stays when it is deleted');
   // GAP.5.2 off: a block that went gives nothing back

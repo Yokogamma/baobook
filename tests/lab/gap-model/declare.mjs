@@ -125,8 +125,11 @@ export function checkDeclaration(base, T) {
   }
   // the reasons each action may give
   for (const [k, w] of LV) { const id = k.slice(0, k.lastIndexOf('|'));
-    if (w === 'away' && id !== carried) errs.push(`${k}: only the carried block leaves as carried away`);
-    if (id === carried && w !== 'away') errs.push(`${k}: the carried block leaves every column it leaves as carried away`);
+    if (w === 'away' && !(id === carried && canonical)) errs.push(`${k}: only an undo's carry back leaves as carried away`);
+    // the carried block keeps some of its columns in one RELINK and leaves the others as narrowed off (the owner, 2026-11-10, G8); an undo's
+    // carry back leaves every column as carried away
+    if (id === carried && !canonical && w !== 'narrow') errs.push(`${k}: the carried block, keeping some of its columns, leaves the others as narrowed off`);
+    if (id === carried && canonical && w !== 'away') errs.push(`${k}: an undo's carry back leaves every column as carried away`);
     if (w === 'delete') errs.push(`${k}: a deleted block is one after does not hold, with no declaration`);
     if (!['away', 'narrow', 'press', 'delete'].includes(w)) errs.push(`${k}: no such reason to leave, ${w}`); }
   for (const [k, h] of EN) { const id = k.slice(0, k.lastIndexOf('|')), created = !base[id];

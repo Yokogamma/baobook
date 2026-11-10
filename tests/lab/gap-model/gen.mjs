@@ -3,7 +3,7 @@
 // with the neighbour right under the carried block, a width change (narrowed, widened, shifted), a block created or deleted, a height,
 // under temporary heights. Each gives the geometry after it and the declaration of the model's relink(T); declare.mjs checks that the
 // declaration explains the geometry. Text blocks only (areas: next). The generator's version goes with every saved example.
-export const GEN_VERSION = 7;
+export const GEN_VERSION = 8;
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const cols = (b) => { const r = []; for (let c = b.c0; c <= b.c1; c++) r.push(c); return r; };
@@ -118,7 +118,7 @@ export function action(r, base, opts = {}) {
     if (!commonParts(T, base, after, x, d)) return null;
     // a carry inside its columns changes no order (DRAG.B2): a case where the pushes did is the generator's, not SETTLE's
     if (ids.some((id) => after[id] && reorders(id).length)) return null;
-    for (const c of cols(base[x])) if (c < X.c0 || c > X.c1) T.leave.push([x, c, 'away']);
+    for (const c of cols(base[x])) if (c < X.c0 || c > X.c1) T.leave.push([x, c, 'narrow']);   // keeping some columns, as a narrowing (G8)
     for (const c of cols(X)) if (c < base[x].c0 || c > base[x].c1) T.enter.push([x, c, 'put']);
   } else if (kind === 'swap') {
     // the carried block and the next block under or over it in a column they share (LAYOUT-RULES §5.1b, phase 3, DRAG.B4): the carried

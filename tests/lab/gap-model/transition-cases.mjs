@@ -18,8 +18,9 @@ export function transitionCases() {
       T(m, { X: { y: 10 }, Y: { c1: 3 } }, { steps: [[['X'], 9]], carried: 'X', pass: [['X', 1]], enter: [['Y', 3, 'self']] }),
       (m) => [m.rows(), m.stack('Y', 3)], [{ X: 10, Y: 4 }, 'top | _4 |']); }
   { const m = createModel().open([blk('U', 1, 1, 0), blk('A', 1, 1, 3), blk('D', 1, 1, 6)]);
-    run('D moved up past A comes in at its target, in A\'s gap', m, T(m, { D: { y: 1 } }, { steps: [[['D'], -5]], pass: [['D', 1]] }),
-      (m) => [m.rows(), m.stack('A', 1)], [{ A: 3, D: 1, U: 0 }, 'U | · [D:U1] U1 |']); }
+    // D was an anchor in column 1 and comes back as one (the owner, 2026-11-10): A now stands under D's stack
+    run('D moved up past A comes in at its target, in A\'s gap, as the anchor it was', m, T(m, { D: { y: 1 } }, { steps: [[['D'], -5]], pass: [['D', 1]] }),
+      (m) => [m.rows(), m.stack('A', 1)], [{ A: 3, D: 1, U: 0 }, 'D | U1 |']); }
   { const m = createModel().open([blk('X', 1, 1, 1), blk('Y', 1, 1, 4)]);
     run('X moved down past Y while widening into column 2: its own reference, row 10', m,
       T(m, { X: { y: 10, c1: 2 } }, { steps: [[['X'], 9]], pass: [['X', 1]], enter: [['X', 2, 'self']] }),
@@ -58,7 +59,22 @@ export function transitionCases() {
   { const m = createModel().open([blk('U', 1, 1, 0), blk('X', 1, 1, 2), blk('N', 1, 1, 5), blk('B', 1, 1, 9)]);
     run('blocks that swap keep their own rows (GAP.2, G4): X carried down and swapped with N, N\'s three rows under it go with N when it is deleted', m,
       T(m, { N: { y: 4 }, X: { y: 5 } }, { steps: [[['X'], 2], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
-      (m) => { const r = m.rows(), st = m.stack('B', 1); m.remove('N'); return [r, st, m.rows()]; }, [{ B: 9, N: 4, U: 0, X: 5 }, 'N | · [X:U1] N3 |', { B: 5, U: 0, X: 4 }]); }
+      (m) => { const r = m.rows(), st = m.stack('B', 1); m.remove('N'); return [r, st, m.rows()]; }, [{ B: 9, N: 4, U: 0, X: 5 }, 'X | N3 |', { B: 5, U: 0, X: 4 }]); }
+  // a carry sideways that keeps some columns leaves the others as a narrowing does (the owner, 2026-11-10, G8)
+  { const m = createModel().open([blk('A', 1, 3, 0, 2), blk('B', 1, 1, 4)]);
+    run('a wide block carried one column right: the block under it in the column it left stays, as under a narrowing', m,
+      T(m, { A: { c0: 2, c1: 4 } }, { carried: 'A', leave: [['A', 1, 'narrow']], enter: [['A', 4, 'put']] }),
+      (m) => m.rows(), { A: 0, B: 4 }); }
+  // a block of a swap keeps its status (the owner, 2026-11-10): an anchor comes back as an anchor, so taking it away closes its place as
+  // in a document (G2) and leaves each block its own gaps (G4)
+  { const m = createModel().open([blk('A', 1, 1, 0), blk('B', 1, 1, 1), blk('C', 1, 1, 2)]);
+    run('A, B and C touching, A swapped under B and deleted: C closes up to row 1, as with no swap', m,
+      T(m, { A: { y: 1 }, B: { y: 0 } }, { steps: [[['B'], -1], [['A'], 1]], carried: 'A', swap: ['A', 'B'], pass: [['A', 1]] }),
+      (m) => { const r = m.rows(); m.remove('A'); return [r, m.rows()]; }, [{ A: 1, B: 0, C: 2 }, { B: 0, C: 1 }]); }
+  { const m = createModel().open([blk('U', 1, 1, 0), blk('X', 1, 1, 2), blk('N', 1, 1, 5), blk('B', 1, 1, 9)]);
+    run('X swapped under N and deleted: N keeps its own three rows over B', m,
+      T(m, { N: { y: 4 }, X: { y: 5 } }, { steps: [[['X'], 2], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+      (m) => { m.remove('X'); return m.rows(); }, { B: 8, N: 4, U: 0 }); }
   { const m = createModel().open([blk('b3', 1, 3, 0), blk('b1', 3, 3, 4)]);
     run('a plain carry of b3 from row 0 to 7 past b1: b1 keeps its side and is pushed down to row 8 (DRAG.B2, P-DOWN), b3 alone over the gap and then with b1', m,
       T(m, { b3: { y: 7 }, b1: { y: 8 } }, { steps: [[['b3'], 3], [['b3', 'b1'], 4]], carried: 'b3' }),
@@ -123,13 +139,13 @@ export function transitionCases() {
     // seed 503898: a4 (three temporary rows) carried down and one column left, pushing a3; in column 5 it comes in under a1's temporary
     // rows, while column 6 holds it canonically at 16: the rows under it there keep a3 at its canonical row, so a3 lands where SETTLE put it
     run('a block put under another block\'s temporary rows, held by its other column: the block it pushed lands where SETTLE put it', m,
-      T(m, { a4: { c0: 5, c1: 6, y: 16 }, a3: { y: 21 } }, { steps: [[['a4'], 3], [['a4', 'a3'], 2]], carried: 'a4', leave: [['a4', 7, 'away']], enter: [['a4', 5, 'put']] }),
+      T(m, { a4: { c0: 5, c1: 6, y: 16 }, a3: { y: 21 } }, { steps: [[['a4'], 3], [['a4', 'a3'], 2]], carried: 'a4', leave: [['a4', 7, 'narrow']], enter: [['a4', 5, 'put']] }),
       (m) => [m.rows(), m.rows('canonical')], [{ a1: 5, a3: 21, a4: 16 }, { a1: 5, a3: 18, a4: 16 }]); }
   { const m = createModel().open([blk('A', 0, 0, 0), blk('X', 1, 2, 0), blk('B', 0, 1, 8)]); m.show('A', 2); m.show('X', 2);
     // X carried into column 0 under A's temporary rows, column 1 holding it at 5: B, which nothing moves, keeps its canonical row 8 and is
     // pushed on the screen by X's temporary rows only, as before
     run('a block put under another block\'s temporary rows writes no push of them under it: B keeps its canonical row', m,
-      T(m, { X: { c0: 0, c1: 1, y: 5 } }, { steps: [[['X'], 5]], carried: 'X', leave: [['X', 2, 'away']], enter: [['X', 0, 'put']] }),
+      T(m, { X: { c0: 0, c1: 1, y: 5 } }, { steps: [[['X'], 5]], carried: 'X', leave: [['X', 2, 'narrow']], enter: [['X', 0, 'put']] }),
       (m) => [m.rows(), m.rows('canonical')], [{ A: 0, B: 10, X: 5 }, { A: 0, B: 8, X: 5 }]); }
   { const m = createModel().open([blk('N', 1, 2, 0, 2), blk('X', 1, 1, 5), blk('E', 2, 2, 8)]); m.show('X', 1);
     // going up with a wide N (the owner, 2026-11-10): in column 2, which X does not come into, both gaps round N change by X's canonical
@@ -222,7 +238,7 @@ export function declarationCases() {
     ['a pass outside a swap is refused', D(swapAfter, { steps: swapSteps, carried: 'b3', pass: [['b3', 3]] }), 'only a block of a swap'],
     ['a pass by a block outside the swap is refused', D(swapAfter, { steps: swapSteps, carried: 'b3', swap: ['b3', 'b1'], pass: [['b3', 3], ['a', 5]] }), 'only a block of a swap'],
     ['a swap whose first block is not the carried one is refused', D(swapAfter, { steps: swapSteps, carried: 'b1', swap: ['b3', 'b1'], pass: [['b3', 3]] }), 'not the carried one'],
-    ['leaving as carried away is the carried block\'s only', D({ b1: { ...base.b1, c0: 4, c1: 4 } }, { leave: [['b1', 3, 'away']], enter: [['b1', 4, 'self']] }), 'only the carried block leaves as carried away'],
+    ['leaving as carried away is an undo\'s carry back\'s only', D({ b1: { ...base.b1, c0: 4, c1: 4 } }, { leave: [['b1', 3, 'away']], enter: [['b1', 4, 'self']] }), 'only an undo\'s carry back leaves as carried away'],
     ['coming in where it is put is the carried or a created block\'s only', D({ b1: { ...base.b1, c1: 4 } }, { enter: [['b1', 4, 'put']] }), 'only the carried block or a created one'],
     ['coming back by its canonical row is an undo\'s only', D({ b1: { ...base.b1, c1: 4 } }, { enter: [['b1', 4, 'back']] }), 'only an undo'],
     ['a leave the geometry does not show is refused', D({}, { leave: [['b1', 3, 'narrow']] }), 'is not in the geometry'],
@@ -230,7 +246,7 @@ export function declarationCases() {
     ['a swap away from the rows §5.1b gives (the neighbour at the carried block\'s first row) is refused', D({ b1: { ...base.b1, y: 0 }, b3: { ...base.b3, y: 1 } }, { steps: [[['b1'], -4], [['b3'], 1]], carried: 'b3', swap: ['b3', 'b1'], pass: [['b3', 3]] }), 'not at the rows the swap gives'],
     ['the swap\'s neighbour declared to pass the carried block is refused', D(swapAfter, { steps: swapSteps, carried: 'b3', swap: ['b3', 'b1'], pass: [['b3', 3], ['b1', 3]] }), 'the carried block passes it'],
     ['a swap with no exchange of order is refused', D({ b3: { ...base.b3, y: 2 } }, { steps: [[['b3'], 2]], carried: 'b3', swap: ['b3', 'b1'] }), 'not exchanged'],
-    ['the carried block leaving as narrowed is refused', D({ b3: { ...base.b3, c1: 2 } }, { carried: 'b3', leave: [['b3', 3, 'narrow']] }), 'leaves every column it leaves as carried away'],
+    ['the carried block keeping some of its columns and leaving one as carried away is refused', D({ b3: { ...base.b3, c1: 2 } }, { carried: 'b3', leave: [['b3', 3, 'away']] }), 'leaves the others as narrowed off'],
     ['an undo\'s carry back coming in where it is put is refused', D({ b3: { ...base.b3, c1: 4, y: 0 } }, { carried: 'b3', canonical: true, leave: [[ 'b3', 1, 'away'], ['b3', 2, 'away'], ['b3', 3, 'away']], enter: [['b3', 1, 'back'], ['b3', 2, 'back'], ['b3', 3, 'back'], ['b3', 4, 'put']] }), 'comes back by its canonical row'],
     ['a step of a block after does not hold is refused', checkDeclaration(base, { after: { b3: base.b3, a: base.a }, steps: [[['b1'], 1]], leave: [], enter: [], pass: [], carried: null }), 'which after does not hold'],
     ['two blocks on one cell in after are refused', D({ a: { ...base.a, c0: 3, c1: 3, y: 4 } }, { leave: [['a', 5, 'narrow']], enter: [['a', 3, 'self']] }), 'overlap in after'],

@@ -35,7 +35,9 @@ export function createModel(opts = {}) {
   // GAP.2, the owners of rows, is core (the owner, 2026-11-05). `screenPut`, not a rule: a block moved by hand and put at its row has under it the rest of
   // the seg, as the model had it before the internal review of 62433e9 and as the engine still has it, so that the twin can compare them
   // until step 1b's second part ports the canonical measure to the engine
-  const O = { gap8: true, gap9: true, gap51: true, gap52: true, gap53: true, screenPut: false, ...opts };
+  // `awaySideways`, not a rule either: the carried block leaves a column it no longer covers, while it keeps others, as carried away, as the
+  // model did before the owner's decision of 2026-11-10 and as the engine still does; only the twin sets it, until step 1b's second part
+  const O = { gap8: true, gap9: true, gap51: true, gap52: true, gap53: true, screenPut: false, awaySideways: false, ...opts };
   if (!O.gap51) O.gap8 = false;   // GAP.8 needs GAP.5.1
   if (!O.gap52) O.gap9 = false;   // GAP.9 needs GAP.5.2: with nothing given back there is nothing to keep
   const padOf = (b) => (b.area ? 1 : 0);
@@ -122,7 +124,10 @@ export function createModel(opts = {}) {
   // canon: a block put at its displayed row, its canonical row, the largest its columns give (its other columns may hold it lower than the
   // screen does here, under another block's temporary rows): the rows under it are then those that keep the block under it at its
   // canonical row, so that no temporary push is written (§2.1), and the rest of the seg goes
-  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
+  // resident: a block of a swap that was an anchor in this column comes back as one (the owner, 2026-11-10): it cuts the stack, the rows
+  // above it and under it keeping their owners, so that taking it away later closes its place as in a document (G2) and every block keeps
+  // its own gaps (G4)
+  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
     const Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
     const inChain = new Set(seq(c).map((el) => el.id));   // the neighbours are those already in the column's chain (rule 3), not every block over it
     const others = [...B.values()].filter((b) => b.id !== x.id && inChain.has(b.id)).sort((a, b) => (byCanon ? Y(a) - Y(b) : a.y - b.y) || (a.id < b.id ? -1 : 1));
@@ -139,6 +144,7 @@ export function createModel(opts = {}) {
     const bC = canon != null ? yc.get(below.id) : null;
     let [before, entry, after] = place(st.parts[i], Math.max(0, Y(x) - spans(st, ys ? 'canonical' : 'shown', ys)[i][0]), x);
     if (canon != null) after = after.slice(len(after) - Math.min(len(after), Math.max(0, bC - (canon + x.h))));
+    if (resident) { S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before] }); st.u = x.id; st.parts = [after, ...st.parts.slice(i + 1)]; return; }
     if (!O.gap53) {   // GAP.5.3 off: it cuts the stack, an anchor over the rows above it, the rows under it its own, no lend (lesson 17)
       S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before.map((o) => (o === x.id ? heirOf(st) : o))] });
       st.u = x.id; st.parts = [after.map(() => x.id), ...st.parts.slice(i + 1)];
@@ -309,7 +315,8 @@ export function createModel(opts = {}) {
     for (const [list, d] of moves) for (const id of list) a[id] = { ...a[id], y: a[id].y + d };
     for (const [id, [f0, f1]] of Object.entries(widths)) {
       const x = B.get(id), p = padOf(x), was = cols(x), will = cols({ c0: f0 - p, c1: f1 + p });
-      for (const c of was) if (!will.includes(c)) leave.push([id, c, id === carried ? 'away' : 'narrow']);
+      // a block that keeps some of its columns leaves the others as narrowed off, the carried one too (the owner, 2026-11-10, G8)
+      for (const c of was) if (!will.includes(c)) leave.push([id, c, O.awaySideways && id === carried ? 'away' : 'narrow']);
       for (const c of will) if (!was.includes(c)) enter.push([id, c, id === carried ? 'put' : 'self']);
       a[id] = { ...a[id], c0: f0, c1: f1 };
     }
@@ -453,6 +460,7 @@ export function createModel(opts = {}) {
       // GAP.6 first, top to bottom, for every block after does not hold
       for (const id of [...B.keys()].filter((id) => !tg.has(id)).sort((a, b) => B.get(a).y - B.get(b).y || (a < b ? -1 : 1))) gap6(id);
       const ys = rowsIn('canonical');   // the canonical rows of base, by which rule 2 measures
+      const anchoredIn = new Set(S.keys());   // the (block, column) where a block is an anchor in base: a passer comes back there as one
       // the rows the first step starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move
       const startOf = () => { const s = copy(); for (const [id, t] of tg) if (B.has(id)) { B.get(id).h = t.h; B.get(id).e = t.e; } follow(); const y = new Map([...B.values()].map((b) => [b.id, b.y])); put(s); return y; };
       const start = startOf();
@@ -492,13 +500,14 @@ export function createModel(opts = {}) {
       // canonical row the largest its columns give, those it keeps and those it comes into, measured on the canonical rows of this layout
       // with rule 5 made (the moved blocks at their targets), so that no temporary push of another block is written under it. Created: the
       // rest of the seg under it, as on the screen, so that taking it away gives every row back (INV-7 b)
-      const putIn = (id, cs) => {
-        if (!ys.has(id) || O.screenPut) { for (const c of cs) enter(B.get(id), c); return; }
+      const putIn = (id, cs, passes = () => false) => {
+        const res = (c) => passes(c) && anchoredIn.has(key(id, c));
+        if (!ys.has(id) || O.screenPut) { for (const c of cs) enter(B.get(id), c, null, false, null, null, res(c)); return; }
         const s0 = copy(); follow(); raw.fit(Object.fromEntries(Object.entries(fits).filter(([k]) => k !== id && B.has(k)))); const yc = rowsIn('canonical'); put(s0); atTargets();
         const x = B.get(id), inChain = (c) => seq(c).some((el) => el.id === id);
         let canon = cols(x).some(inChain) ? yc.get(id) : 0;
         for (const c of cs) canon = Math.max(canon, slot(x, c, yc));
-        for (const c of cs) enter(x, c, null, false, canon, yc);
+        for (const c of cs) enter(x, c, null, false, canon, yc, res(c));
       };
       const atTargets = () => { for (const b of B.values()) if (tg.has(b.id)) b.y = tg.get(b.id).y; };
       // R, the reference: every block keeps the columns of base, an undo's carry back out of all of them; a declared passer leaves every
@@ -507,7 +516,7 @@ export function createModel(opts = {}) {
       const W0 = copy();
       // the carried block leaves in R the columns it leaves, as carried away (all of them for an undo's carry back, which is then out)
       if (carried != null && B.has(carried)) {
-        const x = B.get(carried), t = tg.get(carried); for (const c of cols(x)) if (canonical || !covers(t, c)) leave(x, c, 'away', ys);
+        const x = B.get(carried), t = tg.get(carried); for (const c of cols(x)) if (canonical || !covers(t, c)) leave(x, c, canonical || O.awaySideways ? 'away' : 'narrow', ys);
         const k0 = Math.max(x.c0, t.c0), k1 = Math.min(x.c1, t.c1);   // the columns it keeps
         if (canonical || k0 > k1) B.delete(carried); else { x.c0 = k0; x.c1 = k1; }
       }
@@ -528,7 +537,7 @@ export function createModel(opts = {}) {
       departAll((id, c) => (rOut.has(id) && rOut.get(id).has(c) ? passWhy.get(id) : null));
       for (const [id, t] of tg) if (B.has(id)) { B.get(id).h = t.h; B.get(id).e = t.e; }
       capAll(); ruleOne(); atTargets();
-      for (const id of [...rOut.keys()].sort(byTarget)) putIn(id, [...rOut.get(id)].sort((a, b) => a - b));
+      for (const id of [...rOut.keys()].sort(byTarget)) putIn(id, [...rOut.get(id)].sort((a, b) => a - b), () => true);
       follow(); raw.fit(Object.fromEntries(Object.entries(fits).filter(([id]) => B.has(id))));
       const ref = rowsIn('canonical');
       put(W0);
@@ -542,7 +551,7 @@ export function createModel(opts = {}) {
       for (const id of ids) {
         // put at its displayed row: its canonical row is the largest its columns give, those it keeps and those it comes into
         const putCs = cols(B.get(id)).filter((c) => own(id, c) && (EN.get(key(id, c)) === 'put' || PS.has(key(id, c))));
-        if (putCs.length) putIn(id, putCs);
+        if (putCs.length) putIn(id, putCs, (c) => PS.has(key(id, c)));
         const x = B.get(id);
         for (const c of cols(x)) if (own(id, c) && EN.get(key(id, c)) === 'back') {
           const yb = rowsIn('canonical'); yb.set(id, T.after[id].yc != null ? T.after[id].yc - padOf(x) : x.y); enter(x, c, yb, true);

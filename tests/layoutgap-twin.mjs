@@ -4,7 +4,9 @@
 // and change widths in one RELINK, rule 5 alone, shifts and an area's left side handle, under random sets of the GAP switches: after
 // every event both implementations accept it or both refuse it, and their rows in both measures, owners and lends are the same. Until step
 // 1b's second part the model runs with `screenPut`: a block moved by hand and put at its row under another block's temporary rows measured as the engine
-// still measures it (the internal review of 62433e9 found that this writes their push; the model fixed it, the engine follows).
+// still measures it (the internal review of 62433e9 found that this writes their push; the model fixed it, the engine follows), and with
+// `awaySideways`: a carried block leaving a column it no longer covers, while it keeps others, as carried away, as the engine still does
+// (the owner decided on 2026-11-10 that it leaves it as narrowed off).
 // node tests/layoutgap-twin.mjs [histories]
 import { createModel } from './lab/gap-model/model.mjs';
 import { createEngineModel } from './lib/gapdriver.mjs';
@@ -35,7 +37,7 @@ function history(seed) {
     if (!base.some((o) => o.c0 <= b.c1 && b.c0 <= o.c1 && o.y < b.y + b.h + 1 && b.y < o.y + o.h + 1)) { base.push(b); break; }
   }
   // the model with `screenPut`: a block put at its row measured as the engine still measures it, until step 1b's second part
-  const m = createModel({ ...opts, screenPut: true }).open(base), e = createEngineModel(opts).open(base);
+  const m = createModel({ ...opts, screenPut: true, awaySideways: true }).open(base), e = createEngineModel(opts).open(base);
   if (m.snapshot() !== e.snapshot()) return { seed, at: 'open', m: m.snapshot(), e: e.snapshot() };
   let n = 0;
   for (let step = 0; step < 30; step++) {
@@ -69,7 +71,7 @@ function history(seed) {
     const errs = e.check(); if (errs.length) return { seed, step, kind, errs };
   }
   // what 0.1 stores reopens to the same canonical rows in both
-  const pm = createModel({ ...opts, screenPut: true }).open(m.places()), pe = createEngineModel(opts).open(e.places());
+  const pm = createModel({ ...opts, screenPut: true, awaySideways: true }).open(m.places()), pe = createEngineModel(opts).open(e.places());
   if (pm.snapshot() !== pe.snapshot()) return { seed, at: 'places' };
   return null;
 }
