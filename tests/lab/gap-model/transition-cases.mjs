@@ -223,6 +223,107 @@ export function transitionCases() {
       T(m, { Q: { c1: 1 }, X: { y: 5 } }, { steps: [[['X'], -2]], carried: 'X', leave: [['Q', 2, 'narrow']] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('Q', 0); return [...r, m.rows()]; },
       [{ B: 11, Q: 0, X: 5 }, { B: 11, Q: 0, X: 5 }, { B: 11, Q: 0, X: 5 }]); }
+  // the internal review of 416e4c6 (Fable): every pass is measured on one canonical snapshot, taken after the other departures, so a block
+  // that passes in several columns keeps the same place whichever column is taken first
+  for (const ca of [2, 3]) {
+    const m = createModel().open([blk('T', ca, ca, 0), blk('A', ca, ca, 7), blk('X', 2, 3, 9), blk('N', 2, 3, 12)]); m.height('A', 2); m.show('T', 2);
+    // A grew and holds X at 10 in its column, where T's temporary rows push both; in the other column X has one row of slack canonically
+    // and three on the screen, of which its pass keeps one: swapped down with N, N stays at 13 canonically whichever column A is in
+    run(`a block that passes in two columns keeps one place whichever is taken first: A in column ${ca}`, m,
+      T(m, { N: { y: 14 }, X: { y: 15 } }, { steps: [[['X'], 2], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 2], ['X', 3]] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ A: 9, N: 14, T: 0, X: 15 }, { A: 7, N: 13, T: 0, X: 14 }]);
+  }
+  for (const [pc, qc] of [[3, 4], [4, 3]]) {
+    const m = createModel().open([blk('X', 1, 1, 0, 3), blk('P', pc, pc, 3), blk('Q', qc, qc, 3), blk('N', 1, 4, 4), blk('D', qc, qc, 7)]); m.height('P', 2);
+    // P grew and pushed N to 5; X, swapped down with N, passes it in column 1, and N, moving up to 2, passes P and Q in their columns:
+    // D, under Q, which nothing moves, stays at 8 whichever of the two columns comes first
+    run(`the neighbour passing two blocks in its own columns: D under one of them stays, P in column ${pc}`, m,
+      T(m, { N: { y: 2 }, X: { y: 3 } }, { steps: [[['X'], 2], [['N'], -3], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1], ['N', 3], ['N', 4]] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ D: 8, N: 2, P: 3, Q: 3, X: 3 }, { D: 8, N: 2, P: 3, Q: 3, X: 3 }]);
+  }
+  // every step of rule 1 is measured at the rows the declaration gives (start, then the steps so far), whatever rule 2's departures freed,
+  // so a move cut into steps gives what one step gives even when a block leaves a column in the same RELINK
+  for (const steps of [[[['X'], -2]], [[['X'], -1], [['X'], -1]]]) {
+    const m = createModel().open([blk('P', 0, 0, 0, 2), blk('Q', 0, 0, 4, 2), blk('H', 1, 1, 5), blk('X', 0, 1, 10)]); m.show('P', 2);
+    // P (two temporary rows) is pressed into column 2 while X, shown at 12, is carried up 2 rows: in column 0 the two rows X moved up
+    // through, P's temporary rows no longer above it, are its slack and stay its own rows under Q, cut in one step or two
+    run(`a move cut into steps beside a departure gives one step's owners: ${steps.length} step${steps.length > 1 ? 's' : ''}`, m,
+      T(m, { X: { y: 10 }, P: { c0: 2, c1: 2 } }, { steps, carried: 'X', leave: [['P', 0, 'narrow']], enter: [['P', 2, 'self']] }),
+      (m) => { const r = [m.stack('X', 0), m.stack('X', 1)]; m.width('X', 1, 1); return [...r, m.rows()]; }, ['Q | Q2 |', 'H | H4 |', { H: 5, P: 0, Q: 4, X: 10 }]);
+  }
+  for (const uy of [6, 7]) {
+    const m = createModel({ gap9: false }).open([blk('P', 0, 0, 0, 2), blk('Q', 0, 0, 4, 2), blk('U', 1, 1, uy), blk('X', 0, 1, 10)]);
+    // GAP.9 off: P narrowed off column 0 takes its rows under it and Q rises to 0; X carried up 3, pushing U in column 1 or not: column 0
+    // sees the same move either way and gives Q the same rows
+    run(`GAP.9 off: a move cut by a push in another column gives the same owners in this one: U at ${uy}`, m,
+      T(m, { X: { y: 7 }, U: { y: 6 }, P: { c0: 2, c1: 2 } }, { steps: uy === 6 ? [[['X'], -3]] : [[['X'], -2], [['X', 'U'], -1]], carried: 'X', leave: [['P', 0, 'narrow']], enter: [['P', 2, 'self']] }),
+      (m) => [m.rows(), m.stack('X', 0)], [{ P: 0, Q: 0, U: 6, X: 7 }, 'Q | Q1 |']);
+  }
+  // the same review: each of the following pins a line no random law reached (a mutation of it survived every other test)
+  { const m = createModel().open([blk('A', 0, 0, 1, 2), blk('X', 0, 2, 4), blk('N', 1, 2, 7)]); m.show('A', 3);
+    // X, held at 7 on the screen by A's temporary rows in column 0, has 4 rows of slack in column 2 canonically and 7 on the screen; swapped
+    // down with N, its pass keeps the smaller, so N's memory in column 2 holds no temporary push: narrowed to column 2, N stands at 7
+    run('a pass keeps its canonical slack where the screen shows more: narrowed to that column, the neighbour stands at its canonical row', m,
+      T(m, { X: { y: 10 }, N: { y: 9 } }, { steps: [[['X'], 2], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1], ['X', 2]] }),
+      (m) => { const r = [m.rows(), m.stack('N', 2)]; m.width('N', 2, 2); return [...r, m.rows('canonical')]; },
+      [{ A: 1, N: 9, X: 10 }, 'top | _7 |', { A: 1, N: 7, X: 10 }]); }
+  { const m = createModel().open([blk('H', 0, 0, 0), blk('X', 0, 1, 2), blk('N', 0, 1, 5)]); m.height('H', 3);
+    // X, held at 4 by H's growth in column 0, has 2 rows of slack in column 1 in both measures; swapped down with N, its pass keeps them as
+    // rows, so N's memory in column 1 is its row: narrowed to column 1, N stays at 6
+    run('a pass keeps a slack both measures show: narrowed to that column, the neighbour stays', m,
+      T(m, { X: { y: 7 }, N: { y: 6 } }, { steps: [[['X'], 2], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 0], ['X', 1]] }),
+      (m) => { const r = [m.rows(), m.stack('N', 1)]; m.width('N', 1, 1); return [...r, m.rows()]; },
+      [{ H: 0, N: 6, X: 7 }, 'top | _6 |', { H: 0, N: 6, X: 7 }]); }
+  { const m = createModel().open([blk('A', 1, 1, 1), blk('N', 1, 1, 9)]); m.insert(blk('X', 1, 1, 4, 3));
+    // X, created in N's gap, stands there; swapped up with A it comes back standing (G11: a block of a swap keeps its status), now in A's
+    // stack, so deleted it gives its lend back and A and N stay, where an anchor would close its place
+    run('a standing block of a swap comes back standing: deleted, it gives its rows back', m,
+      T(m, { X: { y: 1 }, A: { y: 4 } }, { steps: [[['X'], -2], [['X'], -1], [['A'], 3]], carried: 'X', swap: ['X', 'A'], pass: [['X', 1]] }),
+      (m) => { const r = [m.rows(), m.stack('A', 1)]; m.remove('X'); return [...r, m.rows()]; },
+      [{ A: 4, N: 9, X: 1 }, 'top | _1 [X:_3] · |', { A: 4, N: 9 }]); }
+  { const m = createModel().open([blk('S', 0, 0, 0), blk('N', 0, 1, 6)]); m.insert(blk('X', 1, 1, 2, 2)); m.show('S', 1);
+    // X, created in N's gap, carried down 3 rows on the screen, the gap under it 2 rows canonically, then 2 more pushing N, which S's
+    // temporary row holds on the screen through column 0: over X, the rows of the top first, then the row that is X's room (rule 1, a
+    // move cut into steps); moved back up a row, X takes that row under it, so deleted it takes one row away and N, narrowed to column 1,
+    // stands at 8
+    run('a move down cut by a push puts the stack\'s rows first and the moved block\'s room last, over it', m,
+      T(m, { X: { y: 7 }, N: { y: 9 } }, { steps: [[['X'], 3], [['X', 'N'], 2]], carried: 'X' }),
+      (m) => { const r = [m.rows(), m.stack('N', 1)]; m.relink(T(m, { X: { y: 6 } }, { steps: [[['X'], -1]], carried: 'X' }));
+        r.push(m.stack('N', 1)); m.remove('X'); m.width('N', 1, 1); return [...r, m.rows()]; },
+      [{ N: 9, S: 0, X: 7 }, 'top | _6+X1 [X:_2] · |', 'top | _6 [X:_2] X1 |', { N: 8, S: 0 }]); }
+  { const m = createModel().open([blk('U', 0, 0, 0), blk('H', 1, 1, 0), blk('G', 2, 2, 0), blk('N', 0, 2, 10)]); m.insert(blk('X', 0, 1, 3));
+    m.height('H', 4); m.height('G', 8); m.show('U', 2);
+    // X stands in N's gaps in columns 0 and 1, held at 6 by H's growth; in column 0 it has 3 rows of slack canonically and 1 on the screen,
+    // U's temporary rows taking the others; G's growth holds N at 17 through column 2. Swapped down with N, X's pass keeps the smaller
+    // slack in place of its lend, so U's temporary rows are not written over N there: narrowed to column 0, N stands at 11
+    run('a standing block passing keeps the smaller of its two slacks: the neighbour\'s memory in that column holds no temporary push', m,
+      T(m, { N: { y: 16 }, X: { y: 17 } }, { steps: [[['X'], 10], [['N'], -1], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 0], ['X', 1]] }),
+      (m) => { const r = [m.rows(), m.stack('N', 0)]; m.show('U', 0); m.width('N', 0, 0); return [...r, m.rows()]; },
+      [{ G: 0, H: 0, N: 16, U: 0, X: 17 }, 'U | U10 |', { G: 0, H: 0, N: 11, U: 0, X: 17 }]); }
+  { const m = createModel().open([blk('S', 0, 0, 0), blk('N', 0, 1, 6)]); m.insert(blk('X', 1, 1, 2, 2)); m.show('S', 3);
+    m.relink(T(m, { X: { y: 7 } }, { steps: [[['X'], 5]], carried: 'X' })); m.insert(blk('B', 1, 1, 6));
+    // X, created in N's gap, carried down 5 rows on the screen over a gap of 2 canonically, gets 3 rows of room over it; B, created in the
+    // lowest of them, stands with X's own rows above it. Swapped down with N, X's pass keeps all its rows, those above B included: B,
+    // which nothing moves, stays at 6
+    run('a pass keeps the passer\'s own rows above another block: that block does not move', m,
+      T(m, { N: { y: 7 }, X: { y: 8 } }, { steps: [[['N'], -2], [['X'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
+      (m) => [m.rows(), m.rows('canonical')], [{ B: 6, N: 7, S: 0, X: 8 }, { B: 6, N: 7, S: 0, X: 8 }]); }
+  { const m = createModel().open([blk('X', 0, 1, 0, 2), blk('W', 0, 0, 4)]);
+    // X carried one column right, keeping column 1, leaves column 0 as a narrowing does (M9), also in R, where W's own reference is
+    // measured: W, widening into column 1 in the same RELINK, comes in there at its own row, 4, so narrowed to column 1 it stays
+    run('a carry sideways and a widening under it in one RELINK: the widened block\'s reference keeps its row, the carry leaving as a narrowing', m,
+      T(m, { X: { c0: 1, c1: 2 }, W: { c1: 1 } }, { carried: 'X', leave: [['X', 0, 'narrow']], enter: [['X', 2, 'put'], ['W', 1, 'self']] }),
+      (m) => { const r = [m.rows(), m.stack('W', 1)]; m.width('W', 1, 1); return [...r, m.rows()]; },
+      [{ W: 4, X: 0 }, 'X | X2 |', { W: 4, X: 0 }]); }
+  { const m = createModel().open([blk('S', 0, 0, 0), blk('A', 1, 1, 0), blk('Y', 2, 2, 3), blk('N', 0, 1, 12)]); m.insert(blk('X', 1, 1, 6, 2)); m.show('S', 3);
+    m.relink(T(m, { X: { y: 13 } }, { steps: [[['X'], 7]], carried: 'X' })); m.show('A', 2);
+    // X, created in N's gap and carried down to it on the screen, has 3 rows of room over it in column 1; Y is carried from column 2 into
+    // columns 1–2 at row 5, under A's two temporary rows, column 2 holding it canonically: the rows those would push are not written under
+    // it, cut from the top of the seg, next to Y, so X keeps its room, and with the temporary heights ended and X deleted N is back at 12
+    run('a block put under temporary rows cuts the rows next to it, not the room of the block below', m,
+      T(m, { Y: { c0: 1, c1: 2, y: 5 } }, { steps: [[['Y'], 2]], carried: 'Y', enter: [['Y', 1, 'put']] }),
+      (m) => { const r = [m.rows(), m.stack('N', 1)]; m.show('A', 0); m.show('S', 0); m.remove('X'); return [...r, m.rows()]; },
+      [{ A: 0, N: 15, S: 0, X: 13, Y: 5 }, 'A | A2 [Y:A1] A4+X3 [X:A2] · |', { A: 0, N: 12, S: 0, Y: 5 }]); }
   return out;
 }
 

@@ -177,17 +177,17 @@ export function createModel(opts = {}) {
 
   // ---- a block leaves column c (deleted, carried away, narrowed or pressed off it): rule 2
   // ys: the canonical rows before the change
-  function leave(x, c, why, ys, shown = 0) {
+  function leave(x, c, why, ys, shown = 0, ycPass = null) {   // ycPass: the canonical rows a pass is measured on, the same for every pass
     const f = seq(c).find((el) => el.id === x.id); if (!f) return;
     // a pass (a block of a swap changing its place in the chain of a column it keeps) frees nothing, whatever the switches: its rows
     // above it and under it stay, and its place stays as rows, its canonical body and the slack above it (the rows by which its stack
-    // did not hold it, in both measures: the smaller of its canonical and its displayed slack, as they are when it leaves, after the
-    // other departures of its column); so the blocks under its place go down in neither measure (where the two slacks differ they may
+    // did not hold it, in both measures: the smaller of its canonical and its displayed slack, on the canonical rows taken once after
+    // every other departure of the RELINK); so the blocks under its place go down in neither measure (where the two slacks differ they may
     // rise in one, and rule 5 brings a block the steps moved to its target). The carried block of a swap keeps there its temporary rows too (`shown`), as the screen has
     // them, so that the blocks under its place do not move on the screen either until it comes back (O-21)
     const pass = why === 'pass', g52 = pass || O.gap52, tmpRows = pass ? Array(shown).fill(heirOf(f.st)) : [];
     const keep = pass || ((why === 'narrow' || why === 'press') && O.gap9);   // G8: narrowing or pressing aside is not deleting (GAP.9)
-    const yc = pass ? rowsIn('canonical') : null;
+    const yc = pass ? ycPass || rowsIn('canonical') : null;
     release(x, c, keep, heirOf(f.st), pass);
     if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8); with GAP.5.2 off it goes with it
       const { st, i } = f;
@@ -470,12 +470,14 @@ export function createModel(opts = {}) {
       if (carried != null && !canonical && tg.has(carried)) fits[carried] = T.after[carried].y;
       const departAll = (out) => {   // rule 2, column by column, top to bottom in each chain: out(id, c) → why or null
         const cs = new Set(); for (const b of B.values()) for (const c of cols(b)) cs.add(c);
-        // in each column the passes come after the other departures: a pass frees nothing, so what the others give back is measured with
-        // the passer still in its place, and the passer keeps its place as it is then
-        for (const c of [...cs].sort((a, b) => a - b)) {
-          const ws = seq(c).map((el) => [el.id, out(el.id, c)]).filter(([, w]) => w);
-          for (const [id, w] of [...ws.filter(([, w]) => w !== 'pass'), ...ws.filter(([, w]) => w === 'pass')])
-            leave(B.get(id), c, w, ys, w === 'pass' && T.swap && id === T.swap[0] ? B.get(id).e : 0);
+        // the passes come after every other departure, in every column: a pass frees nothing, so what the others give back is measured with
+        // the passer still in its place; and every pass is measured on the same canonical rows, taken once then, so that a block passing in
+        // several columns keeps the same place whichever column is taken first
+        const order = [...cs].sort((a, b) => a - b), ws = order.map((c) => [c, seq(c).map((el) => [el.id, out(el.id, c)]).filter(([, w]) => w)]);
+        for (const [c, list] of ws) for (const [id, w] of list) if (w !== 'pass') leave(B.get(id), c, w, ys);
+        if (ws.some(([, list]) => list.some(([, w]) => w === 'pass'))) {
+          const ycPass = rowsIn('canonical');
+          for (const [c, list] of ws) for (const [id, w] of list) if (w === 'pass') leave(B.get(id), c, w, ys, T.swap && id === T.swap[0] ? B.get(id).e : 0, ycPass);
         }
       };
       // the neighbour's swap step, its last (§5.1b), with the carried block's temporary rows and the columns it comes into (O-21)
@@ -489,10 +491,10 @@ export function createModel(opts = {}) {
           const sw = si === swapStep ? swapOf : null;
           for (const c of [...cs].sort((a, b) => a - b)) moveIn(c, ids, d, sw);
           for (const id of ids) row.set(id, row.get(id) + d);
-          // a block out of the chain in a column (a passer, or one that comes into a column after the steps) stands at least at the row the
-          // steps give it: the column it is out of no longer holds it, and the next step's slacks are measured at the rows it starts from
-          const floor = new Map(); for (const b of B.values()) if (row.has(b.id) && cols(b).some((c) => !seq(c).some((el) => el.id === b.id))) floor.set(b.id, row.get(b.id));
-          follow(floor);
+          // every step's slacks are measured at the rows the declaration gives: each block at the row it starts from plus the steps that moved
+          // it so far, the gaps those rule 2 left and the steps before made. So a move cut into steps gives what one step gives, a block that
+          // left a column in the same RELINK or passed out of one included (a block created here, out of every chain, follows FOLLOW)
+          follow(); for (const b of B.values()) if (row.has(b.id)) b.y = row.get(b.id);
         });
       };
       const capAll = () => { for (const x of B.values()) capLends(x); };
