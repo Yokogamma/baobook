@@ -12,6 +12,20 @@ const pad = (b) => (isArea(b) ? 1 : 0);
 const boxOf = (b, e = 0) => ({ id: b.id, kind: b.area ? 'area' : 'text', col: b.c0 - 1, w: b.c1 - b.c0 + 2, y: b.y, yc: b.y, h: b.h + e, t: e });
 const inner = (box) => { const x = extent(box), p = pad(box), t = box.t || 0; return { id: box.id, c0: x.c0, c1: x.c1, y: box.y - p, yc: (box.yc ?? box.y) - p, h: box.h - t + 2 * p, e: t }; };
 
+/** The engine's layout of a model's state (model.mjs's save(): its blocks by their extents, its stacks with one owner per row), so that a
+ *  state found in the model, history and all, can be run on the engine. */
+export function layoutFromModel(state) {
+  const runs = (rows) => { const out = []; for (const o of rows) { const v = o === '' ? null : o, p = out[out.length - 1]; if (p && p.o === v) p.n++; else out.push({ o: v, n: 1 }); } return out; };
+  const boxes = new Map(), order = [...state.B.keys()];
+  for (const [id, b] of state.B) {
+    const p = b.area ? 1 : 0, c0 = b.c0 + p, c1 = b.c1 - p;
+    const mine = [...state.S.entries()].filter(([k]) => k.slice(0, k.lastIndexOf('|')) === id).map(([k, st]) => [+k.slice(k.lastIndexOf('|') + 1), { u: st.u, parts: st.parts.map((q, i) => (i % 2 ? { id: q.id, lend: runs(q.lend) } : runs(q))) }]).sort((x, y) => x[0] - y[0]);
+    const above = []; for (const [c, st] of mine) { const l = above[above.length - 1]; if (l && l.c1 === c - 1 && JSON.stringify(l.stack) === JSON.stringify(st)) l.c1 = c; else above.push({ c0: c, c1: c, stack: st }); }
+    boxes.set(id, { id, kind: b.area ? 'area' : 'text', col: c0 - 1, w: c1 - c0 + 2, y: b.y + p, yc: b.y + p, h: b.h - 2 * p + b.e, t: b.e, above });
+  }
+  return { cols: 1 << 20, measure: 'displayed', boxes, order, areas: new Map() };
+}
+
 export function createEngineModel(opts = {}) {
   const rules = resolve({ 'GAP.5.1': opts.gap51 !== false, 'GAP.5.2': opts.gap52 !== false, 'GAP.5.3': opts.gap53 !== false, 'GAP.8': opts.gap8 !== false, 'GAP.9': opts.gap9 !== false });
   let L = { cols: 1 << 20, measure: 'displayed', boxes: new Map(), order: [], areas: new Map() }, ids = [];
