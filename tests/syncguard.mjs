@@ -134,7 +134,12 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   // (e) checkOwner(): the store against this engine's memory
   ok('5i checkOwner: the store matches this engine', await A.sync.checkOwner()===true);
   await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
-  ok('5j another tab changed the owner: checkOwner of the old engine says so', await A.sync.checkOwner()===false && await B.sync.checkOwner()===true); }
+  ok('5j another tab changed the owner: checkOwner of the old engine says so', await A.sync.checkOwner()===false && await B.sync.checkOwner()===true);
+  // (f) a tab that waited for the lock refuses the store in reload(); its memory is left unloaded, and no later lazy load (the copies count on the
+  // start's timer, the account panel's unsynced, a message's state) may take the new owner: each is refused too, and checkOwner still says «not the same»
+  const uidOf=()=>A.sync.owner && A.sync.owner.uid; const before=uidOf(); let r0=null; try{ await A.sync.reload(); }catch(e){ r0=e.code; }
+  const lazy=[]; for(const f of [()=>A.sync.copiesCount(), ()=>A.sync.unsynced(), ()=>A.sync.state('c1'), ()=>A.sync.lrevOf(), ()=>A.sync.countCopies('c1')]){ try{ await f(); lazy.push('ok'); }catch(e){ lazy.push(e.code); } }
+  ok('5j2 the old engine\'s reload() is refused ('+r0+'), and so is every lazy load after it ('+lazy.join(', ')+'): it still names '+uidOf()+' and checkOwner says not the same', before==='u1' && r0==='epoch' && lazy.every(c=>c==='epoch') && uidOf()==='u1' && await A.sync.checkOwner()===false && !A.sync._S.loaded); }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
