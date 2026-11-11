@@ -78,7 +78,7 @@ export function checkTransition(T) {
     else if (!X || !A.has(x)) errs.push(`swap ${x}/${n}: base or after does not hold the carried block`);
     else if (!N || !A.has(n) || !A.has(x)) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
-      const shared = cols(X).filter((c) => covers(N, c)), AX = A.get(x), AN = A.get(n), hX = X.h + X.e, hN = N.h + N.e;
+      const shared = cols(X).filter((c) => covers(N, c)), AX = A.get(x), AN = A.get(n), hX = AX.h + AX.e, hN = AN.h + AN.e;   // the heights the swap is made with, after's (phase 1c sets the carried block's before phase 3)
       const between = (c) => [...B].some(([id, e]) => { if (id === x || id === n) return false; const lo = Math.min(X.y, N.y), hi = Math.max(X.y, N.y); return covers(e, c) && e.y > lo && e.y < hi; });
       if (!shared.length) errs.push(`swap ${x}/${n}: they share no column`);
       else if (shared.every(between)) errs.push(`swap ${x}/${n}: a block stands between them in every column they share`);

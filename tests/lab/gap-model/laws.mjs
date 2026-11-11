@@ -116,10 +116,11 @@ export function runCase(c, make = createModel) {
           m1.load(s1); m2.load(s2);
           if (a !== b) return { law: 'split', what: 'remove ' + id, cut: a, whole: b }; }
       } } }
-  // net: the same transition with each block's steps added up and cut again, the moved block's direction first and in each direction the
-  // furthest alone first, a swap's steps from the neighbour's last one on kept as they are, and every block the steps named held as moved
-  // (G15), gives the same layout, and the same after a moved block is taken away: rule 1 reads only where each moved block starts and ends,
-  // which lets the engine take the moved blocks as facts and cut their moves itself (the architecture review of 2026-11-11)
+  // net: the same transition with each block's steps added up and cut again as the engine's RELINK cuts them, the moved block's direction
+  // first and in each direction the furthest alone first, a swap's steps from the neighbour's last one on kept as they are, and every block
+  // the steps named held as moved (G15), gives the same layout, and the same after a moved block is taken away: the generator's paths are
+  // that cut, which is the definition of the memory a move leaves (which blocks move together is memory), not a proof that any grouping
+  // gives the same; it runs where declare.mjs admits the cut again (the architecture review and the independent review of 24a4f93)
   { const sw = T.swap ? T.steps.map(([ids]) => ids.includes(T.swap[1])).lastIndexOf(true) : -1;
     const head = sw >= 0 ? T.steps.slice(0, sw) : T.steps, tail = sw >= 0 ? T.steps.slice(sw) : [];
     const net = new Map(); for (const [ids, d] of head) for (const id of ids) net.set(id, (net.get(id) || 0) + d);
@@ -226,8 +227,13 @@ function draw(r, m, pending, { areas, kinds }) {
 /** The same case on a second implementation (`twin`, the engine through its driver) against the first: the same history and transition give
  *  the same layout, rows, owners and lends, or both refuse it. */
 export function runTwin(c, make, twin) {
-  const T = merge(c.near, c.far), go = (f) => { let m; try { m = build(c.opts, c.blocks, c.ins || [], c.temps, c.history || [], f); } catch (e) { return 'history refused: ' + e.message; }
-    try { m.relink(T); } catch (e) { return 'refused'; } return m.snapshot(); };
+  // the layout, rows, owners and lends, and the same after each moved block is taken away again (the independent review of 24a4f93)
+  const T = merge(c.near, c.far), ids = [...new Set([...T.steps.flatMap(([l]) => l), ...(T.moved || []), ...(T.carried != null ? [T.carried] : [])])];
+  const go = (f) => { let m; try { m = build(c.opts, c.blocks, c.ins || [], c.temps, c.history || [], f); } catch (e) { return 'history refused: ' + e.message; }
+    try { m.relink(T); } catch (e) { return 'refused'; }
+    const out = [m.snapshot()];
+    for (const id of ids) { if (!m.B.has(id)) continue; const s = m.save(); try { m.remove(id); out.push(id + ' taken away: ' + m.snapshot()); } catch (e) { out.push(id + ' taken away: refused'); } m.load(s); }
+    return out.join('\n'); };
   const a = go(make), b = go(twin);
   return a === b ? null : { law: 'twin', first: a, second: b };
 }

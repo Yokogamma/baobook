@@ -509,7 +509,8 @@ export function cut(d, first = 1) {
 /** The moves rule 1 makes (LAYOUT-RULES GAP's inputs, `moved`; the owner, 2026-11-11, G15): every block SETTLE moved goes from its start
  *  row to its target, and RELINK cuts the moves itself (`cut`, the carried block's direction first): blocks moved by the same rows go
  *  together and keep the gaps between them, and a rigid move cut into more steps gives what one step gives (GAP.5 rule 1). A swap's pair (§5.1b) first goes to the rows it stood at when the carried block was
- *  pinned against the neighbour; then its structural steps, by the heights the swap exchanges (base's, as the check has them): going down,
+ *  pinned against the neighbour; then its structural steps, by the heights the swap is made with, after's (phase 1c gives the carried block
+ *  its width and height at the target before phase 3 swaps; the independent review of 24a4f93): going down,
  *  the neighbour up by the carried block's height and the carried block down by the neighbour's; going up, the carried block up by the
  *  neighbour's height and the neighbour down by the carried block's. In the lab's form, `steps`, the blocks its steps move are the moved
  *  blocks; their path is not used. @returns {{moved:string[], steps:Array<[string[], number]>}} */
@@ -517,8 +518,8 @@ function movesOf(T, W, tg, start, gb) {
   const moved = [...new Set([...(T.moved || (T.steps || []).flatMap(([ids]) => ids)), ...(T.swap || [])])];
   const pre = new Map(), tail = [];
   if (T.swap && gb.has(T.swap[0]) && gb.has(T.swap[1]) && tg.has(T.swap[0]) && tg.has(T.swap[1])) {
-    const [x, n] = T.swap, X = gb.get(x), N = gb.get(n), hX = X.h + X.e, hN = N.h + N.e;
-    if (X.y < N.y) { pre.set(n, tg.get(n).y + hX); pre.set(x, tg.get(x).y - hN); tail.push([[n], -hX], [[x], hN]); }
+    const [x, n] = T.swap, hX = tg.get(x).h + tg.get(x).e, hN = tg.get(n).h + tg.get(n).e;
+    if (gb.get(x).y < gb.get(n).y) { pre.set(n, tg.get(n).y + hX); pre.set(x, tg.get(x).y - hN); tail.push([[n], -hX], [[x], hN]); }
     else { pre.set(x, tg.get(x).y + hN); pre.set(n, tg.get(n).y - hX); tail.push([[x], -hN], [[n], hX]); }
   }
   const d = [];

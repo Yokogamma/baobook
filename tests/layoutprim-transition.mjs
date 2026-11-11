@@ -96,6 +96,22 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
   ok('5c going up: X (two rows) takes N\'s top row, N right under it; taken', eq(checkTransition(tu), []) && ru.ok && eq(got(ru), { X: 0, N: 2 }), [checkTransition(tu), got(ru)]);
 }
 
+/* ── 5d. a swap after the carried block narrowed: made at the heights it is made with (the independent review of 24a4f93) ── */
+{
+  // X, an elastic text of 30 characters on 10 cells (one row), carried to column 1: at the right edge it narrows to 9 cells and takes two
+  // rows (phase 1c), pinned at 2 against N at 4; past N's middle they swap: N up by X's two rows to 2, X right under it at 3
+  const c = ctxOf({ X: { text: chars(30) } }), pass = [['X', 2]];
+  const base = sheet(11, [text('X', 0, 0, 11), set('N', 1, 4, 2)]), w = over(base, c, 'X', { col: 1, y: 2, w: 10, h: 2 });
+  place(w, 'N', { y: 2 }); place(w, 'X', { y: 3 });
+  const tr = { base, after: w.L, ...transitionFacts(w, base, { swap: ['X', 'N'] }), carried: 'X', leave: [['X', 1, 'narrow']], enter: [], pass }, r = relink(tr, DEFAULT);
+  ok('5d going down, X two rows high after narrowing at the edge: taken, N at 2, X right under it at 3', eq(checkTransition(tr), []) && r.ok && eq(got(r), { N: 2, X: 3 }), [checkTransition(tr), got(r)]);
+  // going up: N at 0, X below at 4 carried up to column 1, two rows, pinned under N at 1; X takes N's top row, N right under it at 2
+  const upB = sheet(11, [set('N', 1, 0, 2), text('X', 0, 4, 11)]), v = over(upB, c, 'X', { col: 1, y: 1, w: 10, h: 2 });
+  place(v, 'X', { y: 0 }); place(v, 'N', { y: 2 });
+  const tu = { base: upB, after: v.L, ...transitionFacts(v, upB, { swap: ['X', 'N'] }), carried: 'X', leave: [['X', 1, 'narrow']], enter: [], pass }, ru = relink(tu, DEFAULT);
+  ok('5e going up, the same: taken, X at 0, N right under it at 2', eq(checkTransition(tu), []) && ru.ok && eq(got(ru), { X: 0, N: 2 }), [checkTransition(tu), got(ru)]);
+}
+
 /* ── 6. a moved block whose move adds up to nothing is held (G15; the independent review of 82be34a) ── */
 {
   // B (30 characters on 10 cells) narrowed to 9 cells takes two rows and leaves C's column; A sunk by one row pushes C from 4 to 5 through
