@@ -483,23 +483,52 @@ function projected(W, tg) {
   for (const [id, t] of tg) if (V.B.has(id)) { const b = V.B.get(id); b.h = t.h; b.e = t.e; }
   followWork(V); return new Map([...V.B.values()].map((b) => [b.id, b.y]));
 }
-/** The rows the first step of a transition starts from (LAYOUT-RULES GAP's inputs), as RELINK checks a transition's `start`: FOLLOW over
- *  `base`'s stacks, the blocks `after` does not hold taken away first (GAP.6), with `after`'s heights. Box rows by id, for the blocks both
- *  hold. SETTLE gives these as `start` (LAYOUT-ENGINE-PLAN §5.2), so a block a narrowing pushed on the screen, or did not push because
- *  the block over it left its column, starts where GAP counts it from. With `departed`, the rows once rule 2 has run too.
- *  @param {Layout} base @param {Layout} after @param {Rules} rules @param {{departed?:boolean}} [o] @returns {Map<string, number>} */
-export function startRows(base, after, rules, { departed = false } = {}) {
+/** The rows RELINK counts every move from (LAYOUT-RULES GAP's inputs, `moved`): FOLLOW over `base`'s stacks, the blocks `after` does not
+ *  hold taken away first (GAP.6), with `after`'s heights, a height a phase changed being no move. Box rows by id, for the blocks both hold;
+ *  for the tests and the dev look. @param {Layout} base @param {Layout} after @param {Rules} rules @returns {Map<string, number>} */
+export function startRows(base, after, rules) {
   const gb = new Map(base.order.map((id) => [id, gapBlock(base.boxes.get(id))]));
   let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id, rules);
   const W = work(b0, rules), tg = new Map(after.order.filter((id) => W.B.has(id)).map((id) => [id, gapBlock(after.boxes.get(id))]));
-  // `departed`: the rows rule 2 then gives, every element that does not cover a column of its chain in after having left it as narrowed or
-  // pressed off (the moves still to come): where a block really stood before the moves, for SETTLE's corrections (LAYOUT-ENGINE-PLAN §5.2)
-  if (departed) departAll(W, (id, c) => (tg.has(id) && !covers(tg.get(id), c) ? 'narrow' : null), rowsIn(W, 'canonical'), null);
   return new Map([...projected(W, tg)].map(([id, y]) => [id, y + (isArea(after.boxes.get(id)) ? 1 : 0)]));
 }
 
+/** Moves cut by common parts: `d` holds [id, rows] (rows ≠ 0); the blocks moved down and those moved up form two groups, `first`'s
+ *  direction first; in each, the furthest alone first and the others joining it for the last rows of the way, one step per common part.
+ *  @param {Array<[string, number]>} d @param {1|-1} [first] @returns {Array<[string[], number]>} */
+export function cut(d, first = 1) {
+  const out = [];
+  for (const sign of [first, -first]) {
+    const group = d.filter(([, e]) => Math.sign(e) === sign); if (!group.length) continue;
+    const levels = [...new Set(group.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
+    levels.forEach((lv, i) => out.push([group.filter(([, e]) => Math.abs(e) >= lv).map(([id]) => id), sign * (lv - (levels[i + 1] || 0))]));
+  }
+  return out;
+}
+
+/** The moves rule 1 makes (LAYOUT-RULES GAP's inputs, `moved`; the owner, 2026-11-11, G15): every block SETTLE moved goes from its start
+ *  row to its target, and RELINK cuts the moves itself (`cut`, the carried block's direction first): blocks moved by the same rows go
+ *  together and keep the gaps between them, and a rigid move cut into more steps gives what one step gives (GAP.5 rule 1). A swap's pair (§5.1b) first goes to the rows it stood at when the carried block was
+ *  pinned against the neighbour; then its structural steps, by the heights the swap exchanges (base's, as the check has them): going down,
+ *  the neighbour up by the carried block's height and the carried block down by the neighbour's; going up, the carried block up by the
+ *  neighbour's height and the neighbour down by the carried block's. In the lab's form, `steps`, the blocks its steps move are the moved
+ *  blocks; their path is not used. @returns {{moved:string[], steps:Array<[string[], number]>}} */
+function movesOf(T, W, tg, start, gb) {
+  const moved = [...new Set([...(T.moved || (T.steps || []).flatMap(([ids]) => ids)), ...(T.swap || [])])];
+  const pre = new Map(), tail = [];
+  if (T.swap && gb.has(T.swap[0]) && gb.has(T.swap[1]) && tg.has(T.swap[0]) && tg.has(T.swap[1])) {
+    const [x, n] = T.swap, X = gb.get(x), N = gb.get(n), hX = X.h + X.e, hN = N.h + N.e;
+    if (X.y < N.y) { pre.set(n, tg.get(n).y + hX); pre.set(x, tg.get(x).y - hN); tail.push([[n], -hX], [[x], hN]); }
+    else { pre.set(x, tg.get(x).y + hN); pre.set(n, tg.get(n).y - hX); tail.push([[x], -hN], [[n], hX]); }
+  }
+  const d = [];
+  for (const id of moved) if (W.B.has(id) && tg.has(id) && start.has(id)) { const e = (pre.has(id) ? pre.get(id) : tg.get(id).y) - start.get(id); if (e) d.push([id, e]); }
+  const g = d.find(([id]) => id === T.carried);
+  return { moved, steps: [...cut(d, g && g[1] < 0 ? -1 : 1), ...tail] };
+}
+
 function relinkWork(T, rules) {
-  const { base, after } = T, steps = T.steps || [], carried = T.carried ?? null, canonical = !!T.canonical;
+  const { base, after } = T, carried = T.carried ?? null, canonical = !!T.canonical;
   const kv = (list) => new Map((list || []).map(([id, c, w]) => [key(id, c), w]));
   const LV = kv(T.leave), EN = kv(T.enter), PS = new Map((T.pass || []).map(([id, c]) => [key(id, c), 'pass'])), passers = new Set((T.pass || []).map(([id]) => id));
   // GAP.6 first, top to bottom, for every block after does not hold
@@ -512,11 +541,10 @@ function relinkWork(T, rules) {
   const byTarget = (a, b) => tg.get(a).y - tg.get(b).y || tg.get(a).c0 - tg.get(b).c0 || byId(a, b);
   const ys = rowsIn(W, 'canonical');   // the canonical rows of base, by which rule 2 measures
   const anchoredIn = new Set(W.S.keys());   // the (block, column) where a block is an anchor in base: a passer comes back there as one (G11)
-  // the rows the first step starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move; a start
-  // the transition gives must be those rows
-  const start = projected(W, tg);
-  for (const [id, y] of Object.entries(T.start || {})) if (W.B.has(id) && tg.has(id) && start.get(id) + padOf(id) !== y) throw new Error(`gap: ${id} starts at ${y}, FOLLOW gives ${start.get(id) + padOf(id)}`);
-  const fits = new Map(); for (const [list] of steps) for (const id of list) if (tg.has(id)) fits.set(id, tg.get(id).y);
+  // the rows every move starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move; the moves,
+  // cut here; every moved block is held at its target by rule 5, one whose move adds up to nothing included (G15)
+  const start = projected(W, tg), { moved, steps } = movesOf(T, W, tg, start, gb);
+  const fits = new Map(); for (const id of moved) if (tg.has(id)) fits.set(id, tg.get(id).y);
   if (carried != null && !canonical && tg.has(carried)) fits.set(carried, tg.get(carried).y);
   // the neighbour's swap step, its last (§5.1b), with the carried block's temporary rows and the columns it comes into (O-21)
   const swapStep = T.swap ? steps.map(([list]) => list.includes(T.swap[1])).lastIndexOf(true) : -1;

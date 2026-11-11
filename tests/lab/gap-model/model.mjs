@@ -476,6 +476,9 @@ export function createModel(opts = {}) {
       // the rows the first step starts from, when the transition gives them, are FOLLOW's over base's stacks with after's heights
       if (T.start) for (const [id, y] of Object.entries(T.start)) if (B.has(id) && frameRow(B.get(id), start.get(id)) !== y) throw new Error(`relink: ${id} starts at ${y}, FOLLOW gives ${frameRow(B.get(id), start.get(id))}`);
       const fits = {}; for (const [list] of steps) for (const id of list) if (tg.has(id)) fits[id] = T.after[id].y;
+      // the blocks the transition names as moved, beyond its steps' (the owner, 2026-11-11, G15): held at their targets too, one whose
+      // steps add up to nothing included, so that a path cut again with the same ends holds the same blocks
+      for (const id of T.moved || []) if (tg.has(id)) fits[id] = T.after[id].y;
       if (carried != null && !canonical && tg.has(carried)) fits[carried] = T.after[carried].y;
       const departAll = (out) => {   // rule 2, column by column, top to bottom in each chain: out(id, c) → why or null
         const cs = new Set(); for (const b of B.values()) for (const c of cols(b)) cs.add(c);

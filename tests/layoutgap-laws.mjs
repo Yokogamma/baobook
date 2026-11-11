@@ -7,7 +7,7 @@
 // the same rows, owners and lends, or both refuse it). A failure prints its case shrunk, with the generator's version.
 // node tests/layoutgap-laws.mjs [random cases]
 import { transitionCases, declarationCases, landingCases } from './lab/gap-model/transition-cases.mjs';
-import { runLaws } from './lab/gap-model/laws.mjs';
+import { runLaws, runCase } from './lab/gap-model/laws.mjs';
 import { FIXED, stateOf } from './lab/gap-model/fixed-cases.mjs';
 import { createModel } from './lab/gap-model/model.mjs';
 import { createEngineModel, engineCheck } from './lib/gapdriver.mjs';
@@ -30,15 +30,20 @@ for (const c of FIXED) {   // the state of each, the operation, and the model's 
   const e = createEngineModel(c.opts).loadModel(stateOf(c)); e[c.op[0]](...c.op.slice(1));
   ok(`engine, fixed: ${c.name}${e.snapshot() === c.expect ? '' : ': got ' + e.snapshot()}`, e.snapshot() === c.expect);
 }
+// the engine checks the facts of a transition, not a path (RELINK cuts the moves itself, G15): its reasons are declare.mjs's but those of
+// the path the lab's generator writes, where the steps start, what they add up to and what they put on what replayed
+const PATH = /gives no start for it|add up to|with no step that moves it|^replayed, a step/;
 for (const [name, errs, want, T, base] of declarationCases()) {
   ok(name + (errs.length === 0 === !want ? '' : `: got ${JSON.stringify(errs)}`), want ? errs.some((e) => e.includes(want)) : !errs.length);
-  if (T) { const ee = engineCheck(base, T); ok(`engine's check: ${name}` + (JSON.stringify(ee) === JSON.stringify(errs) ? '' : `: ${JSON.stringify(ee)} for declare.mjs's ${JSON.stringify(errs)}`), JSON.stringify(ee) === JSON.stringify(errs)); }
+  const facts = errs.filter((e) => !PATH.test(e));
+  if (T) { const ee = engineCheck(base, T); ok(`engine's check: ${name}` + (JSON.stringify(ee) === JSON.stringify(facts) ? '' : `: ${JSON.stringify(ee)} for declare.mjs's ${JSON.stringify(facts)}`), JSON.stringify(ee) === JSON.stringify(facts)); }
 }
 for (const [name, f, must] of landingCases()) ok(name + (!!f === must ? '' : `: got ${JSON.stringify(f)}`), !!f === must);
 for (const [name, f, must] of landingCases(createEngineModel)) ok('engine: ' + name + (!!f === must ? '' : `: got ${JSON.stringify(f)}`), !!f === must);
 {
   const { tried, counts, failure } = runLaws(N);
-  ok(`model: ${tried} random transitions after a history: valid, local, landing, untouched, split, and the invariants kept after deleting, narrowing and ending temporary heights (${JSON.stringify(counts)})` +
+  counts['net: cut again'] = runCase.netTried || 0; counts['net: cut again and run'] = runCase.netRun || 0;
+  ok(`model: ${tried} random transitions after a history: valid, local, landing, untouched, split, net, and the invariants kept after deleting, narrowing and ending temporary heights (${JSON.stringify(counts)})` +
     (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= N && !failure);
 }
 {

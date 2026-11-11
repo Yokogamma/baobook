@@ -4,16 +4,16 @@
 // change, which stands at its target and is in no chain until phase 8, so it neither leads nor follows a push and is never moved by a
 // primitive but P-UP's lowering of it. Every vertical move is recorded: each call's steps, cut one per common part within the call (`steps`,
 // the Moved of LAYOUT-ENGINE-PLAN §2.1, for the dev look), and the rows a push gave because a height changed (`follow`), since those are
-// FOLLOW's and no step. The transition's steps are cut once, from what all the phases did (`transitionSteps`): steps recorded call by call
-// hold only inside their call. A press aside changes columns only. Which primitive runs when, and what a switched-off rule runs in its
-// place, is settle.js's (§5.1, §1.6); here a primitive does its one job.
+// FOLLOW's and no step. RELINK reads facts, not a path (`transitionFacts`): the blocks the phases moved, which it takes from the rows it
+// counts them from to where the phases left them. A press aside changes columns only. Which primitive runs when, and what a switched-off
+// rule runs in its place, is settle.js's (§5.1, §1.6); here a primitive does its one job.
 //
 // Rows and columns are compared by extents (an area's frame with its free cells, LAYOUT-RULES §1.1); a box's `y` is its frame's row, so an
 // area's extent starts a row above it.
 
 import { extent, isArea, hits, sharesCol, reaches, readingOrder, range } from './geometry.js';
 import { minCells, rowsAt, capCells, isElastic } from './size.js';
-import { push, resize, startRows } from './gap.js';
+import { push, resize, cut } from './gap.js';
 
 /** @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Ctx} Ctx
  *  @typedef {import('./shapes.js').Step} Step @typedef {import('./shapes.js').Work} Work @typedef {import('./shapes.js').Obstacle} Obstacle */
@@ -43,20 +43,6 @@ const visit = (ws) => ws.order.filter((id) => ws.L.boxes.has(id));
 // an extent's top row and its height, and the frame row an extent row gives (an area's frame is a row under its extent's top)
 const top = (b) => extent(b).r0, ext = (b) => { const e = extent(b); return e.r1 - e.r0 + 1; }, pad = (b) => (isArea(b) ? 1 : 0);
 
-/** Moves cut one per common part (LAYOUT-ENGINE-PLAN §5.2): [id, rows] by direction, `first` first, and in each the blocks by how far they
- *  went, the furthest alone first and the others joining it for the last rows of the way (the lab's commonParts). Replayed in order from
- *  places where nothing hits, to places where nothing hits, no step puts a block on another or carries it past one in a column both keep:
- *  a block that ends above another in such a column moves down at most by the rows between them more than it, and up at least by as much.
- *  @param {Array<[string, number]>} d @returns {Array<[string[], number]>} */
-function cut(d, first = 1) {
-  const out = [];
-  for (const sign of [first, -first]) {
-    const group = d.filter(([, e]) => Math.sign(e) === sign); if (!group.length) continue;
-    const levels = [...new Set(group.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
-    levels.forEach((lv, i) => out.push([group.filter(([, e]) => Math.abs(e) >= lv).map(([id]) => id), sign * (lv - (levels[i + 1] || 0))]));
-  }
-  return out;
-}
 /** The blocks that moved between two layouts within one call, recorded as that call's steps (Moved, for the dev look). */
 function record(ws, before, after, by) {
   const d = [];
@@ -64,80 +50,17 @@ function record(ws, before, after, by) {
   for (const [ids, rows] of cut(d)) { const step = ++ws.n; for (const id of ids) { if (!ws.steps.has(id)) ws.steps.set(id, []); ws.steps.get(id).push({ step, by, rows }); } }
 }
 
-/** The steps and the start rows of the transition the next RELINK reads (LAYOUT-RULES GAP's inputs; LAYOUT-ENGINE-PLAN §5.2), cut once
- *  from what the phases did since `base`, not from the steps each call recorded: those hold only inside their call (phase 1c moves the
- *  carried block alone all the way to its target, onto the neighbour that a later call pushes).
- *  - The start rows are GAP's (gap.js `startRows`): FOLLOW over `base`'s stacks with the heights the phases left, a height being no move.
- *  - Every block's origin, where it stands before the moves, is GAP's too: the same FOLLOW once rule 2 has run, every element that no
- *    longer covers a column of its chain having left it (`startRows` with `departed`). Where the origin is not the start row, a departure
- *    made the difference (a block under one that left its column and grew starts lower in the projection than it stands), and a step
- *    declares it: the corrections, one block at a time, those going up from the top and those going down from the bottom, so that from
- *    the start rows to the origins, both FOLLOW's and with nothing on another in a column both keep, none puts a block on another. A
- *    height that changed in a column the block keeps is FOLLOW's in both (the carried block narrowed at the container's edge and grown
- *    pushes the block under it in both), so it needs none.
- *  - A block the phases did not move and rule 2 puts elsewhere than they did stays at its start row in the replay (RELINK places it), so
- *    the origins are one order (the independent reviews of 8bafb15 and 517a8d7: with GAP.9 off, the blocks under a text pressed aside
- *    rise in GAP's origins, and the one no primitive moved stays at its start row): in a column both keep, a block over another at the
- *    start rows is over it at the origins, by its height, through every block between them; a block the phases did not move is fixed,
- *    and each one they moved stands as near its origin in GAP's projection as that order lets it.
- *  - Then every block the phases moved (by a primitive; the moved block; the pair of a swap) goes from its origin to its row now, cut one
- *    per common part, the moved block's direction first (down when it did not move), in each direction the furthest alone first and the
- *    others joining it for the last rows of the way; so RELINK brings it where the phases put it (GAP.5 rule 5), even when its row now is
- *    its start row. A block they did not move has its correction only where rule 2 leaves it where the phases did, and no move: where
- *    rule 2 puts it elsewhere (with GAP.9 off it rises, as after a deletion, which no phase does), RELINK does, a step would hold it.
- *  - A swap (phase 3, LAYOUT-RULES §5.1b) keeps its structural steps apart: the moves are cut up to the rows where the moved block was
- *    pinned against its neighbour, then the neighbour moves alone by the moved block's height, as the check of a swap requires, then the
- *    moved block by the neighbour's.
- *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o]
- *  @returns {{steps:Array<[string[], number]>, start:Record<string, number>}} */
-export function transitionSteps(ws, base, o = {}) {
-  const S = startRows(base, ws.L, ws.ctx.rules), P = startRows(base, ws.L, ws.ctx.rules, { departed: true }), start = {}, fix = [], d = [];
-  // a swap: the rows before it, where the moved block stood pinned against its neighbour (extent tops; an area's frame is a row under)
-  const pre = new Map(), tail = [];
-  if (o.swap) {
-    const [x, n] = o.swap, X = ws.L.boxes.get(x), N = ws.L.boxes.get(n), down = top(base.boxes.get(x)) < top(base.boxes.get(n));
-    if (down) { pre.set(n, top(N) + ext(X) + pad(N)); pre.set(x, top(X) - ext(N) + pad(X)); tail.push([[n], -ext(X)], [[x], ext(N)]); }
-    else { pre.set(n, top(X) + pad(N)); pre.set(x, top(X) + ext(N) + pad(X)); tail.push([[n], ext(X)], [[x], -ext(N)]); }
-  }
-  // the blocks the phases moved: by a primitive (the swap's own steps are its structural ones), the moved block, the pair of a swap
+/** What the next RELINK reads of the phases (LAYOUT-RULES GAP's inputs; LAYOUT-ENGINE-PLAN §5.2), the facts and no path: the blocks the
+ *  phases moved, by a primitive (a swap's own moves are its pair's), the moved block of the change, and the pair of a swap, in base's
+ *  reading order. RELINK takes every one from the row it counts it from to where the phases left it and holds it there, one whose move adds
+ *  up to nothing included (the owner, 2026-11-11, G15); the rows a push gave because a height changed are FOLLOW's and no move.
+ *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o] @returns {{moved:string[], swap?:[string, string]}} */
+export function transitionFacts(ws, base, o = {}) {
   const moved = new Set([...ws.steps].filter(([, l]) => l.some((st) => st.by !== 'swap')).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
-  const ids = base.order.filter((id) => ws.L.boxes.has(id) && S.has(id)), to = new Map(), stay = [];
-  for (const id of ids) { start[id] = S.get(id); to.set(id, pre.has(id) ? pre.get(id) : ws.L.boxes.get(id).y); }
-  // a block the phases did not move has a step only where rule 2 leaves it where the phases did: elsewhere (with GAP.9 off it rises, as
-  // after a deletion, which no phase does) RELINK puts it, a step would hold it where the screen has it, and it stays at its start row in
-  // the replay; no other block's origin may take that block past it in a column both keep
-  for (const id of ids) if (!moved.has(id) && P.get(id) !== start[id]) { if (P.get(id) === to.get(id)) fix.push([id, P.get(id) - start[id]]); else stay.push(id); }
-  const kept = (id) => { const a = extent(base.boxes.get(id)), b = extent(ws.L.boxes.get(id)); return [Math.max(a.c0, b.c0), Math.min(a.c1, b.c1)]; };
-  const share = (p, q) => { const [a0, a1] = kept(p), [b0, b1] = kept(q); return a0 <= a1 && b0 <= b1 && a0 <= b1 && b0 <= a1; };
-  // the origins as one order (the independent review of 517a8d7): in a column both keep, a block over another at the start rows stays
-  // over it at the origins, by its height (after's, extent tops), through every block between them; a block the phases did not move is
-  // fixed (at its start row, or at its origin where it has its correction), and each block they moved goes as near its origin in GAP's
-  // projection as that order lets it, from the top: no lower than the blocks over it allow, no higher than the fixed ones under it, and
-  // the moved ones between, leave room for
-  const fixed = new Map(ids.filter((id) => !moved.has(id)).map((id) => [id, fix.some(([f]) => f === id) ? P.get(id) : start[id]]));
-  const T0 = (id) => start[id] - pad(ws.L.boxes.get(id)), gap = (p, q) => ext(ws.L.boxes.get(p)) - pad(ws.L.boxes.get(p)) + pad(ws.L.boxes.get(q));
-  const seq = [...ids].sort((p, q) => T0(p) - T0(q)), from = new Map(fixed), hi = new Map();
-  for (let i = seq.length - 1; i >= 0; i--) {
-    const p = seq[i]; if (fixed.has(p)) continue; let h = Infinity;
-    for (let k = i + 1; k < seq.length; k++) { const q = seq[k]; if (T0(q) > T0(p) && share(p, q)) h = Math.min(h, (fixed.has(q) ? fixed.get(q) : hi.get(q)) - gap(p, q)); }
-    hi.set(p, h);
-  }
-  for (let i = 0; i < seq.length; i++) {
-    const q = seq[i]; if (fixed.has(q)) continue; let lo = -Infinity;
-    for (let k = 0; k < i; k++) { const p = seq[k]; if (T0(p) < T0(q) && share(p, q)) lo = Math.max(lo, from.get(p) + gap(p, q)); }
-    from.set(q, Math.min(hi.get(q), Math.max(lo, P.get(q))));
-  }
-  for (const id of ids) {
-    if (!moved.has(id)) continue;
-    const f = from.get(id);
-    if (f !== start[id]) fix.push([id, f - start[id]]);
-    if (to.get(id) !== f) d.push([id, to.get(id) - f]);
-  }
-  fix.sort((p, q) => (p[1] < 0 && q[1] < 0 ? start[p[0]] - start[q[0]] : p[1] > 0 && q[1] > 0 ? start[q[0]] - start[p[0]] : p[1] - q[1]));
-  const g = d.find(([id]) => id === ws.moved);
-  return { steps: [...fix.map(([id, r]) => [[id], r]), ...cut(d, g && g[1] < 0 ? -1 : 1), ...tail], start };
+  const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));
+  return o.swap ? { moved: order, swap: o.swap } : { moved: order };
 }
 /** The rows a push gave because a height changed: FOLLOW's, no step (GAP.5 rule 1). */
 function followed(ws, before, after) {

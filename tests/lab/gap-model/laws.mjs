@@ -116,6 +116,31 @@ export function runCase(c, make = createModel) {
           m1.load(s1); m2.load(s2);
           if (a !== b) return { law: 'split', what: 'remove ' + id, cut: a, whole: b }; }
       } } }
+  // net: the same transition with each block's steps added up and cut again, the moved block's direction first and in each direction the
+  // furthest alone first, a swap's steps from the neighbour's last one on kept as they are, and every block the steps named held as moved
+  // (G15), gives the same layout, and the same after a moved block is taken away: rule 1 reads only where each moved block starts and ends,
+  // which lets the engine take the moved blocks as facts and cut their moves itself (the architecture review of 2026-11-11)
+  { const sw = T.swap ? T.steps.map(([ids]) => ids.includes(T.swap[1])).lastIndexOf(true) : -1;
+    const head = sw >= 0 ? T.steps.slice(0, sw) : T.steps, tail = sw >= 0 ? T.steps.slice(sw) : [];
+    const net = new Map(); for (const [ids, d] of head) for (const id of ids) net.set(id, (net.get(id) || 0) + d);
+    const d = [...net].filter(([, e]) => e !== 0), g = d.find(([id]) => id === T.carried), first = g && g[1] < 0 ? -1 : 1, recut = [];
+    for (const sign of [first, -first]) { const group = d.filter(([, e]) => Math.sign(e) === sign); if (!group.length) continue;
+      const levels = [...new Set(group.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p);
+      levels.forEach((lv, i) => recut.push([group.filter(([, e]) => Math.abs(e) >= lv).map(([id]) => id), sign * (lv - (levels[i + 1] || 0))])); }
+    const steps2 = [...recut, ...tail.map(([ids, dd]) => [ids.slice(), dd])];
+    if (JSON.stringify(steps2) !== JSON.stringify(T.steps)) {
+      const T2 = { ...T, steps: steps2, moved: [...new Set(T.steps.flatMap(([ids]) => ids))] };
+      runCase.netTried = (runCase.netTried || 0) + 1;
+      if (!checkDeclaration(base, T2).length) {
+        runCase.netRun = (runCase.netRun || 0) + 1;
+        const m2 = mk(); try { m2.relink(T2); } catch (e) { return { law: 'net', err: e.message, steps: T.steps, recut: steps2 }; }
+        if (m2.snapshot() !== m1.snapshot()) return { law: 'net', path: m1.snapshot(), net: m2.snapshot(), steps: T.steps, recut: steps2 };
+        const id = [...net.keys()].find((k) => m1.B.has(k));
+        if (id) { const s1 = m1.save(), s2 = m2.save(); let a = null, b = null;
+          try { m1.remove(id); a = m1.snapshot(); } catch (e) { a = 'refused'; } try { m2.remove(id); b = m2.snapshot(); } catch (e) { b = 'refused'; }
+          m1.load(s1); m2.load(s2);
+          if (a !== b) return { law: 'net', what: 'remove ' + id, path: a, net: b }; }
+      } } }
   // untouched: with no temporary rows, no change of height, nothing taken away, no block leaving a column but by a pass and none coming in
   // by itself, in the blocks of a part, every block of that part no step moves keeps its row in both measures (a pass frees nothing, a move
   // changes only the gaps round what it moves)
