@@ -56,7 +56,14 @@ function record(ws, before, after, by) {
  *  up to nothing included (the owner, 2026-11-11, G15); the rows a push gave because a height changed are FOLLOW's and no move.
  *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o] @returns {{moved:string[], swap?:[string, string]}} */
 export function transitionFacts(ws, base, o = {}) {
-  const moved = new Set([...ws.steps].filter(([, l]) => l.some((st) => st.by !== 'swap')).map(([id]) => id));
+  // the blocks P-DOWN sank under a moved block that comes in by rule 3 (one base does not hold: created, or carried away and put), with the
+  // blocks that followed them, are pushed by that block's arrival, FOLLOW's, when no other primitive moved a block: not named, so that
+  // taking the moved block away again gives every row back (INV-7 b, G16). When another primitive moved one too (P-UP, P-SEP, P-SINK,
+  // P-REST), every move is named, as RELINK would otherwise count a push twice, once by FOLLOW over a block it did not name and once in the
+  // move of a block it did
+  const putIn = ws.moved != null && !base.boxes.has(ws.moved);
+  const pushed = putIn && [...ws.steps].every(([id, l]) => id === ws.moved || l.every((st) => st.by === 'down' || st.by === 'swap'));
+  const moved = new Set([...ws.steps].filter(([, l]) => l.some((st) => st.by !== 'swap' && !(pushed && st.by === 'down'))).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
   const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));

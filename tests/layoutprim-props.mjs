@@ -7,14 +7,15 @@
 // and gap.js `relink`. What must hold: RELINK takes every transition the primitives make (a refusal is excused only by sides that
 // contradict each other, a block judged below over one judged above, which P-DOWN then drags past the moved block, step 2b's question,
 // when the refusal names one of them), its result breaks no invariant (relink's own check), and every block the phases moved stands at its
-// target or under it (rule 5, G15). RELINK's rows are the result (INV-8): where they differ from the phases', the difference is reported,
-// block by block, by what GAP decided (1b's landing law; GAP.9 off; O-25, a block pressed out from under a block that sank past it, the
-// owner's (б) of 2026-11-11 still to build), not failed. The property checks itself: a moved block given a row above its target must fail
-// it. Seeded.
+// target or under it (rule 5, G15), lower only as GAP decides: at its reference after coming in by itself (1b's landing law), under its
+// old upper neighbour (O-25, G16), or under a block so put or pushed past its reference. A block created over blocks it pushes down, with
+// nothing else moved and GAP.5.2 on, taken away again leaves every block where it was (INV-7 b). RELINK's rows are the result (INV-8):
+// where a block the phases did not move stands elsewhere, the difference is reported, not failed. The property checks itself: SETTLE
+// dropping its facts must be caught. Seeded.
 import { set, text, chars, ctxOf, sheet, over, rows, hitting } from './lib/primcase.mjs';
 import { aside, down, up, sep, transitionFacts, phase } from '../public/layout/primitives.js';
 import { judgeCarry } from '../public/layout/changes.js';
-import { relink } from '../public/layout/gap.js';
+import { relink, remove } from '../public/layout/gap.js';
 import { checkTransition, explain } from '../public/layout/transition.js';
 import { DEFAULT, resolve } from '../public/layout/rules.js';
 import { readingOrder, hits, sharesCol } from '../public/layout/geometry.js';
@@ -39,9 +40,15 @@ function unexplained(base, after, rr, T, rules, refs = new Map(), count = true) 
     const B = after.boxes.get(b), dy = rr.get(b) - B.y; if (!dy) continue;
     const above = (a) => { const A = after.boxes.get(a); return a !== b && sharesCol(A, B) && A.y < B.y; };
     if (dy > 0) {
-      // a block that came in by itself, no lower than its reference (GAP.5 rule 3: R, every block in its columns of base); or under such a
-      // block, by no more rows
-      if ((selfIn.has(b) && refs.has(b) && rr.get(b) <= refs.get(b)) || [...low].some(([a, da]) => above(a) && dy <= da)) { low.set(b, dy); continue; }
+      // a block that came in by itself, no lower than its reference (GAP.5 rule 3: R, every block in its columns of base), or following its
+      // old upper neighbour (O-25, G16: right under it, no further than the gap it had there in base); or under such a block by no more
+      // rows, or under one that came in by itself and was pushed past its reference, by no more than that (FOLLOW keeps the gaps under it)
+      const B0 = base.boxes.get(b), keeps = B0 && B0.col + 1 <= B.col + B.w - 1 && B.col + 1 <= B0.col + B0.w - 1;
+      const follows = selfIn.has(b) && B0 && !keeps && [...base.boxes.values()].some((U0) => { const U1 = after.boxes.get(U0.id);
+        if (!U1 || U0.id === b || !sharesCol(U0, B0) || U0.y >= B0.y || !sharesCol(U1, B)) return false;
+        const under = rr.get(U0.id) + U1.h; return rr.get(b) >= under && rr.get(b) <= under + Math.max(0, B0.y - (U0.y + U0.h)); });
+      const pushedSelf = [...selfIn].some((a) => a !== b && refs.has(a) && after.boxes.has(a) && above(a) && dy <= rr.get(a) - refs.get(a));
+      if ((selfIn.has(b) && refs.has(b) && rr.get(b) <= refs.get(b)) || follows || pushedSelf || [...low].some(([a, da]) => above(a) && dy <= da)) { low.set(b, dy); continue; }
       out.push([b, `${b} is ${dy} rows lower in RELINK${selfIn.has(b) ? `, past its reference ${refs.get(b)}` : ', with no block come in by itself over it'}`]); continue;
     }
     const B0 = base.boxes.get(b);
@@ -53,7 +60,7 @@ function unexplained(base, after, rr, T, rules, refs = new Map(), count = true) 
   if (count && low.size) rep('lower at its reference (landing law)'); if (count && high.size) rep('GAP.9 off: rises at RELINK');
   return out;
 }
-/** O-25 (the owner, 2026-11-11, (б), to build before step 2b): a block pressed out of every column it had, standing on the screen over a
+/** O-25 (the owner, 2026-11-11, G16): a block pressed out of every column it had, standing on the screen over a
  *  block that stood over it in base, which the same change took down past it. */
 function o25(base, after, T) {
   const selfIn = new Set(T.enter.filter(([, , h]) => h === 'self').map(([b]) => b));
@@ -111,7 +118,7 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   } catch (e) { skip++; continue; }
   if (hitting(w) || w.L.boxes.get(id).y < 0) { skip++; continue; }
   if (stack) triedStack++; else tried++; current = { k, create, stack };
-  if (process.env.DUMP) current.dump = { cols, base: [...base.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]), X: [X.col, X.y, X.w, X.h], map, rules: rules === DEFAULT ? 'default' : Object.entries(rules).filter(([kk, v]) => v === false).map(([kk]) => kk), after: [...w.L.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]), met: [...j.met], side: [...j.side] };
+  if (process.env.DUMP) current.dump = { cols, base: [...base.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]), X: [X.col, X.y, X.w, X.h], map, rules: rules === DEFAULT ? 'default' : Object.entries(rules).filter(([kk, v]) => v === false).map(([kk]) => kk) };
   const g = explain(base, w.L);
   const T = { base, after: w.L, ...transitionFacts(w, base), carried: id,
     leave: g.left.map(([b, col]) => [b, col, b === id ? 'narrow' : 'press']), enter: g.entered.map(([b, col]) => [b, col, b === id ? 'put' : 'self']), pass: [] };
@@ -129,12 +136,22 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   const movedWrong = (m, rf, count) => { const hi = T.moved.find((b) => m.has(b) && m.get(b) < w.L.boxes.get(b).y); if (hi) return `${hi} stands above its target`;
     const u = unexplained(base, w.L, m, T, rules, rf, count).find(([b]) => T.moved.includes(b)); return u ? u[1] : null; };
   const wrong = movedWrong(rr, refs, true), isO25 = o25(base, w.L, T);
-  // O-25 (б) is to be built before step 2b: until then its hole, and the moved blocks under it pushed down, are reported, not failed
-  if (wrong && isO25) { rep('O-25: pressed out from under a block that sank past it'); continue; }
   if (wrong) { fail(wrong); continue; }
-  // the report: RELINK's rows are the result (INV-8); where a block the phases did not move stands elsewhere, by what GAP decided
+  // the report: RELINK's rows are the result (INV-8); where a block the phases did not move stands elsewhere, by what GAP decided, or as
+  // the phases' push predicted otherwise (step 2b's question), counted apart where a block followed its old upper neighbour (O-25, G16)
   const why = unexplained(base, w.L, rr, T, rules, refs, false);
-  if (why.length) { if (isO25) rep('O-25: pressed out from under a block that sank past it'); else { rep('other'); if (others.length < 3) others.push({ ...current, why: why[0][1] }); } }
+  if (isO25) rep('O-25 (G16): a block pressed out from under a block that sank past it follows it');
+  if (why.length) { rep(isO25 ? 'other, with O-25' : 'other'); if (others.length < 3) others.push({ ...current, why: why[0][1] }); }
+  // INV-7 b: a block created and taken away again leaves every block where it was, when nothing else changed columns (nothing pressed
+  // aside or narrowed: a block that changed columns stays where it went) and every other block it moved was pushed down under it (P-DOWN,
+  // FOLLOW's: the facts name it alone). A block P-UP lifted over it is a move, which RELINK keeps: reported apart
+  if (create && T.leave.length === 0 && T.enter.every(([b]) => b === id)) {
+    const z = remove(r.layout, id, rules), back = base.order.filter((b) => z.boxes.get(b).y !== base.boxes.get(b).y);
+    if (T.moved.some((b) => b !== id)) rep(back.length ? 'INV-7 b not asked: a block lifted over the created one stays lifted' : 'INV-7 b not asked, every block back all the same');
+    else if (rules['GAP.5.2'] === false) rep(back.length ? 'INV-7 b not asked, GAP.5.2 off: a standing block taken away keeps its lend' : 'INV-7 b not asked (GAP.5.2 off), every block back all the same');
+    else if (back.length) { fail(`INV-7 b: ${back[0]} at ${z.boxes.get(back[0]).y} once ${id} is taken away, at ${base.boxes.get(back[0]).y} in base`); continue; }
+    else rep('INV-7 b: created over blocks it pushes down and taken away again, every block back');
+  }
   // the property's own check: SETTLE dropping its facts (only the carried block held) must leave some moved block where RELINK cannot put it
   if (injected < 300 && T.moved.some((b) => b !== id)) {
     injected++; let r2; try { r2 = relink({ ...T, moved: [id] }, rules); } catch (e) { r2 = { ok: false }; }

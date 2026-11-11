@@ -123,14 +123,20 @@ export function createModel(opts = {}) {
   // resident: a block of a swap that was an anchor in this column comes back as one (the owner, 2026-11-10): it cuts the stack, the rows
   // above it and under it keeping their owners, so that taking it away later closes its place as in a document (G2) and every block keeps
   // its own gaps (G4)
-  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
+  // uppers: for a block that comes in by itself out of every column it had, the blocks that stood over it in base (O-25, the owner's G16):
+  // it comes in under every one of them in the column's chain, with the gap its reference gives, wherever the screen has it
+  function enter(x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null, uppers = null) {   // byCanon: the block's place is its canonical row only (an undo, §6.4 of the plan)
     const Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
-    const inChain = new Set(seq(c).map((el) => el.id));   // the neighbours are those already in the column's chain (rule 3), not every block over it
-    const others = [...B.values()].filter((b) => b.id !== x.id && inChain.has(b.id)).sort((a, b) => (byCanon ? Y(a) - Y(b) : a.y - b.y) || (a.id < b.id ? -1 : 1));
+    const order = seq(c).map((el) => el.id), inChain = new Set(order);   // the neighbours are those already in the column's chain (rule 3), not every block over it
+    // a block put at its displayed row reads its neighbours in the chain's order, which is the screen's but where a block that came in by
+    // itself followed its old upper neighbour (O-25, G16): it stands under that block in the chain whatever its target row
+    const at = new Map(order.map((id, k) => [id, k]));
+    const others = [...B.values()].filter((b) => b.id !== x.id && inChain.has(b.id)).sort((a, b) => (byCanon ? Y(a) - Y(b) || (a.id < b.id ? -1 : 1) : at.get(a.id) - at.get(b.id)));
     if (byCanon && others.some((b) => Y(b) < Y(x) + x.h && Y(x) < Y(b) + b.h)) throw new Error('restore overlaps');
-    const below = byCanon ? others.find((b) => Y(b) >= Y(x) + x.h) : others.find((b) => b.y >= x.y + shownH(x));
+    const lastUp = uppers ? others.reduce((m, b, k) => (uppers.has(b.id) ? k : m), -1) : -1;
+    const below = byCanon ? others.find((b) => Y(b) >= Y(x) + x.h) : others.find((b, k) => k > lastUp && b.y >= x.y + shownH(x));
     if (!below) {   // fresh: x anchors a stack of its own, rows of the anchor above (unowned under the top)
-      const above = byCanon ? others.filter((b) => Y(b) + b.h <= Y(x)).pop() : others.filter((b) => b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
+      const above = byCanon ? others.filter((b) => Y(b) + b.h <= Y(x)).pop() : others.filter((b, k) => k <= lastUp || b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
       S.set(key(x.id, c), { u, parts: [Array(Math.max(0, Y(x) - (above ? Y(above) + H(above) : 0))).fill(u == null ? '' : u)] });
       return;
     }
@@ -468,6 +474,15 @@ export function createModel(opts = {}) {
       const byTarget = (a, b) => tg.get(a).y - tg.get(b).y || tg.get(a).c0 - tg.get(b).c0 || (a < b ? -1 : 1);
       // GAP.6 first, top to bottom, for every block after does not hold
       for (const id of [...B.keys()].filter((id) => !tg.has(id)).sort((a, b) => B.get(a).y - B.get(b).y || (a < b ? -1 : 1))) gap6(id);
+      // O-25 (the owner, 2026-11-11, G16): a block that comes into a column by itself and keeps none of its columns of base follows the
+      // blocks that stood over it in base, in any of its chains: it comes in under them, with the gap its reference gives
+      const uppersOf = new Map();
+      for (const [id, t] of tg) {
+        const x = B.get(id); if (!x || (t.c0 <= x.c1 && x.c0 <= t.c1)) continue;   // it keeps a column of base: nothing to follow
+        if (!cols(t).some((c) => EN.get(key(id, c)) === 'self')) continue;
+        const up = new Set(); for (const c of cols(x)) { const ch = seq(c).map((el) => el.id); for (const u of ch.slice(0, ch.indexOf(id))) up.add(u); }
+        if (up.size) uppersOf.set(id, up);
+      }
       const ys = rowsIn('canonical');   // the canonical rows of base, by which rule 2 measures
       const anchoredIn = new Set(S.keys());   // the (block, column) where a block is an anchor in base: a passer comes back there as one
       // the rows the first step starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move
@@ -580,7 +595,7 @@ export function createModel(opts = {}) {
         const x = B.get(id), self = cols(x).filter((c) => EN.get(key(id, c)) === 'self' && own(id, c));
         if (!self.length) continue;
         M.set(id, ref.has(id) ? ref.get(id) : M.get(id));
-        for (const c of self) enter(x, c, M);
+        for (const c of self) enter(x, c, M, false, null, null, false, null, uppersOf.get(id) || null);
       }
       follow(); raw.fit(fits);
       const errs = invariants(); if (errs.length) throw new Error('relink: ' + errs[0]);

@@ -15,6 +15,14 @@ const T = (m, edits, x = {}) => { const a = frames(m); for (const [id, p] of Obj
 export function transitionCases(make = createModel) {
   const out = [], run = (name, m, t, got, want) => { const errs = checkDeclaration(frames(m), t);
     let refused = null; try { m.relink(t); } catch (e) { refused = e.message; } out.push([name, refused ? 'refused: ' + refused : got(m), want, errs]); };
+  // O-25 (the owner, 2026-11-11, G16): a text T across the sheet and B1 under it in column 6; X put over both presses B1 a column aside, out
+  // of every column it had, and T goes under X (FOLLOW's: X's arrival pushes it). B1 follows its old upper neighbour: under T, with the
+  // gap it had (none), not over it with T pushed further down; taking X away again gives every row back (INV-7 b)
+  { const m = make().open([blk('T', 1, 9, 0, 2), blk('B1', 6, 6, 2, 2)]);
+    run('O-25: B1 pressed out from under T, which X put over both takes down past it, follows T, and X taken away again gives every row back', m,
+      T(m, { X: { c0: 6, c1: 8, y: 0, h: 4, e: 0 }, T: { y: 4 }, B1: { c0: 5, c1: 5 } }, { leave: [['B1', 6, 'press']], enter: [['X', 6, 'put'], ['X', 7, 'put'], ['X', 8, 'put'], ['B1', 5, 'self']] }),
+      (m) => { const r = m.rows(), st = m.stack('B1', 5), s = m.save(); m.remove('X'); const g = m.rows(); m.load(s); return [r, st, g]; },
+      [{ B1: 6, T: 4, X: 0 }, 'T | · |', { B1: 2, T: 0 }]); }
   { const m = make().open([blk('X', 1, 1, 1), blk('Y', 1, 2, 4)]);
     run('X carried past Y while Y widens into column 3 by itself: Y stays, its reference not pushed', m,
       T(m, { X: { y: 10 }, Y: { c1: 3 } }, { steps: [[['X'], 9]], carried: 'X', pass: [['X', 1]], enter: [['Y', 3, 'self']] }),
