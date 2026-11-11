@@ -65,7 +65,7 @@ export function checkDeclaration(base, T) {
     else if (!X || !after[x]) errs.push(`swap ${x}/${n}: base or after does not hold the carried block`);
     else if (!N || !after[n] || !after[x]) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
-      const shared = cols(X).filter((c) => covers(N, c)), AX = extent(after[x]), AN = extent(after[n]), hX = X.h + X.e, hN = N.h + N.e;
+      const shared = cols(X).filter((c) => covers(N, c)), AX = extent(after[x]), AN = extent(after[n]), hX = AX.h + AX.e, hN = AN.h + AN.e;   // the heights the swap is made with, after's (phase 1c sets the carried block's before phase 3)
       const between = (c) => Object.entries(base).some(([id, b]) => { if (id === x || id === n) return false; const e = extent(b); const lo = Math.min(X.y, N.y), hi = Math.max(X.y, N.y); return covers(e, c) && e.y > lo && e.y < hi; });
       if (!shared.length) errs.push(`swap ${x}/${n}: they share no column`);
       else if (shared.every(between)) errs.push(`swap ${x}/${n}: a block stands between them in every column they share`);
@@ -116,12 +116,15 @@ export function checkDeclaration(base, T) {
     const pair = (p, q) => (swap.includes(p) && swap.includes(q)) || passing(p, q);
     const y = new Map(Object.keys(base).filter((id) => after[id] && id !== undone && origin(id) != null).map((id) => [id, origin(id)]));
     const keptCols = (id) => { const a = extent(base[id]), b = extent(after[id]); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
+    // a block pressed aside out of every column it had keeps none: no order to keep with any block (an empty range shares no column)
+    const none = (k) => k.c0 > k.c1;
     for (const [ids, d] of T.steps || []) {
       for (const id of ids) if (y.has(id)) y.set(id, y.get(id) + d);
       const live = [...y.keys()];
       for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
         const p = live[i], q = live[j]; if (pair(p, q)) continue;
         const a = keptCols(p), b = keptCols(q);
+        if (none(a) || none(b)) continue;
         if (a.c0 <= b.c1 && b.c0 <= a.c1 && y.get(p) < y.get(q) + H(q) && y.get(q) < y.get(p) + H(p)) { errs.push(`replayed, a step puts ${p} on ${q}`); i = live.length; break; }
         const declared = (c0, c1) => { for (let c = c0; c <= c1; c++) if (PS.has(kc(p, c)) || PS.has(kc(q, c))) return true; return false; };
         if (a.c0 <= b.c1 && b.c0 <= a.c1 && (origin(p) < origin(q)) !== (y.get(p) < y.get(q)) && !declared(Math.max(a.c0, b.c0), Math.min(a.c1, b.c1))) { errs.push(`replayed, a step carries ${p} past ${q}`); i = live.length; break; }

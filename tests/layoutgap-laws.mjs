@@ -7,7 +7,7 @@
 // the same rows, owners and lends, or both refuse it). A failure prints its case shrunk, with the generator's version.
 // node tests/layoutgap-laws.mjs [random cases]
 import { transitionCases, declarationCases, landingCases } from './lab/gap-model/transition-cases.mjs';
-import { runLaws } from './lab/gap-model/laws.mjs';
+import { runLaws, runCase, build } from './lab/gap-model/laws.mjs';
 import { FIXED, stateOf } from './lab/gap-model/fixed-cases.mjs';
 import { createModel } from './lab/gap-model/model.mjs';
 import { createEngineModel, engineCheck } from './lib/gapdriver.mjs';
@@ -30,15 +30,32 @@ for (const c of FIXED) {   // the state of each, the operation, and the model's 
   const e = createEngineModel(c.opts).loadModel(stateOf(c)); e[c.op[0]](...c.op.slice(1));
   ok(`engine, fixed: ${c.name}${e.snapshot() === c.expect ? '' : ': got ' + e.snapshot()}`, e.snapshot() === c.expect);
 }
+// the engine checks the facts of a transition, not a path (RELINK cuts the moves itself, G15): its reasons are declare.mjs's but those of
+// the path the lab's generator writes, where the steps start, what they add up to and what they put on what replayed
+const PATH = /gives no start for it|add up to|with no step that moves it|^replayed, a step/;
 for (const [name, errs, want, T, base] of declarationCases()) {
   ok(name + (errs.length === 0 === !want ? '' : `: got ${JSON.stringify(errs)}`), want ? errs.some((e) => e.includes(want)) : !errs.length);
-  if (T) { const ee = engineCheck(base, T); ok(`engine's check: ${name}` + (JSON.stringify(ee) === JSON.stringify(errs) ? '' : `: ${JSON.stringify(ee)} for declare.mjs's ${JSON.stringify(errs)}`), JSON.stringify(ee) === JSON.stringify(errs)); }
+  const facts = errs.filter((e) => !PATH.test(e));
+  if (T) { const ee = engineCheck(base, T); ok(`engine's check: ${name}` + (JSON.stringify(ee) === JSON.stringify(facts) ? '' : `: ${JSON.stringify(ee)} for declare.mjs's ${JSON.stringify(facts)}`), JSON.stringify(ee) === JSON.stringify(facts)); }
+}
+// the facts the model's transitions name reach the engine (the independent review of 24a4f93): C, pushed a row by A through the rows the
+// text B left in its column, adds up to nothing in GAP's count and is held where the push put it (G15), on the model, on the engine given
+// the model's form and on the engine given facts alone
+{
+  const blocks = [{ id: 'A', c0: 1, c1: 1, y: 0, h: 1 }, { id: 'B', c0: 1, c1: 10, y: 2, h: 1 }, { id: 'C', c0: 1, c1: 1, y: 4, h: 1 }];
+  const T = { after: { A: { c0: 1, c1: 1, y: 1, h: 1, e: 0 }, B: { c0: 2, c1: 10, y: 2, h: 2, e: 0 }, C: { c0: 1, c1: 1, y: 5, h: 1, e: 0 } },
+    steps: [[['A'], 1]], moved: ['A', 'C'], start: { A: 0, B: 2, C: 5 }, leave: [['B', 1, 'narrow']], enter: [], pass: [], carried: null };
+  const run = (make) => { const m = build({}, blocks, [], [], [], make); m.relink(T); const s = m.save(); m.remove('A'); const gone = m.snapshot(); m.load(s); return [m.snapshot(), gone]; };
+  const md = run(createModel), en = run(createEngineModel), fa = run((o) => createEngineModel({ ...o, facts: true }));
+  ok('G15 through the adapter: C held at 5 under A\'s three rows, on the model, on the engine in the model\'s form and given facts alone, and the same once A is taken away' +
+    (md[0] === en[0] && md[0] === fa[0] && md[1] === en[1] && md[1] === fa[1] ? '' : `: ${JSON.stringify([md, en, fa])}`), md[0].includes('"C",1,1,5') && md[0] === en[0] && md[0] === fa[0] && md[1] === en[1] && md[1] === fa[1]);
 }
 for (const [name, f, must] of landingCases()) ok(name + (!!f === must ? '' : `: got ${JSON.stringify(f)}`), !!f === must);
 for (const [name, f, must] of landingCases(createEngineModel)) ok('engine: ' + name + (!!f === must ? '' : `: got ${JSON.stringify(f)}`), !!f === must);
 {
   const { tried, counts, failure } = runLaws(N);
-  ok(`model: ${tried} random transitions after a history: valid, local, landing, untouched, split, and the invariants kept after deleting, narrowing and ending temporary heights (${JSON.stringify(counts)})` +
+  counts['net: cut again'] = runCase.netTried || 0; counts['net: cut again and run'] = runCase.netRun || 0;
+  ok(`model: ${tried} random transitions after a history: valid, local, landing, untouched, split, net, and the invariants kept after deleting, narrowing and ending temporary heights (${JSON.stringify(counts)})` +
     (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= N && !failure);
 }
 {
@@ -46,12 +63,19 @@ for (const [name, f, must] of landingCases(createEngineModel)) ok('engine: ' + n
   ok(`engine: ${tried} random transitions after a history: the same laws, and the same layout as the model's (${JSON.stringify(counts)})` +
     (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= N && !failure);
 }
+{
+  // the engine given facts alone, `moved` and no path, in reverse order: the same laws and the model's layout, rows, owners and lends, also
+  // once each moved block is taken away again (the independent review of 24a4f93)
+  const { tried, counts, failure } = runLaws(N, { make: (o) => createEngineModel({ ...o, facts: true }), twin: createModel, seed0: 4000001 });
+  ok(`engine given facts: ${tried} random transitions after a history: the same laws, and the model's layout, also after each moved block is taken away (${JSON.stringify(counts)})` +
+    (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= N && !failure);
+}
 // the carries under a switched-off rule's fallback, alone: the mix above draws them seldom (one in fifty or so), and a weight does not
 // promise how many survive the filters, so a targeted run gives each fallback a floor (the independent review of a27021f)
-for (const [side, o] of [['model', { seed0: 2000001 }], ['engine', { make: createEngineModel, twin: createModel, seed0: 3000001 }]]) {
+for (const [side, o] of [['model', { seed0: 2000001 }], ['engine', { make: createEngineModel, twin: createModel, seed0: 3000001 }], ['engine given facts', { make: (x) => createEngineModel({ ...x, facts: true }), twin: createModel, seed0: 5000001 }]]) {
   const FB = 40, FLOOR = 10, { tried, counts, failure } = runLaws(FB, { kinds: ['fallback'], ...o });
   const pu = counts['fallback P-UP'] || 0, dk = counts['fallback DRAG.B2.keep'] || 0;
-  ok(`${side}: ${tried} carries under a fallback only, after a history: every law${side === 'engine' ? ', and the model\'s layout' : ''}, at least ${FLOOR} of each (P-UP ${pu}, DRAG.B2.keep ${dk})` +
+  ok(`${side}: ${tried} carries under a fallback only, after a history: every law${side !== 'model' ? ', and the model\'s layout' : ''}, at least ${FLOOR} of each (P-UP ${pu}, DRAG.B2.keep ${dk})` +
     (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= FB && pu >= FLOOR && dk >= FLOOR && !failure);
 }
 process.exit(fails ? 1 : 0);

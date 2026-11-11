@@ -1,7 +1,9 @@
 // The check of a transition (docs/LAYOUT-RULES.md §4, GAP's inputs): what SETTLE declares it did between two RELINKs, checked against the
 // geometry of `base` and `after` alone, with no stacks. GAP runs it before RELINK and refuses a transition that fails it, an internal
 // error of SETTLE (`{failed}`, LAYOUT-RULES §5.5). It is written from the lab's tests/lab/gap-model/declare.mjs, which stays as the second
-// implementation its tests compare with; the reasons it gives are the same words.
+// implementation its tests compare with; the reasons it gives are the same words. SETTLE declares facts, not a path (`moved`, the owner's
+// G15; the architecture review of 2026-11-11): RELINK cuts the moves itself, so the lab's checks of a path (where it starts, what it adds up
+// to, what it puts on what when replayed) are the lab's alone, for the steps its generator writes.
 //
 // Coordinates are GAP's: a block by its extent (an area's frame with one free cell on every side, LAYOUT-RULES §1.1), its displayed top
 // row, its canonical height and its temporary rows; the columns a transition names are the extent's.
@@ -46,6 +48,7 @@ const FALLBACKS = ['P-UP', 'DRAG.B2.keep'];
 export function checkTransition(T) {
   const errs = [], B = blocks(T.base), A = blocks(T.after), carried = T.carried ?? null, canonical = !!T.canonical, swap = T.swap || [];
   const steps = T.steps || [], leaveL = T.leave || [], enterL = T.enter || [], passL = T.pass || [];
+  const moved = new Set(T.moved || steps.flatMap(([ids]) => ids));
   const g = explain(T.base, T.after);
   const LV = new Map(leaveL.map(([id, c, w]) => [kc(id, c), w])), EN = new Map(enterL.map(([id, c, h]) => [kc(id, c), h]));
   const PS = new Set(passL.map(([id, c]) => kc(id, c)));
@@ -75,18 +78,16 @@ export function checkTransition(T) {
     else if (!X || !A.has(x)) errs.push(`swap ${x}/${n}: base or after does not hold the carried block`);
     else if (!N || !A.has(n) || !A.has(x)) errs.push(`swap ${x}/${n}: no such neighbour`);
     else {
-      const shared = cols(X).filter((c) => covers(N, c)), AX = A.get(x), AN = A.get(n), hX = X.h + X.e, hN = N.h + N.e;
+      const shared = cols(X).filter((c) => covers(N, c)), AX = A.get(x), AN = A.get(n), hX = AX.h + AX.e, hN = AN.h + AN.e;   // the heights the swap is made with, after's (phase 1c sets the carried block's before phase 3)
       const between = (c) => [...B].some(([id, e]) => { if (id === x || id === n) return false; const lo = Math.min(X.y, N.y), hi = Math.max(X.y, N.y); return covers(e, c) && e.y > lo && e.y < hi; });
       if (!shared.length) errs.push(`swap ${x}/${n}: they share no column`);
       else if (shared.every(between)) errs.push(`swap ${x}/${n}: a block stands between them in every column they share`);
       else if ((X.y < N.y) === (AX.y < AN.y)) errs.push(`swap ${x}/${n}: their order is not exchanged`);
       else {
-        // the neighbour may have been pushed before it stopped (M2, M6): pinned where it stopped, its swap is its last step, the carried
-        // block's displayed height towards where the carried block was pinned
-        const nSteps = steps.filter(([ids]) => ids.includes(n)), last = nSteps[nSteps.length - 1], down = X.y < N.y;
-        const swapStep = last && last[0].length === 1 && last[1] === (down ? -hX : hX);
-        const pinned = AN.y + (down ? hX : -hX);   // the neighbour's row before the swap
-        if (!swapStep || (down ? AX.y !== AN.y + hN || pinned < N.y : AN.y !== AX.y + hX || pinned > N.y)) errs.push(`swap ${x}/${n}: not at the rows the swap gives them`);
+        // the neighbour may have been pushed before it stopped (M2, M6): pinned where it stopped, its swap moves it the carried block's
+        // displayed height towards where the carried block was pinned
+        const down = X.y < N.y, pinned = AN.y + (down ? hX : -hX);   // the neighbour's row before the swap
+        if (down ? AX.y !== AN.y + hN || pinned < N.y : AN.y !== AX.y + hX || pinned > N.y) errs.push(`swap ${x}/${n}: not at the rows the swap gives them`);
       }
       for (const c of shared) if (PS.has(kc(n, c)) && !g.reordered.some(([cc, p, q]) => cc === c && (p === n || q === n) && p !== x && q !== x)) errs.push(`swap ${x}/${n}: in column ${c} the neighbour stayed and moved, the carried block passes it`);
     }
@@ -98,41 +99,8 @@ export function checkTransition(T) {
   { const L = [...A].filter(([id]) => !(canonical && id === carried));
     for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const [p, a] = L[i], [q, b] = L[j];
       if (a.c0 <= b.c1 && b.c0 <= a.c1 && a.y < b.y + b.h + b.e && b.y < a.y + a.h + a.e) errs.push(`${p} and ${q} overlap in after`); } }
-  // the steps: from the rows the first step starts from (`start` for the blocks a change of height or of temporary rows reaches, which the
-  // transition must give, base's rows for the others), they bring every block they move to its row in after, and replayed in order they put
-  // no block on another nor carry it past one in a column both keep, but the two blocks of a swap and a block and the one it is declared
-  // to pass
-  const H = (id) => { const b = A.get(id); return b.h + b.e; };
-  const changed = [...B.keys()].filter((id) => A.has(id) && (B.get(id).h !== A.get(id).h || B.get(id).e !== A.get(id).e));
-  const reached = new Set(), queue = [...changed];
-  while (queue.length) { const K = B.get(queue.pop());
-    for (const [id, b] of B) { if (reached.has(id) || b === K) continue;
-      if (b.c0 <= K.c1 && K.c0 <= b.c1 && b.y >= K.y + K.h + K.e) { reached.add(id); queue.push(id); } } }
-  for (const id of reached) if (A.has(id) && !(T.start && id in T.start)) errs.push(`a change of height reaches ${id} and the transition gives no start for it`);
-  const origin = (id) => (T.start && id in T.start ? T.start[id] - A.get(id).pad : reached.has(id) ? null : B.get(id).y);
-  const moved = new Map();
-  for (const [ids, d] of steps) for (const id of ids) { if (!A.has(id)) errs.push(`step of ${id}, which after does not hold`); moved.set(id, (moved.get(id) || 0) + d); }
-  for (const [id, d] of moved) if (A.has(id) && B.has(id) && origin(id) != null && origin(id) + d !== A.get(id).y) errs.push(`the steps of ${id} add up to ${d} rows, not to its row in after`);
-  // with nothing taken away, nothing leaving a column and no undo, a block no step moves keeps its row: every other change of row is a move
-  if ([...B.keys()].every((id) => A.has(id)) && !leaveL.length && undone == null)
-    for (const id of B.keys()) if (!moved.has(id) && origin(id) != null && origin(id) !== A.get(id).y) errs.push(`${id} is at another row in after with no step that moves it`);
-  { // a block and the one it is declared to pass: the two change their order in a column where one of them is declared to pass
-    const passing = (p, q) => g.reordered.some(([c, a, b]) => ((a === p && b === q) || (a === q && b === p)) && (PS.has(kc(p, c)) || PS.has(kc(q, c))));
-    const pair = (p, q) => (swap.includes(p) && swap.includes(q)) || passing(p, q);
-    const y = new Map([...B.keys()].filter((id) => A.has(id) && id !== undone && origin(id) != null).map((id) => [id, origin(id)]));
-    const keptCols = (id) => { const a = B.get(id), b = A.get(id); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
-    for (const [ids, d] of steps) {
-      for (const id of ids) if (y.has(id)) y.set(id, y.get(id) + d);
-      const live = [...y.keys()];
-      for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
-        const p = live[i], q = live[j]; if (pair(p, q)) continue;
-        const a = keptCols(p), b = keptCols(q);
-        if (a.c0 <= b.c1 && b.c0 <= a.c1 && y.get(p) < y.get(q) + H(q) && y.get(q) < y.get(p) + H(p)) { errs.push(`replayed, a step puts ${p} on ${q}`); i = live.length; break; }
-        const declared = (c0, c1) => { for (let c = c0; c <= c1; c++) if (PS.has(kc(p, c)) || PS.has(kc(q, c))) return true; return false; };
-        if (a.c0 <= b.c1 && b.c0 <= a.c1 && (origin(p) < origin(q)) !== (y.get(p) < y.get(q)) && !declared(Math.max(a.c0, b.c0), Math.min(a.c1, b.c1))) { errs.push(`replayed, a step carries ${p} past ${q}`); i = live.length; break; }
-      }
-    }
-  }
+  // the moved blocks are blocks of after (RELINK takes each from the row it counts it from to its row there)
+  for (const id of moved) if (!A.has(id)) errs.push(`step of ${id}, which after does not hold`);
   // the reasons each action may give
   for (const [k, w] of LV) { const id = idOf(k);
     if (w === 'away' && !(id === carried && canonical)) errs.push(`${k}: only an undo's carry back leaves as carried away`);
@@ -153,6 +121,7 @@ export function checkTransition(T) {
   for (const k of PS) { const id = idOf(k);
     if (!(swap.includes(id) || (T.fallback != null && id === carried))) errs.push(`${k}: only a block of a swap, or the carried block under a fallback, changes its order`);
     if (id === undone) errs.push(`${k}: an undo's carry back keeps no place in any chain and passes nothing`); }
+  // the lab's form names the moved blocks by steps: whole rows, each a move, of blocks of base
   for (const [ids, d] of steps) { if (!Number.isInteger(d) || d === 0) errs.push(`a step of ${d} rows`); for (const id of ids) if (!B.has(id)) errs.push(`step of ${id}, not in base`); }
   return errs;
 }

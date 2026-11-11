@@ -34,10 +34,12 @@ const journal=async()=>{ await pg.evaluate(()=>{ document.getElementById('setPop
 await pg.goto(site.url); await pg.waitForSelector('#list .item');
 await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Ключі від дому'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); }); await pg.waitForTimeout(400);
 await pg.evaluate(()=>document.getElementById('newBtn').click()); await pg.waitForTimeout(200);
-await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Покупки'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); }); await pg.waitForTimeout(1600);
-const snap0=await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t));
-await pg.evaluate(()=>localStorage.removeItem('sheet:listsnap')); await pg.reload(); await pg.waitForSelector('#list .item'); await pg.waitForTimeout(1600);
-ok('1b a healthy start with nothing touched remembers its list too', (await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t))).includes('Покупки'));
+await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Покупки'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); });
+// the list is written a second after the last change (snapSave): wait for it, not for a fixed time, which a slow runner may outlast
+const readSnap=()=>pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t));
+let snap0=[]; await until(async()=>{ snap0=await readSnap(); return snap0.includes('Ключі від дому') && snap0.includes('Покупки'); }, 6000);
+await pg.evaluate(()=>localStorage.removeItem('sheet:listsnap')); await pg.reload(); await pg.waitForSelector('#list .item');
+ok('1b a healthy start with nothing touched remembers its list too', !!(await until(async()=>(await readSnap()).includes('Покупки'), 6000)));
 ok('1 the list is remembered by names only ('+snap0.join(', ')+')', snap0.includes('Ключі від дому') && snap0.includes('Покупки') && await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')).every(x=>Object.keys(x).every(k=>k==='t'||k==='p'))));
 
 // the storage answers after 7 s; the user opens the panel at once (as on the phone)

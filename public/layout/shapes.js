@@ -56,17 +56,18 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  *   // between two of them) returns one step per common part, in order (B up 3, then A and B up 2), so one call can take several steps
  * @typedef {Step[]} Moved   // every step that moved the block, in order (a rigid step moves it whole; a height is never a move); for each step,
  *   // rule 1 groups the blocks it moved that are next to one another in a column's chain into runs and changes only the gap above each run and the gap under it
- * @typedef {{base:Layout, after:Layout, steps?:Array<[string[], number]>, start?:Record<string, number>, carried?:?string, canonical?:boolean,
+ * @typedef {{base:Layout, after:Layout, moved?:string[], steps?:Array<[string[], number]>, start?:Record<string, number>, carried?:?string, canonical?:boolean,
  *            leave?:Array<[string, number, 'away'|'narrow'|'press']>, enter?:Array<[string, number, 'put'|'self'|'back']>,
  *            pass?:Array<[string, number]>, swap?:[string, string], fallback?:'P-UP'|'DRAG.B2.keep'}} Transition
  *   // what SETTLE declares it did between two RELINKs (LAYOUT-RULES §4, GAP's inputs): base and after, both displayed (the rows of after are
- *   // targets; an undo's carried block also has its canonical target, its yc); steps: [ids, rows] in order, each rigid, one per common part,
- *   // cut from the blocks' Moved after the phases; start: the box rows the first step starts from, for every block a change of height or of
- *   // temporary rows reaches; carried, with canonical for an undo's carry back or a deleted block made again (LAYOUT-ENGINE-PLAN §6.4);
+ *   // targets; an undo's carried block also has its canonical target, its yc); moved: the blocks SETTLE moved, facts and no path: RELINK
+ *   // takes each from the row its stacks give it with after's heights to its target, cuts the moves itself and holds every one (G15);
+ *   // steps and start: the lab's form, the moves as explicit steps from start rows, whose blocks RELINK reads as `moved`; carried, with canonical for an undo's carry back or a deleted block made again (LAYOUT-ENGINE-PLAN §6.4);
  *   // leave and enter: [id, column, why or how] for every column a block leaves or comes into, in GAP's columns (an area's extent); swap: the
  *   // carried block and its neighbour; pass: [id, column] for a block of a swap passing another in a column it keeps; fallback: the
  *   // switched-off rule that put a neighbour on the carried block's other side
- * @typedef {{ok:true, layout:Layout}|{ok:false, why:'failed', errors:string[]}} Relinked   // RELINK's answer: the layout with its stacks, or
+ * @typedef {{ok:true, layout:Layout, refs?:Map<string,number>}|{ok:false, why:'failed', errors:string[]}} Relinked   // RELINK's answer: the layout with its stacks
+ *   // (refs: the reference, a canonical box row, of every block that came into a column by itself, for the dev look and the tests), or
  *   // the refusal of a transition that does not match its geometry, an internal error of SETTLE (LAYOUT-RULES §5.5)
  */
 
@@ -105,6 +106,21 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
 
 /** What a block cannot pass, for P-ASIDE, `sink` and P-UP: a wall, a container's edge, a block that cannot move.
  * @typedef {{cols:[number,number], rows:[number,number], pushes:'left'|'right'|'none'}} Obstacle
+ */
+
+/** The working state of SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2; primitives.js).
+ * @typedef {{L:Layout, base:Layout, moved:?string, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, n:number, order:string[]}} Work
+ *   // L: the layout as the phases left it, its stacks as the last RELINK left them; base: the layout the interval started from, whose
+ *   // chains `push` departs by rule 2; moved: the moved block of the change, in no chain until
+ *   // phase 8 (none for a size or a deletion); steps: every step a call moved a block by, cut within the call (Moved, for the dev look);
+ *   // follow: the rows pushes gave a block because a height changed (FOLLOW's, no step); n: the step counter; order: the reading order of
+ *   // the layout the current phase started from, which every primitive visits (INV-5)
+ */
+
+/** What phase 2 judged (changes.js, LAYOUT-RULES §5.1 phase 2).
+ * @typedef {{side:Map<string,'above'|'below'>, met:Map<string,'left'|'right'>}} Judged
+ *   // side: every block that shares a column with the moved block, above or below it; met: every block met from the side, and where it is
+ *   // pressed; a block may be in both
  */
 
 /** The carry memory (LAYOUT-RULES §6.D): only what SETTLE reads.

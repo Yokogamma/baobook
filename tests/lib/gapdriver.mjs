@@ -36,7 +36,7 @@ export function layoutFromModel(state) {
 /** The engine's check of a transition in the model's form ({id: frame} for base and T.after), as declare.mjs's checkDeclaration takes it. */
 export function engineCheck(base, T) {
   const lay = (fr) => { const boxes = new Map(Object.entries(fr).map(([id, f]) => [id, { ...boxOf({ id, ...f }, f.e || 0), yc: f.yc ?? f.y }])); return { cols: 1 << 20, measure: 'displayed', boxes, order: [...boxes.keys()], areas: new Map() }; };
-  return checkTransition({ base: lay(base), after: lay(T.after), steps: T.steps, start: T.start, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave, enter: T.enter, pass: T.pass, swap: T.swap, fallback: T.fallback });
+  return checkTransition({ base: lay(base), after: lay(T.after), moved: T.moved, steps: T.steps, start: T.start, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave, enter: T.enter, pass: T.pass, swap: T.swap, fallback: T.fallback });
 }
 
 export function createEngineModel(opts = {}) {
@@ -64,7 +64,11 @@ export function createEngineModel(opts = {}) {
         boxes.set(id, nb);
       }
     });
-    const out = relink({ base, after, steps: T.steps || [], start: T.start, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave || [], enter: T.enter || [], pass: T.pass || [], swap: T.swap, fallback: T.fallback }, rules);
+    // the facts SETTLE hands RELINK (LAYOUT-RULES GAP's inputs, `moved`): with `facts`, the blocks the model's steps move and those it names
+    // as moved, in reverse order (a set: its order changes nothing), and no path; otherwise the model's form, steps, start and moved
+    const moved = [...new Set([...(T.steps || []).flatMap(([ids]) => ids), ...(T.moved || [])])].reverse();
+    const path = opts.facts ? { moved } : { steps: T.steps || [], start: T.start, moved: T.moved };
+    const out = relink({ base, after, ...path, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave || [], enter: T.enter || [], pass: T.pass || [], swap: T.swap, fallback: T.fallback }, rules);
     if (!out.ok) throw new Error('relink: ' + out.errors[0]);
     return out.layout;
   }

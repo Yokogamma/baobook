@@ -11,7 +11,7 @@
 // Blocks come and go in frame coordinates ({c0, c1, y, h, e, yc, area}: an area by its frame, y its displayed row, yc its canonical one);
 // inside, every block is its extent (LAYOUT-RULES §1.1: an area's frame with one free cell on every side), as GAP counts it, and the
 // columns a declaration names are GAP's, the extent's.
-export const GEN_VERSION = 11;
+export const GEN_VERSION = 12;
 import { checkDeclaration } from './declare.mjs';
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
@@ -210,14 +210,15 @@ export function action(r, baseF, opts = {}) {
     const passes = reorders(x); if (!passes.length) return null;   // no neighbour on the other side: a plain carry
     T.carried = x; T.fallback = off;
     // the blocks pushed the way the carried block moves go with it over the last rows of its way, one step per common part; those pushed
-    // the other way (under it, or over it) after it, one step per displacement
+    // the other way (under it, or over it) after it, cut as RELINK cuts them (LAYOUT-RULES GAP's inputs): the furthest alone first, the
+    // others joining it for the last rows of the way; blocks that move together keep the gaps between them
     const disp = ids.filter((id) => id !== x && after[id].y !== base[id].y).map((id) => [id, after[id].y - base[id].y]);
     const same = disp.filter(([, e]) => Math.sign(e) === Math.sign(d)), other = disp.filter(([, e]) => Math.sign(e) !== Math.sign(d));
     if (same.some(([, e]) => Math.abs(e) > Math.abs(d))) return null;
     const levels = [...new Set(same.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p); let doneRows = 0;
     for (const L of [...levels, 0].map((v) => Math.abs(d) - v)) if (L > doneRows) { T.steps.push([[x, ...same.filter(([, e]) => Math.abs(d) - Math.abs(e) < L).map(([id]) => id)], Math.sign(d) * (L - doneRows)]); doneRows = L; }
-    const byD = new Map(); for (const [id, e] of other) { if (!byD.has(e)) byD.set(e, []); byD.get(e).push(id); }
-    for (const [e, list] of [...byD].sort((p, q) => Math.abs(p[0]) - Math.abs(q[0]))) T.steps.push([list, e]);
+    const lv2 = [...new Set(other.map(([, e]) => Math.abs(e)))].sort((p, q) => q - p), so = -Math.sign(d);
+    lv2.forEach((lv, i) => T.steps.push([other.filter(([, e]) => Math.abs(e) >= lv).map(([id]) => id), so * (lv - (lv2[i + 1] || 0))]));
     for (const c of passes) T.pass.push([x, c]);
     const out = done(); if (checkDeclaration(baseF, out.T).length) return null; return out;
   }
