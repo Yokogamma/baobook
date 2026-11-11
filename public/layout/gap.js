@@ -486,12 +486,15 @@ function projected(W, tg) {
 /** The rows the first step of a transition starts from (LAYOUT-RULES GAP's inputs), as RELINK checks a transition's `start`: FOLLOW over
  *  `base`'s stacks, the blocks `after` does not hold taken away first (GAP.6), with `after`'s heights. Box rows by id, for the blocks both
  *  hold. SETTLE gives these as `start` (LAYOUT-ENGINE-PLAN §5.2), so a block a narrowing pushed on the screen, or did not push because
- *  the block over it left its column, starts where GAP counts it from. @param {Layout} base @param {Layout} after @param {Rules} rules
- *  @returns {Map<string, number>} */
-export function startRows(base, after, rules) {
+ *  the block over it left its column, starts where GAP counts it from. With `departed`, the rows once rule 2 has run too.
+ *  @param {Layout} base @param {Layout} after @param {Rules} rules @param {{departed?:boolean}} [o] @returns {Map<string, number>} */
+export function startRows(base, after, rules, { departed = false } = {}) {
   const gb = new Map(base.order.map((id) => [id, gapBlock(base.boxes.get(id))]));
   let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id, rules);
   const W = work(b0, rules), tg = new Map(after.order.filter((id) => W.B.has(id)).map((id) => [id, gapBlock(after.boxes.get(id))]));
+  // `departed`: the rows rule 2 then gives, every element that does not cover a column of its chain in after having left it as narrowed or
+  // pressed off (the moves still to come): where a block really stood before the moves, for SETTLE's corrections (LAYOUT-ENGINE-PLAN §5.2)
+  if (departed) departAll(W, (id, c) => (tg.has(id) && !covers(tg.get(id), c) ? 'narrow' : null), rowsIn(W, 'canonical'), null);
   return new Map([...projected(W, tg)].map(([id, y]) => [id, y + (isArea(after.boxes.get(id)) ? 1 : 0)]));
 }
 

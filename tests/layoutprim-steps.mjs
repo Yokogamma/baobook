@@ -9,7 +9,7 @@ import { down, up, aside, reshape, sinkTo, transitionSteps } from '../public/lay
 import { checkTransition, explain } from '../public/layout/transition.js';
 import { judgeCarry } from '../public/layout/changes.js';
 import { relink, stackAt, showStack } from '../public/layout/gap.js';
-import { DEFAULT } from '../public/layout/rules.js';
+import { DEFAULT, resolve } from '../public/layout/rules.js';
 import { set, text, chars, ctxOf, sheet, over, place, rows, steps, hitting, eq, tally } from './lib/primcase.mjs';
 import { readingOrder } from '../public/layout/geometry.js';
 
@@ -130,6 +130,32 @@ function naive(base, w) { const d = w.L.boxes.get('X').y - base.boxes.get('X').y
   ok('7a B, D and C start at 4, 4 and 5; B\'s correction comes first, then D\'s and C\'s, then D and C together', eq(sw.start, { A: 0, B: 4, D: 4, C: 5 }) && eq(sw.steps, [[['B'], -1], [['D'], -1], [['C'], -1], [['D', 'C'], 1]]), [sw.start, sw.steps]);
   const r = relink(tr, DEFAULT);
   ok('7b checkTransition and RELINK take it, with the rows the phases left', eq(checkTransition(tr), []) && r.ok && eq(Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])), rows(w)), [checkTransition(tr), r.ok || r.errors]);
+}
+
+/* ── 8. a height that changed where the block under it stays is FOLLOW's, no correction (the independent review of 421412d) ── */
+{
+  // X, an elastic text of 30 characters on 10 cells (one row), carried to column 1, row 1: at the right edge it narrows to 9 cells (DRAG.A3)
+  // and takes two rows; B under it in column 2, judged below, sinks under it to 3. GAP counts B from 2, X's growth pushing it in a column
+  // X keeps: B's origin is 2 too, so its way is the move with X alone, which the correction to 1 inside X's new body would have broken
+  const c = ctxOf({ X: { text: chars(30) } }), base = sheet(11, [text('X', 0, 0, 11), set('B', 1, 1, 2)]), w = over(base, c, 'X', { col: 1, y: 1, w: 10, h: 2 });
+  down(w, new Set(['B']));
+  const tr = { ...T(base, w), leave: [['X', 1, 'narrow']] };
+  ok('8 X at col 1, row 1, w 10, two rows; B sunk under it to 3', eq(rows(w), { X: 1, B: 3 }) && w.L.boxes.get('X').h === 2, rows(w));
+  ok('8a B starts at 2 and needs no correction: one step, X and B by 1', eq(tr.start, { X: 0, B: 2 }) && eq(tr.steps, [[['X', 'B'], 1]]), [tr.start, tr.steps]);
+  const r = relink(tr, DEFAULT);
+  ok('8b checkTransition and RELINK take it: X 1, B 3', eq(checkTransition(tr), []) && r.ok && eq(Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])), { X: 1, B: 3 }), [checkTransition(tr), r.ok || r.errors]);
+}
+
+/* ── 9. with GAP.9 off a block the phases did not move has no step that holds it: it rises at RELINK ── */
+{
+  // A narrowed off column 1 (from the left); B under it there. With GAP.9 off A's own rows go with it and its body leaves none, so B rises
+  // as after a deletion; the phases never move a block up, so the screen has B where it was, and only RELINK lifts it
+  const off = resolve({ 'GAP.9': false }), c = ctxOf({}, off), base = sheet(11, [set('A', 0, 0, 5), set('B', 0, 2, 2)]), w = over(base, c);
+  place(w, 'A', { col: 1, w: 4 });
+  const tr = { base, after: w.L, ...transitionSteps(w, base), carried: null, leave: [['A', 1, 'narrow']], enter: [], pass: [] };
+  const r = relink(tr, off);
+  ok('9 no step for B, which the phases did not move', eq(tr.steps, []), tr.steps);
+  ok('9a RELINK takes it and lifts B, as GAP.9 off has it (row 0), above the row the screen had (2)', eq(checkTransition(tr), []) && r.ok && r.layout.boxes.get('B').y === 0, [checkTransition(tr), r.ok ? r.layout.boxes.get('B').y : r.errors]);
 }
 
 process.exit(t.fails ? 1 : 0);
