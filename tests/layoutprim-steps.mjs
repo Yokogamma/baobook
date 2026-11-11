@@ -6,10 +6,11 @@
 // the dev look) are not that input: phase 1c's step carries the moved block alone onto the neighbour that a later call pushes, and the check
 // refuses them in order.
 import { down, up, aside, reshape, sinkTo, transitionSteps } from '../public/layout/primitives.js';
-import { checkTransition } from '../public/layout/transition.js';
+import { checkTransition, explain } from '../public/layout/transition.js';
+import { judgeCarry } from '../public/layout/changes.js';
 import { relink, stackAt, showStack } from '../public/layout/gap.js';
 import { DEFAULT } from '../public/layout/rules.js';
-import { set, text, chars, ctxOf, sheet, over, place, rows, steps, eq, tally } from './lib/primcase.mjs';
+import { set, text, chars, ctxOf, sheet, over, place, rows, steps, hitting, eq, tally } from './lib/primcase.mjs';
 import { readingOrder } from '../public/layout/geometry.js';
 
 const t = tally(), ok = t.ok, ctx = ctxOf();
@@ -73,7 +74,7 @@ function naive(base, w) { const d = w.L.boxes.get('X').y - base.boxes.get('X').y
   aside(w, 'A', 'X', 'right');
   const tr = { ...T(base, w), leave: [['A', 1, 'press']], enter: [['X', 1, 'put']] };
   ok('4 A pressed right (col 1, w 10, two rows); B stays at row 2', eq(w.L.boxes.get('A').col, 1) && w.L.boxes.get('A').h === 2 && rows(w).B === 2, rows(w));
-  ok('4a B starts where GAP counts it from, FOLLOW over base\'s stacks with A\'s new height (row 3), and no step moves it', tr.start.B === 3 && !tr.steps.some(([ids]) => ids.includes('B')), [tr.start, tr.steps]);
+  ok('4a B starts where GAP counts it from, FOLLOW over base\'s stacks with A\'s new height (row 3); its way is one correction to the row it stood at, 2', tr.start.B === 3 && eq(tr.steps, [[['B'], -1]]), [tr.start, tr.steps]);
   const r = relink(tr, DEFAULT);
   ok('4b checkTransition and RELINK take it, and B stays at row 2 (GAP.9: A\'s body and gap stay as rows in column 1)', eq(checkTransition(tr), []) && r.ok && r.layout.boxes.get('B').y === 2, [checkTransition(tr), r.ok ? r.layout.boxes.get('B').y : r]);
 }
@@ -109,6 +110,26 @@ function naive(base, w) { const d = w.L.boxes.get('X').y - base.boxes.get('X').y
   ok('6a C\'s way is declared: from its start to the row it stood at, then with A', eq(tr.steps, [[['C'], -1], [['A', 'C'], 1]]), tr.steps);
   const r = relink(tr, DEFAULT);
   ok('6b checkTransition and RELINK take it; C stays at 5 with A\'s three rows above it', eq(checkTransition(tr), []) && r.ok && r.layout.boxes.get('C').y === 5 && showStack(stackAt(r.layout, 'C', 1)) === 'A | A3 |', [checkTransition(tr), r.ok && r.layout.boxes.get('C').y, r.ok && showStack(stackAt(r.layout, 'C', 1))]);
+}
+
+/* ── 7. a correction never meets a block that stood still (the independent review of 321c664) ── */
+{
+  // X created on A's right half: the carry's judge meets A from the side, P-ASIDE narrows it from the left to three rows and it leaves the
+  // columns of B, D and C; B stays at 3, P-DOWN takes D under X to 4 and C under D to 5. GAP projects B and D at 4 and C at 5 (A, still in
+  // their columns in base, grown by a row): B, which no primitive moved, gets its correction too, before C's would put C on it
+  const c = ctxOf({ A: { text: chars(54) } }), base = sheet(11, [text('A', 0, 0, 11, 2), set('B', 0, 3, 2), set('D', 2, 3, 3), set('C', 0, 4, 4)]);
+  const boxes = new Map([...base.boxes, ['X', set('X', 3, 0, 2, 4)]]), order = readingOrder(boxes.values());
+  const w = over({ ...base, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }, c, 'X');
+  const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+  const j = judgeCarry(w.L, base, { id: 'X', at: { col: 3, y: 0, frow: 0 }, away: true }, mem, c);
+  for (const [id, sd] of j.met) aside(w, id, 'X', sd);
+  down(w, new Set([...j.side].filter(([, sd]) => sd === 'below').map(([id]) => id)));
+  const g = explain(base, w.L), sw = transitionSteps(w, base);
+  const tr = { base, after: w.L, steps: sw.steps, start: sw.start, carried: 'X', leave: g.left.map(([id, col]) => [id, col, 'press']), enter: g.entered.map(([id, col]) => [id, col, id === 'X' ? 'put' : 'self']), pass: [] };
+  ok('7 A pressed aside (col 4, w 7, three rows); B at 3, D at 4, C at 5; nothing hits', eq(rows(w), { X: 0, A: 0, B: 3, D: 4, C: 5 }) && w.L.boxes.get('A').h === 3 && hitting(w) === null, rows(w));
+  ok('7a B, D and C start at 4, 4 and 5; B\'s correction comes first, then D\'s and C\'s, then D and C together', eq(sw.start, { A: 0, B: 4, D: 4, C: 5 }) && eq(sw.steps, [[['B'], -1], [['D'], -1], [['C'], -1], [['D', 'C'], 1]]), [sw.start, sw.steps]);
+  const r = relink(tr, DEFAULT);
+  ok('7b checkTransition and RELINK take it, with the rows the phases left', eq(checkTransition(tr), []) && r.ok && eq(Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])), rows(w)), [checkTransition(tr), r.ok || r.errors]);
 }
 
 process.exit(t.fails ? 1 : 0);

@@ -121,12 +121,15 @@ export function checkTransition(T) {
     const pair = (p, q) => (swap.includes(p) && swap.includes(q)) || passing(p, q);
     const y = new Map([...B.keys()].filter((id) => A.has(id) && id !== undone && origin(id) != null).map((id) => [id, origin(id)]));
     const keptCols = (id) => { const a = B.get(id), b = A.get(id); return { c0: Math.max(a.c0, b.c0), c1: Math.min(a.c1, b.c1) }; };
+    // a block pressed aside out of every column it had keeps none: no order to keep with any block (an empty range shares no column)
+    const none = (k) => k.c0 > k.c1;
     for (const [ids, d] of steps) {
       for (const id of ids) if (y.has(id)) y.set(id, y.get(id) + d);
       const live = [...y.keys()];
       for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
         const p = live[i], q = live[j]; if (pair(p, q)) continue;
         const a = keptCols(p), b = keptCols(q);
+        if (none(a) || none(b)) continue;
         if (a.c0 <= b.c1 && b.c0 <= a.c1 && y.get(p) < y.get(q) + H(q) && y.get(q) < y.get(p) + H(p)) { errs.push(`replayed, a step puts ${p} on ${q}`); i = live.length; break; }
         const declared = (c0, c1) => { for (let c = c0; c <= c1; c++) if (PS.has(kc(p, c)) || PS.has(kc(q, c))) return true; return false; };
         if (a.c0 <= b.c1 && b.c0 <= a.c1 && (origin(p) < origin(q)) !== (y.get(p) < y.get(q)) && !declared(Math.max(a.c0, b.c0), Math.min(a.c1, b.c1))) { errs.push(`replayed, a step carries ${p} past ${q}`); i = live.length; break; }

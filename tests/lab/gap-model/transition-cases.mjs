@@ -422,6 +422,11 @@ export function declarationCases() {
     // block passes only the blocks it changes its order with there (GAP.5 rule 2's pass, the steps one per common part)
     (() => { const b0 = { a1: { c0: 5, c1: 5, y: 1, h: 3, e: 1, area: true }, a2: { c0: 3, c1: 4, y: 7, h: 3, e: 0 }, a3: { c0: 3, c1: 5, y: 12, h: 3, e: 0 } };
       return ['a pass in one column does not let the steps put the passer on a block of another', chk(b0, { after: { a1: { ...b0.a1, y: 13 }, a2: b0.a2, a3: { ...b0.a3, y: 18 } }, steps: [[['a1'], 12], [['a3'], 6]], leave: [], enter: [], pass: [['a1', 4]], carried: 'a1', fallback: 'DRAG.B2.keep' }), 'puts a1 on a3']; })(),
+    // the independent review of 321c664 found it through step 2a's primitives: B5, one column wide, pressed aside out of the only column it
+    // had, keeps no column, so no block passes it there; the replay took its empty range for a column it shares with B3, carried down past
+    // its old row by P-DOWN
+    (() => { const b0 = { B3: { c0: 1, c1: 9, y: 6, h: 2, e: 0 }, B5: { c0: 8, c1: 8, y: 9, h: 2, e: 0 } };
+      return ['a block pressed aside out of every column it had keeps none to be passed in', chk(b0, { after: { B3: { ...b0.B3, y: 11 }, B5: { ...b0.B5, c0: 9, c1: 9 } }, steps: [[['B3'], 5]], leave: [['B5', 8, 'press']], enter: [['B5', 9, 'self']], pass: [], carried: null }), null]; })(),
   ].map(([name, errs, want]) => [name, errs, want, errs.T, errs.base]);
 }
 

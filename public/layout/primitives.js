@@ -69,13 +69,15 @@ function record(ws, before, after, by) {
  *  carried block alone all the way to its target, onto the neighbour that a later call pushes).
  *  - The start rows are GAP's (gap.js `startRows`): FOLLOW over `base`'s stacks with the heights the phases left; a row FOLLOW gives is
  *    no step.
- *  - Every block a primitive moved, and the moved block, has its real way declared, so RELINK brings it where the phases put it (GAP.5
- *    rule 5) even when its row now is its start row: first, where its real origin (the row it stood at before the first primitive moved
- *    it, the moved block's row in `base`) is not its start row, a step from the one to the other (a block under one that left its column
- *    and grew starts lower in GAP's projection than it stood: the departure leaves it where it was); then its moves, from its origin to its
- *    row now, cut one per common part, the moved block's direction first (down when it did not move), in each direction the furthest
- *    alone first and the others joining it for the last rows of the way. A block no primitive moved has no step: what moved it on the
- *    screen is FOLLOW's or a departure's, which RELINK makes from the declaration.
+ *  - Every block has its real way declared, so that replayed from the start rows the steps go through the rows the phases really gave and
+ *    RELINK brings each block where they put it (GAP.5 rule 5), even when its row now is its start row: first, for every block whose real
+ *    origin is not its start row, a step from the one to the other; its real origin is the row it stood at before the first primitive
+ *    moved it, its row now when none did (moved or not: a block under one that left its column and grew starts lower in GAP's projection
+ *    than it stood, the departure leaving it where it was), the moved block's row in `base`; then the moves of the blocks primitives moved,
+ *    and of the moved block, from their origins to their rows now, cut one per common part, the moved block's direction first (down when
+ *    it did not move), in each direction the furthest alone first and the others joining it for the last rows of the way. The corrections
+ *    go one block at a time, those going up from the top and those going down from the bottom: from the start rows, where nothing hits,
+ *    to the real origins, where nothing hits, none puts a block on another.
  *  - A swap (phase 3, LAYOUT-RULES §5.1b) keeps its structural steps apart: the moves are cut up to the rows where the moved block was
  *    pinned against its neighbour, then the neighbour moves alone by the moved block's height, as the check of a swap requires, then the
  *    moved block by the neighbour's.
@@ -100,8 +102,7 @@ export function transitionSteps(ws, base, o = {}) {
   for (const id of base.order) {
     const a = ws.L.boxes.get(id); if (!a || !S.has(id)) continue;
     start[id] = S.get(id);
-    if (!went.has(id)) continue;
-    const to = pre.has(id) ? pre.get(id) : a.y, from = to - went.get(id);
+    const to = pre.has(id) ? pre.get(id) : a.y, from = to - (went.get(id) || 0);
     if (from !== start[id]) fix.push([id, from - start[id]]);
     if (to !== from) d.push([id, to - from]);
   }
