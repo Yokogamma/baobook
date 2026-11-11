@@ -75,6 +75,9 @@ function record(ws, before, after, by) {
  *    the start rows to the origins, both FOLLOW's and with nothing on another in a column both keep, none puts a block on another. A
  *    height that changed in a column the block keeps is FOLLOW's in both (the carried block narrowed at the container's edge and grown
  *    pushes the block under it in both), so it needs none.
+ *  - A block the phases did not move and rule 2 puts elsewhere than they did stays at its start row in the replay (RELINK places it), so
+ *    the origin of a block they moved is kept from taking it past such a block in a column both keep (the independent review of 8bafb15:
+ *    with GAP.9 off, the blocks under a text pressed aside rise in GAP's origins, and the one no primitive moved stays at its start row).
  *  - Then every block the phases moved (by a primitive; the moved block; the pair of a swap) goes from its origin to its row now, cut one
  *    per common part, the moved block's direction first (down when it did not move), in each direction the furthest alone first and the
  *    others joining it for the last rows of the way; so RELINK brings it where the phases put it (GAP.5 rule 5), even when its row now is
@@ -98,15 +101,25 @@ export function transitionSteps(ws, base, o = {}) {
   const moved = new Set([...ws.steps].filter(([, l]) => l.some((st) => st.by !== 'swap')).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
-  for (const id of base.order) {
-    const a = ws.L.boxes.get(id); if (!a || !S.has(id)) continue;
-    start[id] = S.get(id);
-    const to = pre.has(id) ? pre.get(id) : a.y, from = P.get(id);
-    // a block the phases did not move has a step only where rule 2 leaves it where the phases did: elsewhere (with GAP.9 off it rises,
-    // as after a deletion, which no phase does) RELINK puts it, and a step would hold it where the screen has it
-    if (!moved.has(id)) { if (from !== start[id] && from === to) fix.push([id, from - start[id]]); continue; }
+  const ids = base.order.filter((id) => ws.L.boxes.has(id) && S.has(id)), to = new Map(), stay = [];
+  for (const id of ids) { start[id] = S.get(id); to.set(id, pre.has(id) ? pre.get(id) : ws.L.boxes.get(id).y); }
+  // a block the phases did not move has a step only where rule 2 leaves it where the phases did: elsewhere (with GAP.9 off it rises, as
+  // after a deletion, which no phase does) RELINK puts it, a step would hold it where the screen has it, and it stays at its start row in
+  // the replay; no other block's origin may take that block past it in a column both keep
+  for (const id of ids) if (!moved.has(id) && P.get(id) !== start[id]) { if (P.get(id) === to.get(id)) fix.push([id, P.get(id) - start[id]]); else stay.push(id); }
+  const kept = (id) => { const a = extent(base.boxes.get(id)), b = extent(ws.L.boxes.get(id)); return [Math.max(a.c0, b.c0), Math.min(a.c1, b.c1)]; };
+  const share = (p, q) => { const [a0, a1] = kept(p), [b0, b1] = kept(q); return a0 <= a1 && b0 <= b1 && a0 <= b1 && b0 <= a1; };
+  for (const id of ids) {
+    if (!moved.has(id)) continue;
+    const M = ws.L.boxes.get(id); let lo = -Infinity, hi = Infinity;
+    for (const u of stay) {
+      if (!share(id, u)) continue;
+      const U = ws.L.boxes.get(u), uTop = start[u] - pad(U);   // where it stands in the replay, by its height there (after's)
+      if (start[u] < start[id]) lo = Math.max(lo, uTop + ext(U) + pad(M)); else hi = Math.min(hi, uTop - ext(M) + pad(M));
+    }
+    let from = P.get(id); if (lo > hi) from = start[id]; else from = Math.min(hi, Math.max(lo, from));
     if (from !== start[id]) fix.push([id, from - start[id]]);
-    if (to !== from) d.push([id, to - from]);
+    if (to.get(id) !== from) d.push([id, to.get(id) - from]);
   }
   fix.sort((p, q) => (p[1] < 0 && q[1] < 0 ? start[p[0]] - start[q[0]] : p[1] > 0 && q[1] > 0 ? start[q[0]] - start[p[0]] : p[1] - q[1]));
   const g = d.find(([id]) => id === ws.moved);

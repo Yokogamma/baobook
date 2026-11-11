@@ -66,7 +66,8 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  *   // leave and enter: [id, column, why or how] for every column a block leaves or comes into, in GAP's columns (an area's extent); swap: the
  *   // carried block and its neighbour; pass: [id, column] for a block of a swap passing another in a column it keeps; fallback: the
  *   // switched-off rule that put a neighbour on the carried block's other side
- * @typedef {{ok:true, layout:Layout}|{ok:false, why:'failed', errors:string[]}} Relinked   // RELINK's answer: the layout with its stacks, or
+ * @typedef {{ok:true, layout:Layout, refs?:Map<string,number>}|{ok:false, why:'failed', errors:string[]}} Relinked   // RELINK's answer: the layout with its stacks
+ *   // (refs: the reference, a canonical box row, of every block that came into a column by itself, for the dev look and the tests), or
  *   // the refusal of a transition that does not match its geometry, an internal error of SETTLE (LAYOUT-RULES §5.5)
  */
 

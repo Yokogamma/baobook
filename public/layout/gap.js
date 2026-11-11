@@ -466,14 +466,14 @@ function departAll(W, out, ys, swap) {
  *  and M, W with rule 5 made, where the blocks that come in by themselves are measured, each at its reference. Then rule 5 and FOLLOW,
  *  whose rows are the result. @param {Transition} T @param {Rules} rules @returns {Relinked} */
 export function relink(T, rules) {
-  let layout;
+  let out;
   try {
     const errors = checkTransition(T);
     if (errors.length) return { ok: false, why: 'failed', errors };
-    layout = relinkWork(T, rules);
+    out = relinkWork(T, rules);
   } catch (e) { return { ok: false, why: 'failed', errors: [e.message] }; }
-  const errs = check(layout);
-  return errs.length ? { ok: false, why: 'failed', errors: errs } : { ok: true, layout };
+  const errs = check(out.layout);
+  return errs.length ? { ok: false, why: 'failed', errors: errs } : { ok: true, layout: out.layout, refs: out.refs };
 }
 
 /** FOLLOW over a working state's stacks with the heights of `tg` (after, in GAP's coordinates): the rows a transition's first step starts
@@ -602,7 +602,9 @@ function relinkWork(T, rules) {
     for (const c of self) enter(W, W.B.get(id), c, M);
   }
   followWork(W); fitWork(W, fits);
-  return toLayout(W, after);
+  // the references of the blocks that came in by themselves, as canonical box rows, for the dev look and the tests (landing)
+  const refs = new Map(ids.filter((id) => ref.has(id) && cols(W.B.get(id)).some((c) => EN.get(key(id, c)) === 'self')).map((id) => [id, ref.get(id) + padOf(id)]));
+  return { layout: toLayout(W, after), refs };
 }
 
 /** Rule 1 alone, every block keeping its columns: the steps of `moves` in order, then FOLLOW; alone it is the lab model's `move`, and what

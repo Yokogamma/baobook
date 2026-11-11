@@ -158,4 +158,24 @@ function naive(base, w) { const d = w.L.boxes.get('X').y - base.boxes.get('X').y
   ok('9a RELINK takes it and lifts B, as GAP.9 off has it (row 0), above the row the screen had (2)', eq(checkTransition(tr), []) && r.ok && r.layout.boxes.get('B').y === 0, [checkTransition(tr), r.ok ? r.layout.boxes.get('B').y : r.errors]);
 }
 
+/* ── 10. case 7 with GAP.9 off: no origin takes a block past one that stays at its start row (the independent review of 8bafb15) ── */
+{
+  // as in case 7, but A's own rows go with it: in GAP's origins B, D and C rise (0, 0, 1). B, which no primitive moved, gets no step (RELINK
+  // lifts it) and stays at its start row, 4, in the replay; C's origin is kept under it, so C is not carried past it
+  const off = resolve({ 'GAP.9': false }), c = ctxOf({ A: { text: chars(54) } }, off);
+  const base = sheet(11, [text('A', 0, 0, 11, 2), set('B', 0, 3, 2), set('D', 2, 3, 3), set('C', 0, 4, 4)]);
+  const boxes = new Map([...base.boxes, ['X', set('X', 3, 0, 2, 4)]]), order = readingOrder(boxes.values());
+  const w = over({ ...base, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }, c, 'X');
+  const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+  const j = judgeCarry(w.L, base, { id: 'X', at: { col: 3, y: 0, frow: 0 }, away: true }, mem, c);
+  for (const [id, sd] of j.met) aside(w, id, 'X', sd);
+  down(w, new Set([...j.side].filter(([, sd]) => sd === 'below').map(([id]) => id)));
+  const g = explain(base, w.L), sw = transitionSteps(w, base);
+  const tr = { base, after: w.L, steps: sw.steps, start: sw.start, carried: 'X', leave: g.left.map(([id, col]) => [id, col, 'press']), enter: g.entered.map(([id, col]) => [id, col, id === 'X' ? 'put' : 'self']), pass: [] };
+  ok('10 the phases leave B at 3, D at 4, C at 5', eq(rows(w), { X: 0, A: 0, B: 3, D: 4, C: 5 }) && hitting(w) === null, rows(w));
+  ok('10a no step for B; none takes C past it', !tr.steps.some(([ids]) => ids.includes('B')), tr.steps);
+  const r = relink(tr, off);
+  ok('10b checkTransition and RELINK take it: B lifted to 0 (GAP.9 off), D at 4, C at 5', eq(checkTransition(tr), []) && r.ok && eq(Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])), { X: 0, A: 0, B: 0, D: 4, C: 5 }), [checkTransition(tr), r.ok ? Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])) : r.errors, tr.steps]);
+}
+
 process.exit(t.fails ? 1 : 0);

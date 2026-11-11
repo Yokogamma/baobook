@@ -8,7 +8,8 @@
 // deletion, or one under it by no more rows (the phases never move a block up); each differing block is explained on its own. A refused
 // transition is excused only by sides that contradict each other (a block judged below over one judged above, which P-DOWN then drags
 // past the moved block), a question for the pipeline of step 2b, when the refusal names one of them. Anything else fails, with the first
-// case printed. The property checks itself: one more row down given to a block nothing lets RELINK put lower must fail it. Seeded.
+// case printed. The property checks itself: one more row down given to a block nothing lets RELINK put lower, and one more row past its
+// reference given to a block that came in by itself, must fail it. Seeded.
 import { set, text, chars, ctxOf, sheet, over, rows, hitting } from './lib/primcase.mjs';
 import { aside, down, up, sep, transitionSteps, phase } from '../public/layout/primitives.js';
 import { judgeCarry } from '../public/layout/changes.js';
@@ -19,23 +20,26 @@ import { readingOrder, hits, sharesCol } from '../public/layout/geometry.js';
 // a seed, and how many cases: node tests/layoutprim-props.mjs [seed] [N]
 let seed = +process.argv[2] || 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const N = +process.argv[3] || 3000;
-let tried = 0, bad = 0, skip = 0, injected = 0, caught = 0; const fails = {}, firsts = [], inc = (k) => (fails[k] = (fails[k] || 0) + 1);
+let tried = 0, bad = 0, skip = 0, injected = 0, caught = 0, injectedSelf = 0, caughtSelf = 0; const fails = {}, firsts = [], inc = (k) => (fails[k] = (fails[k] || 0) + 1);
 let current = null;
 const fail = (why) => { bad++; inc(why.replace(/[A-Z]\d?/g, '·').slice(0, 60)); if (firsts.length < 3) firsts.push({ ...current, why }); };
 const covers = (b, c) => b.col + 1 <= c && c <= b.col + b.w - 1;
 /** Why a difference between RELINK's rows and the working state's is not one GAP decided, block by block, from the top; or null.
- *  Lower: a block that came into a column by itself, put at its reference (1b's landing law), or a block under one so put, by no more rows.
+ *  Lower: a block that came into a column by itself, no lower than its reference (RELINK's `refs`, GAP.5 rule 3), or a block under one so
+ *  put, by no more rows.
  *  Higher: only with GAP.9 off, a block under one that left a column it keeps (it rises as after a deletion), or under one that rose, by no
  *  more rows. */
-function unexplained(base, after, rr, T, rules) {
+function unexplained(base, after, rr, T, rules, refs = new Map()) {
   const selfIn = new Set(T.enter.filter(([, , h]) => h === 'self').map(([b]) => b)), low = new Map(), high = new Map();
   const off9 = rules !== DEFAULT && rules['GAP.9'] === false;
   for (const b of after.order) {
     const B = after.boxes.get(b), dy = rr.get(b) - B.y; if (!dy) continue;
     const above = (a) => { const A = after.boxes.get(a); return a !== b && sharesCol(A, B) && A.y < B.y; };
     if (dy > 0) {
-      if (selfIn.has(b) || [...low].some(([a, da]) => above(a) && dy <= da)) { low.set(b, dy); continue; }
-      return `${b} is ${dy} rows lower in RELINK, with no block come in by itself over it`;
+      // a block that came in by itself, no lower than its reference (GAP.5 rule 3: R, every block in its columns of base); or under such a
+      // block, by no more rows
+      if ((selfIn.has(b) && refs.has(b) && rr.get(b) <= refs.get(b)) || [...low].some(([a, da]) => above(a) && dy <= da)) { low.set(b, dy); continue; }
+      return `${b} is ${dy} rows lower in RELINK${selfIn.has(b) ? `, past its reference ${refs.get(b)}` : ', with no block come in by itself over it'}`;
     }
     const B0 = base.boxes.get(b);
     const left = B0 && [...base.boxes.values()].some((X0) => { if (X0.id === b || X0.y + X0.h > B0.y) return false;
@@ -95,17 +99,38 @@ for (let k = 0; k < N * 3 && tried < N; k++) {
     const shares = B2.col + 1 < X2.col + X2.w && X2.col + 1 < B2.col + B2.w; return shares && (s2 === 'above' ? B2.y > X2.y : B2.y < X2.y); }).map(([b]) => b);
   if (errs.length && contra.some((b) => errs.some((e) => e.includes(b)))) { inc('contradictory sides (2b)'); continue; }
   if (errs.length || !r.ok) { fail(errs[0] || r.errors[0]); continue; }
-  const why = unexplained(base, w.L, rr, T, rules);
+  const refs = r.refs || new Map(), why = unexplained(base, w.L, rr, T, rules, refs);
   if (why) { fail(why); continue; }
   // the property's own check (the independent review of 421412d): one more row down for a block nothing lets RELINK put lower must fail it
   if (injected < 200) {
     const selfIn = new Set(T.enter.filter(([, , h]) => h === 'self').map(([b]) => b));
     const victim = [...w.L.order].reverse().find((b) => !selfIn.has(b) && rr.get(b) === w.L.boxes.get(b).y && ![...selfIn].some((s2) => sharesCol(w.L.boxes.get(s2), w.L.boxes.get(b))));
-    if (victim) { injected++; const rr2 = new Map(rr); rr2.set(victim, rr.get(victim) + 1); if (unexplained(base, w.L, rr2, T, rules)) caught++; }
+    if (victim) { injected++; const rr2 = new Map(rr); rr2.set(victim, rr.get(victim) + 1); if (unexplained(base, w.L, rr2, T, rules, refs)) caught++; }
+  }
+  // and one more row past its reference for a block that came in by itself (the independent review of 8bafb15)
+  if (injectedSelf < 200) {
+    const self = [...new Set(T.enter.filter(([, , h]) => h === 'self').map(([b]) => b))].find((b) => refs.has(b) && rr.get(b) >= refs.get(b));
+    if (self) { injectedSelf++; const rr2 = new Map(rr); rr2.set(self, Math.max(rr.get(self), refs.get(self)) + 1); if (unexplained(base, w.L, rr2, T, rules, refs)) caughtSelf++; }
   }
 }
-const ok = tried >= N && bad === 0;
+// the reviewer's case, fixed: A pressed one column right into a free column by a new block X; RELINK leaves it at 0, its reference: put
+// at 1 or at 100 instead, nothing explains it
+let named = false;
+{
+  const base = sheet(8, [set('A', 0, 0, 3)]), ctx = ctxOf();
+  const boxes = new Map([...base.boxes, ['X', set('X', 0, 0, 2)]]), order = readingOrder(boxes.values());
+  const w = over({ ...base, boxes: new Map(order.map((b) => [b, boxes.get(b)])), order }, ctx, 'X');
+  aside(w, 'A', 'X', 'right');
+  const g = explain(base, w.L), ts = transitionSteps(w, base);
+  const T = { base, after: w.L, steps: ts.steps, start: ts.start, carried: 'X', leave: g.left.map(([b, col]) => [b, col, 'press']), enter: g.entered.map(([b, col]) => [b, col, b === 'X' ? 'put' : 'self']), pass: [] };
+  const r = relink(T, DEFAULT), rr = new Map([...r.layout.boxes].map(([b, x]) => [b, x.y]));
+  const wrong = (y) => { const m = new Map(rr); m.set('A', y); return unexplained(base, w.L, m, T, DEFAULT, r.refs) != null; };
+  named = r.ok && rr.get('A') === 0 && rr.get('X') === 0 && unexplained(base, w.L, rr, T, DEFAULT, r.refs) == null && wrong(1) && wrong(100);
+}
+const ok = tried >= N && bad === 0 && named;
 console.log((ok ? '✓ ' : '✗ ') + `${tried} random creations and carries through the primitives, every transition taken by checkTransition and relink with the rows the phases left, every block that differs explained as GAP decided (${JSON.stringify(fails)}); ${skip} draws with no valid state`);
 console.log((caught === injected && injected > 0 ? '✓ ' : '✗ ') + `the property catches a row RELINK did not give: ${caught} of ${injected} results given one more row down for a block nothing lets RELINK put lower`);
+console.log((caughtSelf === injectedSelf && injectedSelf > 0 ? '✓ ' : '✗ ') + `and ${caughtSelf} of ${injectedSelf} given one more row past its reference for a block that came into a column by itself`);
+console.log((named ? '✓ ' : '✗ ') + 'a block pressed into a free column by a new one stays at its reference, 0; put at 1 or 100 instead, nothing explains it');
 for (const f of firsts) console.log('  first unexplained: ' + JSON.stringify(f).slice(0, 1200));
-process.exit(ok && caught === injected && injected > 0 ? 0 : 1);
+process.exit(ok && caught === injected && injected > 0 && caughtSelf === injectedSelf && injectedSelf > 0 ? 0 : 1);
