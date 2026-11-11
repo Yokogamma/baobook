@@ -57,13 +57,22 @@ function record(ws, before, after, by) {
  *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o] @returns {{moved:string[], swap?:[string, string]}} */
 export function transitionFacts(ws, base, o = {}) {
   // the blocks P-DOWN sank under a moved block that comes in by rule 3 (one base does not hold: created, or carried away and put), with the
-  // blocks that followed them, are pushed by that block's arrival, FOLLOW's, when no other primitive moved a block: not named, so that
-  // taking the moved block away again gives every row back (INV-7 b, G16). When another primitive moved one too (P-UP, P-SEP, P-SINK,
-  // P-REST), every move is named, as RELINK would otherwise count a push twice, once by FOLLOW over a block it did not name and once in the
-  // move of a block it did
-  const putIn = ws.moved != null && !base.boxes.has(ws.moved);
-  const pushed = putIn && [...ws.steps].every(([id, l]) => id === ws.moved || l.every((st) => st.by === 'down' || st.by === 'swap'));
-  const moved = new Set([...ws.steps].filter(([, l]) => l.some((st) => st.by !== 'swap' && !(pushed && st.by === 'down'))).map(([id]) => id));
+  // blocks that followed them, are pushed by that block's arrival, FOLLOW's: not named, so that taking the moved block away again gives
+  // every row back (INV-7 b, G16). That is judged for each group of blocks the phases moved that share columns, base's or now's, one with
+  // the next: a group where another primitive moved a block too (P-UP, P-SEP, P-SINK, P-REST) has every move named, as RELINK would
+  // otherwise count a push twice, once by FOLLOW over a block it did not name and once in the move of a block under it; a group in other
+  // columns changes nothing of it (the independent review of 0eda0ba)
+  const putIn = ws.moved != null && !base.boxes.has(ws.moved), pushedOnly = new Set();
+  if (putIn) {
+    const ids = [...ws.steps.keys()].filter((id) => id !== ws.moved && ws.L.boxes.has(id)), up = new Map(ids.map((id) => [id, id]));
+    const root = (id) => { while (up.get(id) !== id) id = up.get(id); return id; };
+    const spans = (id) => [base.boxes.get(id), ws.L.boxes.get(id)].filter(Boolean).map((b) => extent(b));
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++)
+      if (spans(ids[i]).some((a) => spans(ids[j]).some((b) => a.c0 <= b.c1 && b.c0 <= a.c1))) up.set(root(ids[i]), root(ids[j]));
+    const groups = new Map(); for (const id of ids) { const r = root(id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(id); }
+    for (const g of groups.values()) if (g.every((id) => ws.steps.get(id).every((st) => st.by === 'down' || st.by === 'swap'))) for (const id of g) pushedOnly.add(id);
+  }
+  const moved = new Set([...ws.steps].filter(([id, l]) => !pushedOnly.has(id) && l.some((st) => st.by !== 'swap')).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
   const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));

@@ -249,4 +249,16 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
   ok('15a RELINK gives the rows the phases left', r.ok && eq(got(r), rows(w)), [got(r), rows(w)]);
 }
 
+/* ── 16. a move in other columns changes nothing of a push under a created block (the independent review of 0eda0ba) ── */
+{
+  // T pushed down under X, created over it; in the same transition F, twenty columns away, moved down a row by P-SEP. The two share no
+  // column: T's push stays FOLLOW's, not named, and X taken away again gives T back its row while F keeps its move
+  const base = sheet(30, [set('T', 0, 0, 3), set('F', 20, 0, 3)]), w = over(withX(base, set('X', 0, 0, 3, 2)), ctx, 'X');
+  down(w, new Set(['T'])); sinkTo(w, 'F', 1, 'sep');
+  const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
+  const z = r.ok && remove(r.layout, 'X', DEFAULT);
+  ok('16 the facts name F and X, not T: F\'s move is in other columns', eq([...tr.moved].sort(), ['F', 'X']), tr.moved);
+  ok('16a X taken away again: T back at 0, F at 1 where it was moved', r.ok && got(r).T === 2 && z && eq(rowsOf(z), { T: 0, F: 1 }), [got(r), z && rowsOf(z)]);
+}
+
 process.exit(t.fails ? 1 : 0);

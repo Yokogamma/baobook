@@ -104,6 +104,12 @@ export function createModel(opts = {}) {
     return out;
   }
 
+  // the blocks in the order given, but each after every one of its uppers that the list holds (O-25): a stable order of dependencies
+  function followOrder(list, uppersOf) {
+    const out = [], left = list.slice();
+    while (left.length) { const k = left.findIndex((id) => ![...(uppersOf.get(id) || [])].some((u) => u !== id && left.includes(u))); out.push(...left.splice(k < 0 ? 0 : k, 1)); }
+    return out;
+  }
   // ---- a block comes into column c (rules 3 and 4): dropped there, at its displayed row (the user aims at what is shown); come in by
   // itself (widened, pressed aside), at its canonical row `ys`, so that nothing a temporary height pushed is written (§2.1)
   // where a block put at its displayed row comes into column c: the start of the seg it stands in (rule 3), or of the rows over it as a
@@ -591,7 +597,9 @@ export function createModel(opts = {}) {
       // M, where the blocks that come in by themselves are measured: W with rule 5 made, so that a block rule 5 is to lower is measured
       // where it will stand, and nothing of it written; each such block comes in at its reference
       const W1 = copy(); raw.fit(fits); const M = rowsIn('canonical'); put(W1); atTargets();
-      for (const id of ids) {
+      // top to bottom, but a block that follows an old upper neighbour (O-25) after that neighbour, when it comes in by itself too (the
+      // independent review of 0eda0ba)
+      for (const id of followOrder(ids.filter((id) => cols(B.get(id)).some((c) => EN.get(key(id, c)) === 'self')), uppersOf)) {
         const x = B.get(id), self = cols(x).filter((c) => EN.get(key(id, c)) === 'self' && own(id, c));
         if (!self.length) continue;
         M.set(id, ref.has(id) ? ref.get(id) : M.get(id));

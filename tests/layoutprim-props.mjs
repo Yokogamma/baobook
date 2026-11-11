@@ -143,14 +143,16 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   if (isO25) rep('O-25 (G16): a block pressed out from under a block that sank past it follows it');
   if (why.length) { rep(isO25 ? 'other, with O-25' : 'other'); if (others.length < 3) others.push({ ...current, why: why[0][1] }); }
   // INV-7 b: a block created and taken away again leaves every block where it was, when nothing else changed columns (nothing pressed
-  // aside or narrowed: a block that changed columns stays where it went) and every other block it moved was pushed down under it (P-DOWN,
-  // FOLLOW's: the facts name it alone). A block P-UP lifted over it is a move, which RELINK keeps: reported apart
+  // aside or narrowed: a block that changed columns stays where it went): every block it pushed down that the facts leave out (FOLLOW's),
+  // and every block that shares no column with a block the facts name, is back at its row of base, whatever moved elsewhere (the
+  // independent review of 0eda0ba); a named block keeps its move, and one P-UP lifted over the creation stays lifted: reported apart
   if (create && T.leave.length === 0 && T.enter.every(([b]) => b === id)) {
-    const z = remove(r.layout, id, rules), back = base.order.filter((b) => z.boxes.get(b).y !== base.boxes.get(b).y);
-    if (T.moved.some((b) => b !== id)) rep(back.length ? 'INV-7 b not asked: a block lifted over the created one stays lifted' : 'INV-7 b not asked, every block back all the same');
-    else if (rules['GAP.5.2'] === false) rep(back.length ? 'INV-7 b not asked, GAP.5.2 off: a standing block taken away keeps its lend' : 'INV-7 b not asked (GAP.5.2 off), every block back all the same');
+    const z = remove(r.layout, id, rules), named = T.moved.filter((b) => b !== id).map((b) => w.L.boxes.get(b));
+    const free = base.order.filter((b) => !T.moved.includes(b) && !named.some((n) => sharesCol(n, w.L.boxes.get(b)) || sharesCol(n, base.boxes.get(b))));
+    const back = free.filter((b) => z.boxes.get(b).y !== base.boxes.get(b).y);
+    if (rules['GAP.5.2'] === false) rep(back.length ? 'INV-7 b not asked, GAP.5.2 off: a standing block taken away keeps its lend' : 'INV-7 b not asked (GAP.5.2 off), every block back all the same');
     else if (back.length) { fail(`INV-7 b: ${back[0]} at ${z.boxes.get(back[0]).y} once ${id} is taken away, at ${base.boxes.get(back[0]).y} in base`); continue; }
-    else rep('INV-7 b: created over blocks it pushes down and taken away again, every block back');
+    else if (base.order.some((b) => w.L.boxes.get(b).y !== base.boxes.get(b).y)) rep(named.length ? 'INV-7 b: created over blocks it pushes, taken away again, every block not under a named move back' : 'INV-7 b: created over blocks it pushes down and taken away again, every block back');
   }
   // the property's own check: SETTLE dropping its facts (only the carried block held) must leave some moved block where RELINK cannot put it
   if (injected < 300 && T.moved.some((b) => b !== id)) {

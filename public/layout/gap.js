@@ -144,6 +144,12 @@ function slot(W, x, c, yc) {
 // that keep the block under it at its canonical row, so that no temporary push of another block is written (§2.1), and the rest of the
 // seg goes. resident: a block of a swap that was an anchor in this column comes back as one (G11): it cuts the stack, the rows above it and
 // under it keeping their owners
+/** The blocks in the order given, but each after every one of its uppers that the list holds (O-25): a stable order of dependencies. */
+function followOrder(list, uppersOf) {
+  const out = [], left = list.slice();
+  while (left.length) { const k = left.findIndex((id) => ![...(uppersOf.get(id) || [])].some((u) => u !== id && left.includes(u))); out.push(...left.splice(k < 0 ? 0 : k, 1)); }
+  return out;
+}
 // uppers: for a block that comes in by itself out of every column it had, the blocks that stood over it in base (O-25, the owner's G16): it
 // comes in under every one of them in the column's chain, with the gap its reference gives, wherever the screen has it
 function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null, uppers = null) {
@@ -640,7 +646,9 @@ function relinkWork(T, rules) {
   // will stand, and nothing of it written; each such block comes in at its reference, one that came in before it in this RELINK measured
   // at its own (blocks that come in at once are one path, G4)
   const W1 = copyWork(W); fitWork(W, fits); const M = rowsIn(W, 'canonical'); restore(W1); atTargets();
-  for (const id of ids) {
+  // top to bottom, but a block that follows an old upper neighbour (O-25) after that neighbour, when it comes in by itself too (the
+  // independent review of 0eda0ba)
+  for (const id of followOrder(ids.filter((id) => cols(W.B.get(id)).some((c) => EN.get(key(id, c)) === 'self')), uppersOf)) {
     const self = cols(W.B.get(id)).filter((c) => EN.get(key(id, c)) === 'self' && own(id, c)); if (!self.length) continue;
     if (ref.has(id)) M.set(id, ref.get(id));
     for (const c of self) enter(W, W.B.get(id), c, M, false, null, null, false, null, uppersOf.get(id) || null);
