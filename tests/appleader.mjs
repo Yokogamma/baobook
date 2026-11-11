@@ -2,8 +2,9 @@
 // cloud; the others write locally and the leader sends their edits at once. A tab that closes or freezes lets the lock go, and the next tab
 // continues the attempts it finds in the store: a lost confirmation is resolved by the receipt without a second write, and two runners of one
 // attempt leave one commit. A change of owner made in another tab turns a tab into view-only («epoch»), with the text it could not write kept
-// under the unsaved warning; so does the engine's own check and the resume check; a status from a replaced engine locks nothing. Any view-only
-// mode releases the lock. Without an owner no lock is asked for.
+// under the unsaved warning; so does the engine's own check, the resume check and the load that comes with the lock (no later load through
+// that engine takes the new owner); a status from a replaced engine locks nothing. Any view-only mode releases the lock. Without an owner no
+// lock is asked for.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
@@ -13,6 +14,8 @@ import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
+// a check of named parts: a failure lists the parts that did not hold, so a run that fails once on CI says which one
+const okAll=(n,parts)=>{ const bad=Object.keys(parts).filter(k=>!parts[k]); ok(n+(bad.length? ' — failed: '+bad.join('; ') : ''), !bad.length); };
 const PACE={dev:0, note:0, big:0, huge:0, slow:0, retryMin:0, retryMax:300}, LOCK='baobook-sync:test';
 const cloud=new TestCloud({start:Date.now()});
 const commits=id=>cloud.events.filter(e=>e.t==='commit' && e.id===id).length;
@@ -74,13 +77,16 @@ ok('3g the third tab closed: the second leads again', bl2 && (await lead(B)).hel
 /* ── 4. the owner changed in another tab ── */
 // 4a: the engine's own check refuses a write; the text stays unsaved and the tab is view-only, the lock released
 const D=await newTab(A, SITE, {connect:{pace:PACE}}); ok('4 a fourth tab waits in the queue', (await lead(D)).queued);
+// B leads again since 3g, and its own steps (the catch-up of a new leader) would meet the new owner too: under load one did before the write
+// below, B locked itself with nothing typed (the sheet inert, 4a and 4c failed). So B is idle first, and the check says which way it went
+await settle(B);
 await D.evaluate(o=>sheetDebug.sync.engine().setOwner(o), owner('u2'));   // the store's owner changes without a word to the other tabs
-await B.bringToFront(); await B.mouse.click(500,660); await B.keyboard.type('не запишеться'); await B.keyboard.press('Escape'); await B.waitForTimeout(700);
+const pre4=await locked(B); if(!pre4.strip) await typeAt(B,500,660,'не запишеться'); await until(async()=>{ const k=await locked(B); return k.strip && k.warn; }, 5000);   // typeAt waits for the caret in the new block: keys typed before it lands are lost
 const k4=await locked(B), l4=await lead(B), bu=await B.evaluate(()=>{ const e=new Event('beforeunload',{cancelable:true}); window.dispatchEvent(e); return e.defaultPrevented; });
-ok('4a the write was refused by the epoch check: view-only with the «epoch» strip, the text is unsaved (⚠, «Експортувати незбережене»), leaving would ask, the tab does not lead', k4.strip && /іншого облікового запису/.test(k4.msg) && k4.exp==='Експортувати незбережене' && k4.warn && bu && !l4.on && !l4.held && !l4.queued && /locked/.test(k4.cls));
+okAll('4a the write was refused by the epoch check: view-only with the «epoch» strip, the text is unsaved (⚠, «Експортувати незбережене»), leaving would ask, the tab does not lead', {'B was editable when the text was typed':!pre4.strip, 'the strip':k4.strip, ['«epoch» ('+k4.msg+')']:/іншого облікового запису/.test(k4.msg), ['the export of the unsaved ('+k4.exp+')']:k4.exp==='Експортувати незбережене', '⚠':k4.warn, 'leaving asks':bu, 'B does not lead':!l4.on, 'B holds nothing':!l4.held, 'B is not queued':!l4.queued, ['locked ('+k4.cls+')']:/locked/.test(k4.cls)});
 const dl=await until(async()=>(await lead(D)).on, 5000);
 ok('4b the lock went to the fourth tab, which leads for the new owner', dl && (await lead(D)).held && (await D.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u2');
-ok('4c the text typed in the locked tab is still on its sheet', (await B.evaluate(()=>document.getElementById('sheet').innerText)).includes('не запишеться'));
+const sB=await B.evaluate(()=>document.getElementById('sheet').innerText); ok('4c the text typed in the locked tab is still on its sheet'+(sB.includes('не запишеться')? '' : ' — failed: the sheet holds «'+sB.replace(/\s+/g,' ').slice(-80)+'»'), sB.includes('не запишеться'));
 // 4b: another tab reports the change («owner» message): the check locks the tab at once
 const E=await newTab(A, SITE, {connect:false}); ok('4d a fifth tab opens with the stored owner and waits in the queue', (await lead(E)).queued && (await E.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u2');
 await connect(D,{devId:'A', devName:'Device A', owner:owner('u3'), pace:PACE}); await E.waitForTimeout(300);
@@ -96,20 +102,32 @@ await D.evaluate(()=>window.__old.writeLocal('zz',(C,m,t)=>({title:'x', blocks:[
 ok('4h the replaced engine reported «reload»: the tab stays editable and leads', !(await locked(D)).strip && (await lead(D)).on && (await lead(D)).held);
 
 // 4e: the lock is granted to a tab that waited with the old owner, and no «owner» message reached it: the load refuses the store, the tab locks and lets the lock go
+const uidOf=pg=>pg.evaluate(()=>{ const o=sheetDebug.sync.engine().owner; return o? o.uid : null; });
 const H=await newTab(A, SITE, {connect:false}), J=await newTab(A, SITE, {connect:false});
 await typeAt(H,500,780,'набрано у H під u5');
-ok('4i two more tabs wait in the queue with the stored owner; one of them wrote a note locally', (await lead(H)).queued && (await lead(J)).queued && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && (await stored(H,'notes')).some(n=>n.blocks.some(b=>b.text==='набрано у H під u5')));
+const l4h=await lead(H), l4jq=await lead(J), uH0=await uidOf(H);
+okAll('4i two more tabs wait in the queue with the stored owner; one of them wrote a note locally', {'H queued':l4h.queued, 'J queued':l4jq.queued, ['H names u5 ('+uH0+')']:uH0==='u5', 'H\'s note stored':(await stored(H,'notes')).some(n=>n.blocks.some(b=>b.text==='набрано у H під u5'))});
 await D.evaluate(o=>sheetDebug.sync.engine().setOwner(o), owner('u6'));   // the owner changes without a word to the other tabs
-const K=await newTab(A, SITE, {connect:false}); ok('4j a tab opened after the change knows the new owner and waits last', (await K.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u6' && (await lead(K)).queued);
-await D.close(); const kl=await until(async()=>(await lead(K)).on, 10000);
-const k4i=await locked(H), l4i=await lead(H), k4j=await locked(J);
-ok('4k the lock reached the tabs that knew the old owner first: each refused the store, locked itself as «epoch» (the engine still names u5) and let the lock go; the tab that knows the new owner leads', kl && (await lead(K)).held && k4i.strip && /іншого облікового запису/.test(k4i.msg) && !l4i.on && !l4i.held && !l4i.queued && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && k4j.strip && !(await lead(J)).on);
-ok('4l the locked tab still shows its note and takes no new text into the store', (await H.evaluate(()=>document.getElementById('sheet').innerText)).includes('набрано у H під u5') && (await H.evaluate(()=>document.getElementById('sheet').inert)));
+const K=await newTab(A, SITE, {connect:false}), uK=await uidOf(K); okAll('4j a tab opened after the change knows the new owner and waits last', {['K names u6 ('+uK+')']:uK==='u6', 'K queued':(await lead(K)).queued});
+await D.close(); const t4k=Date.now(), kl=await until(async()=>(await lead(K)).on, 10000), kMs=Date.now()-t4k;
+const k4i=await locked(H), l4i=await lead(H), k4j=await locked(J), l4j=await lead(J), lK=await lead(K), uH=await uidOf(H), uJ=await uidOf(J);
+okAll('4k the lock reached the tabs that knew the old owner first: each refused the store, locked itself as «epoch» (the engine still names u5) and let the lock go; the tab that knows the new owner leads ('+(kl? 'after '+kMs+' ms' : 'not within 10 s')+')', {
+  'K leads':!!kl, 'K holds the lock':lK.held, 'H shows the strip':k4i.strip, ['H says «epoch» ('+k4i.msg+')']:/іншого облікового запису/.test(k4i.msg), 'H does not lead':!l4i.on, 'H holds nothing':!l4i.held, 'H is not queued':!l4i.queued,
+  ['H names u5 ('+uH+')']:uH==='u5', 'J shows the strip':k4j.strip, 'J does not lead':!l4j.on, 'J is not queued':!l4j.queued, ['J names u5 ('+uJ+')']:uJ==='u5'});
+// 4e′: reload() refused the store and left those engines unloaded, and the page still loads through them: it counts the conflict copies 1.5 s after
+// its start, which on a fast runner falls after the lock went through (the one CI failure of 4k and 4l2: H's engine took u6 from that count). Every
+// such load is refused and the engine keeps the owner it knew; the owner check says another owner
+const late=pg=>pg.evaluate(async id=>{ const E=sheetDebug.sync.engine(), r={}; for(const [k,f] of Object.entries({copies:()=>E.copiesCount(), state:()=>E.state(id), lrev:()=>E.lrevOf()})){ try{ await f(); r[k]='took'; }catch(e){ r[k]=(e && e.code)||String(e); } }
+  r.same=await E.checkOwner().catch(e=>(e && e.code)||String(e)); r.uid=E.owner? E.owner.uid : null; r.loaded=E._S.loaded; return r; }, id);
+const lH=await late(H), lJ=await late(J), refused=r=>['copies','state','lrev'].every(k=>r[k]==='epoch') && r.same===false && !r.loaded;
+okAll('4k2 the locked tabs load through their engines later (the copies count, a note\'s state, the lrev, the owner check): each load is refused and both still name u5', {['H refused ('+JSON.stringify(lH)+')']:refused(lH) && lH.uid==='u5', ['J refused ('+JSON.stringify(lJ)+')']:refused(lJ) && lJ.uid==='u5', 'H stays locked':(await locked(H)).strip && !(await lead(H)).queued, 'K still leads':(await lead(K)).on});
+okAll('4l the locked tab still shows its note and takes no new text into the store', {'H shows its note':(await H.evaluate(()=>document.getElementById('sheet').innerText)).includes('набрано у H під u5'), 'H\'s sheet is inert':await H.evaluate(()=>document.getElementById('sheet').inert)});
 // 4g: the locked tab is shown again: the storage check of pageshow/visibilitychange must not bring the new owner's data onto its screen either
 await K.bringToFront(); await K.click('#ttl'); await K.keyboard.press('End'); await K.keyboard.type(' (u6)'); await K.keyboard.press('Escape'); await K.waitForTimeout(600);
 const tH=await H.evaluate(()=>document.getElementById('ttl').textContent);
 await H.evaluate(()=>{ document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(Object.assign(new Event('pageshow'),{persisted:true})); }); await H.waitForTimeout(500);
-ok('4l2 the new owner\'s tab renamed the note: the store has the new title, the locked tab shown again keeps the old one («'+tH+'») and still names u5', (await stored(H,'notes',id)).title.endsWith('(u6)') && (await H.evaluate(()=>document.getElementById('ttl').textContent))===tH && !tH.endsWith('(u6)') && (await H.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u5' && !(await lead(H)).queued);
+const sT=(await stored(H,'notes',id)).title, tH2=await H.evaluate(()=>document.getElementById('ttl').textContent), uH2=await uidOf(H);
+okAll('4l2 the new owner\'s tab renamed the note: the store has the new title, the locked tab shown again keeps the old one («'+tH+'») and still names u5', {['the store has K\'s title («'+sT+'»)']:sT.endsWith('(u6)'), ['H keeps its title («'+tH2+'»)']:tH2===tH && !tH.endsWith('(u6)'), ['H names u5 ('+uH2+')']:uH2==='u5', 'H is not queued':!(await lead(H)).queued});
 // 4f: the lead is lost while the start is still running (the format record write is held): the start must not bring the engine up afterwards
 const L=await newTab(A, SITE, {connect:{owner:owner('u6'), pace:PACE}});   // with a cloud: the engine's start writes the format record, which the gate below holds
 await L.evaluate(()=>{ window.__gate=new Promise(r=>{ window.__open=r; }); sheetDebug.saveGate=()=>window.__gate; });   // every write of L waits, the engine's start among them

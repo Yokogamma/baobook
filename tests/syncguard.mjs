@@ -6,7 +6,7 @@
 // move decides over the stored record inside its own transaction. Section 5 (§4.10, two tabs of one device over one store): both engines write
 // as the device of the store's `device` record; a runner that read the cloud before another insured an attempt does not insure a second one
 // over it; two runners of one attempt leave one commit; a late delivery by a runner with an old memory never moves the cursor back; a tab
-// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab. Section 6 (§4.6):
+// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab; an engine refused by reload() stays refused on every later load. Section 6 (§4.6):
 // a listener the server ends with an error is started again by the step after a growing pause, from the cursor (one that keeps ending right after
 // its snapshot keeps the pause growing); a refused one is not; an error of a listener already replaced, or reported inside listen(), leaks nothing.
 import { loadCore } from './lib/core.mjs';
@@ -155,6 +155,24 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const D2=device(cloud2,'E',{db:db2}); await D2.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
   hV.res(); await idleC; await C.sync.idle(20);
   ok('5p the versions page came after the owner changed: no version stored, no cursor:versions, no cursor:notes written back, the status «reload»', !db2.get('versions','vv') && !db2.get('sync','cursor:versions') && !db2.get('sync','cursor:notes') && !C.sync._S.catchupDone.versions && C.status.includes('reload')); }
+
+/* ── 5q. a load refused by the guard stays refused (§4.10, appleader 4k): the tab that waited for the lock under the old owner is refused by reload(),
+   which leaves the engine unloaded; every later call that loads (the page counts the conflict copies 1.5 s after its start, a read, a write, a start,
+   the owner check) is refused too, and the engine keeps naming the owner it knew. Only the engine's own setOwner takes another owner, also for a
+   call that loads while that owner is being written ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore();
+  const A=await mk(cloud,'A',{db}); A.sync.stop();   // a tab that led, now waiting for the lock
+  const B=device(cloud,'B',{db}); await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});   // another tab changed the owner without a word
+  const ep1=A.sync.epoch, ep2=db.get('sync','epoch').id; let r=null; try{ await A.sync.reload(); r='took'; }catch(e){ r=e.code; }
+  ok('5q the lock came to the old tab: reload() refused the store («epoch», status «reload»), the engine still names u1 and is unloaded', r==='epoch' && A.sync.owner.uid==='u1' && A.sync.epoch===ep1 && ep1!==ep2 && !A.sync._S.loaded && A.status.includes('reload'));
+  const codes={}; for(const [k,f] of Object.entries({copies:()=>A.sync.copiesCount(), state:()=>A.sync.state('x'), lrev:()=>A.sync.lrevOf(), unsynced:()=>A.sync.unsynced(), start:()=>A.sync.start()})){ try{ await f(); codes[k]='took'; }catch(e){ codes[k]=e.code; } }
+  const w=await edit(A,'late',(C,t)=>({title:'', blocks:[{id:'b',row:1,fx:0,text:'під u1'}], created:t, updated:t})), same=await A.sync.checkOwner();
+  ok('5r every later load is refused too ('+JSON.stringify(codes)+', the write '+w.code+'), the owner check says another owner ('+same+'): the engine still names u1 with its epoch, unloaded, not started, nothing written', Object.values(codes).every(c=>c==='epoch') && !w.ok && w.code==='epoch' && same===false && A.sync.owner.uid==='u1' && A.sync.epoch===ep1 && !A.sync._S.loaded && !A.sync._S.started && !db.get('notes','late'));
+  const together=await Promise.allSettled([A.sync.copiesCount(), A.sync.state('x'), A.sync.lrevOf(), A.sync.unsynced()]), tc=together.map(x=>x.status==='rejected'? x.reason.code : 'took');   // the first starts a load, the others find it in flight
+  ok('5r2 calls made while a load is in flight wait for it and share its refusal ('+tc.join(', ')+'): none read the store before the check', tc.every(c=>c==='epoch') && A.sync.owner.uid==='u1' && !A.sync._S.loaded && !A.sync._S.loading);
+  let mid=null; db.onPut=(s,v)=>{ if(s==='sync' && v.k==='epoch' && !mid) mid=B.sync.state('x').then(()=>B.sync.owner.uid, e=>e.code); };   // right after the owner's transaction, before setOwner's own load
+  await B.sync.setOwner({env:'test', uid:'u3', email:'w@test'}); db.onPut=null; const midU=await mid;
+  ok('5s an engine\'s own setOwner takes the owner it writes, also for a call that loads in the middle of it ('+midU+')', midU==='u3' && B.sync.owner.uid==='u3' && B.sync.epoch===db.get('sync','epoch').id && await B.sync.checkOwner()===true); }
 
 /* ── 5k. reload(): a tab that spent yesterday's budget is not paused when it leads again today ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore();

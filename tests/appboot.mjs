@@ -34,9 +34,11 @@ const journal=async()=>{ await pg.evaluate(()=>{ document.getElementById('setPop
 await pg.goto(site.url); await pg.waitForSelector('#list .item');
 await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Ключі від дому'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); }); await pg.waitForTimeout(400);
 await pg.evaluate(()=>document.getElementById('newBtn').click()); await pg.waitForTimeout(200);
-await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Покупки'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); }); await pg.waitForTimeout(1600);
-const snap0=await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t));
-await pg.evaluate(()=>localStorage.removeItem('sheet:listsnap')); await pg.reload(); await pg.waitForSelector('#list .item'); await pg.waitForTimeout(1600);
+// the names are written 1 s after the list was last drawn, and the save that draws it comes 0.6 s after the input: a fixed 1.6 s wait had no margin
+const snapT=()=>pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t));
+await pg.evaluate(()=>{ document.getElementById('ttl').textContent='Покупки'; document.getElementById('ttl').dispatchEvent(new Event('input',{bubbles:true})); }); await until(async()=>{ const t=await snapT(); return t.includes('Ключі від дому') && t.includes('Покупки'); }, 5000);
+const snap0=await snapT();
+await pg.evaluate(()=>localStorage.removeItem('sheet:listsnap')); await pg.reload(); await pg.waitForSelector('#list .item'); await until(async()=>(await snapT()).includes('Покупки'), 5000);
 ok('1b a healthy start with nothing touched remembers its list too', (await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')||'[]').map(x=>x.t))).includes('Покупки'));
 ok('1 the list is remembered by names only ('+snap0.join(', ')+')', snap0.includes('Ключі від дому') && snap0.includes('Покупки') && await pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:listsnap')).every(x=>Object.keys(x).every(k=>k==='t'||k==='p'))));
 
