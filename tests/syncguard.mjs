@@ -141,6 +141,23 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const lazy=[]; for(const f of [()=>A.sync.copiesCount(), ()=>A.sync.unsynced(), ()=>A.sync.state('c1'), ()=>A.sync.lrevOf(), ()=>A.sync.countCopies('c1')]){ try{ await f(); lazy.push('ok'); }catch(e){ lazy.push(e.code); } }
   ok('5j2 the old engine\'s reload() is refused ('+r0+'), and so is every lazy load after it ('+lazy.join(', ')+'): it still names '+uidOf()+' and checkOwner says not the same', before==='u1' && r0==='epoch' && lazy.every(c=>c==='epoch') && uidOf()==='u1' && await A.sync.checkOwner()===false && !A.sync._S.loaded); }
 
+/* ── 5q. loads around a change of owner: a lazy call inside this engine's own setOwner waits for it and is guarded by the new owner; parallel lazy calls share one load ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  const A=await mk(cloud,'A',{db}); const u2={env:'test', uid:'u2', email:'v@test'};
+  // the reviewer's case: setOwner sets S.loaded false inside its transaction; a lazy call made in that window took the guard of u1 and met u2
+  A.status.length=0; const bind=A.sync.setOwner(u2); let spins=0; while(A.sync._S.loaded && spins<100000){ spins++; await Promise.resolve(); }
+  const inWindow=!A.sync._S.loaded, lazy=A.sync.copiesCount().then(()=>'ok', e=>e.code); await bind; const r=await lazy;
+  ok('5q a lazy call made inside this engine\'s own setOwner (in its window: '+inWindow+') waits for it: '+r+', the engine names '+(A.sync.owner && A.sync.owner.uid)+', no «reload» status ('+A.status.filter(c=>c==='reload').length+')',
+    inWindow && r==='ok' && A.sync.owner.uid==='u2' && !A.status.includes('reload') && await A.sync.checkOwner()===true);
+  // parallel lazy calls after a refused reload: each waits for the one load and shares its refusal; none reads the store before it
+  const B=await mk(cloud,'B',{db});   // mk binds the store to u1 again
+  await A.sync.setOwner({env:'test', uid:'u3', email:'w@test'}); try{ await B.sync.reload(); }catch(_){}
+  const par=await Promise.all([B.sync.copiesCount(), B.sync.unsynced(), B.sync.state('x'), B.sync.lrevOf()].map(p=>p.then(()=>'ok', e=>e.code)));
+  ok('5q2 four lazy calls at once in a refused engine share one refused load ('+par.join(', ')+'); it still names '+B.sync.owner.uid, par.every(c=>c==='epoch') && B.sync.owner.uid==='u1' && !B.sync._S.loading);
+  // and in an engine that may load, the calls at once wait for the one load and all succeed
+  const C=device(cloud,'C',{db}); const par2=await Promise.all([C.sync.copiesCount(), C.sync.unsynced(), C.sync.state('x')].map(p=>p.then(()=>'ok', e=>e.code)));
+  ok('5q3 a fresh engine: three lazy calls at once wait for one load ('+par2.join(', ')+') and it names '+C.sync.owner.uid, par2.every(c=>c==='ok') && C.sync.owner.uid==='u3' && C.sync._S.everLoaded); }
+
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
   for(let i=0;i<3;i++){ cloud.advance(1000); cloud.write('notes',{id:'o'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'o'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }

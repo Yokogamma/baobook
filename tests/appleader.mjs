@@ -15,7 +15,7 @@ const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 // a check of several conditions: on a failure it names the ones that failed and prints what `more` returns (the state of the tabs involved)
 const okWhy=async(n,conds,more)=>{ const bad=Object.keys(conds).filter(k=>!conds[k]); ok(n, !bad.length); if(bad.length){ console.log('    failed: '+bad.join('; ')); if(more) console.log('    '+JSON.stringify(await more())); } };
-// each tab's lead, lock and start journal (BOOT.m: the steps with their times, lock:<kind> among them) and its engine's owner
+// each tab's lead, its engine's owner and its view-only strip with the strip's text
 const diag=async tabs=>{ const o={}; for(const [k,pg] of Object.entries(tabs)) o[k]=await pg.evaluate(()=>({lead:sheetDebug.sync.lead(), owner:sheetDebug.sync.engine().owner && sheetDebug.sync.engine().owner.uid,
   strip:!document.getElementById('roStrip').hidden, msg:document.getElementById('roMsg').textContent})).catch(e=>String(e)); return o; };
 const PACE={dev:0, note:0, big:0, huge:0, slow:0, retryMin:0, retryMax:300}, LOCK='baobook-sync:test';
