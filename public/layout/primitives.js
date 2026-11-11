@@ -76,8 +76,10 @@ function record(ws, before, after, by) {
  *    height that changed in a column the block keeps is FOLLOW's in both (the carried block narrowed at the container's edge and grown
  *    pushes the block under it in both), so it needs none.
  *  - A block the phases did not move and rule 2 puts elsewhere than they did stays at its start row in the replay (RELINK places it), so
- *    the origin of a block they moved is kept from taking it past such a block in a column both keep (the independent review of 8bafb15:
- *    with GAP.9 off, the blocks under a text pressed aside rise in GAP's origins, and the one no primitive moved stays at its start row).
+ *    the origins are one order (the independent reviews of 8bafb15 and 517a8d7: with GAP.9 off, the blocks under a text pressed aside
+ *    rise in GAP's origins, and the one no primitive moved stays at its start row): in a column both keep, a block over another at the
+ *    start rows is over it at the origins, by its height, through every block between them; a block the phases did not move is fixed,
+ *    and each one they moved stands as near its origin in GAP's projection as that order lets it.
  *  - Then every block the phases moved (by a primitive; the moved block; the pair of a swap) goes from its origin to its row now, cut one
  *    per common part, the moved block's direction first (down when it did not move), in each direction the furthest alone first and the
  *    others joining it for the last rows of the way; so RELINK brings it where the phases put it (GAP.5 rule 5), even when its row now is
@@ -109,17 +111,29 @@ export function transitionSteps(ws, base, o = {}) {
   for (const id of ids) if (!moved.has(id) && P.get(id) !== start[id]) { if (P.get(id) === to.get(id)) fix.push([id, P.get(id) - start[id]]); else stay.push(id); }
   const kept = (id) => { const a = extent(base.boxes.get(id)), b = extent(ws.L.boxes.get(id)); return [Math.max(a.c0, b.c0), Math.min(a.c1, b.c1)]; };
   const share = (p, q) => { const [a0, a1] = kept(p), [b0, b1] = kept(q); return a0 <= a1 && b0 <= b1 && a0 <= b1 && b0 <= a1; };
+  // the origins as one order (the independent review of 517a8d7): in a column both keep, a block over another at the start rows stays
+  // over it at the origins, by its height (after's, extent tops), through every block between them; a block the phases did not move is
+  // fixed (at its start row, or at its origin where it has its correction), and each block they moved goes as near its origin in GAP's
+  // projection as that order lets it, from the top: no lower than the blocks over it allow, no higher than the fixed ones under it, and
+  // the moved ones between, leave room for
+  const fixed = new Map(ids.filter((id) => !moved.has(id)).map((id) => [id, fix.some(([f]) => f === id) ? P.get(id) : start[id]]));
+  const T0 = (id) => start[id] - pad(ws.L.boxes.get(id)), gap = (p, q) => ext(ws.L.boxes.get(p)) - pad(ws.L.boxes.get(p)) + pad(ws.L.boxes.get(q));
+  const seq = [...ids].sort((p, q) => T0(p) - T0(q)), from = new Map(fixed), hi = new Map();
+  for (let i = seq.length - 1; i >= 0; i--) {
+    const p = seq[i]; if (fixed.has(p)) continue; let h = Infinity;
+    for (let k = i + 1; k < seq.length; k++) { const q = seq[k]; if (T0(q) > T0(p) && share(p, q)) h = Math.min(h, (fixed.has(q) ? fixed.get(q) : hi.get(q)) - gap(p, q)); }
+    hi.set(p, h);
+  }
+  for (let i = 0; i < seq.length; i++) {
+    const q = seq[i]; if (fixed.has(q)) continue; let lo = -Infinity;
+    for (let k = 0; k < i; k++) { const p = seq[k]; if (T0(p) < T0(q) && share(p, q)) lo = Math.max(lo, from.get(p) + gap(p, q)); }
+    from.set(q, Math.min(hi.get(q), Math.max(lo, P.get(q))));
+  }
   for (const id of ids) {
     if (!moved.has(id)) continue;
-    const M = ws.L.boxes.get(id); let lo = -Infinity, hi = Infinity;
-    for (const u of stay) {
-      if (!share(id, u)) continue;
-      const U = ws.L.boxes.get(u), uTop = start[u] - pad(U);   // where it stands in the replay, by its height there (after's)
-      if (start[u] < start[id]) lo = Math.max(lo, uTop + ext(U) + pad(M)); else hi = Math.min(hi, uTop - ext(M) + pad(M));
-    }
-    let from = P.get(id); if (lo > hi) from = start[id]; else from = Math.min(hi, Math.max(lo, from));
-    if (from !== start[id]) fix.push([id, from - start[id]]);
-    if (to.get(id) !== from) d.push([id, to.get(id) - from]);
+    const f = from.get(id);
+    if (f !== start[id]) fix.push([id, f - start[id]]);
+    if (to.get(id) !== f) d.push([id, to.get(id) - f]);
   }
   fix.sort((p, q) => (p[1] < 0 && q[1] < 0 ? start[p[0]] - start[q[0]] : p[1] > 0 && q[1] > 0 ? start[q[0]] - start[p[0]] : p[1] - q[1]));
   const g = d.find(([id]) => id === ws.moved);

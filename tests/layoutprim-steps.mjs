@@ -178,4 +178,31 @@ function naive(base, w) { const d = w.L.boxes.get('X').y - base.boxes.get('X').y
   ok('10b checkTransition and RELINK take it: B lifted to 0 (GAP.9 off), D at 4, C at 5', eq(checkTransition(tr), []) && r.ok && eq(Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])), { X: 0, A: 0, B: 0, D: 4, C: 5 }), [checkTransition(tr), r.ok ? Object.fromEntries([...r.layout.boxes].map(([k, b]) => [k, b.y])) : r.errors, tr.steps]);
 }
 
+/* ── 11. case 10 with a chain under C: the origins are one order through every block between (the independent review of 517a8d7) ── */
+{
+  // E under C in columns C keeps, and D, which the phases moved, over E; C's origin kept under B (case 10) keeps E under C, and so on down a
+  // chain of several: no correction carries a block past another, and RELINK gives the rows the empty list gives
+  const off = resolve({ 'GAP.9': false }), c = ctxOf({ A: { text: chars(54) } }, off);
+  const run = (extra) => {
+    const base = sheet(11, [text('A', 0, 0, 11, 2), set('B', 0, 3, 2), set('D', 2, 3, 3), set('C', 0, 4, 4), ...extra]);
+    const boxes = new Map([...base.boxes, ['X', set('X', 3, 0, 2, 4)]]), order = readingOrder(boxes.values());
+    const w = over({ ...base, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }, c, 'X');
+    const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+    const j = judgeCarry(w.L, base, { id: 'X', at: { col: 3, y: 0, frow: 0 }, away: true }, mem, c);
+    for (const [id, sd] of j.met) aside(w, id, 'X', sd);
+    down(w, new Set([...j.side].filter(([, sd]) => sd === 'below').map(([id]) => id)));
+    const g = explain(base, w.L), sw = transitionSteps(w, base);
+    const tr = { base, after: w.L, steps: sw.steps, start: sw.start, carried: 'X', leave: g.left.map(([id, col]) => [id, col, 'press']), enter: g.entered.map(([id, col]) => [id, col, id === 'X' ? 'put' : 'self']), pass: [] };
+    const r = relink(tr, off), r0 = relink({ ...tr, steps: [] }, off), y = (x) => x.ok ? Object.fromEntries([...x.layout.boxes].map(([k, b]) => [k, b.y])) : x.errors;
+    return { w, tr, r, rows: y(r), empty: y(r0), check: checkTransition(tr) };
+  };
+  const e = run([set('E', 2, 5, 2)]);
+  ok('11 the reviewer\'s case: E under C; the phases leave B 3, D 4, C 5, E 6', eq(rows(e.w), { X: 0, A: 0, B: 3, D: 4, C: 5, E: 6 }) && hitting(e.w) === null, rows(e.w));
+  ok('11a checkTransition and RELINK take it: B 0, D 4, C 5, E 6, as with no steps at all', eq(e.check, []) && e.r.ok && eq(e.rows, { X: 0, A: 0, B: 0, D: 4, C: 5, E: 6 }) && eq(e.rows, e.empty), [e.check, e.rows, e.tr.steps]);
+  const f = run([set('E', 2, 5, 2), set('F', 2, 6, 2)]);
+  ok('11b two in a row under C (E, F): taken, B 0, D 4, C 5, E 6, F 7', eq(f.check, []) && f.r.ok && eq(f.rows, { X: 0, A: 0, B: 0, D: 4, C: 5, E: 6, F: 7 }), [f.check, f.rows, f.tr.steps]);
+  const g = run([set('E', 2, 5, 2), set('F', 1, 6, 2), set('G', 0, 7, 3)]);
+  ok('11c three, each under the one before in a column both keep (E, F, G): taken, with the rows the phases left', eq(g.check, []) && g.r.ok && eq(g.rows, { X: 0, A: 0, B: 0, D: 4, C: 5, E: 6, F: 7, G: 8 }) && eq(g.rows, g.empty), [g.check, g.rows, g.tr.steps]);
+}
+
 process.exit(t.fails ? 1 : 0);
