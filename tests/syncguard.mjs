@@ -134,7 +134,54 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   // (e) checkOwner(): the store against this engine's memory
   ok('5i checkOwner: the store matches this engine', await A.sync.checkOwner()===true);
   await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'});
-  ok('5j another tab changed the owner: checkOwner of the old engine says so', await A.sync.checkOwner()===false && await B.sync.checkOwner()===true); }
+  ok('5j another tab changed the owner: checkOwner of the old engine says so', await A.sync.checkOwner()===false && await B.sync.checkOwner()===true);
+  // (f) a tab that waited for the lock refuses the store in reload(); its memory is left unloaded, and no later lazy load (the copies count on the
+  // start's timer, the account panel's unsynced, a message's state) may take the new owner: each is refused too, and checkOwner still says «not the same»
+  const uidOf=()=>A.sync.owner && A.sync.owner.uid; const before=uidOf(); let r0=null; try{ await A.sync.reload(); }catch(e){ r0=e.code; }
+  const lazy=[]; for(const f of [()=>A.sync.copiesCount(), ()=>A.sync.unsynced(), ()=>A.sync.state('c1'), ()=>A.sync.lrevOf(), ()=>A.sync.countCopies('c1')]){ try{ await f(); lazy.push('ok'); }catch(e){ lazy.push(e.code); } }
+  ok('5j2 the old engine\'s reload() is refused ('+r0+'), and so is every lazy load after it ('+lazy.join(', ')+'): it still names '+uidOf()+' and checkOwner says not the same', before==='u1' && r0==='epoch' && lazy.every(c=>c==='epoch') && uidOf()==='u1' && await A.sync.checkOwner()===false && !A.sync._S.loaded); }
+
+/* ── 5q. loads around a change of owner: a lazy call inside this engine's own setOwner is not refused; a start stopped meanwhile stays stopped; a write during a load does not wait ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
+  const A=await mk(cloud,'A',{db}); const u2={env:'test', uid:'u2', email:'v@test'};
+  // setOwner sets S.loaded false inside its transaction; a lazy call made in that window must not take the guard of u1 and meet u2 (a false «epoch»)
+  A.status.length=0; const bind=A.sync.setOwner(u2); let spins=0; while(A.sync._S.loaded && spins<100000){ spins++; await Promise.resolve(); }
+  const inWindow=!A.sync._S.loaded, lazy=A.sync.copiesCount().then(()=>'ok', e=>e.code); await bind; const r=await lazy;
+  ok('5q a lazy call made inside this engine\'s own setOwner (in its window: '+inWindow+') reads the owner being written: '+r+', the engine names '+(A.sync.owner && A.sync.owner.uid)+', no «reload» status ('+A.status.filter(c=>c==='reload').length+')',
+    inWindow && r==='ok' && A.sync.owner.uid==='u2' && !A.status.includes('reload') && await A.sync.checkOwner()===true);
+  // a refused attempt opens nothing: the engine knows u2, another tab binds the store to u4; a reload() is in flight (so S.loaded is true and a
+  // setOwner skips its first load) when this engine tries setOwner(u5) with the epoch it knew; a lazy call is made while that attempt runs
+  const F=await mk(cloud,'F',{db}); const G=await mk(cloud,'G',{db}); const knownF=F.sync._S.epoch; await G.sync.setOwner({env:'test', uid:'u4', email:'x@test'});
+  const rlF=F.sync.reload().then(()=>'ok', e=>e.code), bindF=F.sync.setOwner({env:'test', uid:'u5', email:'y@test'},{expectEpoch:knownF}).then(()=>'ok', e=>e.code);
+  let bindDone=false; bindF.then(()=>{ bindDone=true; }); const r0=await rlF;   // the reload is refused first; the attempt is still running
+  const early=!bindDone && !F.sync._S.loaded, lz4=await F.sync.copiesCount().then(()=>'ok', e=>e.code); const r4=[r0, await bindF, lz4];
+  ok('5q4 a reload() refused while a setOwner refused by its epoch runs: reload, bind and the lazy call are all refused ('+r4.join(', ')+', the call made before the attempt ended: '+early+'); the engine still names '+F.sync.owner.uid+' and checkOwner says not the same',
+    early && r4.every(c=>c==='epoch') && F.sync.owner.uid==='u1' && await F.sync.checkOwner()===false);
+  // two changes of owner of this engine at once, a lazy call in the first one's window: the second registers (and may end) while the lazy
+  // load's read waits for its turn; the load must take that owner as this engine's own, not lock the tab
+  const race=async(H,abortFirst)=>{ const tx0=H.db.tx.bind(H.db); let n=0;
+    if(abortFirst) H.db.tx=(stores,mode,fn)=>{ if(mode==='readwrite' && stores.length===4 && !n++) return tx0(stores,mode,async t=>{ await fn(t); throw Object.assign(new Error('aborted'),{name:'AbortError'}); }); return tx0(stores,mode,fn); };
+    H.status.length=0; const ep=H.sync._S.epoch, a=H.sync.setOwner({env:'test', uid:'r2', email:'r2@test'}, abortFirst? {expectEpoch:ep} : {}).then(()=>'ok', e=>e.code||e.name), b=H.sync.setOwner({env:'test', uid:'r3', email:'r3@test'}, abortFirst? {expectEpoch:ep} : {}).then(()=>'ok', e=>e.code||e.name);
+    let spins=0; while(H.sync._S.loaded && spins<100000){ spins++; await Promise.resolve(); } const win=!H.sync._S.loaded;
+    const lz=H.sync.copiesCount().then(()=>'ok', e=>e.code); const out=[await a, await b, await lz]; H.db.tx=tx0; return {win, out, uid:H.sync.owner && H.sync.owner.uid, reload:H.status.filter(c=>c==='reload').length, same:await H.sync.checkOwner()}; };
+  const H5=await mk(cloud,'H5',{db:new MemStore()}), q5=await race(H5,false);
+  ok('5q5 two changes of owner at once and a lazy call in the first one\'s window (in it: '+q5.win+'): '+q5.out.join(', ')+'; the engine names '+q5.uid+', no «reload» ('+q5.reload+'), checkOwner '+q5.same,
+    q5.win && q5.out.every(c=>c==='ok') && q5.uid==='r3' && !q5.reload && q5.same===true);
+  const H6=await mk(cloud,'H6',{db:new MemStore()}), q6=await race(H6,true);
+  ok('5q6 the same with one expectEpoch, the first transaction aborted after it ran (in its window: '+q6.win+'): '+q6.out.join(', ')+'; the engine names '+q6.uid+', no «reload» ('+q6.reload+'), checkOwner '+q6.same,
+    q6.win && q6.out[1]==='ok' && q6.out[2]==='ok' && q6.uid==='r3' && !q6.reload && q6.same===true);
+  // a start made during this engine's own change of owner (an email update of the same owner), then stopped (pagehide, freeze): it stays stopped
+  A.sync.stop(); const same=A.sync.setOwner({...u2, email:'v2@test'}); const st=A.sync.start(); A.sync.stop(); await same; await st; await tick(50);
+  ok('5q2 a start during this engine\'s own setOwner, stopped at once: the engine stays stopped, no listener', !A.sync._S.started && !A.sync._S.listen.notes && !A.sync._S.listen.versions);
+  // a write made while a load is in flight (the leader's reload, the start's copies count) opens its transaction before it yields: the save of a
+  // versionchange handler must start in that task, before the handler closes the connection (IDB-BARRIER-PLAN; appformat 3 checks the plain case)
+  const E=device(cloud,'E',{db:new MemStore()}); await E.sync.setOwner(u2); const tx0=E.db.tx.bind(E.db); let hold=null, release;
+  E.db.tx=(stores,mode,fn)=>{ if(hold && mode==='readonly' && stores.length===1 && stores[0]==='sync'){ const h=hold; hold=null; return h.then(()=>tx0(stores,mode,fn)); } return tx0(stores,mode,fn); };
+  hold=new Promise(r=>{ release=r; }); const rl=E.sync.reload(); await tick();
+  const writes=[]; const tx1=E.db.tx; E.db.tx=(stores,mode,fn)=>{ if(mode==='readwrite') writes.push(stores.join(',')); return tx1(stores,mode,fn); };
+  const w=E.sync.writeLocal('w1',(C,m,t)=>({title:'під час завантаження', blocks:[], created:t, updated:t})); const opened=writes.length;
+  release(); await rl; const wr=await w;
+  ok('5q3 a write made while a load is in flight opens its transaction at once ('+opened+' before it yielded) and lands ('+(wr && wr.ok)+')', opened>=1 && !!wr && wr.ok!==false && !!E.db.get('notes','w1')); }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
