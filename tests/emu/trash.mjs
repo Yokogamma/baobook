@@ -27,8 +27,15 @@ ok('2 in the trash: deleted and a server tsrv equal to the write\'s srv', d2.del
 // 3. the device clock runs a month ahead: the hourly look queues an automatic tombstone, the rules refuse it as early, the job waits a day
 await A.pg.evaluate(d=>{ sheetDebug.sync.clock=31*d; sheetDebug.sync.wake(); }, DAY);
 await until(A.pg, id=>sheetDebug.sync.log().some(e=>e.t==='purge-early' && e.id===id), id1);
-const st3=await A.pg.evaluate(async id=>{ const st=await sheetDebug.sync.state(id); return {tomb:!!(st.job && st.job.tomb && st.job.auto), wait:st.job? st.job.wait : null, tr:!!st.tr, note:!!st.note}; }, id1), d3=await readDoc(ROOT+'/notes/'+id1), a3=await acc(A.pg);
-ok('3 the tombstone was refused as early: the job waits a day, no attempt stays, the note is still in the trash here and in the cloud; the status is not «sending»', st3.tomb && st3.wait>Date.now()+31*DAY && !st3.tr && st3.note && !d3.purged && d3.deleted>0 && a3.ui.code==='synced');
+// the log line comes from inside the transaction that sets the job's wait and drops the attempt (sync.js, purge-early). The store reads below
+// cannot pass that transaction (IndexedDB orders a readonly one after an earlier readwrite one over the same store), but the status is computed
+// later, after the engine's next steps: until then the account still says «sending». So the check waits for all its conditions, the status
+// among them, instead of reading once after the line (CI, 2026-11-12: failed once; which condition failed, its log does not tell)
+const look3=async()=>{ const st=await A.pg.evaluate(async id=>{ const st=await sheetDebug.sync.state(id); return {tomb:!!(st.job && st.job.tomb && st.job.auto), wait:st.job? st.job.wait : null, tr:!!st.tr, note:!!st.note}; }, id1), d=await readDoc(ROOT+'/notes/'+id1), a=await acc(A.pg);
+  return {'an automatic tombstone job': st.tomb, 'it waits a day': st.wait>Date.now()+31*DAY, 'no attempt': !st.tr, 'the note is here': st.note, 'not purged in the cloud': !d.purged, 'in the trash in the cloud': d.deleted>0, 'the status is synced': a.ui.code==='synced'}; };
+const t3=Date.now(); let c3=await look3(); while(Object.values(c3).some(v=>!v) && Date.now()-t3<10000){ await new Promise(r=>setTimeout(r,200)); c3=await look3(); }
+const bad3=Object.keys(c3).filter(k=>!c3[k]), d3=await readDoc(ROOT+'/notes/'+id1);
+ok('3 the tombstone was refused as early: the job waits a day, no attempt stays, the note is still in the trash here and in the cloud; the status is not «sending»'+(bad3.length? ' (failed: '+bad3.join('; ')+')' : ''), !bad3.length);
 
 // 4. the month passes on the server (the date is moved back past the rules) and the day on the device: the tombstone passes, the note leaves the device
 await seed(ROOT+'/notes/'+id1, {...d3, tsrv:Ts.ms(Date.now()-31*DAY)});
