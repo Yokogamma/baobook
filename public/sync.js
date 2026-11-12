@@ -273,7 +273,8 @@ function makeSync(deps){
     finally{ LOADS.delete(a); a.end(); } }
   // a read made while a load is in flight skipped it (S.loaded is set before the load's transaction) and must not return what that load refuses
   // (a refused engine would hand out the new owner's data): it checks the store in its own transaction by the rule of every load in flight at its
-  // call, and is refused with `epoch` where one of them would be (the load itself sets the status). Nothing waits for the load
+  // call, and is refused with `epoch` where one of them would be. It sets no status itself: the load beside it does when that load is refused, and a
+  // store that moved after an accepted load's read leaves only this refusal (the caller's catch). Nothing waits for the load
   function rtx(stores, fn){ const as=[...LOADS].map(l=>l.list()).filter(Boolean).map(allowance);
     return db.tx(as.length && !stores.includes('sync')? [...stores,'sync'] : stores,'readonly', async t=>{ if(as.length){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!as.every(a=>a.ok(eid,ow))) throw fail('epoch'); } return fn(t); })
       .finally(()=>{ for(const a of as) a.end(); }); }
@@ -295,9 +296,12 @@ function makeSync(deps){
   async function reload(){ const guard=S.everLoaded? known() : null;   // a tab that waited for the lock must not adopt an owner it never knew
     resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.reauth=false; S.unauth=0; S.readOk=false; S.unverified=false; S.lastPurge=0; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load({guard}); }
   const blocked=()=>S.denied || S.reauth;   // nothing talks to the cloud until the access or the sign-in is sorted out (reload() or a new owner clears both)
-  // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way
-  async function checkOwner(){ if(!S.loaded){ try{ await load(); }catch(e){ if(e && e.code==='epoch') return false; throw e; } } return db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
-    return (ep? ep.id : null)===S.epoch && (ow? ow.uid : null)===(S.owner? S.owner.uid : null) && (ow? ow.env : null)===(S.owner? S.owner.env : null); }); }
+  // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way.
+  // It takes the rule of a lazy load: the owner this engine knows, or one of its own setOwner transactions (PENDING at the call, OWN after it), so a
+  // leadCheck (visible, resume, pageshow, a non-account «owner» message) that lands while this tab binds does not lock it with a false «epoch»
+  async function checkOwner(){ if(!S.loaded){ try{ await load(); }catch(e){ if(e && e.code==='epoch') return false; throw e; } } const a=allowance([known(), ...PENDING]);
+    try{ return await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
+      return a.ok(ep? ep.id : null, ow); }); }finally{ a.end(); } }
   const nudge=()=>{ S.queueAt=0; };   // another tab wrote: the next step reads the queue again instead of waiting for its minute
 
   /* ── budget and pace ── */

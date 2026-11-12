@@ -222,7 +222,18 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
     const bindB=B.sync.setOwner({env:'test', uid:'u4', email:'u4@test'}).then(()=>'ok', e=>e.code); await spinUntil(()=>!B.sync._S.loaded); const lzB=B.sync.copiesCount().then(()=>'ok', e=>e.code); await Promise.resolve(); const rB=await B.sync.state('k1').then(()=>'ok', e=>e.code);
     const ctl=[await lf, rf, await rlB, rb, await bindB, await lzB, rB];
     ok('5r3b reads beside a load the engine accepts answer: a fresh engine\'s first load (in flight: '+fly+') '+ctl.slice(0,2).join('/')+', an accepted reload '+ctl.slice(2,4).join('/')+', its own change of owner '+ctl.slice(4).join('/'),
-      fly && ctl.every(c=>c==='ok') && B.sync.owner.uid==='u4'); } }
+      fly && ctl.every(c=>c==='ok') && B.sync.owner.uid==='u4'); }
+  // (4) the owner check (leadCheck on visible, resume, pageshow or a non-account «owner» message) made right after this engine's own setOwner was
+  // called and inside its window: it compares the store with the owners a lazy load accepts, so the tab's own binding is «the same» and locks
+  // nothing; another tab's owner is still «not the same»
+  for(const when of ['call','window']){ const C=await mk(cloud,'C4'+when,{db:new MemStore()}); C.status.length=0;
+    const bind=C.sync.setOwner({env:'test', uid:'w4', email:'w4@test'}).then(()=>'ok', e=>e.code||e.name);
+    const inWin=when==='window'? await spinUntil(()=>!C.sync._S.loaded) : true;
+    const same=await C.sync.checkOwner().catch(e=>e.code||e.name), b=await bind;
+    ok('5r4 '+(when==='call'? 'checkOwner() right after setOwner was called' : 'checkOwner() inside setOwner\'s window (in it: '+inWin+')')+' says '+same+'; setOwner '+b+', the engine names '+(C.sync.owner && C.sync.owner.uid),
+      inWin && same===true && b==='ok' && C.sync.owner.uid==='w4' && !C.status.includes('reload')); }
+  { const db=new MemStore(); const E=await mk(cloud,'E4',{db}), F=await mk(cloud,'F4',{db}); await F.sync.setOwner({env:'test', uid:'w5', email:'w5@test'});
+    ok('5r4b another tab\'s owner: checkOwner() of the engine that knew the old one still says not the same', await E.sync.checkOwner()===false); } }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});

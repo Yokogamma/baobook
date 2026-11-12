@@ -66,5 +66,13 @@ const r3=await T.evaluate(async()=>{ const e=sheetDebug.sync.engine();
 await okWhy('3 T knew '+tOwner+', its reload() refused u23 ('+t0+'); a read made while its next lazy load is held (in flight: '+r3.flying+') is refused as the load is: '+r3.out.join(', '), {
   'reload refused': t0==='epoch', 'in flight': r3.flying, 'all refused': r3.out.every(c=>c==='epoch'), 'still not u23': (await ownerOf(T))!=='u23'}, ()=>diag({T}));
 
-const errs=[...A.errs, ...D.errs].filter(e=>!/epoch/.test(e)); ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
+/* ── 4. the owner check (leadCheck: visible, resume, pageshow, a non-account «owner» message) made right after this tab starts to bind: it takes
+   the rule of a lazy load, so the tab's own binding is «the same owner» and locks nothing (the independent review of #143 locked 6 of 8 such tabs) ── */
+const G=await newDevice(br, cloud, SITE, 'G', {ctx:CTX, connect:{owner:owner('u30'), pace:PACE}});
+const r4=[]; for(let i=0;i<6;i++){ const P=i? await newTab(G, SITE, {connect:false}) : G.pg;
+  r4.push(await P.evaluate(async o=>{ const b=sheetDebug.sync.bind(o); await sheetDebug.sync.check(); const r=await b; return {bind:r.ok? 'ok' : r.code, lock:sheetDebug.sync.locked()||null}; }, owner('u3'+(i+1)))); }
+await okWhy('4 six tabs, each binding a new owner with an owner check right behind it: '+r4.map(r=>r.bind+'/'+(r.lock||'-')).join(', '), {
+  'every binding ok': r4.every(r=>r.bind==='ok'), 'no tab locked': r4.every(r=>!r.lock)});
+
+const errs=[...A.errs, ...D.errs, ...G.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
