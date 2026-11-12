@@ -290,4 +290,29 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
   ok('17c transitionFacts refuses a working state whose `insert` disagrees with base, both ways', thrown(() => transitionFacts(old, base)) && thrown(() => transitionFacts(carriedIn, carriedIn.base)) && !thrown(() => transitionFacts(w, base)));
 }
 
+/* ── 18. a push up in a carry within its columns stays (the owner, 2026-11-12, G18, O-27) ── */
+{
+  // A at rows 2–5 with two free rows above it, X under it at row 8, both in columns 0–4. X carried up into A's lower half (row 4): A keeps
+  // its side from the carry's start (above) and P-UP pushes it to 0; the drop keeps it there. X carried back to row 8 is a new carry:
+  // nothing brings A down, so four empty rows stand between A and X where there were two (INV-7 c as G18 has it: the user pushed A on
+  // purpose; within one carry, before the drop, it comes back with X, INV-7 a)
+  const base = sheet(10, [set('A', 0, 2, 5, 4), set('X', 0, 8, 5, 2)]), w = over(base, ctx, 'X', { y: 4 });
+  up(w, new Set(['A']));
+  const tr = T(base, w), r = relink(tr, DEFAULT);
+  ok('18 X carried up into A\'s lower half: A pushed up to 0 and named, X at 4; taken', eq(tr.moved, ['A', 'X']) && eq(checkTransition(tr), []) && r.ok && eq(got(r), { A: 0, X: 4 }), [tr.moved, got(r)]);
+  const L1 = r.layout, v = over(L1, ctx, 'X', { y: 8 }), r2 = relink(T(L1, v), DEFAULT);
+  ok('18a X carried back to 8: A stays at 0, four empty rows over X', r2.ok && eq(got(r2), { A: 0, X: 8 }), got(r2));
+  // a block brought from other columns pushes nothing up (G17): it is put under A, and a second carry, within its new columns, pushes A
+  const b2 = sheet(6, [set('A', 2, 2, 4, 4), set('B', 2, 7, 4)]), X = set('X', 0, 4, 5, 2), u = over(withX(b2, X), ctx, 'X', null, true);
+  const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+  const j = judgeCarry(u.L, b2, { id: 'X', at: { col: 0, y: 4, frow: 4 }, away: true }, mem, ctx);
+  phase(u); up(u, new Set([...j.side].filter(([, sd]) => sd === 'above').map(([id]) => id)));
+  phase(u); down(u, new Set([...j.side].filter(([, sd]) => sd === 'below').map(([id]) => id)));
+  const r3 = relink({ base: b2, after: u.L, ...transitionFacts(u, b2), carried: 'X', ...columns(b2, u) }, DEFAULT);
+  const L3 = r3.layout, p = over(L3, ctx, 'X', { y: 4 });
+  up(p, new Set(['A']));
+  const r4 = relink(T(L3, p), DEFAULT);
+  ok('18b X brought from other columns stands under A (A 2, X 6, B 8); carried up again within its columns, it pushes A to 0', r3.ok && eq(got(r3), { A: 2, X: 6, B: 8 }) && r4.ok && eq(got(r4), { A: 0, X: 4, B: 8 }), [r3.ok && got(r3), r4.ok && got(r4)]);
+}
+
 process.exit(t.fails ? 1 : 0);
