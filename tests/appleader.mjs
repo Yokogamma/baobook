@@ -79,13 +79,19 @@ ok('3g the third tab closed: the second leads again', bl2 && (await lead(B)).hel
 /* ── 4. the owner changed in another tab ── */
 // 4a: the engine's own check refuses a write; the text stays unsaved and the tab is view-only, the lock released
 const D=await newTab(A, SITE, {connect:{pace:PACE}}); ok('4 a fourth tab waits in the queue', (await lead(D)).queued);
+// B leads again since 3g, and its own steps (the catch-up of a new leader) would meet the new owner too: under load one did before the write below,
+// B locked itself with nothing typed (the sheet inert; 4a and 4c failed, 4b green). So B is idle first, and 4a says which way it went
+await settle(B);
 await D.evaluate(o=>sheetDebug.sync.engine().setOwner(o), owner('u2'));   // the store's owner changes without a word to the other tabs
-await B.bringToFront(); await B.mouse.click(500,660); await B.keyboard.type('не запишеться'); await B.keyboard.press('Escape'); await B.waitForTimeout(700);
+const pre4=await locked(B); await B.bringToFront();
+if(!pre4.strip) await typeAt(B,500,660,'не запишеться');   // typeAt waits for the caret in the new block: keys typed before it lands go nowhere
+await until(async()=>{ const k=await locked(B); return k.strip && k.warn; }, 5000);
 const k4=await locked(B), l4=await lead(B), bu=await B.evaluate(()=>{ const e=new Event('beforeunload',{cancelable:true}); window.dispatchEvent(e); return e.defaultPrevented; });
-ok('4a the write was refused by the epoch check: view-only with the «epoch» strip, the text is unsaved (⚠, «Експортувати незбережене»), leaving would ask, the tab does not lead', k4.strip && /іншого облікового запису/.test(k4.msg) && k4.exp==='Експортувати незбережене' && k4.warn && bu && !l4.on && !l4.held && !l4.queued && /locked/.test(k4.cls));
+await okWhy('4a the write was refused by the epoch check: view-only with the «epoch» strip, the text is unsaved (⚠, «Експортувати незбережене»), leaving would ask, the tab does not lead', {'B was editable when the text was typed': !pre4.strip, 'the write was refused as «epoch», the text unsaved, the tab not leading': k4.strip && /іншого облікового запису/.test(k4.msg) && k4.exp==='Експортувати незбережене' && k4.warn && bu && !l4.on && !l4.held && !l4.queued && /locked/.test(k4.cls)});
 const dl=await until(async()=>(await lead(D)).on, 5000);
 ok('4b the lock went to the fourth tab, which leads for the new owner', dl && (await lead(D)).held && (await D.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u2');
-ok('4c the text typed in the locked tab is still on its sheet', (await B.evaluate(()=>document.getElementById('sheet').innerText)).includes('не запишеться'));
+const sB=await B.evaluate(()=>document.getElementById('sheet').innerText);
+ok('4c the text typed in the locked tab is still on its sheet'+(sB.includes('не запишеться')? '' : ' — failed: the sheet holds «'+sB.replace(/\s+/g,' ').slice(-80)+'»'), sB.includes('не запишеться'));
 // 4b: another tab reports the change («owner» message): the check locks the tab at once
 const E=await newTab(A, SITE, {connect:false}); ok('4d a fifth tab opens with the stored owner and waits in the queue', (await lead(E)).queued && (await E.evaluate(()=>sheetDebug.sync.engine().owner.uid))==='u2');
 await connect(D,{devId:'A', devName:'Device A', owner:owner('u3'), pace:PACE}); await E.waitForTimeout(300);
