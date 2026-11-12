@@ -8,8 +8,9 @@
 // contradict each other, a block judged below over one judged above, which P-DOWN then drags past the moved block, step 2b's question,
 // when the refusal names one of them), its result breaks no invariant (relink's own check), and every block the phases moved stands at its
 // target or under it (rule 5, G15), lower only as GAP decides: at its reference after coming in by itself (1b's landing law), under its
-// old upper neighbour (O-25, G16), or under a block so put or pushed past its reference. A block created over blocks it pushes down, with
-// nothing else moved and GAP.5.2 on, taken away again leaves every block where it was (INV-7 b). RELINK's rows are the result (INV-8):
+// old upper neighbour (O-25, G16), or under a block so put or pushed past its reference. A creation lifts no block: P-UP leaves the blocks
+// judged above it where they are and puts it under them (G17). A block created over blocks it pushes down, with nothing else moved and
+// GAP.5.2 on, taken away again leaves every block where it was (INV-7 b). RELINK's rows are the result (INV-8):
 // where a block the phases did not move stands elsewhere, the difference is reported, not failed. The property checks itself: SETTLE
 // dropping its facts must be caught. Seeded.
 import { set, text, chars, ctxOf, sheet, over, rows, hitting } from './lib/primcase.mjs';
@@ -22,7 +23,7 @@ import { readingOrder, hits, sharesCol } from '../public/layout/geometry.js';
 // a seed, and how many cases: node tests/layoutprim-props.mjs [seed] [N]
 let seed = +process.argv[2] || 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const N = +process.argv[3] || 3000, NS = Math.ceil(N / 2);
-let tried = 0, triedStack = 0, bad = 0, skip = 0, injected = 0, caught = 0; const fails = {}, firsts = [], inc = (k) => (fails[k] = (fails[k] || 0) + 1);
+let tried = 0, triedStack = 0, bad = 0, skip = 0, injected = 0, caught = 0, lowered = 0; const fails = {}, firsts = [], inc = (k) => (fails[k] = (fails[k] || 0) + 1);
 const report = {}, rep = (k) => (report[k] = (report[k] || 0) + 1), others = [];
 let current = null;
 const fail = (why) => { bad++; inc(why.replace(/[A-Z]\d?/g, '·').slice(0, 60)); if (firsts.length < 3) firsts.push({ ...current, why }); };
@@ -98,7 +99,7 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   if (create) {
     const xw = int(2, 5), xh = stack ? int(2, 6) : int(1, 3); X = set('X', int(0, cols - xw), stack ? 0 : int(0, 8), xw, xh);
     const boxes = new Map([...base.boxes, ['X', X]]), order = readingOrder(boxes.values());
-    w = over({ ...base, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }, ctx, 'X');
+    w = over({ ...base, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }, ctx, 'X', null, true);
   } else {
     const b = bs[int(0, n - 1)], d = int(-5, 5), dc = int(-1, 1);
     const B0 = base.boxes.get(b.id); if (!d && !dc) { skip++; continue; }
@@ -118,6 +119,8 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   } catch (e) { skip++; continue; }
   if (hitting(w) || w.L.boxes.get(id).y < 0) { skip++; continue; }
   if (stack) triedStack++; else tried++; current = { k, create, stack };
+  // G17: a creation lifts nothing; where blocks judged above reached it, it went under them
+  if (create) { const lift = [...w.steps].find(([b, l]) => b !== X.id && l.some((st) => st.by === 'up')); if (lift) { fail(`G17: ${lift[0]} lifted over a creation`); continue; } if (w.L.boxes.get(X.id).y > X.y) lowered++; }
   if (process.env.DUMP) current.dump = { cols, base: [...base.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]), X: [X.col, X.y, X.w, X.h], map, rules: rules === DEFAULT ? 'default' : Object.entries(rules).filter(([kk, v]) => v === false).map(([kk]) => kk) };
   const g = explain(base, w.L);
   const T = { base, after: w.L, ...transitionFacts(w, base), carried: id,
@@ -145,7 +148,7 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   // INV-7 b: a block created and taken away again leaves every block where it was, when nothing else changed columns (nothing pressed
   // aside or narrowed: a block that changed columns stays where it went): every block it pushed down that the facts leave out (FOLLOW's),
   // and every block that shares no column with a block the facts name, is back at its row of base, whatever moved elsewhere (the
-  // independent review of 0eda0ba); a named block keeps its move, and one P-UP lifted over the creation stays lifted: reported apart
+  // independent review of 0eda0ba); a named block keeps its move (P-SEP, P-SINK, P-REST: P-UP lifts nothing over a creation, G17)
   if (create && T.leave.length === 0 && T.enter.every(([b]) => b === id)) {
     const z = remove(r.layout, id, rules), named = T.moved.filter((b) => b !== id).map((b) => w.L.boxes.get(b));
     const free = base.order.filter((b) => !T.moved.includes(b) && !named.some((n) => sharesCol(n, w.L.boxes.get(b)) || sharesCol(n, base.boxes.get(b))));
@@ -166,7 +169,7 @@ let named = false;
 {
   const base = sheet(8, [set('A', 0, 0, 3)]), ctx = ctxOf();
   const boxes = new Map([...base.boxes, ['X', set('X', 0, 0, 2)]]), order = readingOrder(boxes.values());
-  const w = over({ ...base, boxes: new Map(order.map((b) => [b, boxes.get(b)])), order }, ctx, 'X');
+  const w = over({ ...base, boxes: new Map(order.map((b) => [b, boxes.get(b)])), order }, ctx, 'X', null, true);
   aside(w, 'A', 'X', 'right');
   const g = explain(base, w.L);
   const T = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', leave: g.left.map(([b, col]) => [b, col, 'press']), enter: g.entered.map(([b, col]) => [b, col, b === 'X' ? 'put' : 'self']), pass: [] };
@@ -175,7 +178,7 @@ let named = false;
   named = r.ok && rr.get('A') === 0 && rr.get('X') === 0 && !unexplained(base, w.L, rr, T, DEFAULT, r.refs, false).length && wrong(1) && wrong(100);
 }
 const ok = tried >= N && triedStack >= NS && bad === 0 && named;
-console.log((ok ? '✓ ' : '✗ ') + `${tried} random creations and carries and ${triedStack} stacks under a text pressed aside, through the primitives: RELINK takes every transition, as facts, and every moved block stands at its target or under it (${JSON.stringify(fails)}); ${skip} draws with no valid state`);
+console.log((ok ? '✓ ' : '✗ ') + `${tried} random creations and carries and ${triedStack} stacks under a text pressed aside, through the primitives: RELINK takes every transition, as facts, every moved block stands at its target or under it, and no creation lifts a block (G17; ${lowered} went under blocks judged above) (${JSON.stringify(fails)}); ${skip} draws with no valid state`);
 console.log('  where RELINK\'s rows differ from the phases\', by what GAP decided (reported, RELINK\'s rows being the result): ' + JSON.stringify(report));
 const teeth = caught >= injected / 10;
 console.log((teeth ? '✓ ' : '✗ ') + `the property has teeth: with the facts dropped (only the carried block held), ${caught} of ${injected} transitions leave a moved block where nothing explains it (a tenth at least)`);
