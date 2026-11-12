@@ -1465,7 +1465,11 @@ async function leadAsk(){ const name=leadName(); if(LOCK || !name) return false;
 // freeze a page holding one) but throttles its timers to one a minute after five minutes, so the sync would crawl there while this tab could run it.
 // It asks when it queues, when it is shown, and when it writes (o.write: the user is editing here; at most once in 2 s)
 function leadWanted(o={}){ if(!CLOUD || document.hidden || !hasLocks() || !LEAD.abort) return; if(o.write){ const t=Date.now(); if(t-(LEAD.askedW||0)<2000) return; LEAD.askedW=t; } tellTabs({t:'lead?'}); }   // askedW: the writes' own pace, so an ask on showing does not mute the first edit's
-async function leadCheck(){ if(!SYNC || LOCK) return; let same=true; try{ same=await SYNC.checkOwner(); }catch(_){ return; } if(!same){ setLock('epoch'); return; } leadAsk(); }
+// the check can wait (checkOwner ends a load in flight first), and the page may live on meanwhile: a result for an engine replaced since is dropped; a
+// mismatch still locks (also a hidden page); a match asks for the lead only if the leadership's generation is the one the check began in, so a
+// pagehide, freeze or hand-over meanwhile (leadOff moves LEAD.gen) is not undone without the event that brings the page back
+async function leadCheck(){ if(!SYNC || LOCK) return; const eng=SYNC, gen=LEAD.gen; let same=true; try{ same=await eng.checkOwner(); }catch(_){ return; }
+  if(SYNC!==eng || LOCK) return; if(!same){ setLock('epoch'); return; } if(LEAD.gen!==gen) return; leadAsk(); }
 /* ══ the account (SYNC-PLAN 4.11–4.13, 4.18; PR 3b): Google sign-in through Firebase Auth, the Firestore adapter (cloud.js) as this tab's CLOUD.
    The SDK (three modules from gstatic, cached by the service worker once used) loads only when needed: at start with an owner, a user Firebase
    remembers or a redirect under way, else on the first press of «Увійти». After a sign-in the check goes in the order of §4.11: the access (one read

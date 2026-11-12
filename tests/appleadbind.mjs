@@ -88,5 +88,17 @@ await okWhy('5 a resume while a fresh tab\'s first load is held (held: '+held5+'
   'the first load was held': !!held5, 'not locked': !s5.lock && !s5.strip, 'it names the stored owner': !!o5 && o5===st5}, ()=>diag({P5}));
 G.errs.push(...p5errs);
 
-const errs=[...A.errs, ...D.errs, ...G.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
+/* ── 6. an owner check that waits for a load (checkOwner ends a load in flight first) and ends after a pagehide: the page let the lead go and must
+   not take it back without the event that brings it again (the third review of #143: the late «true» called leadAsk and the engine ran again) ── */
+const H6=await newDevice(br, cloud, SITE, 'H6', {ctx:CTX, connect:{owner:owner('u40'), pace:PACE}}), P6=H6.pg;
+const l6a=await until(async()=>(await lead(P6)).on, 5000);
+await arm(P6); await P6.evaluate(()=>{ window.__rl=sheetDebug.sync.engine().reload().then(()=>'ok', e=>e && e.code); });   // a load in flight, as leadOn's
+const h6=await until(async()=>(await held(P6))>0, 5000);
+await P6.evaluate(()=>{ window.dispatchEvent(Object.assign(new Event('pageshow'),{persisted:true})); }); await P6.waitForTimeout(100);   // its leadCheck waits for that load
+await P6.evaluate(()=>{ window.dispatchEvent(new Event('pagehide')); }); await P6.waitForTimeout(100);   // the lead goes, the engine stops
+const mid6=await lead(P6); await open(P6); await P6.evaluate(()=>window.__rl); await P6.waitForTimeout(600); const l6=await lead(P6);
+await okWhy('6 an owner check waiting for a load ends after a pagehide: the tab stays without the lead (before the release '+JSON.stringify(mid6)+', after '+JSON.stringify(l6)+')', {
+  'it led first': !!l6a, 'the load was held': !!h6, 'the pagehide let the lead go': !mid6.held && !mid6.on, 'not leading after': !l6.on, 'holds no lock after': !l6.held, 'the engine not started after': !l6.started}, ()=>diag({P6}));
+
+const errs=[...A.errs, ...D.errs, ...G.errs, ...H6.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
