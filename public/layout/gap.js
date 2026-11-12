@@ -144,15 +144,27 @@ function slot(W, x, c, yc) {
 // that keep the block under it at its canonical row, so that no temporary push of another block is written (§2.1), and the rest of the
 // seg goes. resident: a block of a swap that was an anchor in this column comes back as one (G11): it cuts the stack, the rows above it and
 // under it keeping their owners
-function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null) {
+/** The blocks in the order given, but each after every one of its uppers that the list holds (O-25): a stable order of dependencies. */
+function followOrder(list, uppersOf) {
+  const out = [], left = list.slice();
+  while (left.length) { const k = left.findIndex((id) => ![...(uppersOf.get(id) || [])].some((u) => u !== id && left.includes(u))); out.push(...left.splice(k < 0 ? 0 : k, 1)); }
+  return out;
+}
+// uppers: for a block that comes in by itself out of every column it had, the blocks that stood over it in base (O-25, the owner's G16): it
+// comes in under every one of them in the column's chain, with the gap its reference gives, wherever the screen has it
+function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, resident = false, targetOf = null, uppers = null) {
   const shownH = (b) => b.h + b.e, Y = (b) => (ys ? ys.get(b.id) : b.y), H = (b) => b.h + (ys ? 0 : b.e);
-  const inChain = new Set(seq(W, c).map((el) => el.id));   // the neighbours are those already in the column's chain (rule 3)
+  const order = seq(W, c).map((el) => el.id), inChain = new Set(order);   // the neighbours are those already in the column's chain (rule 3)
+  // a block put at its displayed row reads its neighbours in the chain's order, which is the screen's but where a block that came in by itself
+  // followed its old upper neighbour (O-25, G16): it stands under that block in the chain whatever its target row
+  const at = new Map(order.map((id, k) => [id, k]));
   const others = [...W.B.values()].filter((b) => b.id !== x.id && inChain.has(b.id))
-    .sort((a, b) => (byCanon ? Y(a) - Y(b) : a.y - b.y) || byId(a.id, b.id));
+    .sort((a, b) => (byCanon ? Y(a) - Y(b) || byId(a.id, b.id) : at.get(a.id) - at.get(b.id)));
   if (byCanon && others.some((b) => Y(b) < Y(x) + x.h && Y(x) < Y(b) + b.h)) throw new Error('gap: a canonical place overlaps');
-  const below = byCanon ? others.find((b) => Y(b) >= Y(x) + x.h) : others.find((b) => b.y >= x.y + shownH(x));
+  const lastUp = uppers ? others.reduce((m, b, k) => (uppers.has(b.id) ? k : m), -1) : -1;
+  const below = byCanon ? others.find((b) => Y(b) >= Y(x) + x.h) : others.find((b, k) => k > lastUp && b.y >= x.y + shownH(x));
   if (!below) {   // rule 4, fresh: x anchors a stack of its own, rows of the anchor above (unowned under the top)
-    const above = byCanon ? others.filter((b) => Y(b) + b.h <= Y(x)).pop() : others.filter((b) => b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
+    const above = byCanon ? others.filter((b) => Y(b) + b.h <= Y(x)).pop() : others.filter((b, k) => k <= lastUp || b.y + shownH(b) <= x.y).pop(), u = above ? above.id : null;
     W.S.set(key(x.id, c), { u, parts: [fill(u, Math.max(0, Y(x) - (above ? Y(above) + H(above) : 0)))] });
     return;
   }
@@ -540,6 +552,15 @@ function relinkWork(T, rules) {
   const padOf = (id) => (isArea(after.boxes.get(id)) ? 1 : 0);
   const canonTarget = (id) => { const b = after.boxes.get(id); return (b.yc ?? b.y) - padOf(id); };
   const byTarget = (a, b) => tg.get(a).y - tg.get(b).y || tg.get(a).c0 - tg.get(b).c0 || byId(a, b);
+  // O-25 (the owner, 2026-11-11, G16): a block that comes into a column by itself and keeps none of its columns of base follows the blocks
+  // that stood over it in base, in any of its chains: it comes in under them, with the gap its reference gives
+  const uppersOf = new Map();
+  for (const [id, t] of tg) {
+    const x = W.B.get(id); if (!x || (t.c0 <= x.c1 && x.c0 <= t.c1)) continue;   // it keeps a column of base: nothing to follow
+    if (!cols(t).some((c) => EN.get(key(id, c)) === 'self')) continue;
+    const up = new Set(); for (const c of cols(x)) { const ch = seq(W, c).map((el) => el.id); for (const u of ch.slice(0, ch.indexOf(id))) up.add(u); }
+    if (up.size) uppersOf.set(id, up);
+  }
   const ys = rowsIn(W, 'canonical');   // the canonical rows of base, by which rule 2 measures
   const anchoredIn = new Set(W.S.keys());   // the (block, column) where a block is an anchor in base: a passer comes back there as one (G11)
   // the rows every move starts from: FOLLOW over base's stacks with after's heights, a height a phase changed being no move; the moves,
@@ -625,10 +646,12 @@ function relinkWork(T, rules) {
   // will stand, and nothing of it written; each such block comes in at its reference, one that came in before it in this RELINK measured
   // at its own (blocks that come in at once are one path, G4)
   const W1 = copyWork(W); fitWork(W, fits); const M = rowsIn(W, 'canonical'); restore(W1); atTargets();
-  for (const id of ids) {
+  // top to bottom, but a block that follows an old upper neighbour (O-25) after that neighbour, when it comes in by itself too (the
+  // independent review of 0eda0ba)
+  for (const id of followOrder(ids.filter((id) => cols(W.B.get(id)).some((c) => EN.get(key(id, c)) === 'self')), uppersOf)) {
     const self = cols(W.B.get(id)).filter((c) => EN.get(key(id, c)) === 'self' && own(id, c)); if (!self.length) continue;
     if (ref.has(id)) M.set(id, ref.get(id));
-    for (const c of self) enter(W, W.B.get(id), c, M);
+    for (const c of self) enter(W, W.B.get(id), c, M, false, null, null, false, null, uppersOf.get(id) || null);
   }
   followWork(W); fitWork(W, fits);
   // the references of the blocks that came in by themselves, as canonical box rows, for the dev look and the tests (landing)

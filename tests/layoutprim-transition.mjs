@@ -5,7 +5,7 @@
 // narrowing and what the primitives did after it; RELINK takes the transition, gives the rows the phases left, and its memory is the one
 // GAP's rules give: a block taken away again leaves no trace (INV-7 b). The cases of the reviews of the path this replaced (rounds 1 to 6 of
 // the independent review of step 2a) stay, as rows and memory.
-import { down, up, aside, reshape, sinkTo, transitionFacts } from '../public/layout/primitives.js';
+import { down, up, aside, sep, phase, reshape, sinkTo, transitionFacts } from '../public/layout/primitives.js';
 import { checkTransition, explain } from '../public/layout/transition.js';
 import { judgeCarry } from '../public/layout/changes.js';
 import { relink, remove, stackAt, showStack } from '../public/layout/gap.js';
@@ -71,7 +71,7 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
   // A, an elastic text of 30 characters on 10 cells (one row), and B under it in A's first column; a new block X at A's left presses A
   // right: A narrows to 9 cells and takes two rows, and leaves column 1, so B, which only that column held, stays at row 2 on the screen
   const c = ctxOf({ A: { text: chars(30) } }), base = sheet(11, [text('A', 0, 0, 11), set('B', 0, 2, 2)]);
-  const w = over(withX(base, set('X', 0, 0, 2)), c, 'X');
+  const w = over(withX(base, set('X', 0, 0, 2)), c, 'X', null, true);
   aside(w, 'A', 'X', 'right');
   const tr = { ...T(base, w), leave: [['A', 1, 'press']], enter: [['X', 1, 'put']] }, r = relink(tr, DEFAULT);
   ok('4 A pressed right (col 1, w 10, two rows); B stays at row 2, which no primitive moved', eq(w.L.boxes.get('A').col, 1) && w.L.boxes.get('A').h === 2 && rows(w).B === 2 && !tr.moved.includes('B'), [rows(w), tr.moved]);
@@ -128,13 +128,14 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
 /* ── 7. no block the phases did not move gets a move (the independent reviews of 321c664 and 517a8d7; the architecture review) ── */
 {
   // X created on A's right half: the carry's judge meets A from the side, P-ASIDE narrows it from the left to three rows and it leaves the
-  // columns of B, D and C; B stays at 3, P-DOWN takes D under X to 4 and C under D to 5. B moved by no primitive: no fact, no move; taking X
-  // away again gives every block back its row of base (INV-7 b), which the path's corrections of B and D broke
+  // columns of B, D and C; B stays at 3, P-DOWN takes D under X to 4 and C under D to 5. X is created: D and C, pushed down under it and
+  // nothing else moved, are FOLLOW's, not named (G16, INV-7 b); taking X away again gives every block back its row of base, which the
+  // path's corrections of B and D broke
   const c = ctxOf({ A: { text: chars(54) } }), base = sheet(11, [text('A', 0, 0, 11, 2), set('B', 0, 3, 2), set('D', 2, 3, 3), set('C', 0, 4, 4)]);
-  const w = over(withX(base, set('X', 3, 0, 2, 4)), c, 'X');
+  const w = over(withX(base, set('X', 3, 0, 2, 4)), c, 'X', null, true);
   carry(w, base, c, { col: 3, y: 0, frow: 0 });
   const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
-  ok('7 A pressed aside (col 4, w 7, three rows); B at 3, D at 4, C at 5; the facts name D, C and X', eq(rows(w), { X: 0, A: 0, B: 3, D: 4, C: 5 }) && w.L.boxes.get('A').h === 3 && hitting(w) === null && eq([...tr.moved].sort(), ['C', 'D', 'X']), [rows(w), tr.moved]);
+  ok('7 A pressed aside (col 4, w 7, three rows); B at 3, D at 4, C at 5; the facts name X alone, D and C being pushed down under it', eq(rows(w), { X: 0, A: 0, B: 3, D: 4, C: 5 }) && w.L.boxes.get('A').h === 3 && hitting(w) === null && eq(tr.moved, ['X']), [rows(w), tr.moved]);
   ok('7a checkTransition and RELINK take it, with the rows the phases left', eq(checkTransition(tr), []) && r.ok && eq(got(r), rows(w)), [checkTransition(tr), got(r)]);
   const z = r.ok && remove(r.layout, 'X', DEFAULT);
   ok('7b X taken away again: B 3, D 3, C 4, as in base', z && eq({ B: z.boxes.get('B').y, D: z.boxes.get('D').y, C: z.boxes.get('C').y }, { B: 3, D: 3, C: 4 }), z && rowsOf(z));
@@ -169,7 +170,7 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
   const off = resolve({ 'GAP.9': false }), c = ctxOf({ A: { text: chars(54) } }, off);
   const run = (extra) => {
     const base = sheet(11, [text('A', 0, 0, 11, 2), set('B', 0, 3, 2), set('D', 2, 3, 3), set('C', 0, 4, 4), ...extra]);
-    const w = over(withX(base, set('X', 3, 0, 2, 4)), c, 'X');
+    const w = over(withX(base, set('X', 3, 0, 2, 4)), c, 'X', null, true);
     carry(w, base, c, { col: 3, y: 0, frow: 0 });
     const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, off);
     return { w, tr, r, check: checkTransition(tr), gone: r.ok ? rowsOf(remove(r.layout, 'X', off)) : null };
@@ -192,11 +193,126 @@ function columns(base, w) { const g = explain(base, w.L); return { leave: g.left
   // in GAP's count than the screen has them: the path had to move them up, through B1, and was refused. As facts it is taken
   const off = resolve({ 'GAP.9': false }), c = ctxOf({ T: { text: chars(67) } }, off);
   const base = sheet(13, [text('T', 0, 0, 13, 2), set('B0', 8, 2, 4, 2), set('B1', 3, 3, 2, 2), set('B3', 6, 3, 3, 1), set('B4', 6, 4, 3, 2), set('B2', 3, 5, 4, 1), set('B5', 5, 6, 2, 2)]);
-  const w = over(withX(base, set('X', 5, 0, 2, 6)), c, 'X');
+  const w = over(withX(base, set('X', 5, 0, 2, 6)), c, 'X', null, true);
   carry(w, base, c, { col: 5, y: 0, frow: 0 });
   const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, off);
-  ok('12 nothing hits after the phases; B2 and B5 moved down a row', hitting(w) === null && rows(w).B2 === 6 && rows(w).B5 === 7 && tr.moved.includes('B2') && tr.moved.includes('B5'), [rows(w), tr.moved]);
+  ok('12 nothing hits after the phases; B2 and B5 moved down a row, pushed under X: FOLLOW\'s, the facts name X alone', hitting(w) === null && rows(w).B2 === 6 && rows(w).B5 === 7 && eq(tr.moved, ['X']), [rows(w), tr.moved]);
   ok('12a checkTransition and RELINK take it, B2 and B5 where the phases left them', eq(checkTransition(tr), []) && r.ok && r.layout.boxes.get('B2').y === 6 && r.layout.boxes.get('B5').y === 7, [checkTransition(tr), got(r)]);
+}
+
+/* ── 13. O-25 (the owner, 2026-11-11, G16): a block pressed out from under a block that the change takes down past it follows it ── */
+{
+  // T, a text across the sheet, and B1 under it in column 6; X created over both: the carry's judge meets B1 from the side (P-ASIDE, a
+  // column left, out of every column it had) and T sinks under X with the blocks under it (P-DOWN, FOLLOW's). RELINK: B1 under T with the
+  // gap it had, none, not over it with T pushed further; X taken away again, every block back (INV-7 b)
+  const c = ctxOf({ T: { text: chars(76) } });
+  const base = sheet(10, [text('T', 0, 0, 10, 2), set('B0', 2, 2, 2, 2), set('B1', 5, 2, 2, 2), set('B2', 0, 3, 3, 1)]);
+  const w = over(withX(base, set('X', 5, 0, 4, 4)), c, 'X', null, true);
+  carry(w, base, c, { col: 5, y: 0, frow: 0 });
+  const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
+  ok('13 the phases: B1 a column aside, beside X at 2; T under X at 4, B0 at 6, B2 at 7; the facts name X alone', eq(rows(w), { X: 0, B1: 2, T: 4, B0: 6, B2: 7 }) && w.L.boxes.get('B1').col === 4 && eq(tr.moved, ['X']), [rows(w), tr.moved]);
+  ok('13a RELINK: B1 right under T, at 6; T at 4, with no rows left empty under X', eq(checkTransition(tr), []) && r.ok && eq(got(r), { X: 0, T: 4, B0: 6, B1: 6, B2: 7 }) && showStack(stackAt(r.layout, 'B1', 5)) === 'T | · |', [checkTransition(tr), got(r), r.ok && showStack(stackAt(r.layout, 'B1', 5))]);
+  const z = r.ok && remove(r.layout, 'X', DEFAULT);
+  ok('13b X taken away again: T at 0, B1 right under it at 2, B0 2, B2 3, as in base', z && eq(rowsOf(z), { T: 0, B0: 2, B1: 2, B2: 3 }), z && rowsOf(z));
+}
+
+/* ── 14. INV-7 b: a block created over a block it pushes down, then taken away (G16) ── */
+{
+  // T at row 0; X created over it, over every column of T or over some: P-DOWN sinks T under X. T pushed down under X is FOLLOW's: the
+  // facts name X alone, and X taken away again, T is back at 0. Named as a move, T would keep the rows it went down by, as free room above
+  // it, and stay at 2
+  for (const [name, tw] of [['over all of T', 3], ['over part of T', 5]]) {
+    const base = sheet(10, [set('T', 0, 0, tw, 1)]), w = over(withX(base, set('X', 0, 0, 3, 2)), ctx, 'X', null, true);
+    down(w, new Set(['T']));
+    const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
+    const z = r.ok && remove(r.layout, 'X', DEFAULT), z1 = remove(relink({ ...tr, moved: ['T', 'X'] }, DEFAULT).layout, 'X', DEFAULT);
+    ok(`14 X created ${name}: T at 2 under it, the facts name X alone; X taken away, T back at 0 (named as a move, it would stay at 2)`, eq(tr.moved, ['X']) && r.ok && got(r).T === 2 && z && z.boxes.get('T').y === 0 && z1.boxes.get('T').y === 2, [tr.moved, got(r), z && rowsOf(z), rowsOf(z1)]);
+  }
+}
+
+/* ── 15. a push under a created block beside another primitive's move: every move named, none counted twice ── */
+{
+  // X created at row 2 and lowered by P-UP to 3; P-DOWN takes the blocks under it down by three rows, and P-SEP one more for some of
+  // them: those are moves, so every block the phases moved is named, and RELINK gives the rows the phases left (a block left out would
+  // be pushed by FOLLOW over it and again by the move of the block under it)
+  const c = ctxOf({ B4: { text: chars(18) }, B5: { text: chars(26) }, B6: { text: chars(11) } });
+  const base = sheet(10, [set('B1', 1, 0, 2), set('B0', 4, 0, 6, 3), set('B2', 0, 2, 3, 3), set('B3', 2, 3, 4, 2), text('B4', 0, 5, 7), text('B5', 1, 8, 9, 2), text('B6', 1, 11, 5)]);
+  const w = over(withX(base, set('X', 1, 2, 5, 3)), c, 'X', null, true);
+  const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+  const j = judgeCarry(w.L, base, { id: 'X', at: { col: 1, y: 2, frow: 2 }, away: true }, mem, c);
+  phase(w); for (const [id, sd] of j.met) aside(w, id, 'X', sd);
+  phase(w); up(w, new Set([...j.side].filter(([id, sd]) => sd === 'above' && !j.met.has(id)).map(([id]) => id)));
+  phase(w); down(w, new Set([...j.side].filter(([id, sd]) => sd === 'below' && !j.met.has(id)).map(([id]) => id)));
+  phase(w); for (let k = 0; k < 20; k++) { const h = hitting(w); if (!h) break; sep(w, h[0], h[1], (o) => j.side.get(o)); }
+  const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
+  ok('15 every block the phases moved is named, P-DOWN\'s pushes with them', hitting(w) === null && ['B2', 'B3', 'B4', 'B5', 'B6', 'X'].every((b) => tr.moved.includes(b)), [rows(w), tr.moved]);
+  ok('15a RELINK gives the rows the phases left', r.ok && eq(got(r), rows(w)), [got(r), rows(w)]);
+}
+
+/* ── 16. a move in other columns changes nothing of a push under a created block (the independent review of 0eda0ba) ── */
+{
+  // T pushed down under X, created over it; in the same transition F, twenty columns away, moved down a row by P-SEP. The two share no
+  // column: T's push stays FOLLOW's, not named, and X taken away again gives T back its row while F keeps its move
+  const base = sheet(30, [set('T', 0, 0, 3), set('F', 20, 0, 3)]), w = over(withX(base, set('X', 0, 0, 3, 2)), ctx, 'X', null, true);
+  down(w, new Set(['T'])); sinkTo(w, 'F', 1, 'sep');
+  const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
+  const z = r.ok && remove(r.layout, 'X', DEFAULT);
+  ok('16 the facts name F and X, not T: F\'s move is in other columns', eq([...tr.moved].sort(), ['F', 'X']), tr.moved);
+  ok('16a X taken away again: T back at 0, F at 1 where it was moved', r.ok && got(r).T === 2 && z && eq(rowsOf(z), { T: 0, F: 1 }), [got(r), z && rowsOf(z)]);
+}
+
+/* ── 17. a creation lifts nothing: X goes under the block judged above it (the owner, 2026-11-12, G17) ── */
+{
+  // A in columns 2–5 at rows 2–5, B under it at row 7; X, five columns wide and two rows tall, created with its top on A's lower half
+  // (row 4). A's middle is not below X's top, so A is judged above: it stays, and X goes under it, to 6; B, judged below, is pushed to 8 by
+  // X's arrival, FOLLOW's. The facts name X alone, and X taken away again, every block is back (INV-7 b). Before G17, P-UP lifted A to 0,
+  // a named move that X taken away left there, three empty rows over B
+  const base = sheet(6, [set('A', 2, 2, 4, 4), set('B', 2, 7, 4)]), X = set('X', 0, 4, 5, 2);
+  const run = (insert) => {
+    const w = over(withX(base, X), ctx, 'X', null, insert);
+    const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+    const j = judgeCarry(w.L, base, { id: 'X', at: { col: 0, y: 4, frow: 4 }, away: true }, mem, ctx);
+    phase(w); up(w, new Set([...j.side].filter(([, sd]) => sd === 'above').map(([id]) => id)));
+    phase(w); down(w, new Set([...j.side].filter(([, sd]) => sd === 'below').map(([id]) => id)));
+    return { w, j };
+  };
+  const { w, j } = run(true);
+  const tr = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', ...columns(base, w) }, r = relink(tr, DEFAULT);
+  const z = r.ok && remove(r.layout, 'X', DEFAULT);
+  ok('17 A judged above, B below; A stays at 2, X under it at 6, B pushed to 8; the facts name X alone', j.side.get('A') === 'above' && j.side.get('B') === 'below' && eq(rows(w), { A: 2, X: 6, B: 8 }) && eq(tr.moved, ['X']), [rows(w), tr.moved]);
+  ok('17a checkTransition and RELINK take it; X taken away again, every block back (A 2, B 7)', eq(checkTransition(tr), []) && r.ok && eq(got(r), { A: 2, X: 6, B: 8 }) && z && eq(rowsOf(z), { A: 2, B: 7 }), [got(r), z && rowsOf(z)]);
+  // the same creation run as before G17 (P-UP lifting over it): A at 0, named, and still at 0 once X is taken away
+  const old = run(false).w, ro = relink({ base, after: old.L, moved: ['A', 'X'], carried: 'X', ...columns(base, old) }, DEFAULT);
+  ok('17b before G17: A lifted to 0, and left there once X is taken away (three empty rows over B)', eq(rows(old), { A: 0, X: 4, B: 7 }) && ro.ok && eq(rowsOf(remove(ro.layout, 'X', DEFAULT)), { A: 0, B: 7 }), rows(old));
+  // the working state and base must agree on whether the moved block comes in by rule 3: SETTLE's error otherwise
+  const thrown = (f) => { try { f(); return false; } catch (e) { return /transitionFacts/.test(e.message); } };
+  const carriedIn = over(sheet(6, [set('A', 2, 2, 4, 4), { ...X, y: 9 }]), ctx, 'X', { y: 8 }, true);
+  ok('17c transitionFacts refuses a working state whose `insert` disagrees with base, both ways', thrown(() => transitionFacts(old, base)) && thrown(() => transitionFacts(carriedIn, carriedIn.base)) && !thrown(() => transitionFacts(w, base)));
+}
+
+/* ── 18. a push up in a carry within its columns stays (the owner, 2026-11-12, G18, O-27) ── */
+{
+  // A at rows 2–5 with two free rows above it, X under it at row 8, both in columns 0–4. X carried up into A's lower half (row 4): A keeps
+  // its side from the carry's start (above) and P-UP pushes it to 0; the drop keeps it there. X carried back to row 8 is a new carry:
+  // nothing brings A down, so four empty rows stand between A and X where there were two (INV-7 c as G18 has it: the user pushed A on
+  // purpose; within one carry, before the drop, it comes back with X, INV-7 a)
+  const base = sheet(10, [set('A', 0, 2, 5, 4), set('X', 0, 8, 5, 2)]), w = over(base, ctx, 'X', { y: 4 });
+  up(w, new Set(['A']));
+  const tr = T(base, w), r = relink(tr, DEFAULT);
+  ok('18 X carried up into A\'s lower half: A pushed up to 0 and named, X at 4; taken', eq(tr.moved, ['A', 'X']) && eq(checkTransition(tr), []) && r.ok && eq(got(r), { A: 0, X: 4 }), [tr.moved, got(r)]);
+  const L1 = r.layout, v = over(L1, ctx, 'X', { y: 8 }), r2 = relink(T(L1, v), DEFAULT);
+  ok('18a X carried back to 8: A stays at 0, four empty rows over X', r2.ok && eq(got(r2), { A: 0, X: 8 }), got(r2));
+  // a block brought from other columns pushes nothing up (G17): it is put under A, and a second carry, within its new columns, pushes A
+  const b2 = sheet(6, [set('A', 2, 2, 4, 4), set('B', 2, 7, 4)]), X = set('X', 0, 4, 5, 2), u = over(withX(b2, X), ctx, 'X', null, true);
+  const mem = { away: true, sides: new Map(), through: null, areaBottoms: new Map(), lastTarget: null, dir: 'down' };
+  const j = judgeCarry(u.L, b2, { id: 'X', at: { col: 0, y: 4, frow: 4 }, away: true }, mem, ctx);
+  phase(u); up(u, new Set([...j.side].filter(([, sd]) => sd === 'above').map(([id]) => id)));
+  phase(u); down(u, new Set([...j.side].filter(([, sd]) => sd === 'below').map(([id]) => id)));
+  const r3 = relink({ base: b2, after: u.L, ...transitionFacts(u, b2), carried: 'X', ...columns(b2, u) }, DEFAULT);
+  const L3 = r3.layout, p = over(L3, ctx, 'X', { y: 4 });
+  up(p, new Set(['A']));
+  const r4 = relink(T(L3, p), DEFAULT);
+  ok('18b X brought from other columns stands under A (A 2, X 6, B 8); carried up again within its columns, it pushes A to 0', r3.ok && eq(got(r3), { A: 2, X: 6, B: 8 }) && r4.ok && eq(got(r4), { A: 0, X: 4, B: 8 }), [r3.ok && got(r3), r4.ok && got(r4)]);
 }
 
 process.exit(t.fails ? 1 : 0);

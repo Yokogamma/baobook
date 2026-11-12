@@ -18,8 +18,10 @@ import { push, resize, cut } from './gap.js';
 /** @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Ctx} Ctx
  *  @typedef {import('./shapes.js').Step} Step @typedef {import('./shapes.js').Work} Work @typedef {import('./shapes.js').Obstacle} Obstacle */
 
-/** A working state over a layout, its moved block and the context. @param {Layout} L @param {?string} moved @param {Ctx} ctx @returns {Work} */
-export function working(L, moved, ctx) { return { L, base: L, moved, ctx, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
+/** A working state over a layout, its moved block and the context; `insert` when the moved block comes in by rule 3 (created, or carried
+ *  while away, DRAG.B1), which P-UP reads (G17). @param {Layout} L @param {?string} moved @param {Ctx} ctx @param {boolean} [insert]
+ *  @returns {Work} */
+export function working(L, moved, ctx, insert = false) { return { L, base: L, moved, ctx, insert: !!insert, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
 /** A phase starts: its visits go in the reading order of the layout it starts from (LAYOUT-RULES §5.1, INV-5). @param {Work} ws */
 export function phase(ws) { ws.order = ws.L.order.slice(); return ws; }
 
@@ -56,7 +58,25 @@ function record(ws, before, after, by) {
  *  up to nothing included (the owner, 2026-11-11, G15); the rows a push gave because a height changed are FOLLOW's and no move.
  *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o] @returns {{moved:string[], swap?:[string, string]}} */
 export function transitionFacts(ws, base, o = {}) {
-  const moved = new Set([...ws.steps].filter(([, l]) => l.some((st) => st.by !== 'swap')).map(([id]) => id));
+  // the blocks P-DOWN sank under a moved block that comes in by rule 3 (one base does not hold: created, or carried away and put), with the
+  // blocks that followed them, are pushed by that block's arrival, FOLLOW's: not named, so that taking the moved block away again gives
+  // every row back (INV-7 b, G16). That is judged for each group of blocks the phases moved that share columns, base's or now's, one with
+  // the next: a group where another primitive moved a block too (P-SEP, P-SINK, P-REST; P-UP lifts nothing over such a block, G17) has
+  // every move named, as RELINK would otherwise count a push twice, once by FOLLOW over a block it did not name and once in the move of a
+  // block under it; a group in other columns changes nothing of it (the independent review of 0eda0ba). The working state says the same
+  // (`insert`, which P-UP read): a state that disagrees with base is SETTLE's error
+  const putIn = ws.moved != null && !base.boxes.has(ws.moved), pushedOnly = new Set();
+  if (ws.moved != null && putIn !== !!ws.insert) throw new Error(`transitionFacts: ${ws.moved} ${putIn ? 'comes in by rule 3' : 'is in base'}, the working state says ${ws.insert ? 'inserted' : 'not inserted'}`);
+  if (putIn) {
+    const ids = [...ws.steps.keys()].filter((id) => id !== ws.moved && ws.L.boxes.has(id)), up = new Map(ids.map((id) => [id, id]));
+    const root = (id) => { while (up.get(id) !== id) id = up.get(id); return id; };
+    const spans = (id) => [base.boxes.get(id), ws.L.boxes.get(id)].filter(Boolean).map((b) => extent(b));
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++)
+      if (spans(ids[i]).some((a) => spans(ids[j]).some((b) => a.c0 <= b.c1 && b.c0 <= a.c1))) up.set(root(ids[i]), root(ids[j]));
+    const groups = new Map(); for (const id of ids) { const r = root(id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(id); }
+    for (const g of groups.values()) if (g.every((id) => ws.steps.get(id).every((st) => st.by === 'down' || st.by === 'swap'))) for (const id of g) pushedOnly.add(id);
+  }
+  const moved = new Set([...ws.steps].filter(([id, l]) => !pushedOnly.has(id) && l.some((st) => st.by !== 'swap')).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
   const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));
@@ -250,14 +270,17 @@ function upTo(ws, b, t, rows) {
 /** P-UP (phase 5), the mirror of `sink`: every block of `above` (judged above the moved block) that shares a column with it and reaches it
  *  goes up so that its bottom meets the moved block's top: first the gap above it shrinks, then the blocks above it go up too, each only as
  *  far as it must, no higher than row 0, as the mockup's `up` does. When they cannot all go high enough, the moved block stands under the
- *  lowest bottom they could reach (`topmost`, each as high as it can) [M3].
+ *  lowest bottom they could reach (`topmost`, each as high as it can) [M3]. Over a moved block that comes in by rule 3 (`ws.insert`:
+ *  created, or carried while away) they go up by nothing: the moved block stands under the lowest bottom of those it reaches, so that taking
+ *  it away again gives every row back (the owner, 2026-11-12, G17; INV-7 b).
  *  @param {Work} ws @param {Set<string>} above */
 export function up(ws, above) {
   if (ws.moved == null) return;
   const g = get(ws, ws.moved), memo = new Map(), rows = new Map();
   const hitsUp = visit(ws).filter((id) => above.has(id) && id !== g.id && sharesCol(get(ws, id), g) && reaches(get(ws, id), g, 'above'));
   if (!hitsUp.length) return;
-  const lim = Math.max(...hitsUp.map((id) => topmost(ws, get(ws, id), memo) + ext(get(ws, id))));
+  const high = (b) => (ws.insert ? top(b) : topmost(ws, b, memo));
+  const lim = Math.max(...hitsUp.map((id) => high(get(ws, id)) + ext(get(ws, id))));
   if (top(g) < lim) rows.set(g.id, lim + pad(g));
   const gTop = Math.max(top(g), lim);
   for (const id of hitsUp) { const b = get(ws, id); upTo(ws, rows.has(id) ? { ...b, y: rows.get(id) } : b, gTop - ext(b), rows); }
