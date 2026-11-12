@@ -46,20 +46,15 @@ export function sideways(last, at) { return !!last && Math.abs(at.col - last.col
  *  that keeps its side with the blocks over it, P-DOWN then sinks one of them, judged below, under the moved block, and it drags the first
  *  past the moved block, an order no declaration explains. Blocks judged by their middle never contradict each other (one over another has
  *  the higher middle), nor do two that keep their sides (they kept start's order). @param {Map<string,'above'|'below'>} side */
-function keepOrder(side, start, S, g, pinned = null) {
-  // the neighbour letting the block through (DRAG.B4) keeps the side the memory gives it, judged neither way here (PR-4) but a seed all
-  // the same: a block that stood under a neighbour held below is below too
-  const keptOf = (id) => {
-    if (pinned && id === pinned.id) return pinned.side;
-    const w = start.boxes.get(id); return w && sharesCol(w, S) ? (extent(w).r0 < extent(S).r0 ? 'above' : 'below') : null;
-  };
-  const kept = [...side.keys(), ...(pinned ? [pinned.id] : [])].filter((id) => keptOf(id)), free = [...side.keys()].filter((id) => !keptOf(id));
+function keepOrder(side, start, S, g) {
+  const keptOf = (id) => { const w = start.boxes.get(id); return w && sharesCol(w, S) ? (extent(w).r0 < extent(S).r0 ? 'above' : 'below') : null; };
+  const kept = [...side.keys()].filter((id) => keptOf(id)), free = [...side.keys()].filter((id) => !keptOf(id));
   if (!kept.length || !free.length) return;
   const boxes = [...start.boxes.values()].filter((b) => b.id !== g);
   const ups = new Map(boxes.map((b) => [b.id, upperNeighbours(boxes, b).map((a) => a.id)])), downs = new Map(boxes.map((b) => [b.id, []]));
   for (const [id, us] of ups) for (const u of us) downs.get(u).push(id);
   const flood = (v, next) => {
-    const q = kept.filter((id) => keptOf(id) === v && (side.get(id) === v || (pinned && id === pinned.id))), seen = new Set(q);
+    const q = kept.filter((id) => keptOf(id) === v && side.get(id) === v), seen = new Set(q);
     while (q.length) for (const n of next.get(q.pop()) || []) if (!seen.has(n)) { seen.add(n); q.push(n); if (side.has(n) && !keptOf(n)) side.set(n, v); }
   };
   flood('above', ups); flood('below', downs);
@@ -76,23 +71,22 @@ function keepOrder(side, start, S, g, pinned = null) {
  *    or equal and the last move was sideways; pressed to the side its centre lies on, to the left when the centres coincide. Once met from
  *    the side, it stays so while it shares a row with the target's rows (the memory's `sides`). With `DRAG.B3` off nothing is met from the
  *    side.
- *  - The neighbour letting the block through is judged like any other, but apart (`held`): its judgements count only if phase 3 releases
- *    it (LAYOUT-RULES §5.1 phase 2, PR-4).
+ *  - The neighbour letting the block through is judged like any other: while it is held, the wrapper runs the pipeline at the target of
+ *    the choice, where the judgements are the ones the choice was made on (LAYOUT-RULES §5.1b).
  *  The sides met are returned for the memory; nothing here writes it (PR-7).
  *  @param {Layout} layout @param {?Layout} start @param {{id:string, at:Target, away?:boolean}} change @param {Memory} memory @param {Ctx} ctx
- *  @returns {Judged & {sides:Map<string,'left'|'right'>, held:?{side?:'above'|'below', met?:'left'|'right'}}} */
+ *  @returns {Judged & {sides:Map<string,'left'|'right'>}} */
 export function judgeCarry(layout, start, change, memory, ctx) {
   const g = change.id, at = change.at, G = layout.boxes.get(g), eg = extent(G), side = new Map(), met = new Map(), sides = new Map();
-  const through = memory.through ? memory.through.id : null, keep = on(ctx.rules, 'DRAG.B2.keep') && !change.away;
+  const keep = on(ctx.rules, 'DRAG.B2.keep') && !change.away;
   const S = start ? start.boxes.get(g) : null, frow = at.frow ?? at.y;
-  let held = null;
   for (const id of layout.order) {
     if (id === g) continue;
-    const n = layout.boxes.get(id), en = extent(n), sd = id === through ? (held = {}) : null;
+    const n = layout.boxes.get(id), en = extent(n);
     if (sharesCol(n, G)) {
       const was = keep && S && start.boxes.get(id);
       const v = was && sharesCol(was, S) ? (extent(was).r0 < extent(S).r0 ? 'above' : 'below') : midRow(en) > frow ? 'below' : 'above';
-      if (sd) sd.side = v; else side.set(id, v);
+      side.set(id, v);
     }
     if (!on(ctx.rules, 'DRAG.B3') || !hits(n, G)) continue;
     const kept = memory.sides && memory.sides.get(id);
@@ -102,13 +96,13 @@ export function judgeCarry(layout, start, change, memory, ctx) {
       const across = overlap(en.c0, en.c1, eg.c0, eg.c1), along = overlap(en.r0, en.r1, eg.r0, eg.r1);
       if (across < along || (across === along && sideways(memory.lastTarget, at))) m = midCol(en) > midCol(eg) ? 'right' : 'left';
     }
-    if (m) { if (sd) sd.met = m; else met.set(id, m); }
+    if (m) met.set(id, m);
   }
-  if (keep && S) keepOrder(side, start, S, g, memory.through ? { id: memory.through.id, side: memory.through.side } : null);
+  if (keep && S) keepOrder(side, start, S, g);
   for (const [id, s] of met) sides.set(id, s);
   // a block met from the side earlier keeps its record while it shares a row with the target's rows, hit or not
   if (memory.sides) for (const [id, s] of memory.sides) if (!sides.has(id) && layout.boxes.has(id) && sharesRow(layout.boxes.get(id), G)) sides.set(id, s);
-  return { side, met, sides, held };
+  return { side, met, sides };
 }
 
 /** The wall's judge (phase 2; LAYOUT-RULES §5.3 «Obstacle»):

@@ -11,6 +11,7 @@ import { set, text, chars, ctxOf, sheet, eq, tally } from './lib/primcase.mjs';
 const t = tally(), ok = t.ok;
 const rows = (L) => Object.fromEntries([...L.boxes].map(([k, b]) => [k, b.y]));
 const places = (L) => Object.fromEntries([...L.boxes].map(([k, b]) => [k, [b.col, b.y, b.w, b.h]]));
+const nb = (m) => m && { id: m.id, row: m.row, side: m.side };   // the neighbour in the memory, without the target it was chosen at
 /** A result's layout is sound: its stacks pass gap.js's check, every card inside the container's columns, the order the reading order. */
 function sound(r) {
   if (!r.ok) return false;
@@ -193,12 +194,12 @@ const ctx = ctxOf();
   const r0 = settle(L, carry('X', 0, 2, 5), down(), ctx);
   ok('18 X carried down onto N: N pushed to 4, and pressed (phase 11): it touches X\'s leading edge', r0.ok && eq(rows(r0.layout), { X: 2, N: 4 }) && r0.pressed === 'N' && r0.ran.includes('11'), r0.ok ? [rows(r0.layout), r0.pressed] : r0);
   const r1 = settle(L, { ...carry('X', 0, 2, 5), through: 'hold' }, down(), ctx);
-  ok('18a the hold runs out: N goes into the memory where it stopped (row 4, below), the pipeline again from start, pinned', r1.ok && eq(r1.memory.through, { id: 'N', row: 4, side: 'below' }) && eq(rows(r1.layout), { X: 2, N: 4 }) && r1.ran.includes('3') && sound(r1), r1.ok ? [r1.memory.through, rows(r1.layout), r1.ran] : r1);
-  const pinned = down({ through: { id: 'N', row: 4, side: 'below' } });
+  ok('18a the hold runs out: N goes into the memory where it stopped (row 4, below), with X\'s target there (2), the pipeline again, held', r1.ok && eq(nb(r1.memory.through), { id: 'N', row: 4, side: 'below' }) && r1.memory.through.at.y === 2 && eq(rows(r1.layout), { X: 2, N: 4 }) && r1.ran.includes('3') && sound(r1), r1.ok ? [r1.memory.through, rows(r1.layout), r1.ran] : r1);
+  const pinned = r1.ok ? { ...r1.memory, dir: 'down' } : down();
   const r2 = settle(L, carry('X', 0, 3, 5), pinned, ctx);
   ok('18b carried on to frow 3, before N\'s middle: N stays pinned at 4, X right against it at 2', r2.ok && eq(rows(r2.layout), { X: 2, N: 4 }) && r2.memory.through && sound(r2), r2.ok ? [rows(r2.layout), r2.memory.through] : r2);
   const r3 = settle(L, carry('X', 0, 4, 5), pinned, ctx);
-  ok('18c to frow 4, X\'s bottom past N\'s middle: they swap, N at 2 and X right under it at 4; the start is the swapped layout, N in the memory above', r3.ok && eq(rows(r3.layout), { N: 2, X: 4 }) && eq(rows(r3.start), { N: 2, X: 4 }) && eq(r3.memory.through, { id: 'N', row: 2, side: 'above' }) && sound(r3), r3.ok ? [rows(r3.layout), r3.memory.through, r3.ran] : r3);
+  ok('18c to frow 4, X\'s bottom past N\'s middle: they swap, N at 2 and X right under it at 4; the start is the swapped layout, N in the memory above', r3.ok && eq(rows(r3.layout), { N: 2, X: 4 }) && eq(rows(r3.start), { N: 2, X: 4 }) && eq(nb(r3.memory.through), { id: 'N', row: 2, side: 'above' }) && sound(r3), r3.ok ? [rows(r3.layout), r3.memory.through, r3.ran] : r3);
   const r4 = r3.ok && settle(r3.start, carry('X', 0, 7, 5), r3.memory, ctx);
   ok('18d carried on down from the swapped start: N leaves the memory and stays where the swap put it (2), X at 7', r4 && r4.ok && eq(rows(r4.layout), { N: 2, X: 7 }) && !r4.memory.through && sound(r4), r4 && (r4.ok ? [rows(r4.layout), r4.memory.through] : r4));
   const r5 = settle(L, carry('X', 0, 1, 5), pinned, ctx);
@@ -206,9 +207,9 @@ const ctx = ctxOf();
   // going up: X under N, carried up into it; P-UP lifts N to 1; held, N pinned at 1, X right under it at 3; past N's middle they swap
   const U = sheet(20, [set('N', 0, 2, 5, 2), set('X', 0, 6, 5, 2)]), upm = (o = {}) => ({ ...emptyMemory(), dir: 'up', ...o });
   const u1 = settle(U, { ...carry('X', 0, 3, 5), through: 'shift' }, upm(), ctx);
-  ok('18f going up: X carried into N lifts it to 1; Shift held: N into the memory (row 1, above), X right under it at 3', u1.ok && eq(rows(u1.layout), { N: 1, X: 3 }) && eq(u1.memory.through, { id: 'N', row: 1, side: 'above' }) && sound(u1), u1.ok ? [rows(u1.layout), u1.memory.through] : u1);
-  const u2 = settle(U, carry('X', 0, 1, 5), upm({ through: { id: 'N', row: 1, side: 'above' } }), ctx);
-  ok('18g to frow 1, X\'s top past N\'s middle (2): X takes N\'s top row 1, N right under it at 3; swapped, N below in the memory', u2.ok && eq(rows(u2.layout), { X: 1, N: 3 }) && eq(u2.memory.through, { id: 'N', row: 3, side: 'below' }) && sound(u2), u2.ok ? [rows(u2.layout), u2.memory.through] : u2);
+  ok('18f going up: X carried into N lifts it to 1; Shift held: N into the memory (row 1, above), X right under it at 3', u1.ok && eq(rows(u1.layout), { N: 1, X: 3 }) && eq(nb(u1.memory.through), { id: 'N', row: 1, side: 'above' }) && sound(u1), u1.ok ? [rows(u1.layout), u1.memory.through] : u1);
+  const u2 = u1.ok && settle(U, carry('X', 0, 1, 5), { ...u1.memory, dir: 'up' }, ctx);
+  ok('18g to frow 1, X\'s top past N\'s middle (2): X takes N\'s top row 1, N right under it at 3; swapped, N below in the memory', u2 && u2.ok && eq(rows(u2.layout), { X: 1, N: 3 }) && eq(nb(u2.memory.through), { id: 'N', row: 3, side: 'below' }) && sound(u2), u2 && (u2.ok ? [rows(u2.layout), u2.memory.through] : u2));
   const off = settle(L, { ...carry('X', 0, 2, 5), through: 'hold' }, down(), ctxOf({}, resolve({ THROUGH: false })));
   ok('18h with THROUGH off: no phase 3 or 11, nothing pressed, N pushed as far as X is carried', off.ok && !off.ran.includes('3') && !off.ran.includes('11') && off.pressed === null && eq(rows(off.layout), { X: 2, N: 4 }), off.ok ? [off.ran, off.pressed] : off);
 }
@@ -255,7 +256,7 @@ const ctx = ctxOf();
   // (4) SETTLE reads the direction from the target's row against the last target's, before phase 2 (§6.D)
   const D = sheet(20, [set('N', 0, 2, 5, 2), set('X', 0, 6, 5, 2)]);
   const d = settle(D, { ...carry('X', 0, 3, 5), through: 'hold' }, { ...emptyMemory(), dir: 'down', lastTarget: { col: 0, y: 6, frow: 6, w: 5 } }, ctx);
-  ok('20c carried up from 6 to 3 with a memory saying down: dir up, N pushed to 1 and held there (above), X at 3; lastTarget the new target', d.ok && d.memory.dir === 'up' && eq(d.memory.through, { id: 'N', row: 1, side: 'above' }) && eq(rows(d.layout), { N: 1, X: 3 }) && d.memory.lastTarget.y === 3, d.ok ? [d.memory.dir, d.memory.through, rows(d.layout)] : d);
+  ok('20c carried up from 6 to 3 with a memory saying down: dir up, N pushed to 1 and held there (above), X at 3; lastTarget the new target', d.ok && d.memory.dir === 'up' && eq(nb(d.memory.through), { id: 'N', row: 1, side: 'above' }) && eq(rows(d.layout), { N: 1, X: 3 }) && d.memory.lastTarget.y === 3, d.ok ? [d.memory.dir, d.memory.through, rows(d.layout)] : d);
   // (5) the blocks met from the side are cleared at a swap (§6.D): the run again judges them anew and presses B only as far as it must
   const S = sheet(20, [set('A', 5, 2, 3, 4), set('N', 4, 6, 4, 3), set('X', 5, 9, 5, 5), set('B', 7, 2, 5, 5)]);
   const sw = settle(S, { type: 'carry', box: null, id: 'X', at: { col: 4, y: 5, frow: 5.3, w: 5 }, away: false, through: 'shift' }, { ...emptyMemory(), dir: 'up' }, ctx);
@@ -268,7 +269,9 @@ const ctx = ctxOf();
   // moved block, not from the blocks judged above, which a held neighbour is not
   const c = ctxOf({ B1: { text: chars(9) } }, resolve({ 'SIZE.2': false, 'GAP.8': false, 'P-UP': false, 'P-REST': false }));
   const L = sheet(8, [set('B0', 0, 1, 6, 2), text('B1', 3, 0, 4, 1)]);
-  const r0 = settle(L, carry('B0', 1, 0, 6), emptyMemory(), c);
+  // the direction kept down (the last target the same row, so the pointer moved only sideways): the hold takes the block under B0
+  const still = { ...emptyMemory(), dir: 'down', lastTarget: { col: 1, y: 0, frow: 0, w: 6 } };
+  const r0 = settle(L, carry('B0', 1, 0, 6), still, c);
   const r1 = r0.ok && settle(r0.start, { ...carry('B0', 1, 0, 6), through: 'hold' }, r0.memory, c);
   ok('21 P-UP off: B1 under B0, then held there: taken (the fallback\'s pass declared), B1 in the memory, sound', r1 && r1.ok && r1.memory.through?.id === 'B1' && rows(r1.layout).B1 === 2 && sound(r1), r1 && (r1.ok ? [rows(r1.layout), r1.memory.through] : r1));
   // k 4425 (seed 21): B3 stopped at row 6, where RELINK lifted it (GAP.9 off, the block over it pressed aside); the phases' prediction has
@@ -277,10 +280,45 @@ const ctx = ctxOf();
   const G = sheet(11, [set('B0', 6, 0, 2, 3), set('B1', 5, 4, 6, 3), set('B2', 2, 8, 5, 2), set('B3', 7, 8, 2, 2)]);
   const m0 = settle(G, carry('B0', 7, 1, 2), emptyMemory(), g);
   const m1 = m0.ok && settle(m0.start, { ...carry('B0', 7, 3, 2), at: { col: 7, y: 3, frow: 3.4, w: 2 }, through: 'hold' }, m0.memory, g);
-  ok('21a held at the row RELINK gave it (6), not the phases\' prediction (8): B3 pinned there, B0 right against it at 3; sound', m1 && m1.ok && eq(m1.memory.through, { id: 'B3', row: 6, side: 'below' }) && rows(m1.layout).B3 === 6 && rows(m1.layout).B0 === 3 && sound(m1), m1 && (m1.ok ? [rows(m1.layout), m1.memory.through] : m1));
+  ok('21a held at the row RELINK gave it (6), not the phases\' prediction (8): B3 pinned there, B0 right against it at 3; sound', m1 && m1.ok && eq(nb(m1.memory.through), { id: 'B3', row: 6, side: 'below' }) && rows(m1.layout).B3 === 6 && rows(m1.layout).B0 === 3 && sound(m1), m1 && (m1.ok ? [rows(m1.layout), m1.memory.through] : m1));
   const m2 = m1 && m1.ok && settle(m1.start, { ...carry('B0', 7, 5, 2), at: { col: 7, y: 5, frow: 5.4, w: 2 } }, m1.memory, g);
   const f2 = m1 && m1.ok && settle(m1.start, { ...carry('B0', 7, 5, 2), at: { col: 7, y: 5, frow: 5.4, w: 2 } }, { ...m1.memory, through: null }, g);
   ok('21b past B3\'s middle no swap can be declared (B0 shared no column with it in base): released, the result the one with no pin', m2 && m2.ok && !m2.memory.through && eq(rows(m2.layout), rows(f2.layout)), m2 && (m2.ok ? [rows(m2.layout), rows(f2.layout)] : m2));
+}
+
+/* ── 22. the architecture review of 0a262d7: the neighbour held by the target of the choice (LAYOUT-RULES §5.1b), and what the gesture
+   generator (tests/layoutgestures.mjs) found once it was ── */
+{
+  // (a) the review's first counterexample: B2, an elastic text phase 9 rests at 4 columns and 4 rows, held against B0 at once; the held
+  // run is the result the choice was made on, never a pin rebuilt at the 3 columns phase 1c gives it (that was a swap RELINK refused)
+  const c = ctxOf({ B0: { text: 'x' }, B1: { text: 'x' }, B3: { text: 'x' }, B2: { text: chars(33) } });
+  const A0 = sheet(18, [set('B1', 6, 1, 6, 1), set('B3', 5, 3, 5, 3), text('B2', 15, 4, 3, 1), set('B0', 12, 6, 5, 2)]);
+  const z = settle(A0, { type: 'size', box: null, id: 'B2' }, emptyMemory(), c);
+  const a = z.ok && settle(z.layout, { ...carry('B2', 14, 5, 3), through: 'hold' }, emptyMemory(), c);
+  ok('22 held at once against B0 (the review\'s (a)): taken, B0 in the memory at 9, B2 right over it at 5 at its rest width 4; sound', a && a.ok && eq(nb(a.memory.through), { id: 'B0', row: 9, side: 'below' }) && eq(places(a.layout).B2, [14, 5, 4, 4]) && sound(a), a && (a.ok ? [places(a.layout), a.memory.through] : a));
+  // (b) the review's second: X, wide, held against N; carried sideways off N's columns (still in its own, so not away) or away, N leaves
+  // the memory and the result is the one with no neighbour there (step 2b, proposed); sideways while still over N, it stays held
+  const S = sheet(20, [set('X', 0, 0, 8, 1), set('N', 0, 4, 4, 3), set('Z', 0, 8, 4, 1)]), cx = (col, y, o = {}) => ({ ...carry('X', col, y, 8), ...o });
+  const s0 = settle(S, cx(0, 5), emptyMemory(), ctx), s1 = s0.ok && settle(s0.start, cx(0, 5, { through: 'hold' }), s0.memory, ctx);
+  const side = s1 && s1.ok && settle(s1.start, cx(4, 5), s1.memory, ctx), sideFree = s1 && s1.ok && settle(s1.start, cx(4, 5), { ...s1.memory, through: null }, ctx);
+  const away = s1 && s1.ok && settle(s1.start, cx(12, 5, { away: true }), s1.memory, ctx), awayFree = s1 && s1.ok && settle(s1.start, cx(12, 5, { away: true }), { ...s1.memory, through: null }, ctx);
+  const over = s1 && s1.ok && settle(s1.start, cx(1, 5), s1.memory, ctx);
+  ok('22a carried sideways off its held neighbour (the review\'s (b)): N released, back at 4 as with no neighbour held; X at 5', side && side.ok && !side.memory.through && side.pressed === null && eq(rows(side.layout), rows(sideFree.layout)) && rows(side.layout).N === 4, side && (side.ok ? [rows(side.layout), side.memory.through] : side));
+  ok('22b carried away from it: released as well, N where the free result has it (0), nothing pressed', away && away.ok && !away.memory.through && away.pressed === null && eq(rows(away.layout), rows(awayFree.layout)), away && (away.ok ? [rows(away.layout), away.memory.through] : away));
+  ok('22c carried sideways while still over N: N stays held at 6, X right over it at 5', over && over.ok && eq(nb(over.memory.through), { id: 'N', row: 6, side: 'below' }) && rows(over.layout).X === 5, over && (over.ok ? [rows(over.layout), over.memory.through] : over));
+  // (c) seed 16, k 728: B0 held against B5, an elastic text, and past its middle at once: they swap, and in the run again B5 rests at
+  // another height; without the line the swap crossed, the pair would swap back in the same move (a failure) or flicker on a still pointer
+  const e = ctxOf({ B0: { text: 'x' }, B1: { text: 'x' }, B2: { text: 'x' }, B3: { text: 'x' }, B4: { text: 'x' }, B5: { text: chars(20) } });
+  const E = sheet(14, [set('B0', 0, 0, 3, 2), set('B4', 7, 1, 2, 2), text('B5', 0, 2, 7, 2), set('B3', 5, 6, 2, 2), set('B1', 4, 9, 6, 1), set('B2', 4, 10, 5, 2)]);
+  const e1 = settle(E, { ...carry('B0', 0, 2, 3), at: { col: 0, y: 2, frow: 2.8, w: 3 }, through: 'hold' }, emptyMemory(), e);
+  const e2 = e1.ok && settle(e1.start, { ...carry('B0', 0, 2, 3), at: { col: 0, y: 2, frow: 2.8, w: 3 } }, e1.memory, e);
+  ok('22d held and past B5\'s middle at once: swapped once (B5 at 2, B0 under it at 4), and the pointer held still swaps nothing back', e1.ok && e1.start !== E && eq(nb(e1.memory.through), { id: 'B5', row: 2, side: 'above' }) && rows(e1.layout).B0 === 4 && e2 && e2.ok && e2.start === e1.start && eq(rows(e2.layout), rows(e1.layout)) && sound(e1), e1.ok ? [rows(e1.layout), e1.memory.through, e2 && e2.ok && rows(e2.layout)] : e1);
+  // (d) seed 15, k 391: the first move of a carry takes its direction from the block's place at the start: B1 carried up from 1 to 0 and
+  // held picks nothing (no block touches its top), not B0 under it as «down before any move» did
+  const f = ctxOf({ B0: { text: 'x' }, B1: { text: chars(25) }, B2: { text: 'x' }, B3: { text: chars(4) }, B4: { text: 'x' }, B5: { text: 'x' } });
+  const F = sheet(9, [text('B1', 0, 1, 7, 2), set('B0', 6, 2, 2, 2), set('B2', 4, 5, 3, 1), set('B4', 4, 7, 4, 1), text('B3', 6, 8, 3, 1), set('B5', 2, 9, 5, 2)]);
+  const f1 = settle(F, { ...carry('B1', 0, 0, 7), at: { col: 0, y: 0, frow: 0.5, w: 7 }, through: 'hold' }, emptyMemory(), f);
+  ok('22e carried up on its first move: dir up, nothing pressed above, nothing held', f1.ok && f1.memory.dir === 'up' && !f1.memory.through && f1.pressed === null, f1.ok ? [f1.memory.dir, f1.memory.through, f1.pressed] : f1);
 }
 
 process.exit(t.fails ? 1 : 0);

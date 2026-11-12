@@ -4,7 +4,7 @@
 // - the carry's judge: DRAG.B2 above or below (a block that stood in the carried block's columns in `start` keeps its side unless the
 //   block is away; any other by its middle against frow, strictly below being below), DRAG.B3 met from the side (across smaller than along,
 //   or equal and the last move sideways; vertical before any move; pressed to the side its centre lies on, left when they coincide; sticky
-//   while it shares a row with the target), the neighbour letting the block through judged neither way (PR-4); DRAG.B2.keep and DRAG.B3 in
+//   while it shares a row with the target), the neighbour letting the block through judged like any other; DRAG.B2.keep and DRAG.B3 in
 //   both states;
 // - the wall's judge: an area's side handle inside the area (the right wall presses left what passes the last column, the left wall
 //   presses right a handle left of column 0) and the width handle's moving edge (what the widened card now overlaps, pressed away from it).
@@ -87,14 +87,12 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
     sideways({ col: 0, y: 0 }, { col: 2, y: 1 }) && !sideways({ col: 0, y: 0 }, { col: 1, y: 1 }) && !sideways(null, { col: 5, y: 0 }));
 }
 
-/* ── 4. the neighbour letting the block through ── */
+/* ── 4. the neighbour letting the block through: judged like any other (the wrapper runs the pipeline at the target of the choice, §5.1b) ── */
 {
   const start = sheet(20, [set('X', 0, 0, 5), set('B', 0, 2, 5, 3)]), L = at1c(start, 'X', { col: 0, y: 3 });
-  const j = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 3, frow: 3 } }, mem({ through: { id: 'B', row: 1, side: 'below' } }), ctx);
-  ok('4 the neighbour in the memory counts in neither judgement (PR-4)', !j.side.has('B') && !j.met.has('B'), [obj(j.side), obj(j.met)]);
-  ok('4a but it is judged apart, for phase 3 to use if it releases it: below, kept from the start, not met from the side', eq(j.held, { side: 'below' }), j.held);
+  const held = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 3, frow: 3 } }, mem({ through: { id: 'B', row: 1, side: 'below', at: { col: 0, y: 0, frow: 0 }, last: null } }), ctx);
   const none = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 3, frow: 3 } }, mem(), ctx);
-  ok('4b with no neighbour in the memory nothing is held', none.held === null && none.side.get('B') === 'below');
+  ok('4 the neighbour in the memory is judged as with no neighbour there: below, kept from the start, not met from the side', held.side.get('B') === 'below' && !held.met.has('B') && eq(obj(held.side), obj(none.side)) && eq(obj(held.met), obj(none.met)), [obj(held.side), obj(held.met)]);
 }
 
 /* ── 4c. an area as the carried block, and a record of a block no longer hit (the internal review of 345ac6f) ── */
