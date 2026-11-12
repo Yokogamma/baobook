@@ -52,6 +52,30 @@ const covers = (b, c) => b.c0 <= c && c <= b.c1;
 const heirOf = (st) => st.u;
 const isStand = (i) => i % 2 === 1;
 const cloneStack = (st) => ({ u: st.u, parts: st.parts.map((p, i) => (isStand(i) ? { id: p.id, lend: p.lend.slice() } : p.slice())) });
+/** The stacks of a working state, keyed by key(anchor, column), with an index by column and by anchor kept with every set and delete, so
+ *  that a column's chain and a block's stretches read only their own stacks (LAYOUT-ENGINE-PLAN §4.5: RELINK linear in the stacks). */
+class Stacks extends Map {
+  constructor(entries = null) { super(); this.byCol = new Map(); this.byAnchor = new Map(); if (entries) for (const [k, v] of entries) this.set(k, v); }
+  set(k, v) {
+    const c = colOf(k), l = anchorOf(k);
+    let m = this.byCol.get(c); if (!m) this.byCol.set(c, (m = new Map())); m.set(k, v);
+    let a = this.byAnchor.get(l); if (!a) this.byAnchor.set(l, (a = new Map())); a.set(k, v);
+    return super.set(k, v);
+  }
+  delete(k) {
+    if (!super.has(k)) return false;
+    const c = colOf(k), l = anchorOf(k), m = this.byCol.get(c), a = this.byAnchor.get(l);
+    m.delete(k); if (!m.size) this.byCol.delete(c);
+    a.delete(k); if (!a.size) this.byAnchor.delete(l);
+    return super.delete(k);
+  }
+  clear() { this.byCol.clear(); this.byAnchor.clear(); super.clear(); }
+  /** the stacks of column c, by key @returns {Map<string, Stack>} */
+  inCol(c) { return this.byCol.get(c) || NONE; }
+  /** the stacks block l anchors, by key @returns {Map<string, Stack>} */
+  of(l) { return this.byAnchor.get(l) || NONE; }
+}
+const NONE = new Map();
 
 /** A box in GAP's coordinates: its extent, its canonical height and its temporary rows. */
 function gapBlock(b) {
@@ -60,19 +84,19 @@ function gapBlock(b) {
   return { id: b.id, c0: e.c0, c1: e.c1, y: b.y - pad, h: b.h - t + 2 * pad, e: t };
 }
 function toWork(layout) {
-  const B = new Map(), S = new Map();
+  const B = new Map(), S = new Stacks();
   for (const id of layout.order) {
     const b = layout.boxes.get(id); B.set(id, gapBlock(b));
     for (const s of b.above || []) for (let c = s.c0; c <= s.c1; c++) S.set(key(id, c), cloneStack(s.stack));
   }
   return { B, S, rules: null };
 }
-const copyWork = (W) => ({ B: new Map([...W.B].map(([k, b]) => [k, { ...b }])), S: new Map([...W.S].map(([k, st]) => [k, cloneStack(st)])), rules: W.rules });
+const copyWork = (W) => ({ B: new Map([...W.B].map(([k, b]) => [k, { ...b }])), S: new Stacks([...W.S].map(([k, st]) => [k, cloneStack(st)])), rules: W.rules });
 
 // ---- the chain of one column: anchors from the top; and every element of it, anchors and standing blocks, in order
 function chain(W, c) {
   const byU = new Map();
-  for (const [k, st] of W.S) if (colOf(k) === c) byU.set(st.u, anchorOf(k));
+  for (const [k, st] of W.S.inCol(c)) byU.set(st.u, anchorOf(k));
   const out = []; let u = null;
   while (byU.has(u)) { const l = byU.get(u); out.push(l); u = l; if (out.length > W.B.size + 1) throw new Error('gap: a loop in column ' + c); }
   return out;
@@ -82,7 +106,7 @@ function seq(W, c) {   // [{id, st, i}]: i the index in st.parts for a standing 
   for (const l of chain(W, c)) { const st = W.S.get(key(l, c)); st.parts.forEach((p, i) => { if (isStand(i)) out.push({ id: p.id, st, i }); }); out.push({ id: l, st, i: -1 }); }
   return out;
 }
-const lowerOf = (W, x, c) => { for (const [k, st] of W.S) if (colOf(k) === c && st.u === x) return st; return null; };
+const lowerOf = (W, x, c) => { for (const st of W.S.inCol(c).values()) if (st.u === x) return st; return null; };
 const allCols = (W) => { const cs = new Set(); for (const b of W.B.values()) for (const c of cols(b)) cs.add(c); return [...cs].sort((a, b) => a - b); };
 
 // ---- FOLLOW (GAP.4, INV-2): every block's row is the highest the stacks of all its columns allow, in a measure: one pass in the order of
@@ -335,7 +359,7 @@ function fitWork(W, targets) {
 
 // ---- writing a layout back: the rows FOLLOW gives in both measures, frame rows for an area; the stacks by stretches of equal columns
 function stretchesOf(W, id) {
-  const mine = [...W.S.entries()].filter(([k]) => anchorOf(k) === id).map(([k, st]) => [colOf(k), st]).sort((a, b) => a[0] - b[0]);
+  const mine = [...W.S.of(id)].map(([k, st]) => [colOf(k), st]).sort((a, b) => a[0] - b[0]);
   const out = [];
   for (const [c, st] of mine) {
     const p = out[out.length - 1], frozen = freeze(st);
@@ -367,7 +391,7 @@ const work = (layout, rules) => { const W = toWork(layout); W.rules = rules; ret
  *  block above (or the top) to it, owned by the block above, unowned under the top; nothing stands yet. Then FOLLOW. Places that overlap are
  *  a caller's bug (open()'s separation comes first). @param {Layout} layout @returns {Layout} */
 export function fromPlaces(layout) {
-  const W = { B: new Map(), S: new Map(), rules: null };
+  const W = { B: new Map(), S: new Stacks(), rules: null };
   for (const id of layout.order) { const b = layout.boxes.get(id); W.B.set(id, gapBlock({ ...b, y: b.yc ?? b.y })); }
   for (const c of allCols(W)) {
     const col = [...W.B.values()].filter((b) => covers(b, c)).sort((a, b) => a.y - b.y || byId(a.id, b.id));
@@ -409,7 +433,7 @@ export function push(before, after, skip = new Set(), rules = null, base = befor
     if (was < 0) return;   // not under it on the screen any more (a phase moved one of them): it does not follow it
     preds.get(q).push([p, Math.min(gap, was)]); succs.get(p).push(q);
   };
-  for (const c of [...new Set([...D.S.keys()].map(colOf))].sort((a, b) => a - b)) {
+  for (const c of [...D.S.byCol.keys()].sort((a, b) => a - b)) {
     let prev = null, gap = 0;
     const at = (id) => { if (skip.has(id)) prev = null; else { lead(prev, id, gap, c); prev = id; } gap = 0; };
     for (const l of chain(D, c)) {
@@ -633,7 +657,12 @@ function relinkWork(T, rules) {
   for (const [id, t] of tg) if (!W.B.has(id)) W.B.set(id, { ...t });
   for (const [id, t] of tg) { const b = W.B.get(id); b.h = t.h; b.e = t.e; b.c0 = t.c0; b.c1 = t.c1; }
   capAll(W); ruleOne(); atTargets();
-  const ids = [...tg.keys()].sort(byTarget), own = (id, c) => !seq(W, c).some((el) => el.id === id);
+  // whether a block is out of a column's chain: read from a snapshot of the chains taken before each pass of arrivals, as a block's
+  // membership changes only by its own arrival, which comes after its test
+  let members = new Map();
+  const snapshotChains = () => { members = new Map(allCols(W).map((c) => [c, new Set(seq(W, c).map((el) => el.id))])); };
+  const ids = [...tg.keys()].sort(byTarget), own = (id, c) => !(members.get(c) || NONE).has(id);
+  snapshotChains();
   for (const id of ids) {
     const putCs = cols(W.B.get(id)).filter((c) => own(id, c) && (EN.get(key(id, c)) === 'put' || PS.has(key(id, c))));
     if (putCs.length) putIn(id, putCs, (c) => PS.has(key(id, c)));
@@ -648,6 +677,7 @@ function relinkWork(T, rules) {
   const W1 = copyWork(W); fitWork(W, fits); const M = rowsIn(W, 'canonical'); restore(W1); atTargets();
   // top to bottom, but a block that follows an old upper neighbour (O-25) after that neighbour, when it comes in by itself too (the
   // independent review of 0eda0ba)
+  snapshotChains();
   for (const id of followOrder(ids.filter((id) => cols(W.B.get(id)).some((c) => EN.get(key(id, c)) === 'self')), uppersOf)) {
     const self = cols(W.B.get(id)).filter((c) => EN.get(key(id, c)) === 'self' && own(id, c)); if (!self.length) continue;
     if (ref.has(id)) M.set(id, ref.get(id));
@@ -738,7 +768,7 @@ export function check(layout) {
   }
   if (!errs.length) for (const c of stackCols) {
     let reached; try { reached = new Set(chain(W, c)); } catch (e) { errs.push(e.message); continue; }
-    for (const k of W.S.keys()) if (colOf(k) === c && !reached.has(anchorOf(k))) errs.push(`stack ${k}: not reached from the top of column ${c}`);
+    for (const k of W.S.inCol(c).keys()) if (!reached.has(anchorOf(k))) errs.push(`stack ${k}: not reached from the top of column ${c}`);
   }
   if (errs.length) return errs;
   let yc, ys; try { yc = rowsIn(W, 'canonical'); ys = rowsIn(W, 'shown'); } catch (e) { return [e.message]; }

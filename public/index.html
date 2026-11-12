@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026111201">
+<meta name="baobook-build" content="2026111202">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111201" integrity="sha384-NXz3+u2Hsm+U+aNFt5Bz5wONfPoete23RB2BCkffCtJP9DsTm3p5Qyl5vY2sFIWI"></script>
-<script src="cloud.js?b=2026111201" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026111202" integrity="sha384-NXz3+u2Hsm+U+aNFt5Bz5wONfPoete23RB2BCkffCtJP9DsTm3p5Qyl5vY2sFIWI"></script>
+<script src="cloud.js?b=2026111202" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +806,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-vG4woYhb53YYEU4G/mCcmtkkHdZPVXwW0w9RAnPGhIuURPqTGXY3CpU4p+2egr+3', 'layout/gap.js':'sha384-Vu9YQjStP1fRYKlpBu//JJk9Toskvuz14fiZ2CMMKo7RQsDXt8Kd8CAz1XgjXv6k', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/primitives.js':'sha384-ncilcPuyPhJyJ9BUyGSLLCaPzn2tcs6K/Ifdj2W4Gf5UujMWLJB/ves5T0hLFgDO', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-iNlJG6aUoqb7jBzcCpKKmSwqBWM+1ZjCiVlro28wvzyugj01EgdPCCEJ/TUDJVH7', 'layout/size.js':'sha384-+X1IFotA9hPGyz2OtTcq9ylQDRXspYPvtXqoyq/UZHPgqxDCEvG1GQEazyqo92LY', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
+const SRI={'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-vG4woYhb53YYEU4G/mCcmtkkHdZPVXwW0w9RAnPGhIuURPqTGXY3CpU4p+2egr+3', 'layout/gap.js':'sha384-iswwArvf6iRqN5y1hRjfenLjfp1BoxGo7hyL8MJVS4s6e1f48Xf0NuK4PKDLZbmw', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/primitives.js':'sha384-ncilcPuyPhJyJ9BUyGSLLCaPzn2tcs6K/Ifdj2W4Gf5UujMWLJB/ves5T0hLFgDO', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-iNlJG6aUoqb7jBzcCpKKmSwqBWM+1ZjCiVlro28wvzyugj01EgdPCCEJ/TUDJVH7', 'layout/size.js':'sha384-+X1IFotA9hPGyz2OtTcq9ylQDRXspYPvtXqoyq/UZHPgqxDCEvG1GQEazyqo92LY', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026111201;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026111202;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
 // on every one and the integrity of the SRI table beside it (a browser without import map integrity loads it unchecked; the service worker checks
 // its set against the same table). Written before any module is imported
