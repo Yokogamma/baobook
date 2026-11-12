@@ -11,7 +11,7 @@ import { isElastic, rowsAt, restCells } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
 import { kindOf, judgeCarry, judgeWall } from './changes.js';
-import { working, phase, aside, up, down, sink, sinkAside, sep, rest, transitionFacts } from './primitives.js';
+import { working, phase, snapshot, restore, aside, up, down, sink, sinkAside, sep, rest, transitionFacts } from './primitives.js';
 import { pinStep, swapStep, pressedOf, canSwap } from './through.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Ctx} Ctx
@@ -113,10 +113,15 @@ export function settle(start, change, memory, ctx, hooks = {}) {
  *  once. Bounds exceeded are a failure (§5.5). */
 function wrapper(start, change, memory, ctx, hooks) {
   const through = change.type === 'carry' && on(ctx.rules, 'THROUGH');
-  let s = start, mem = memory, chose = false;
+  // the direction of the last vertical move (§6.D): changed only when the target row changes, by its sign against the last target, read
+  // before phase 2, so that a pointer held still or moved sideways keeps it; the last target itself is the one phase 2 compares with, and
+  // the memory returned carries this one
+  let mem = memory;
+  if (change.at && memory.lastTarget && change.at.y !== memory.lastTarget.y) mem = { ...memory, dir: change.at.y > memory.lastTarget.y ? 'down' : 'up' };
+  let s = start, chose = false;
   const swapped = new Set();
   for (;;) {
-    const r = pipeline(s, change, mem, ctx, hooks, through);
+    const r = pipeline(s, change, mem, ctx, hooks, through, start);
     if (r.swapped) {
       if (swapped.has(r.neighbour)) throw new Failed('settle: a second swap with ' + r.neighbour + ' in one move');
       swapped.add(r.neighbour); s = r.start; mem = r.memory; continue;
@@ -132,11 +137,13 @@ function wrapper(start, change, memory, ctx, hooks) {
       }
     }
     const { met, ...out } = r;
-    return { ...out, start: s, pressed: r.memory.through ? r.memory.through.id : pressed, ran: [...r.ran, ...(through ? ['11'] : [])] };
+    const memOut = change.at ? { ...r.memory, lastTarget: { ...change.at } } : r.memory;
+    return { ...out, start: s, memory: memOut, pressed: r.memory.through ? r.memory.through.id : pressed, ran: [...r.ran, ...(through ? ['11'] : [])] };
   }
 }
 
-function pipeline(start, change, memory, ctx, hooks, through = false) {
+/** One run of phases 1–10 from `start`; `origin`, the start the caller gave settle, which `grew` counts from across the runs again (§5.6). */
+function pipeline(start, change, memory, ctx, hooks, through = false, origin = start) {
   const kind = kindOf(change), rules = ctx.rules, ran = [];
   const g = kind.moved === 'none' ? null : change.id;
   let L = start;
@@ -206,8 +213,10 @@ function pipeline(start, change, memory, ctx, hooks, through = false) {
   // no place to swap from: past the neighbour's middle it is released and its middle judges it (step 2b-2, proposed)
   if (through && memory.through && g != null) {
     ran.push('3');
-    const n = memory.through.id, st = pinStep(ws, memory, change.at);
+    const n = memory.through.id, before = snapshot(ws), st = pinStep(ws, memory, change.at);
     if (st.released || (st.swap && (insert || !canSwap(base, g, n, memory.through.side)))) {
+      // released: whatever the pin did is undone, the moved block back at its target and the neighbour where phase 1 left it (§5.1b)
+      restore(ws, before);
       memory = { ...memory, through: null };
       if (judged.held) { if (judged.held.side) judged.side.set(n, judged.held.side); if (judged.held.met) judged.met.set(n, judged.held.met); }
     } else if (st.swap) {
@@ -232,7 +241,8 @@ function pipeline(start, change, memory, ctx, hooks, through = false) {
       const r = relink(T, rules);
       if (!r.ok) throw new Failed('settle: RELINK refused the swap: ' + (r.errors || []).join('; '));
       trace('3');
-      return { swapped: true, neighbour: n, start: r.layout, memory: { ...mem2, sides: judged.sides || memory.sides }, ran };
+      // the blocks met from the side are cleared at a swap (§6.D): the run again judges them anew
+      return { swapped: true, neighbour: n, start: r.layout, memory: { ...mem2, sides: new Map() }, ran };
     }
     trace('3');
   }
@@ -261,7 +271,9 @@ function pipeline(start, change, memory, ctx, hooks, through = false) {
 
   if (judged.met.size) trace('4');
   // ---- 5. push up (P-UP); off, the blocks judged above are pushed down under the moved block instead, the transition declaring it
-  const fallback = !on(rules, 'P-UP') && above.size ? 'P-UP' : (kind.judge === 'carry' && !on(rules, 'DRAG.B2.keep') ? 'DRAG.B2.keep' : null);
+  // the switched-off rule whose fallback may put a block on the moved block's other side, declared in phase 8 when one did: P-UP off pushes
+  // the blocks above under it (and a neighbour held there stays there, §5.1b), DRAG.B2.keep off judges by the middle alone
+  const fallback = kind.judge !== 'carry' ? null : !on(rules, 'P-UP') ? 'P-UP' : !on(rules, 'DRAG.B2.keep') ? 'DRAG.B2.keep' : null;
   const under = new Set();
   if (g != null && above.size) {
     if (on(rules, 'P-UP')) { ran.push('5'); phase(ws); up(ws, above); }
@@ -354,8 +366,14 @@ function pipeline(start, change, memory, ctx, hooks, through = false) {
   // ---- 10. contain: nothing moves here; a block past MAXCELL refuses the change, an area's own handle refuses to make it taller, any other
   // change inside an area reports how far its content's bottom moved (settleTree grows or shrinks the area, §5.6)
   ran.push('10');
-  for (const b of final.boxes.values()) if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
-  const grown = change.box != null ? bottomOf(final) - bottomOf(start) : 0;
+  for (const b of final.boxes.values()) {
+    if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
+    // INV-4 across the columns: every card (an area with its free columns) inside the container; a wall that leaves a block it could not
+    // press or sink inside stops (§5.4); no other kind leaves one outside, phase 1c having clamped the moved block
+    const r = range(b, final.cols);
+    if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) throw new Refused('a block would stand outside its container (INV-4)');
+  }
+  const grown = change.box != null ? bottomOf(final) - bottomOf(origin) : 0;
   if (kind.contain.bottom === 'refuse' && grown > 0) throw new Refused('the handle would make the area taller');
   return { ok: true, layout: final, start, memory: { ...memory, sides: judged.sides || memory.sides }, pressed: null, moves, grew: grown, ran, met: judged.met };
 }

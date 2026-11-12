@@ -235,4 +235,52 @@ const ctx = ctxOf();
   ok('19b P-SEP keeps base\'s order (k 643): B1 stays over B4; taken, sound', q.ok && rows(q.layout).B1 < rows(q.layout).B4 && sound(q), q.ok ? places(q.layout) : q);
 }
 
+/* ── 20. the independent review of f920fb7 (2026-11-12: 3 major, 2 medium) ── */
+{
+  // (1) a wall that leaves a block it could neither press nor sink inside stops: refused, never a card past the last column (INV-4, §5.4)
+  const W = sheet(8, [set('B', 0, 0, 6, 1)]);
+  const w = settle(W, { type: 'wall', box: 'AREA', side: 'right', cols: 4 }, emptyMemory(), ctx);
+  ok('20 a right wall at 4 columns over B (columns 1–5, a set width): refused', !w.ok && w.why === 'refused', w.ok ? places(w.layout) : w);
+  // (2) inside an area, `grew` counts from the start the caller gave, across the run again after a swap (§5.6)
+  const A = sheet(20, [set('X', 0, 0, 5, 2), set('N', 0, 2, 5, 2)]), inArea = (y, o = {}) => ({ ...carry('X', 0, y, 5), box: 'AREA', ...o });
+  const a1 = settle(A, inArea(2, { through: 'hold' }), { ...emptyMemory(), dir: 'down' }, ctx);
+  const a2 = a1.ok && settle(a1.start, inArea(4), { ...a1.memory, dir: 'down' }, ctx);
+  ok('20a held at 2 (N pinned at 4), then to 4: they swap (N 2, X 4), and grew is 2 (content bottom 4 to 6), not 0', a2 && a2.ok && eq(rows(a2.layout), { N: 2, X: 4 }) && a2.grew === 2, a2 && (a2.ok ? [rows(a2.layout), a2.grew] : a2));
+  // (3) a neighbour released because no swap can be declared leaves no trace of its pin: the moved block at its real target
+  const R = sheet(20, [set('X', 0, 0, 2, 1), set('N', 4, 5, 2, 2)]);
+  const r1 = settle(R, { ...carry('X', 4, 4, 2, true), through: 'hold' }, { ...emptyMemory(), dir: 'down' }, ctx);
+  const r2 = r1.ok && settle(r1.start, carry('X', 4, 10, 2, true), { ...r1.memory, dir: 'down' }, ctx);
+  const free = settle(R, carry('X', 4, 10, 2, true), { ...emptyMemory(), dir: 'down' }, ctx);
+  ok('20b X away held against N (pinned at 5), then carried to 10: no swap can be declared, N released, X at 10 as with no pin', r1.ok && r1.memory.through && r2 && r2.ok && !r2.memory.through && rows(r2.layout).X === 10 && eq(rows(r2.layout), rows(free.layout)), r2 && (r2.ok ? [rows(r2.layout), rows(free.layout)] : r2));
+  // (4) SETTLE reads the direction from the target's row against the last target's, before phase 2 (§6.D)
+  const D = sheet(20, [set('N', 0, 2, 5, 2), set('X', 0, 6, 5, 2)]);
+  const d = settle(D, { ...carry('X', 0, 3, 5), through: 'hold' }, { ...emptyMemory(), dir: 'down', lastTarget: { col: 0, y: 6, frow: 6, w: 5 } }, ctx);
+  ok('20c carried up from 6 to 3 with a memory saying down: dir up, N pushed to 1 and held there (above), X at 3; lastTarget the new target', d.ok && d.memory.dir === 'up' && eq(d.memory.through, { id: 'N', row: 1, side: 'above' }) && eq(rows(d.layout), { N: 1, X: 3 }) && d.memory.lastTarget.y === 3, d.ok ? [d.memory.dir, d.memory.through, rows(d.layout)] : d);
+  // (5) the blocks met from the side are cleared at a swap (§6.D): the run again judges them anew and presses B only as far as it must
+  const S = sheet(20, [set('A', 5, 2, 3, 4), set('N', 4, 6, 4, 3), set('X', 5, 9, 5, 5), set('B', 7, 2, 5, 5)]);
+  const sw = settle(S, { type: 'carry', box: null, id: 'X', at: { col: 4, y: 5, frow: 5.3, w: 5 }, away: false, through: 'shift' }, { ...emptyMemory(), dir: 'up' }, ctx);
+  ok('20d after the swap B stands at column 7, row 9 (the old record would press it once more, to column 8); sound', sw.ok && eq(places(sw.layout).B.slice(0, 2), [7, 9]) && sound(sw), sw.ok ? places(sw.layout) : sw);
+}
+
+/* ── 21. found by the semantic checks of held carries (after the review of f920fb7) ── */
+{
+  // k 1635 (seed 3): P-UP off puts B1, judged above, under B0; held, B1 stays there: phase 8 declares the fallback from what passed the
+  // moved block, not from the blocks judged above, which a held neighbour is not
+  const c = ctxOf({ B1: { text: chars(9) } }, resolve({ 'SIZE.2': false, 'GAP.8': false, 'P-UP': false, 'P-REST': false }));
+  const L = sheet(8, [set('B0', 0, 1, 6, 2), text('B1', 3, 0, 4, 1)]);
+  const r0 = settle(L, carry('B0', 1, 0, 6), emptyMemory(), c);
+  const r1 = r0.ok && settle(r0.start, { ...carry('B0', 1, 0, 6), through: 'hold' }, r0.memory, c);
+  ok('21 P-UP off: B1 under B0, then held there: taken (the fallback\'s pass declared), B1 in the memory, sound', r1 && r1.ok && r1.memory.through?.id === 'B1' && rows(r1.layout).B1 === 2 && sound(r1), r1 && (r1.ok ? [rows(r1.layout), r1.memory.through] : r1));
+  // k 4425 (seed 21): B3 stopped at row 6, where RELINK lifted it (GAP.9 off, the block over it pressed aside); the phases' prediction has
+  // it lower, at 8: the pin puts it at 6, and the moved block right against it
+  const g = ctxOf({}, resolve({ 'SIZE.1': false, 'GAP.9': false, 'DRAG.A5': false }));
+  const G = sheet(11, [set('B0', 6, 0, 2, 3), set('B1', 5, 4, 6, 3), set('B2', 2, 8, 5, 2), set('B3', 7, 8, 2, 2)]);
+  const m0 = settle(G, carry('B0', 7, 1, 2), emptyMemory(), g);
+  const m1 = m0.ok && settle(m0.start, { ...carry('B0', 7, 3, 2), at: { col: 7, y: 3, frow: 3.4, w: 2 }, through: 'hold' }, m0.memory, g);
+  ok('21a held at the row RELINK gave it (6), not the phases\' prediction (8): B3 pinned there, B0 right against it at 3; sound', m1 && m1.ok && eq(m1.memory.through, { id: 'B3', row: 6, side: 'below' }) && rows(m1.layout).B3 === 6 && rows(m1.layout).B0 === 3 && sound(m1), m1 && (m1.ok ? [rows(m1.layout), m1.memory.through] : m1));
+  const m2 = m1 && m1.ok && settle(m1.start, { ...carry('B0', 7, 5, 2), at: { col: 7, y: 5, frow: 5.4, w: 2 } }, m1.memory, g);
+  const f2 = m1 && m1.ok && settle(m1.start, { ...carry('B0', 7, 5, 2), at: { col: 7, y: 5, frow: 5.4, w: 2 } }, { ...m1.memory, through: null }, g);
+  ok('21b past B3\'s middle no swap can be declared (B0 shared no column with it in base): released, the result the one with no pin', m2 && m2.ok && !m2.memory.through && eq(rows(m2.layout), rows(f2.layout)), m2 && (m2.ok ? [rows(m2.layout), rows(f2.layout)] : m2));
+}
+
 process.exit(t.fails ? 1 : 0);

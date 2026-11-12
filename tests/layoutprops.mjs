@@ -75,14 +75,28 @@ for (let k = 0; k < N * 4 && tried < N; k++) {
   // first (step 2b-2: the pin, the swap and its run again, the release), every result sound
   if (c.type === 'carry' && !c.away && rnd() < 0.5) {
     const dir = c.at.y >= d.L.boxes.get(c.id).y ? 'down' : 'up';
-    let st = r.start, mem = { ...r.memory, dir }, y = c.at.y, bad2 = null; const seq = [];
+    let st = r.start, mem = { ...r.memory }, y = c.at.y, bad2 = null; const seq = [];
     for (let m = 0; m < int(2, 3) && !bad2; m++) {
       y = Math.max(0, y + (dir === 'down' ? int(1, 3) : -int(1, 3)));
       const cm = { ...c, at: { ...c.at, y, frow: y + (rnd() < 0.5 ? 0.4 : 0) }, through: m === 0 ? 'hold' : undefined };
       seq.push({ y: cm.at.y, frow: cm.at.frow, through: cm.through }); const rm = settle(st, cm, mem, ctx);
       if (!rm.ok) { if (rm.why !== 'refused') bad2 = (rm.errors || [rm.why])[0]; break; }
       const e2 = check(rm.layout); if (e2.length) { bad2 = e2[0]; break; }
-      st = rm.start; mem = { ...rm.memory, dir };
+      // what the results mean (the independent review of f920fb7): the direction follows the target's row; a neighbour released leaves no
+      // trace, the result being the one with no neighbour in the memory; a neighbour held stays where it stopped, the moved block against it
+      const prevY = mem.lastTarget ? mem.lastTarget.y : null;
+      if (prevY != null && cm.at.y !== prevY && rm.memory.dir !== (cm.at.y > prevY ? 'down' : 'up')) { bad2 = 'dir not the target row\'s'; break; }
+      const swappedNow = rm.start !== st;
+      if (mem.through && !rm.memory.through && !swappedNow && !cm.through) {
+        const free = settle(st, cm, { ...mem, through: null }, ctx);
+        if (free.ok && [...free.layout.boxes].some(([id, b]) => rm.layout.boxes.get(id)?.y !== b.y)) { bad2 = 'a released neighbour left a trace'; break; }
+      }
+      if (mem.through && rm.memory.through && !swappedNow && rm.memory.through.id === mem.through.id) {
+        const N = rm.layout.boxes.get(mem.through.id), Xb = rm.layout.boxes.get(cm.id), en = extent(N), ex = extent(Xb);
+        if (en.r0 !== mem.through.row) { bad2 = 'a held neighbour moved from its row'; break; }
+        if (mem.through.side === 'below' ? ex.r1 + 1 !== en.r0 : en.r1 + 1 !== ex.r0) { bad2 = 'the moved block not against its held neighbour'; break; }
+      }
+      st = rm.start; mem = { ...rm.memory, dir: rm.memory.dir };
     }
     held++;
     if (bad2) { const why = 'held carry: ' + bad2.replace(/B\d+|X\b/g, '·').slice(0, 80); inc(fails, why); if (firsts.length < 4) firsts.push({ ...dump(), dir, seq, errors: [bad2] }); continue; }

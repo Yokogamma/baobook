@@ -35,8 +35,11 @@ export function pinStep(ws, memory, at) {
   if (down ? target < th.row - hX : target > th.row + hN) return { released: true, swap: false };
   // the neighbour where it stopped, and what it carries: down, the blocks under it follow (P-DOWN's push); up, those over it go up (P-UP),
   // as far as they can; the moved block right against it where it stands, on its touching row
-  if (down) { if (top(N0) < th.row) sinkTo(ws, th.id, th.row + pad(N0), 'down'); }
+  // and where the phases' prediction has it on the other side of that row (the last result's row was RELINK's, a block over it gone, GAP.9
+  // off, or the landing law), it is put there as that result had it: a row GAP gave it, no move (step 2b, proposed)
+  if (down) { if (top(N0) < th.row) sinkTo(ws, th.id, th.row + pad(N0), 'down'); else if (top(N0) > th.row) put(ws, th.id, th.row + pad(N0)); }
   else if (top(N0) > th.row) liftTo(ws, th.id, th.row);
+  else if (top(N0) < th.row) sinkTo(ws, th.id, th.row + pad(N0), 'down');
   const nRow = top(ws.L.boxes.get(th.id)), pinnedX = down ? nRow - hX : nRow + hN;
   put(ws, g, pinnedX + pad(X));
   const frow = (at.frow ?? at.y) - pad(X), mid = nRow + hN / 2;
