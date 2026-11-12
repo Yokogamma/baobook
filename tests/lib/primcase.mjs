@@ -20,11 +20,12 @@ export const ctxOf = (map = {}, rules = DEFAULT, settings = SETTINGS) => ({ rule
 export function sheet(cols, boxes) {
   return fromPlaces({ cols, measure: 'displayed', boxes: new Map(boxes.map((b) => [b.id, { ...b }])), order: readingOrder(boxes), areas: new Map() });
 }
-/** A working state over it, the moved block put at a place of its own (phase 1c), in no chain. */
-export function ws(cols, boxes, ctx, moved = null, at = null) {
+/** A working state over it, the moved block put at a place of its own (phase 1c), in no chain; `insert` when the moved block comes in by
+ *  rule 3 (created, or carried while away). */
+export function ws(cols, boxes, ctx, moved = null, at = null, insert = false) {
   let L = sheet(cols, boxes);
   if (moved && at) { const boxes2 = new Map(L.boxes); boxes2.set(moved, { ...L.boxes.get(moved), ...at }); const order = readingOrder(boxes2.values()); L = { ...L, boxes: new Map(order.map((id) => [id, boxes2.get(id)])), order }; }
-  return phase(working(L, moved, ctx));
+  return phase(working(L, moved, ctx, insert));
 }
 export const rows = (w) => Object.fromEntries([...w.L.boxes].map(([id, b]) => [id, b.y]));
 export const places = (w) => Object.fromEntries([...w.L.boxes].map(([id, b]) => [id, [b.col, b.y, b.w, b.h]]));
@@ -49,10 +50,10 @@ export function tally() { let fails = 0; return { ok(n, c, got) { if (!c) fails+
 /** A layout whose block `id` really grew to `h` rows, FOLLOW pushing the blocks under it: the stacks keep their rows, so a column the
  *  growth does not bind keeps slack (LAYOUT-RULES §1.3). */
 export function grown(L, id, h) { return follow(resize(L, id, h)); }
-/** A working state over a layout already built. */
-export const over = (L, ctx, moved = null, at = null) => {
+/** A working state over a layout already built; `insert` when the moved block comes in by rule 3 (created, or carried while away). */
+export const over = (L, ctx, moved = null, at = null, insert = false) => {
   if (moved && at) { const b = new Map(L.boxes); b.set(moved, { ...L.boxes.get(moved), ...at }); const order = readingOrder(b.values()); L = { ...L, boxes: new Map(order.map((id) => [id, b.get(id)])), order }; }
-  return phase(working(L, moved, ctx));
+  return phase(working(L, moved, ctx, insert));
 };
 /** A box of the working state put elsewhere by hand, as an earlier phase would have left it (its stacks unchanged, nothing recorded). */
 export function place(w, id, patch) {
