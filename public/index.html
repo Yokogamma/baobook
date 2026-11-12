@@ -794,7 +794,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111201" integrity="sha384-JxVyHU5zxlFtq4b8EVCVnA8pUqftUL9JSk2Z7qwNht6ieoh+/7/ZPyj7/7pGf42f"></script>
+<script src="sync.js?b=2026111201" integrity="sha384-NXz3+u2Hsm+U+aNFt5Bz5wONfPoete23RB2BCkffCtJP9DsTm3p5Qyl5vY2sFIWI"></script>
 <script src="cloud.js?b=2026111201" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -1114,7 +1114,9 @@ Object.assign(DEBUG.fmt, { state:()=>({lock:LOCK, refused:DEBUG.fmt.refused, db:
 /* SDB: the transactional store the sync core runs on (sync.js, docs/SYNC-PLAN.md PR 1). One IndexedDB transaction, created synchronously when the connection is
    open, so a save made in idbLost still lands before close(); inside `fn` only the transaction's own requests may be awaited (a foreign await commits it early) */
 const SDB={ tx(stores, mode, fn){ const locked=()=>Object.assign(new Error('locked'),{code:'locked'}); if(SDB.frozen) return Promise.reject(frozenErr()); if(mode==='readwrite' && LOCK) return Promise.reject(locked()); if(!idb.db) return idb.open().then(()=>SDB.tx(stores,mode,fn));   // frozen: nothing new starts between `freeze` and the thaw
-    if(mode==='readwrite' && DEBUG.saveGate) return Promise.resolve().then(()=>DEBUG.saveGate(stores)).then(()=>SDB.run(stores,mode,fn)); return SDB.run(stores,mode,fn); },   // saveGate: a test's hand on every write (appsave): it waits for the promise, or fails with its error
+    if(mode==='readwrite' && DEBUG.saveGate) return Promise.resolve().then(()=>DEBUG.saveGate(stores)).then(()=>SDB.run(stores,mode,fn));
+    if(mode==='readonly' && DEBUG.readGate){ const g=DEBUG.readGate(stores); if(g) return Promise.resolve(g).then(()=>SDB.run(stores,mode,fn)); }   // readGate: a test's hand on a read (appformat 3l: a load held in flight); a falsy answer reads at once
+    return SDB.run(stores,mode,fn); },   // saveGate: a test's hand on every write (appsave): it waits for the promise, or fails with its error
   run(stores, mode, fn){ return new Promise((res0,rej)=>{ const res=v=>{ if(mode==='readwrite' && stores.includes('notes') && DEBUG.saveHold) Promise.resolve(DEBUG.saveHold(stores)).then(()=>res0(v), rej); else res0(v); };   /* saveHold: a test's hand after the write landed (appstatus) */ let t; try{ t=idb.db.transaction((mode==='readwrite'? fmtScope(idb.db, stores) : stores).filter(st=>idb.db.objectStoreNames.contains(st)),mode); }catch(e){ return rej(e); } SDB.open.add(t);   // a store a damaged database lacks is left out: only a request to it fails
     const req=r=>new Promise((ok,ko)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); });
     const T={ get:(st,k)=>req(t.objectStore(st).get(k)), put:(st,v)=>{ t.objectStore(st).put(v); }, del:(st,k)=>{ t.objectStore(st).delete(k); },

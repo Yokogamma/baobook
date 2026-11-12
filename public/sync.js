@@ -233,10 +233,24 @@ function makeSync(deps){
   const busyMs=()=>{ let first=0; for(const t of S.txOpen.values()) if(!first || t<first) first=t; return first? Date.now()-first : 0; };   // the oldest transaction still open, as long as it has waited so far
   const slowNow=()=>{ const b=busyMs(); return b>=pace.slowTx? b : S.slowMs && Date.now()-S.slowAt<60000? S.slowMs : 0; };
   // o.guard: the (epoch, env, uid) this engine had before; a store that moved to another owner meanwhile is not adopted (§4.4 step 1), the
-  // status «reload» goes out and the load fails with code `epoch`, inside the same transaction that would have read the state
-  async function load(o={}){ if(S.loaded) return; S.loaded=true; const guard=o.guard||null; try{
+  // status «reload» goes out and the load fails with code `epoch`, inside the same transaction that would have read the state. An engine that
+  // has loaded once always loads with that guard: a refused load leaves S.loaded false, and the next lazy load (copiesCount on the start's timer,
+  // unsynced for the account panel, state for a message) must not take the new owner either. Only setOwner adopts one (o.adopt). While this
+  // engine's own setOwner transaction writes a new owner, a lazy load accepts that exact owner too (PENDING and OWN: the epoch, uid and env it writes,
+  // registered inside the transaction and dropped when setOwner ends): setOwner sets S.loaded false there, and a lazy call in that window must
+  // read the owner this engine is writing instead of locking the tab with a false «epoch». An attempt that writes nothing (refused by
+  // expectEpoch, or a locked engine's) registers nothing, so another tab's owner is still refused. Nothing here waits: a write made in a
+  // versionchange handler must open its transaction in that task
+  const known=()=>({epoch:S.epoch, uid:S.owner? S.owner.uid : null, env:S.owner? S.owner.env : null});
+  // OWN: every owner this engine's own transactions registered while a load was open (OWN.base: the absolute index of OWN[0]); a load accepts
+  // the owners in PENDING when it starts and every one registered after that, read when its transaction checks the store, not copied at the
+  // call (a second setOwner of this engine can register and even end while the load's read waits for its turn). Cleared when no load is open
+  const PENDING=new Set(), OWN=[]; OWN.base=0; OWN.open=0;
+  const ownAdd=exp=>{ PENDING.add(exp); if(OWN.open) OWN.push(exp); };
+  async function load(o={}){ if(S.loaded) return; S.loaded=true; const implicit=!o.guard && !o.adopt && S.everLoaded, from=OWN.base+OWN.length;
+    const allow=()=>o.guard? [o.guard] : implicit? [known0, ...pend0, ...OWN.slice(from-OWN.base)] : null; const known0=known(), pend0=[...PENDING]; OWN.open++; try{
     await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null;
-      if(guard && (eid!==guard.epoch || (ow? ow.uid : null)!==guard.uid || (ow? ow.env : null)!==guard.env)){ setStatus('reload'); throw fail('epoch'); }
+      const ok=allow(); if(ok && !ok.some(g=>eid===g.epoch && (ow? ow.uid : null)===g.uid && (ow? ow.env : null)===g.env)){ setStatus('reload'); throw fail('epoch'); }
       S.epoch=eid; S.owner=ow||null; const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       S.cursor.notes=(await t.get('sync',K.cursor('notes')))||null; S.cursor.versions=(await t.get('sync',K.cursor('versions')))||null; S.quota=(await t.get('sync','quota'))||null;
       if(overBudget()){ S.paused=true; S.listenPaused=true; }   // the day's budget was spent before this start: the pause is restored from the stored quota, nothing is read until the next day
@@ -246,7 +260,8 @@ function makeSync(deps){
       for(const m of await t.range('sync','meta:n:','meta:n:\uffff')){ if(m.err) S.err.set(m.k.slice(7), m.err); if(m.sends) S.sends.set(m.k.slice(7), m.sends); }
       for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ if(m.wait) addWaiting(m.wait); if(m.err) S.verr.set(m.k.slice(7), m.err); }
       await loadV(t);
-      for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); S.everLoaded=true; }catch(e){ S.loaded=false; throw e; } }
+      for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); S.everLoaded=true; }catch(e){ S.loaded=false; throw e; }
+    finally{ if(!--OWN.open){ OWN.base+=OWN.length; OWN.length=0; } } }
   // the version queue from the store; a job without a meta (written by code before 4a) asks for the migration pass (§4.9)
   async function loadV(t){ S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear();
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); S.vjobs.set(id, j); if(!j.tomb && !(await t.get('sync',K.meta('v',id)))) S.vjudge=true; }
@@ -262,11 +277,11 @@ function makeSync(deps){
     if(o.owner){ S.everCaughtUp=false; S.denied=false; S.reauth=false; S.unauth=0; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}; } S.loaded=false; }
   // a tab that becomes the leader (§4.10) starts from the store: the previous leader moved the cursor, resolved attempts and spent the budget while this
   // tab's memory stood still. The pause is reset too, since load() only ever sets it (a budget spent yesterday must not pause a leader of today)
-  async function reload(){ const guard=S.everLoaded? {epoch:S.epoch, uid:S.owner? S.owner.uid : null, env:S.owner? S.owner.env : null} : null;   // a tab that waited for the lock must not adopt an owner it never knew
+  async function reload(){ const guard=S.everLoaded? known() : null;   // a tab that waited for the lock must not adopt an owner it never knew
     resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.reauth=false; S.unauth=0; S.readOk=false; S.unverified=false; S.lastPurge=0; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load({guard}); }
   const blocked=()=>S.denied || S.reauth;   // nothing talks to the cloud until the access or the sign-in is sorted out (reload() or a new owner clears both)
   // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way
-  async function checkOwner(){ if(!S.loaded) await load(); return db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
+  async function checkOwner(){ if(!S.loaded){ try{ await load(); }catch(e){ if(e && e.code==='epoch') return false; throw e; } } return db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
     return (ep? ep.id : null)===S.epoch && (ow? ow.uid : null)===(S.owner? S.owner.uid : null) && (ow? ow.env : null)===(S.owner? S.owner.env : null); }); }
   const nudge=()=>{ S.queueAt=0; };   // another tab wrote: the next step reads the queue again instead of waiting for its minute
 
@@ -906,10 +921,12 @@ function makeSync(deps){
   /* ── owner, start, stop (the hook of PR 1; sign-in comes with PR 3) ── */
   // o.erase: the device's data go with the previous owner and the new one starts empty («Прибрати й увійти», §4.11), one transaction;
   // o.expectEpoch: the epoch the caller decided over (a dialog); another one in the store means another tab changed the owner first → `epoch`
-  async function setOwner(owner, o={}){ if(!S.loaded) await load(); const same=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
+  async function setOwner(owner, o={}){ if(!S.loaded) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
+  async function setOwnerNow(owner, o, mine){ const same=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
     await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ if(o.expectEpoch!==undefined){ const ep=await t.get('sync','epoch'); if((ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
       if(same){ t.put('sync',{k:'owner', ...owner}); return; }
       const epoch={k:'epoch', id:'e'+now().toString(36)+random().toString(36).slice(2,8)}; t.put('sync',epoch);
+      if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; ownAdd(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'￿')) t.del('sync',r.k);
       const erase=!!o.erase || !owner;
       if(erase){ for(const n of await t.range('notes','','￿')) t.del('notes',n.id); for(const v of await t.range('versions','','￿')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['￿','￿'])) t.del('blobs',[b.note,b.h]); }
@@ -917,7 +934,7 @@ function makeSync(deps){
       else t.del('sync','owner');
       S.loaded=false; });
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
-    resetMemory({owner:true}); await load(); if(S.started) connectCloud(); }
+    resetMemory({owner:true}); await load({adopt:true}); if(S.started) connectCloud(); }
   // «Створити копію нотатки» (§4.18): the note the rules refuse for its receipts stays here as it is; its job goes, so the copy syncs in its place
   async function unqueue(id){ if(!S.loaded) await load(); return tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err!=='receipts') return {ok:false, code:'receipts'}; delete meta.err; putMeta(t,meta,after); dropJob(t,id,after); dropRefetch(t,id,after); return {ok:true}; }); }
   function connectCloud(){ if(!S.cloud || !S.owner) return; S.readOk=false; S.unverified=false; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); listenVersions(); }

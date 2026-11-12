@@ -166,6 +166,22 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   ok('3d after it, typing and saving change nothing', !/після оновлення/.test(await sheetText(a)) && JSON.stringify(await dump(a))===JSON.stringify(before));
   ok('3e no page errors', !a.errs.length); await ctx.close(); }
 
+/* ── 3l. the same while the engine's load is in flight (a leader's reload, the start's copies count): the save still lands before the tab lets go ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const a=await fresh(ctx), b=await fresh(ctx);
+  await go(a,SITE); await ready(a);
+  await go(b,SITE+'blank.html');
+  await a.evaluate(()=>{ window.__readOpen=null; const held=new Promise(r=>{ window.__readOpen=r; }); let once=true;   // the next read of the engine's load (one readonly ['sync']) waits until released
+    sheetDebug.readGate=stores=>{ if(once && stores.length===1 && stores[0]==='sync'){ once=false; window.__held=true; return held; } return null; };
+    window.__reload=sheetDebug.sync.engine().reload().then(()=>'ok', e=>e && e.code); });
+  await typeAt(a,500,300,'під час завантаження');   // no wait: the autosave (300 ms) has not run yet
+  const notes=await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',5); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('sync')) r.result.createObjectStore('sync',{keyPath:'k'}); };
+    r.onsuccess=()=>{ const d=r.result, q=d.transaction('notes','readonly').objectStore('notes').getAll(); q.onsuccess=()=>{ d.close(); res(q.result); }; }; }));
+  const inFlight=await a.evaluate(()=>window.__held===true && sheetDebug.sync.engine()._S.loaded);   // the load was held all along: its read had not run when the upgrade came
+  await a.evaluate(()=>{ sheetDebug.readGate=null; window.__readOpen(); }); await a.waitForTimeout(300);
+  const msg=await strip(a);
+  ok('3l with the engine\'s load held in flight ('+inFlight+'), the text typed just before the upgrade was written before the tab let go, nothing is left unsaved ('+msg+')', inFlight && has(notes,/під час завантаження/) && /оновився в іншій вкладці/.test(msg) && !/не вдалося/.test(msg));
+  ok('3m no page errors', !a.errs.length); await ctx.close(); }
+
 /* ── 3f. the same, but the last edit could not be written: the strip offers to export it ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(a,SITE); await ready(a); await a.evaluate(()=>{ window.sheetDebug.failSave=true; });
