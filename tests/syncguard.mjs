@@ -183,6 +183,47 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   release(); await rl; const wr=await w;
   ok('5q3 a write made while a load is in flight opens its transaction at once ('+opened+' before it yielded) and lands ('+(wr && wr.ok)+')', opened>=1 && !!wr && wr.ok!==false && !!E.db.get('notes','w1')); }
 
+/* ── 5r. the three races PR #140 left open: an explicit reload() during this engine's own change of owner; another tab's binding between this
+   engine's commit and its adopt; a read made while a load is in flight ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000});
+  const spinUntil=async c=>{ let n=0; while(!c() && n<100000){ n++; await Promise.resolve(); } return c(); };
+  // (1) the leader's reload() (leadOn, a lock granted while this tab binds) made right after setOwner was called: its guard is the old owner, but
+  // the owner it meets is the one this engine is writing. Then the same made inside setOwner's window (after its commit, before its adopt)
+  for(const when of ['call','window']){ const R=await mk(cloud,'R'+when,{db:new MemStore()}); R.status.length=0;
+    const bind=R.sync.setOwner({env:'test', uid:'w2', email:'w2@test'}).then(()=>'ok', e=>e.code||e.name);
+    const inWin=when==='window'? await spinUntil(()=>!R.sync._S.loaded) : true;
+    const rl=await R.sync.reload().then(()=>'ok', e=>e.code||e.name), b=await bind;
+    ok('5r1 '+(when==='call'? 'a reload() made right after setOwner was called' : 'a reload() made inside setOwner\'s window (in it: '+inWin+')')+': reload '+rl+', setOwner '+b+'; the engine names '+(R.sync.owner && R.sync.owner.uid)+', no «reload» status ('+R.status.filter(c=>c==='reload').length+'), checkOwner true',
+      inWin && rl==='ok' && b==='ok' && R.sync.owner.uid==='w2' && !R.status.includes('reload') && await R.sync.checkOwner()===true && await R.sync.copiesCount().then(()=>true, ()=>false)); }
+  // (2) another tab binds the store to u3 after this engine's setOwner(u2) committed and before its own load read the store: the engine must not
+  // adopt u3 (memory and store would agree, and leadCheck could never see it); setOwner fails with `epoch`, the status says «reload»
+  { const db=new MemStore(); const B=await mk(cloud,'B2',{db}); let other=null, armed=false;
+    const wrap={ tx:(stores,mode,fn)=>{ const p=db.tx(stores,mode,fn); if(armed && mode==='readwrite' && stores.length===4 && !other) return p.then(r=>{ other=B.sync.setOwner({env:'test', uid:'u3', email:'u3@test'}).then(()=>'ok', e=>e.code); return r; }); return p; }, get:(s,k)=>db.get(s,k), all:s=>db.all(s) };
+    const A=await mk(cloud,'A2',{db:wrap}); armed=true; A.status.length=0;
+    const r=await A.sync.setOwner({env:'test', uid:'u2', email:'u2@test'}).then(()=>'ok', e=>e.code||e.name); const ro=await other;
+    ok('5r2 another tab bound u3 between this engine\'s commit of u2 and its adopt (that binding: '+ro+'): setOwner '+r+', the engine names '+(A.sync.owner && A.sync.owner.uid)+' (the store: '+(db.get('sync','owner')||{}).uid+'), status «reload» '+A.status.includes('reload')+', checkOwner says not the same',
+      ro==='ok' && r==='epoch' && (!A.sync.owner || A.sync.owner.uid!=='u3') && db.get('sync','owner').uid==='u3' && A.status.includes('reload') && await A.sync.checkOwner()===false);
+    // the same binding of this engine's own with no other tab in between still adopts (control)
+    const C=await mk(cloud,'C2',{db:new MemStore()}); const rc=await C.sync.setOwner({env:'test', uid:'u2', email:'u2@test'}).then(()=>'ok', e=>e.code);
+    ok('5r2b with nobody in between the engine adopts its own owner: '+rc+', '+C.sync.owner.uid, rc==='ok' && C.sync.owner.uid==='u2' && await C.sync.checkOwner()===true); }
+  // (3) a refused engine (another tab changed the owner): one lazy call starts a load, a second is made while it is in flight and skips it.
+  // Neither may return the new owner's data; reads made during a load the engine accepts still answer
+  { const db=new MemStore(); const A=await mk(cloud,'A3',{db}), B=await mk(cloud,'B3',{db});
+    await edit(A,'k1',(C,t)=>({title:'старий власник', blocks:[], created:t, updated:t})); await idle(A);
+    await B.sync.setOwner({env:'test', uid:'u2', email:'u2@test'}); await B.sync.putCopies('k1',[{id:'vcopy', note:'k1', t:1, reason:'copy', title:'копія нового', blocks:[]}]).catch(()=>{});
+    let r0=null; try{ await A.sync.reload(); }catch(e){ r0=e.code; }
+    const reads={copiesCount:()=>A.sync.copiesCount(), countCopies:()=>A.sync.countCopies('k1'), state:()=>A.sync.state('k1'), lrevOf:()=>A.sync.lrevOf(), seenAll:()=>A.sync.seenAll(), unsynced:()=>A.sync.unsynced(), versionStates:()=>A.sync.versionStates('k1')};
+    const out=[]; for(const [name,f] of Object.entries(reads)){ const first=A.sync.copiesCount().then(()=>'ok', e=>e.code), flying=A.sync._S.loaded, second=await f().then(()=>'ok', e=>e.code); out.push(name+':'+(await first)+'/'+second+(flying? '' : '(no load in flight)')); }
+    ok('5r3 a refused engine ('+r0+'): a read made while another lazy load is in flight is refused too ('+out.join(', ')+'); the engine still names '+A.sync.owner.uid,
+      r0==='epoch' && out.every(s=>s.endsWith(':epoch/epoch')) && A.sync.owner.uid==='u1' && await A.sync.checkOwner()===false);
+    // controls: reads made during the first load of a fresh engine, during an accepted reload and during this engine's own change of owner answer
+    const F=device(cloud,'F3',{db}); const lf=F.sync.copiesCount().then(()=>'ok', e=>e.code), fly=F.sync._S.loaded, rf=await F.sync.state('k1').then(()=>'ok', e=>e.code);
+    const rlB=B.sync.reload().then(()=>'ok', e=>e.code), rb=await B.sync.lrevOf().then(()=>'ok', e=>e.code);
+    const bindB=B.sync.setOwner({env:'test', uid:'u4', email:'u4@test'}).then(()=>'ok', e=>e.code); await spinUntil(()=>!B.sync._S.loaded); const lzB=B.sync.copiesCount().then(()=>'ok', e=>e.code); await Promise.resolve(); const rB=await B.sync.state('k1').then(()=>'ok', e=>e.code);
+    const ctl=[await lf, rf, await rlB, rb, await bindB, await lzB, rB];
+    ok('5r3b reads beside a load the engine accepts answer: a fresh engine\'s first load (in flight: '+fly+') '+ctl.slice(0,2).join('/')+', an accepted reload '+ctl.slice(2,4).join('/')+', its own change of owner '+ctl.slice(4).join('/'),
+      fly && ctl.every(c=>c==='ok') && B.sync.owner.uid==='u4'); } }
+
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
   for(let i=0;i<3;i++){ cloud.advance(1000); cloud.write('notes',{id:'o'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'o'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }
