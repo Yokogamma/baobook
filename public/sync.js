@@ -235,14 +235,17 @@ function makeSync(deps){
   // o.guard: the (epoch, env, uid) this engine had before; a store that moved to another owner meanwhile is not adopted (§4.4 step 1), the
   // status «reload» goes out and the load fails with code `epoch`, inside the same transaction that would have read the state. An engine that
   // has loaded once always loads with that guard: a refused load leaves S.loaded false, and the next lazy load (copiesCount on the start's timer,
-  // unsynced for the account panel, state for a message) must not take the new owner either. Only setOwner adopts one (o.adopt), and while
-  // this engine changes the owner itself (S.adopting, from before setOwner's transaction to its end) a lazy load is not guarded either: setOwner
-  // sets S.loaded false inside its transaction, and a lazy call in that window must read the owner this engine is writing, not lock the tab with
-  // a false «epoch». Nothing here waits: a write made in a versionchange handler must open its transaction in that task
+  // unsynced for the account panel, state for a message) must not take the new owner either. Only setOwner adopts one (o.adopt). While this
+  // engine's own setOwner transaction writes a new owner, a lazy load accepts that exact owner too (PENDING: the epoch, uid and env it writes,
+  // registered inside the transaction and dropped when setOwner ends): setOwner sets S.loaded false there, and a lazy call in that window must
+  // read the owner this engine is writing instead of locking the tab with a false «epoch». An attempt that writes nothing (refused by
+  // expectEpoch, or a locked engine's) registers nothing, so another tab's owner is still refused. Nothing here waits: a write made in a
+  // versionchange handler must open its transaction in that task
   const known=()=>({epoch:S.epoch, uid:S.owner? S.owner.uid : null, env:S.owner? S.owner.env : null});
-  async function load(o={}){ if(S.loaded) return; S.loaded=true; const guard=o.guard || (!o.adopt && !S.adopting && S.everLoaded? known() : null); try{
+  const PENDING=new Set();
+  async function load(o={}){ if(S.loaded) return; S.loaded=true; const allow=o.guard? [o.guard] : !o.adopt && S.everLoaded? [known(), ...PENDING] : null; try{
     await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null;
-      if(guard && (eid!==guard.epoch || (ow? ow.uid : null)!==guard.uid || (ow? ow.env : null)!==guard.env)){ setStatus('reload'); throw fail('epoch'); }
+      if(allow && !allow.some(g=>eid===g.epoch && (ow? ow.uid : null)===g.uid && (ow? ow.env : null)===g.env)){ setStatus('reload'); throw fail('epoch'); }
       S.epoch=eid; S.owner=ow||null; const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       S.cursor.notes=(await t.get('sync',K.cursor('notes')))||null; S.cursor.versions=(await t.get('sync',K.cursor('versions')))||null; S.quota=(await t.get('sync','quota'))||null;
       if(overBudget()){ S.paused=true; S.listenPaused=true; }   // the day's budget was spent before this start: the pause is restored from the stored quota, nothing is read until the next day
@@ -912,11 +915,12 @@ function makeSync(deps){
   /* ── owner, start, stop (the hook of PR 1; sign-in comes with PR 3) ── */
   // o.erase: the device's data go with the previous owner and the new one starts empty («Прибрати й увійти», §4.11), one transaction;
   // o.expectEpoch: the epoch the caller decided over (a dialog); another one in the store means another tab changed the owner first → `epoch`
-  async function setOwner(owner, o={}){ if(!S.loaded) await load(); S.adopting=(S.adopting||0)+1; try{ return await setOwnerNow(owner, o); }finally{ S.adopting--; } }   // a count: two changes at once
-  async function setOwnerNow(owner, o){ const same=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
+  async function setOwner(owner, o={}){ if(!S.loaded) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
+  async function setOwnerNow(owner, o, mine){ const same=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
     await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ if(o.expectEpoch!==undefined){ const ep=await t.get('sync','epoch'); if((ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
       if(same){ t.put('sync',{k:'owner', ...owner}); return; }
       const epoch={k:'epoch', id:'e'+now().toString(36)+random().toString(36).slice(2,8)}; t.put('sync',epoch);
+      if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; PENDING.add(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'￿')) t.del('sync',r.k);
       const erase=!!o.erase || !owner;
       if(erase){ for(const n of await t.range('notes','','￿')) t.del('notes',n.id); for(const v of await t.range('versions','','￿')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['￿','￿'])) t.del('blobs',[b.note,b.h]); }

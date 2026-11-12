@@ -149,6 +149,14 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const inWindow=!A.sync._S.loaded, lazy=A.sync.copiesCount().then(()=>'ok', e=>e.code); await bind; const r=await lazy;
   ok('5q a lazy call made inside this engine\'s own setOwner (in its window: '+inWindow+') reads the owner being written: '+r+', the engine names '+(A.sync.owner && A.sync.owner.uid)+', no «reload» status ('+A.status.filter(c=>c==='reload').length+')',
     inWindow && r==='ok' && A.sync.owner.uid==='u2' && !A.status.includes('reload') && await A.sync.checkOwner()===true);
+  // a refused attempt opens nothing: the engine knows u2, another tab binds the store to u4; a reload() is in flight (so S.loaded is true and a
+  // setOwner skips its first load) when this engine tries setOwner(u5) with the epoch it knew; a lazy call is made while that attempt runs
+  const F=await mk(cloud,'F',{db}); const G=await mk(cloud,'G',{db}); const knownF=F.sync._S.epoch; await G.sync.setOwner({env:'test', uid:'u4', email:'x@test'});
+  const rlF=F.sync.reload().then(()=>'ok', e=>e.code), bindF=F.sync.setOwner({env:'test', uid:'u5', email:'y@test'},{expectEpoch:knownF}).then(()=>'ok', e=>e.code);
+  let bindDone=false; bindF.then(()=>{ bindDone=true; }); const r0=await rlF;   // the reload is refused first; the attempt is still running
+  const early=!bindDone && !F.sync._S.loaded, lz4=await F.sync.copiesCount().then(()=>'ok', e=>e.code); const r4=[r0, await bindF, lz4];
+  ok('5q4 a reload() refused while a setOwner refused by its epoch runs: reload, bind and the lazy call are all refused ('+r4.join(', ')+', the call made before the attempt ended: '+early+'); the engine still names '+F.sync.owner.uid+' and checkOwner says not the same',
+    early && r4.every(c=>c==='epoch') && F.sync.owner.uid==='u1' && await F.sync.checkOwner()===false);
   // a start made during this engine's own change of owner (an email update of the same owner), then stopped (pagehide, freeze): it stays stopped
   A.sync.stop(); const same=A.sync.setOwner({...u2, email:'v2@test'}); const st=A.sync.start(); A.sync.stop(); await same; await st; await tick(50);
   ok('5q2 a start during this engine\'s own setOwner, stopped at once: the engine stays stopped, no listener', !A.sync._S.started && !A.sync._S.listen.notes && !A.sync._S.listen.versions);
