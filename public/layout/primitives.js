@@ -196,12 +196,18 @@ export function sink(ws, id, against, meets, by) {
 }
 
 /** P-DOWN (phase 6): every block judged below the moved block that reaches it sinks against it, in reading order; the blocks under each
- *  follow with their gaps. No limit but containment (LAYOUT-RULES §5.4). @param {Work} ws @param {Set<string>} below */
-export function down(ws, below) {
+ *  follow with their gaps. No limit but containment (LAYOUT-RULES §5.4). Under P-UP's fallback (P-UP off) the blocks judged above go down
+ *  under the moved block too (`under`): every block sinks against them as well, so they stand right under the moved block in their own
+ *  order and the blocks judged below stay under them, the carried block alone passing them (GAP's inputs, `fallback`).
+ *  @param {Work} ws @param {Set<string>} below @param {Set<string>} [under] */
+export function down(ws, below, under = new Set()) {
   const g = ws.moved; if (g == null) return;
+  const done = new Set();   // the blocks of `under` already under the moved block: one of them sinks against those before it, in reading order
   for (const id of visit(ws)) {
     if (id === g || !below.has(id)) continue;
-    sink(ws, id, (a) => a === g, (n, a) => sharesCol(n, a) && reaches(n, a, 'below'), 'down');
+    const mine = under.has(id);
+    sink(ws, id, (a) => a === g || (under.has(a) && (mine ? done.has(a) : true)), (n, a) => sharesCol(n, a) && reaches(n, a, 'below'), 'down');
+    if (mine) done.add(id);
   }
 }
 

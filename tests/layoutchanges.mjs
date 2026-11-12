@@ -125,4 +125,22 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
   ok('5c an area\'s left edge carried outwards: what its extent now overlaps, pressed left', eq(obj(al.met), { B: 'left' }), obj(al.met));
 }
 
+/* ── 6. sides that keep the order of the chains (step 2b, proposed): no block judged below stands over one judged above ── */
+{
+  // X (B4, columns 1–3 of its extent) carried up from row 12 to row 8 at column 2: B3 stood over it and keeps the side above; B2, at row
+  // 8 over B3, never stood in X's columns, so its middle (8.5, below frow 8) would judge it below, and P-DOWN would then drag B3 past X.
+  // B2 stood over a block that keeps the side above: it is above too
+  const S = sheet(9, [set('B2', 3, 8, 4), set('B3', 1, 9, 5, 3), set('B4', 1, 12, 3, 3)]);
+  const j = judgeCarry(at1c(S, 'B4', { col: 2, y: 8 }), S, { id: 'B4', at: { col: 2, y: 8, frow: 8 }, away: false }, mem(), ctx);
+  ok('6 B2 over B3, which keeps the side above, is above too, not below by its middle', j.side.get('B3') === 'above' && j.side.get('B2') === 'above', obj(j.side));
+  const off = judgeCarry(at1c(S, 'B4', { col: 2, y: 8 }), S, { id: 'B4', at: { col: 2, y: 8, frow: 8 }, away: false }, mem(), ctxOf({}, resolve({ 'DRAG.B2.keep': false })));
+  ok('6a with DRAG.B2.keep off every side is the middle\'s: B2 (8.5) and B3 (10.5) both below frow 8', off.side.get('B2') === 'below' && off.side.get('B3') === 'below', obj(off.side));
+  // the mirror: X carried down from rows 0–1 to row 6 at column 2; C stood under it and keeps the side below; E, at row 5 under C, never
+  // stood in X's columns, so its middle (5.5, not below frow 6) would judge it above, and P-UP would lift it past C. E stood under a block
+  // that keeps the side below: it is below too
+  const T = sheet(12, [set('X', 0, 0, 3, 2), set('C', 0, 3, 5, 2), set('E', 3, 5, 5, 1)]);
+  const k = judgeCarry(at1c(T, 'X', { col: 2, y: 6 }), T, { id: 'X', at: { col: 2, y: 6, frow: 6 }, away: false }, mem(), ctx);
+  ok('6b E under C, which keeps the side below, is below too, not above by its middle', k.side.get('C') === 'below' && k.side.get('E') === 'below', obj(k.side));
+}
+
 process.exit(t.fails ? 1 : 0);
