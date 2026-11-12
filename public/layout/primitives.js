@@ -239,8 +239,13 @@ export function sep(ws, a, b, sideOf) {
   let low;
   if (a === g) low = b; else if (b === g) low = a;
   else {
+    // two blocks that shared a column in the interval's base keep the order they had there: the one that stood lower sinks, so P-SEP never
+    // takes a block past one it stood under (step 2b, proposed; found by tests/layoutprops.mjs); any other pair as today's app separates
+    // blocks: the lower one, on the same row the right one, on the same row and column the later in reading order
+    const A0 = ws.base.boxes.get(a), B0 = ws.base.boxes.get(b);
     const ea = extent(A), eb = extent(B), at = (id) => { const i = ws.order.indexOf(id); return i < 0 ? Infinity : i; };
-    low = ea.r0 !== eb.r0 ? (ea.r0 > eb.r0 ? a : b) : ea.c0 !== eb.c0 ? (ea.c0 > eb.c0 ? a : b) : (at(a) > at(b) ? a : b);
+    if (A0 && B0 && sharesCol(A0, B0) && extent(A0).r0 !== extent(B0).r0) low = extent(A0).r0 > extent(B0).r0 ? a : b;
+    else low = ea.r0 !== eb.r0 ? (ea.r0 > eb.r0 ? a : b) : ea.c0 !== eb.c0 ? (ea.c0 > eb.c0 ? a : b) : (at(a) > at(b) ? a : b);
   }
   const other = low === a ? b : a;
   sink(ws, low, (x) => x === other, (n, x) => hits(n, x), 'sep');

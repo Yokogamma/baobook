@@ -6,12 +6,13 @@
 // through wrapper (phase 3 and phase 11 with the runs again, §5.1b) is through.js's; this file runs the pipeline it wraps.
 
 import { on } from './rules.js';
-import { extent, isArea, hits, sharesCol, readingOrder, range, MAXCELL } from './geometry.js';
+import { extent, isArea, hits, sharesCol, reaches, readingOrder, range, MAXCELL } from './geometry.js';
 import { isElastic, rowsAt, restCells } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
 import { kindOf, judgeCarry, judgeWall } from './changes.js';
-import { working, phase, aside, up, down, sinkAside, sep, rest, transitionFacts } from './primitives.js';
+import { working, phase, aside, up, down, sink, sinkAside, sep, rest, transitionFacts } from './primitives.js';
+import { pinStep, swapStep, pressedOf, canSwap } from './through.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Ctx} Ctx
  *  @typedef {import('./shapes.js').Change} Change @typedef {import('./shapes.js').Memory} Memory @typedef {import('./shapes.js').Result} Result
@@ -97,7 +98,7 @@ function columnsOf(base, after, moved, how) {
  *  @param {{pin?:(ws:Work, judged:object) => void, trace?:(phase:string, layout:Layout) => void}} [hooks] phase 3 (through.js); the
  *  working layout after each phase, for the dev look and the tests @returns {Result} */
 export function settle(start, change, memory, ctx, hooks = {}) {
-  try { return pipeline(start, change, memory || emptyMemory(), ctx, hooks); }
+  try { return wrapper(start, change, memory || emptyMemory(), ctx, hooks); }
   catch (e) {
     if (e instanceof Refused) return { ok: false, why: 'refused' };
     if (e instanceof Failed) return { ok: false, why: 'failed', errors: [e.message] };
@@ -105,7 +106,37 @@ export function settle(start, change, memory, ctx, hooks = {}) {
   }
 }
 
-function pipeline(start, change, memory, ctx, hooks) {
+/** The letting-through wrapper (LAYOUT-RULES §5.1b; step 2b-2): for a carry with THROUGH on, the pipeline again after a swap in phase 3,
+ *  from the swapped layout as `start`, at most once for every neighbour swapped in this move; and phase 11 after the pipeline: `pressed`, the
+ *  first block touching the moved block's leading edge in the memory's direction, and, when the change says the hold ran out or Shift is
+ *  held (`change.through`), that block into the memory and the pipeline once more from `start`, pinned. Any other change runs the pipeline
+ *  once. Bounds exceeded are a failure (§5.5). */
+function wrapper(start, change, memory, ctx, hooks) {
+  const through = change.type === 'carry' && on(ctx.rules, 'THROUGH');
+  let s = start, mem = memory, chose = false;
+  const swapped = new Set();
+  for (;;) {
+    const r = pipeline(s, change, mem, ctx, hooks, through);
+    if (r.swapped) {
+      if (swapped.has(r.neighbour)) throw new Failed('settle: a second swap with ' + r.neighbour + ' in one move');
+      swapped.add(r.neighbour); s = r.start; mem = r.memory; continue;
+    }
+    let pressed = null;
+    if (through && !r.memory.through) {   // phase 11
+      pressed = pressedOf(r.layout, change.id, r.met, mem.dir || 'down');
+      if (pressed && change.through && !chose) {
+        chose = true;
+        const P = r.layout.boxes.get(pressed);
+        mem = { ...r.memory, through: { id: pressed, row: extent(P).r0, side: (mem.dir || 'down') === 'down' ? 'below' : 'above' } };
+        continue;   // once more from start, with that neighbour pinned
+      }
+    }
+    const { met, ...out } = r;
+    return { ...out, start: s, pressed: r.memory.through ? r.memory.through.id : pressed, ran: [...r.ran, ...(through ? ['11'] : [])] };
+  }
+}
+
+function pipeline(start, change, memory, ctx, hooks, through = false) {
   const kind = kindOf(change), rules = ctx.rules, ran = [];
   const g = kind.moved === 'none' ? null : change.id;
   let L = start;
@@ -170,8 +201,41 @@ function pipeline(start, change, memory, ctx, hooks) {
   else if (kind.judge === 'wall') { ran.push('2'); judged = { ...judgeWall(ws.L, change.type === 'wall' ? change : { type: 'width', id: g, side: change.side }), sides: memory.sides, held: null }; }
   const sideOf = (id) => judged.side.get(id);
 
-  // ---- 3. letting through: through.js's pin and swap, for a carry with THROUGH on
-  if (hooks.pin && change.type === 'carry' && on(rules, 'THROUGH')) { ran.push('3'); hooks.pin(ws, judged); }
+  // ---- 3. letting through, for a carry with THROUGH on and a neighbour in the memory: released (its judgements of phase 2 then count),
+  // pinned with the moved block right against it, or swapped, which ends this run with the swap's own RELINK (§5.1b). A carry away holds
+  // no place to swap from: past the neighbour's middle it is released and its middle judges it (step 2b-2, proposed)
+  if (through && memory.through && g != null) {
+    ran.push('3');
+    const n = memory.through.id, st = pinStep(ws, memory, change.at);
+    if (st.released || (st.swap && (insert || !canSwap(base, g, n, memory.through.side)))) {
+      memory = { ...memory, through: null };
+      if (judged.held) { if (judged.held.side) judged.side.set(n, judged.held.side); if (judged.held.met) judged.met.set(n, judged.held.met); }
+    } else if (st.swap) {
+      const mem2 = swapStep(ws, memory);
+      // the swapped layout holds no hit: what the two blocks of the swap now meet sinks against them, as in phase 7, the pair held where the
+      // swap put it; any other hit, the lower one sinking (P-SEP)
+      for (let k = 0, lim = stepsGuard(ws.L); ; k++) {
+        const h = firstHit(ws.L); if (!h) break;
+        if (k > lim) throw new Failed('settle: the swap\'s separation does not end');
+        const pair = (id) => id === g || id === n;
+        if (pair(h[0]) || pair(h[1])) { const o = pair(h[0]) ? h[1] : h[0], p = o === h[0] ? h[1] : h[0]; sink(ws, o, (x) => x === p, (a, b) => hits(a, b), 'sep'); }
+        else sep(ws, h[0], h[1]);
+      }
+      const cl = columnsOf(base, ws.L, g, 'put');
+      const pass = [];
+      for (const [c, p, q] of cl.reordered) {
+        if (p === g || q === g) pass.push([g, c]);
+        else if (p === n || q === n) pass.push([n, c]);
+      }
+      /** @type {Transition} */
+      const T = { base, after: ws.L, ...transitionFacts(ws, base, { swap: [g, n] }), carried: g, leave: cl.leave, enter: cl.enter, pass };
+      const r = relink(T, rules);
+      if (!r.ok) throw new Failed('settle: RELINK refused the swap: ' + (r.errors || []).join('; '));
+      trace('3');
+      return { swapped: true, neighbour: n, start: r.layout, memory: { ...mem2, sides: judged.sides || memory.sides }, ran };
+    }
+    trace('3');
+  }
 
   // ---- 4. press aside; a block with no room aside goes to its kind's branch: by its side (DRAG.B5, phases 5 and 6), or P-SINK (phase 6)
   const above = new Set([...judged.side].filter(([id, s]) => s === 'above' && !judged.met.has(id)).map(([id]) => id));
@@ -201,7 +265,10 @@ function pipeline(start, change, memory, ctx, hooks) {
   const under = new Set();
   if (g != null && above.size) {
     if (on(rules, 'P-UP')) { ran.push('5'); phase(ws); up(ws, above); }
-    else for (const id of above) { below.add(id); under.add(id); }
+    else {   // only the blocks P-UP would have moved: judged above and reaching the moved block (LAYOUT-RULES §5.3 «Reaches»)
+      const X = ws.L.boxes.get(g);
+      for (const id of above) if (reaches(ws.L.boxes.get(id), X, 'above')) { below.add(id); under.add(id); }
+    }
   }
 
   trace('5');
@@ -290,5 +357,5 @@ function pipeline(start, change, memory, ctx, hooks) {
   for (const b of final.boxes.values()) if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
   const grown = change.box != null ? bottomOf(final) - bottomOf(start) : 0;
   if (kind.contain.bottom === 'refuse' && grown > 0) throw new Refused('the handle would make the area taller');
-  return { ok: true, layout: final, start, memory: { ...memory, sides: judged.sides || memory.sides }, pressed: null, moves, grew: grown, ran };
+  return { ok: true, layout: final, start, memory: { ...memory, sides: judged.sides || memory.sides }, pressed: null, moves, grew: grown, ran, met: judged.met };
 }

@@ -46,15 +46,20 @@ export function sideways(last, at) { return !!last && Math.abs(at.col - last.col
  *  that keeps its side with the blocks over it, P-DOWN then sinks one of them, judged below, under the moved block, and it drags the first
  *  past the moved block, an order no declaration explains. Blocks judged by their middle never contradict each other (one over another has
  *  the higher middle), nor do two that keep their sides (they kept start's order). @param {Map<string,'above'|'below'>} side */
-function keepOrder(side, start, S, g) {
-  const keptOf = (id) => { const w = start.boxes.get(id); return w && sharesCol(w, S) ? (extent(w).r0 < extent(S).r0 ? 'above' : 'below') : null; };
-  const kept = [...side.keys()].filter((id) => keptOf(id)), free = [...side.keys()].filter((id) => !keptOf(id));
+function keepOrder(side, start, S, g, pinned = null) {
+  // the neighbour letting the block through (DRAG.B4) keeps the side the memory gives it, judged neither way here (PR-4) but a seed all
+  // the same: a block that stood under a neighbour held below is below too
+  const keptOf = (id) => {
+    if (pinned && id === pinned.id) return pinned.side;
+    const w = start.boxes.get(id); return w && sharesCol(w, S) ? (extent(w).r0 < extent(S).r0 ? 'above' : 'below') : null;
+  };
+  const kept = [...side.keys(), ...(pinned ? [pinned.id] : [])].filter((id) => keptOf(id)), free = [...side.keys()].filter((id) => !keptOf(id));
   if (!kept.length || !free.length) return;
   const boxes = [...start.boxes.values()].filter((b) => b.id !== g);
   const ups = new Map(boxes.map((b) => [b.id, upperNeighbours(boxes, b).map((a) => a.id)])), downs = new Map(boxes.map((b) => [b.id, []]));
   for (const [id, us] of ups) for (const u of us) downs.get(u).push(id);
   const flood = (v, next) => {
-    const q = kept.filter((id) => keptOf(id) === v && side.get(id) === v), seen = new Set(q);
+    const q = kept.filter((id) => keptOf(id) === v && (side.get(id) === v || (pinned && id === pinned.id))), seen = new Set(q);
     while (q.length) for (const n of next.get(q.pop()) || []) if (!seen.has(n)) { seen.add(n); q.push(n); if (side.has(n) && !keptOf(n)) side.set(n, v); }
   };
   flood('above', ups); flood('below', downs);
@@ -99,7 +104,7 @@ export function judgeCarry(layout, start, change, memory, ctx) {
     }
     if (m) { if (sd) sd.met = m; else met.set(id, m); }
   }
-  if (keep && S) keepOrder(side, start, S, g);
+  if (keep && S) keepOrder(side, start, S, g, memory.through ? { id: memory.through.id, side: memory.through.side } : null);
   for (const [id, s] of met) sides.set(id, s);
   // a block met from the side earlier keeps its record while it shares a row with the target's rows, hit or not
   if (memory.sides) for (const [id, s] of memory.sides) if (!sides.has(id) && layout.boxes.has(id) && sharesRow(layout.boxes.get(id), G)) sides.set(id, s);

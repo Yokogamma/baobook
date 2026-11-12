@@ -1,6 +1,6 @@
 // Node: SETTLE as a property (public/layout/settle.js; LAYOUT-ENGINE-PLAN §4.2, §5.2 step 2b, step 2's row of §5): random small sheets of
 // elastic texts and set widths, and random changes of every kind SETTLE takes (a carry within its columns or away, a creation, a size, a
-// deletion, the width handle) under random sets of switched-off rules, each set through `resolve`, seeded. What must hold: SETTLE never
+// deletion, the width handle, a carry held and carried on past its neighbour) under random sets of switched-off rules, each set through `resolve`, seeded. What must hold: SETTLE never
 // fails (a failure is a bug: a bound exceeded, or a transition RELINK refuses), a refusal has one of the reasons §5.5 allows, and every
 // result passes gap.js's check (INV-1 no two blocks share a cell, INV-2 rows FOLLOW's, INV-3 the stacks well formed), lies inside its
 // container (INV-4) and in reading order (INV-5). A creation taken away again leaves every block where it was when nothing else changed
@@ -16,7 +16,7 @@ const N = +process.argv[3] || 2000;
 const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'GAP.5.1', 'GAP.5.2', 'GAP.5.3', 'GAP.8', 'GAP.9', 'P-ASIDE', 'P-UP', 'P-REST', 'P-SINK', 'DRAG.A3.narrow', 'DRAG.A5', 'DRAG.B2.keep', 'DRAG.B3', 'DRAG.B5'];
 const known = new Set(DECLS.map((d) => d.id)); for (const s of SWITCHES) if (!known.has(s)) throw new Error('unknown switch ' + s);
 const fails = {}, firsts = [], refusals = {}, kinds = {}, inc = (m, k) => (m[k] = (m[k] || 0) + 1);
-let tried = 0, skipped = 0, inv7 = 0;
+let tried = 0, skipped = 0, inv7 = 0, held = 0;
 
 function draw() {
   const cols = int(8, 16), n = int(2, 7), bs = [], map = {};
@@ -71,6 +71,22 @@ for (let k = 0; k < N * 4 && tried < N; k++) {
     if (allowed.has(r.why)) { inc(refusals, c.type); continue; }
     const why = (r.errors || [r.why])[0].replace(/B\d+|X\b/g, '·').slice(0, 90); inc(fails, why); if (firsts.length < 4) firsts.push({ ...dump(), errors: r.errors }); continue;
   }
+  // a carry within its columns, held: two or three moves further the same way from the result's start and memory, the hold set on the
+  // first (step 2b-2: the pin, the swap and its run again, the release), every result sound
+  if (c.type === 'carry' && !c.away && rnd() < 0.5) {
+    const dir = c.at.y >= d.L.boxes.get(c.id).y ? 'down' : 'up';
+    let st = r.start, mem = { ...r.memory, dir }, y = c.at.y, bad2 = null; const seq = [];
+    for (let m = 0; m < int(2, 3) && !bad2; m++) {
+      y = Math.max(0, y + (dir === 'down' ? int(1, 3) : -int(1, 3)));
+      const cm = { ...c, at: { ...c.at, y, frow: y + (rnd() < 0.5 ? 0.4 : 0) }, through: m === 0 ? 'hold' : undefined };
+      seq.push({ y: cm.at.y, frow: cm.at.frow, through: cm.through }); const rm = settle(st, cm, mem, ctx);
+      if (!rm.ok) { if (rm.why !== 'refused') bad2 = (rm.errors || [rm.why])[0]; break; }
+      const e2 = check(rm.layout); if (e2.length) { bad2 = e2[0]; break; }
+      st = rm.start; mem = { ...rm.memory, dir };
+    }
+    held++;
+    if (bad2) { const why = 'held carry: ' + bad2.replace(/B\d+|X\b/g, '·').slice(0, 80); inc(fails, why); if (firsts.length < 4) firsts.push({ ...dump(), dir, seq, errors: [bad2] }); continue; }
+  }
   const L = r.layout, errs = check(L);
   if (!L.order.every((id, i) => id === readingOrder(L.boxes.values())[i])) errs.push('not in reading order');
   for (const b of L.boxes.values()) if (b.col < 0 || extent(b).c1 > L.cols - 1 || b.y < 0) errs.push(b.id + ' outside its container');
@@ -83,6 +99,6 @@ for (let k = 0; k < N * 4 && tried < N; k++) {
   }
 }
 const bad = Object.values(fails).reduce((s, n) => s + n, 0), okAll = tried >= N && bad === 0;
-console.log((okAll ? '✓ ' : '✗ ') + `${tried} random changes through SETTLE (${JSON.stringify(kinds)}) under random switches: never failed, every result sound (INV-1 to INV-5); refused ${JSON.stringify(refusals)}; INV-7 b checked on ${inv7} creations ${JSON.stringify(fails)}; ${skipped} draws skipped`);
+console.log((okAll ? '✓ ' : '✗ ') + `${tried} random changes through SETTLE (${JSON.stringify(kinds)}) under random switches: never failed, every result sound (INV-1 to INV-5); refused ${JSON.stringify(refusals)}; ${held} carries held and carried on; INV-7 b checked on ${inv7} creations ${JSON.stringify(fails)}; ${skipped} draws skipped`);
 for (const f of firsts) console.log('  first failure: ' + JSON.stringify(f).slice(0, 1500));
 process.exit(okAll ? 0 : 1);
