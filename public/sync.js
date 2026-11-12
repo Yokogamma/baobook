@@ -236,16 +236,21 @@ function makeSync(deps){
   // status «reload» goes out and the load fails with code `epoch`, inside the same transaction that would have read the state. An engine that
   // has loaded once always loads with that guard: a refused load leaves S.loaded false, and the next lazy load (copiesCount on the start's timer,
   // unsynced for the account panel, state for a message) must not take the new owner either. Only setOwner adopts one (o.adopt). While this
-  // engine's own setOwner transaction writes a new owner, a lazy load accepts that exact owner too (PENDING: the epoch, uid and env it writes,
+  // engine's own setOwner transaction writes a new owner, a lazy load accepts that exact owner too (PENDING and OWN: the epoch, uid and env it writes,
   // registered inside the transaction and dropped when setOwner ends): setOwner sets S.loaded false there, and a lazy call in that window must
   // read the owner this engine is writing instead of locking the tab with a false «epoch». An attempt that writes nothing (refused by
   // expectEpoch, or a locked engine's) registers nothing, so another tab's owner is still refused. Nothing here waits: a write made in a
   // versionchange handler must open its transaction in that task
   const known=()=>({epoch:S.epoch, uid:S.owner? S.owner.uid : null, env:S.owner? S.owner.env : null});
-  const PENDING=new Set();
-  async function load(o={}){ if(S.loaded) return; S.loaded=true; const allow=o.guard? [o.guard] : !o.adopt && S.everLoaded? [known(), ...PENDING] : null; try{
+  // OWN: every owner this engine's own transactions registered while a load was open (OWN.base: the absolute index of OWN[0]); a load accepts
+  // the owners in PENDING when it starts and every one registered after that, read when its transaction checks the store, not copied at the
+  // call (a second setOwner of this engine can register and even end while the load's read waits for its turn). Cleared when no load is open
+  const PENDING=new Set(), OWN=[]; OWN.base=0; OWN.open=0;
+  const ownAdd=exp=>{ PENDING.add(exp); if(OWN.open) OWN.push(exp); };
+  async function load(o={}){ if(S.loaded) return; S.loaded=true; const implicit=!o.guard && !o.adopt && S.everLoaded, from=OWN.base+OWN.length;
+    const allow=()=>o.guard? [o.guard] : implicit? [known0, ...pend0, ...OWN.slice(from-OWN.base)] : null; const known0=known(), pend0=[...PENDING]; OWN.open++; try{
     await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null;
-      if(allow && !allow.some(g=>eid===g.epoch && (ow? ow.uid : null)===g.uid && (ow? ow.env : null)===g.env)){ setStatus('reload'); throw fail('epoch'); }
+      const ok=allow(); if(ok && !ok.some(g=>eid===g.epoch && (ow? ow.uid : null)===g.uid && (ow? ow.env : null)===g.env)){ setStatus('reload'); throw fail('epoch'); }
       S.epoch=eid; S.owner=ow||null; const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       S.cursor.notes=(await t.get('sync',K.cursor('notes')))||null; S.cursor.versions=(await t.get('sync',K.cursor('versions')))||null; S.quota=(await t.get('sync','quota'))||null;
       if(overBudget()){ S.paused=true; S.listenPaused=true; }   // the day's budget was spent before this start: the pause is restored from the stored quota, nothing is read until the next day
@@ -255,7 +260,8 @@ function makeSync(deps){
       for(const m of await t.range('sync','meta:n:','meta:n:\uffff')){ if(m.err) S.err.set(m.k.slice(7), m.err); if(m.sends) S.sends.set(m.k.slice(7), m.sends); }
       for(const m of await t.range('sync','meta:v:','meta:v:\uffff')){ if(m.wait) addWaiting(m.wait); if(m.err) S.verr.set(m.k.slice(7), m.err); }
       await loadV(t);
-      for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); S.everLoaded=true; }catch(e){ S.loaded=false; throw e; } }
+      for(const col of ['notes','versions']){ const sc=await t.get('sync',K.scan(col)); if(sc) S.scan[col]=sc; } }); S.everLoaded=true; }catch(e){ S.loaded=false; throw e; }
+    finally{ if(!--OWN.open){ OWN.base+=OWN.length; OWN.length=0; } } }
   // the version queue from the store; a job without a meta (written by code before 4a) asks for the migration pass (§4.9)
   async function loadV(t){ S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear();
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); S.vjobs.set(id, j); if(!j.tomb && !(await t.get('sync',K.meta('v',id)))) S.vjudge=true; }
@@ -920,7 +926,7 @@ function makeSync(deps){
     await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ if(o.expectEpoch!==undefined){ const ep=await t.get('sync','epoch'); if((ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
       if(same){ t.put('sync',{k:'owner', ...owner}); return; }
       const epoch={k:'epoch', id:'e'+now().toString(36)+random().toString(36).slice(2,8)}; t.put('sync',epoch);
-      if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; PENDING.add(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
+      if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; ownAdd(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'￿')) t.del('sync',r.k);
       const erase=!!o.erase || !owner;
       if(erase){ for(const n of await t.range('notes','','￿')) t.del('notes',n.id); for(const v of await t.range('versions','','￿')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['￿','￿'])) t.del('blobs',[b.note,b.h]); }

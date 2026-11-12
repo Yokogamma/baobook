@@ -157,6 +157,19 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const early=!bindDone && !F.sync._S.loaded, lz4=await F.sync.copiesCount().then(()=>'ok', e=>e.code); const r4=[r0, await bindF, lz4];
   ok('5q4 a reload() refused while a setOwner refused by its epoch runs: reload, bind and the lazy call are all refused ('+r4.join(', ')+', the call made before the attempt ended: '+early+'); the engine still names '+F.sync.owner.uid+' and checkOwner says not the same',
     early && r4.every(c=>c==='epoch') && F.sync.owner.uid==='u1' && await F.sync.checkOwner()===false);
+  // two changes of owner of this engine at once, a lazy call in the first one's window: the second registers (and may end) while the lazy
+  // load's read waits for its turn; the load must take that owner as this engine's own, not lock the tab
+  const race=async(H,abortFirst)=>{ const tx0=H.db.tx.bind(H.db); let n=0;
+    if(abortFirst) H.db.tx=(stores,mode,fn)=>{ if(mode==='readwrite' && stores.length===4 && !n++) return tx0(stores,mode,async t=>{ await fn(t); throw Object.assign(new Error('aborted'),{name:'AbortError'}); }); return tx0(stores,mode,fn); };
+    H.status.length=0; const ep=H.sync._S.epoch, a=H.sync.setOwner({env:'test', uid:'r2', email:'r2@test'}, abortFirst? {expectEpoch:ep} : {}).then(()=>'ok', e=>e.code||e.name), b=H.sync.setOwner({env:'test', uid:'r3', email:'r3@test'}, abortFirst? {expectEpoch:ep} : {}).then(()=>'ok', e=>e.code||e.name);
+    let spins=0; while(H.sync._S.loaded && spins<100000){ spins++; await Promise.resolve(); } const win=!H.sync._S.loaded;
+    const lz=H.sync.copiesCount().then(()=>'ok', e=>e.code); const out=[await a, await b, await lz]; H.db.tx=tx0; return {win, out, uid:H.sync.owner && H.sync.owner.uid, reload:H.status.filter(c=>c==='reload').length, same:await H.sync.checkOwner()}; };
+  const H5=await mk(cloud,'H5',{db:new MemStore()}), q5=await race(H5,false);
+  ok('5q5 two changes of owner at once and a lazy call in the first one\'s window (in it: '+q5.win+'): '+q5.out.join(', ')+'; the engine names '+q5.uid+', no «reload» ('+q5.reload+'), checkOwner '+q5.same,
+    q5.win && q5.out.every(c=>c==='ok') && q5.uid==='r3' && !q5.reload && q5.same===true);
+  const H6=await mk(cloud,'H6',{db:new MemStore()}), q6=await race(H6,true);
+  ok('5q6 the same with one expectEpoch, the first transaction aborted after it ran (in its window: '+q6.win+'): '+q6.out.join(', ')+'; the engine names '+q6.uid+', no «reload» ('+q6.reload+'), checkOwner '+q6.same,
+    q6.win && q6.out[1]==='ok' && q6.out[2]==='ok' && q6.uid==='r3' && !q6.reload && q6.same===true);
   // a start made during this engine's own change of owner (an email update of the same owner), then stopped (pagehide, freeze): it stays stopped
   A.sync.stop(); const same=A.sync.setOwner({...u2, email:'v2@test'}); const st=A.sync.start(); A.sync.stop(); await same; await st; await tick(50);
   ok('5q2 a start during this engine\'s own setOwner, stopped at once: the engine stays stopped, no listener', !A.sync._S.started && !A.sync._S.listen.notes && !A.sync._S.listen.versions);
