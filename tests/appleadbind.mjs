@@ -74,5 +74,19 @@ const r4=[]; for(let i=0;i<6;i++){ const P=i? await newTab(G, SITE, {connect:fal
 await okWhy('4 six tabs, each binding a new owner with an owner check right behind it: '+r4.map(r=>r.bind+'/'+(r.lock||'-')).join(', '), {
   'every binding ok': r4.every(r=>r.bind==='ok'), 'no tab locked': r4.every(r=>!r.lock)});
 
+/* ── 5. the owner check (a `resume`) made while a fresh tab's first load is held: it compares with the owner that load ends with, so the tab locks
+   nothing (the second review of #143: on its head the tab locked as «epoch», the stored owner unchanged). The gate is set before the app runs ── */
+await G.ctx.addInitScript(()=>{ let v; Object.defineProperty(window,'sheetDebug',{configurable:true, get(){ return v; }, set(x){ v=x; window.__held=0; window.__gate=new Promise(r=>{ window.__open=r; });
+  x.readGate=st=>st.length===1 && st[0]==='sync'? (window.__held++, window.__gate) : null; }}); });
+const P5=await G.ctx.newPage(); const p5errs=[]; P5.on('pageerror',e=>p5errs.push(String(e))); await P5.goto(SITE);
+const held5=await until(()=>P5.evaluate(()=>window.__held>0).catch(()=>false), 10000);
+await P5.evaluate(()=>{ document.dispatchEvent(new Event('resume')); }); await P5.waitForTimeout(150);
+await P5.evaluate(()=>{ sheetDebug.readGate=null; window.__open(); });
+await P5.waitForSelector('html[data-ready]',{state:'attached',timeout:10000}); await P5.waitForTimeout(500);
+const s5=await strip(P5), o5=await ownerOf(P5), st5=await storedOwner(P5);
+await okWhy('5 a resume while a fresh tab\'s first load is held (held: '+held5+'): the tab names '+o5+' (the store: '+st5+'), lock '+s5.lock, {
+  'the first load was held': !!held5, 'not locked': !s5.lock && !s5.strip, 'it names the stored owner': !!o5 && o5===st5}, ()=>diag({P5}));
+G.errs.push(...p5errs);
+
 const errs=[...A.errs, ...D.errs, ...G.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

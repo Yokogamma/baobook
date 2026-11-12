@@ -256,7 +256,10 @@ function makeSync(deps){
   // the owner its own transaction wrote, so another tab's binding committed between that transaction and this read is refused, not adopted; a lazy
   // load the owner this engine knows; the first load of an engine any owner
   const LOADS=new Set();
-  async function load(o={}){ if(S.loaded) return; S.loaded=true;
+  // the load in flight (LOADP): checkOwner waits for it (its comparison needs the owner that load ends with); nothing on the save path does
+  let LOADP=null;
+  async function load(o={}){ if(S.loaded) return; const p=loadOnce(o); LOADP=p; try{ return await p; }finally{ if(LOADP===p) LOADP=null; } }
+  async function loadOnce(o){ if(S.loaded) return; S.loaded=true;
     const a=allowance(o.guard? [o.guard, ...PENDING] : o.adopt? [o.adopt, ...PENDING] : S.everLoaded? [known(), ...PENDING] : null); LOADS.add(a); try{
     await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null;
       if(!a.ok(eid,ow)){ setStatus('reload'); throw fail('epoch'); }
@@ -275,9 +278,9 @@ function makeSync(deps){
   // (a refused engine would hand out the new owner's data): it checks the store in its own transaction by the rule of every load in flight at its
   // call, and is refused with `epoch` where one of them would be. It sets no status itself: the load beside it does when that load is refused, and a
   // store that moved after an accepted load's read leaves only this refusal (the caller's catch). Nothing waits for the load
-  function rtx(stores, fn){ const as=[...LOADS].map(l=>l.list()).filter(Boolean).map(allowance);
-    return db.tx(as.length && !stores.includes('sync')? [...stores,'sync'] : stores,'readonly', async t=>{ if(as.length){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!as.every(a=>a.ok(eid,ow))) throw fail('epoch'); } return fn(t); })
-      .finally(()=>{ for(const a of as) a.end(); }); }
+  function rtx(stores, fn){ const as=[...LOADS].map(l=>l.list()).filter(Boolean).map(allowance), end=()=>{ for(const a of as) a.end(); }; let tx;
+    try{ tx=db.tx(as.length && !stores.includes('sync')? [...stores,'sync'] : stores,'readonly', async t=>{ if(as.length){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!as.every(a=>a.ok(eid,ow))) throw fail('epoch'); } return fn(t); }); }catch(e){ end(); throw e; }   // an adapter that throws at once (not this app's SDB, which rejects) must not leave the allowances open
+    return tx.finally(end); }
   // the version queue from the store; a job without a meta (written by code before 4a) asks for the migration pass (§4.9)
   async function loadV(t){ S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear();
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); S.vjobs.set(id, j); if(!j.tomb && !(await t.get('sync',K.meta('v',id)))) S.vjudge=true; }
@@ -299,7 +302,7 @@ function makeSync(deps){
   // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way.
   // It takes the rule of a lazy load: the owner this engine knows, or one of its own setOwner transactions (PENDING at the call, OWN after it), so a
   // leadCheck (visible, resume, pageshow, a non-account «owner» message) that lands while this tab binds does not lock it with a false «epoch»
-  async function checkOwner(){ if(!S.loaded){ try{ await load(); }catch(e){ if(e && e.code==='epoch') return false; throw e; } } const a=allowance([known(), ...PENDING]);
+  async function checkOwner(){ if(!S.loaded || LOADP){ try{ await (S.loaded? LOADP : load()); }catch(e){ if(e && e.code==='epoch') return false; throw e; } } const a=allowance([known(), ...PENDING]);   // a load in flight (a fresh engine's first one, a reload) ends first: its owner is the one to compare
     try{ return await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       return a.ok(ep? ep.id : null, ow); }); }finally{ a.end(); } }
   const nudge=()=>{ S.queueAt=0; };   // another tab wrote: the next step reads the queue again instead of waiting for its minute
@@ -1068,7 +1071,7 @@ function makeSync(deps){
   async function seenAll(){ if(!S.loaded) await load(); return rtx(['sync'], async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
   async function lrevOf(ids){ if(!S.loaded) await load(); return rtx(['sync'], async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
-  return {start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, deviceName, usedToday:()=>{ const q=quotaNow(); return {reads:q.reads, writes:q.writes}; }, usedStored,  limits:()=>({...budgets()}), countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
+  return {_own:()=>({open:OWN.open, len:OWN.length, loads:LOADS.size}), start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, deviceName, usedToday:()=>{ const q=quotaNow(); return {reads:q.reads, writes:q.writes}; }, usedStored,  limits:()=>({...budgets()}), countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
     typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ tx(['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
     left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, isOnline:()=>S.online, busyMs, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};

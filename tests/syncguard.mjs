@@ -233,7 +233,21 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
     ok('5r4 '+(when==='call'? 'checkOwner() right after setOwner was called' : 'checkOwner() inside setOwner\'s window (in it: '+inWin+')')+' says '+same+'; setOwner '+b+', the engine names '+(C.sync.owner && C.sync.owner.uid),
       inWin && same===true && b==='ok' && C.sync.owner.uid==='w4' && !C.status.includes('reload')); }
   { const db=new MemStore(); const E=await mk(cloud,'E4',{db}), F=await mk(cloud,'F4',{db}); await F.sync.setOwner({env:'test', uid:'w5', email:'w5@test'});
-    ok('5r4b another tab\'s owner: checkOwner() of the engine that knew the old one still says not the same', await E.sync.checkOwner()===false); } }
+    ok('5r4b another tab\'s owner: checkOwner() of the engine that knew the old one still says not the same', await E.sync.checkOwner()===false); }
+  // (5) the owner check while a load is in flight compares with the owner that load ends with: a fresh engine's two checks at once both say the same
+  // owner (the second one skipped the load and once compared with the empty memory: a false «epoch» lock on resume during the first load); a check
+  // beside a reload() that is refused still says not the same
+  { const db=new MemStore(); await mk(cloud,'H5',{db}); const F=device(cloud,'F5',{db}); const two=await Promise.all([F.sync.checkOwner(), F.sync.checkOwner()]);
+    ok('5r5 a fresh engine, two owner checks at once during its first load: '+JSON.stringify(two), two[0]===true && two[1]===true && F.sync.owner && F.sync.owner.uid==='u1');
+    const G=await mk(cloud,'G5',{db}); await F.sync.setOwner({env:'test', uid:'w6', email:'w6@test'});
+    const rl=G.sync.reload().then(()=>'ok', e=>e.code), c=await G.sync.checkOwner();
+    ok('5r5b an owner check beside a refused reload() ('+(await rl)+') says not the same ('+c+')', (await rl)==='epoch' && c===false); }
+  // (6) a read beside a load whose adapter throws at once (not this app's SDB, which rejects) leaves no allowance open: OWN is emptied again
+  { const db=new MemStore(); const K=await mk(cloud,'K6',{db}); const tx0=db.tx.bind(db); let hold, gate=new Promise(r=>{ hold=r; }), boom=false;
+    db.tx=(stores,mode,fn)=>{ if(boom && mode==='readonly' && stores.includes('versions')){ boom=false; throw new Error('sync throw'); } if(gate && mode==='readonly' && stores.length===1 && stores[0]==='sync'){ const g=gate; gate=null; return g.then(()=>tx0(stores,mode,fn)); } return tx0(stores,mode,fn); };
+    const rl=K.sync.reload(); await Promise.resolve(); boom=true; let threw=null; try{ await K.sync.copiesCount(); }catch(e){ threw=e.message; }
+    hold(); await rl; db.tx=tx0; await K.sync.setOwner({env:'test', uid:'w7', email:'w7@test'}); const own=K.sync._own();
+    ok('5r6 a read beside a load whose adapter throws at once ('+threw+'): after the load and a change of owner nothing is left open '+JSON.stringify(own), threw==='sync throw' && own.open===0 && own.len===0 && own.loads===0); } }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
