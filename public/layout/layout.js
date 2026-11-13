@@ -5,7 +5,7 @@
 // §3.4 needs.
 
 import { PLACE_FIELDS } from './shapes.js';
-import { extent, isArea, hits, readingOrder, range, inRange, rowFromY, fxFromCol } from './geometry.js';
+import { extent, isArea, hits, readingOrder, range, inRange, rowFromY, fxFromCol, MAXCELL } from './geometry.js';
 import { on } from './rules.js';
 import { isElastic, rowsAt, restCells, capCells, canonicalCtx } from './size.js';
 import { fromPlaces, follow, resize } from './gap.js';
@@ -55,17 +55,22 @@ function sized(boxes, cols, inner, ctx) {
 }
 
 /** Step 1, clamp, by each block's kind (geometry.js's range, as phase 1c clamps a moved block): an area at row 0 moves down one row, so
- *  that its free row above lies in the sheet; a card past the container's right edge moves left to the last column where it fits, an
- *  elastic block narrowed below its floor by the edge taking its floor first (DRAG.A3: min(natural width, MINC) and its kind's floor; with
- *  DRAG.A3.narrow off, the widest it gets by itself); a set width wider than its container already stands at its full width (step 0) and
- *  goes to column 0. What a clamp puts on another block, step 2 separates. @returns {Map<string, Box>} */
+ *  that its free row above lies in the sheet; a card past the container's right edge moves left to the last column where it fits; a set
+ *  width wider than its container already stands at its full width (step 0) and goes to column 0. An elastic block is past the edge only
+ *  when the rest width its neighbours leave it, with no right edge, does not fit there: then it narrows to the edge but no further than its
+ *  floor, min(natural width, MINC) and its kind's floor, and moves left (DRAG.A3); with DRAG.A3.narrow off it keeps that width and moves
+ *  left. A block its neighbours narrowed, not the edge, keeps the width step 0 gave it, so a note at rest opens to the same widths, rows
+ *  and places (the independent review of 6257763). What a clamp puts on another block, step 2 separates. @returns {Map<string, Box>} */
 function clamped(boxes, cols, inner, ctx) {
-  const out = new Map();
+  const out = new Map(), wide = { ...layoutOf({ cols, measure: 'canonical' }, boxes), cols: MAXCELL };
   for (const b of boxes.values()) {
     let w = b.w;
     if (isElastic(b, ctx)) {
-      const k = ctx.kinds[b.kind], floor = on(ctx.rules, 'DRAG.A3.narrow') ? Math.max(k.minCells(b, ctx.measure), Math.min(ctx.measure.natural(b.id), ctx.settings.MINC)) : capCells(b, ctx);
-      w = Math.min(Math.max(w, floor + 1), cols - pad(b));
+      const want = restCells(wide, b, ctx) + 1;
+      if (b.col + want + pad(b) > cols) {
+        const k = ctx.kinds[b.kind], floor = Math.min(want, Math.max(k.minCells(b, ctx.measure), Math.min(ctx.measure.natural(b.id), ctx.settings.MINC)) + 1);
+        w = Math.min(on(ctx.rules, 'DRAG.A3.narrow') ? Math.max(floor, cols - b.col - pad(b)) : want, cols - pad(b));
+      }
     }
     const r = range({ ...b, w }, cols), col = Math.max(r.colMin, Math.min(r.colMax, b.col)), y = Math.max(r.yMin, b.y);
     if (w === b.w && col === b.col && y === b.y) { out.set(b.id, b); continue; }
@@ -96,17 +101,14 @@ function separated(boxes) {
 
 /** One container's steps 0–4 (§3.5): sizes, clamp, separate at the places as read, with no stacks and no FOLLOW; GAP.1's stacks from the
  *  separated places; phases 9 and 10 of SETTLE at rest (`rest`), FOLLOW and RELINK included. `inner`: the rows each area's children
- *  take, its children opened first. @returns {{ok:true, layout:Layout}|{ok:false, layout:Layout, errors:string[]}} */
+ *  take, its children opened first. @returns {{ok:true, layout:Layout}|{ok:false, errors:string[]}} */
 function openOne(L, cols, inner, ctx) {
-  const read = sized(L.boxes, cols, inner, ctx);
-  const safe = layoutOf({ cols, measure: 'canonical' }, read);
   try {
-    const placed = separated(clamped(read, cols, inner, ctx));
+    const placed = separated(clamped(sized(L.boxes, cols, inner, ctx), cols, inner, ctx));
     const r = rest(fromPlaces(layoutOf({ cols, measure: 'canonical' }, placed)), ctx);
-    if (!r.ok) return { ok: false, layout: safe, errors: r.errors };
-    return { ok: true, layout: r.layout };
+    return r.ok ? { ok: true, layout: r.layout } : { ok: false, errors: r.errors };
   } catch (e) {
-    return { ok: false, layout: safe, errors: [e.message] };
+    return { ok: false, errors: [e.message] };
   }
 }
 
@@ -116,35 +118,58 @@ function outOfRange(L) {
   for (const b of L.boxes.values()) for (const f of ['col', 'y', 'cw', 'ch']) if (b[f] != null && !inRange(b[f])) return `${b.id}.${f} = ${b[f]}`;
   return null;
 }
+/** The first block of a layout, or of an area's, whose bottom would pass MAXCELL (LAYOUT-RULES §1.5). @returns {?string} */
+function pastMaxcell(L) {
+  for (const b of L.boxes.values()) if (extent(b).r1 + 1 > MAXCELL) return b.id;
+  for (const A of (L.areas || new Map()).values()) { const id = pastMaxcell(A); if (id) return id; }
+  return null;
+}
+/** The columns an area shows its children in: its set width, no wider than the sheet allows (§3.5, step 1). */
+const shownCols = (area, cols) => (area.cw != null ? Math.min(area.cw + 1, cols - 1) : 2) - 1;
+/** The safe result (§3.5): the whole note as read, every block of the sheet and of every area at its place as read and its size there,
+ *  nothing clamped or separated, no stacks; made from the note the bridge read, never from a partly opened one. */
+function safeTree(stored, cols, c) {
+  const bare = (boxes, n, inner) => {
+    let m;
+    try { m = sized(boxes, n, inner, c); } catch { m = new Map([...boxes].map(([id, b]) => [id, { ...b, w: b.cw != null ? b.cw + 1 : 2, h: Math.max(1, b.ch || 1), t: 0, yc: b.y }])); }
+    for (const [id, b] of m) if (b.above) { const { above, ...o } = b; m.set(id, o); }
+    return layoutOf({ cols: n, measure: 'canonical' }, m, { areas: new Map() });
+  };
+  const areas = new Map(), inner = new Map();
+  for (const b of stored.boxes.values()) {
+    if (!isArea(b)) continue;
+    const L = bare(stored.areas?.get(b.id)?.boxes || new Map(), shownCols(b, cols), new Map());
+    areas.set(b.id, L); inner.set(b.id, bottomOf(L));
+  }
+  return { ...bare(stored.boxes, cols, inner), areas };
+}
 
 /** open() (LAYOUT-ENGINE-PLAN §3.5): the note's places as the bridge read them, a Layout of Boxes with `w` and `h` unset and no stacks,
  *  the sheet's with each area's children in `areas` in the area's cells, made a valid layout in the canonical measure: every area's
  *  children first, in the columns the area shows, so that its frame holds the rows they take; then the sheet. Step 5, the displayed
- *  layout, is `show` with the temporary heights the caller gives (`shown`). Writes and records nothing; deterministic: the same note
- *  gives the same layout on every device that measures the same. When a step fails, which only a bug makes happen, or a value lies out of
- *  the engine's range, `{ok: false, why: 'failed', layout}`: every block at its place and size as read, nothing separated, no stacks,
- *  for the safe mode. A collapsed area's children are opened as any area's, kept for when it opens (proposed).
+ *  layout, is `show` with the temporary heights the caller gives (`shown`), within MAXCELL too. Writes and records nothing;
+ *  deterministic: the same note gives the same layout on every device that measures the same. When a step fails, which only a bug makes
+ *  happen, or a value lies out of the engine's range, or the shown layout would pass MAXCELL, `{ok: false, why: 'failed', layout}`: the
+ *  safe result, the whole note as read. A collapsed area's children are opened as any area's, kept for when it opens (proposed).
  *  @param {Layout} stored @param {Ctx} ctx @param {Map<string, number>} [temp] the temporary rows per block id, for `shown`
  *  @returns {{ok:true, layout:Layout, shown:Layout}|{ok:false, why:'failed', layout:Layout, errors:string[]}} */
 export function open(stored, ctx, temp = new Map()) {
-  const c = canonicalCtx(ctx), cols = stored.cols, areas = new Map(), inner = new Map(), errors = [];
+  const c = canonicalCtx(ctx), cols = stored.cols;
+  const fail = (errors) => ({ ok: false, why: 'failed', layout: safeTree(stored, cols, c), errors });
   const bad = [stored, ...(stored.areas ? stored.areas.values() : [])].map(outOfRange).find(Boolean);
-  if (bad) errors.push('open: out of the engine\'s range: ' + bad);
+  if (bad) return fail(['open: out of the engine\'s range: ' + bad]);
+  const areas = new Map(), inner = new Map();
   for (const b of stored.boxes.values()) {
     if (!isArea(b)) continue;
-    const A = stored.areas?.get(b.id) || { boxes: new Map() }, shown = b.cw != null ? Math.min(b.cw + 1, cols - 1) : 2;
-    const r = errors.length ? { ok: false, layout: layoutOf({ cols: shown - 1, measure: 'canonical' }, new Map()) } : openOne(A, shown - 1, new Map(), c);
-    if (!r.ok) { errors.push(...(r.errors || [])); areas.set(b.id, r.layout); } else areas.set(b.id, r.layout);
-    inner.set(b.id, bottomOf(r.layout));
+    const r = openOne(stored.areas?.get(b.id) || { boxes: new Map() }, shownCols(b, cols), new Map(), c);
+    if (!r.ok) return fail(r.errors);
+    areas.set(b.id, r.layout); inner.set(b.id, bottomOf(r.layout));
   }
-  const sheet = errors.length ? null : openOne(stored, cols, inner, c);
-  if (sheet && !sheet.ok) errors.push(...sheet.errors);
-  if (errors.length) {
-    const L = { ...layoutOf({ cols, measure: 'canonical' }, sized(stored.boxes, cols, inner, c)), areas };
-    return { ok: false, why: 'failed', layout: L, errors };
-  }
-  const layout = { ...sheet.layout, areas };
-  return { ok: true, layout, shown: show(layout, temp, ctx) };
+  const sheet = openOne(stored, cols, inner, c);
+  if (!sheet.ok) return fail(sheet.errors);
+  const layout = { ...sheet.layout, areas }, shown = show(layout, temp, ctx), past = pastMaxcell(shown);
+  if (past) return fail([`open: ${past} would be shown past MAXCELL`]);
+  return { ok: true, layout, shown };
 }
 
 // ====================================================================== the two measures

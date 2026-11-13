@@ -10,14 +10,17 @@
 //   7    show and unshow: temporary rows per block and by the measure, an area's growth by its children's, back to the canonical layout;
 //   8    diff: the place in each container's own fields, a cleared field removed, a block that changed containers, a new block, booleans,
 //        a fractional row as stored, every key one of PLACE_FIELDS;
-//   9    the safe result: a value out of the engine's range, a bound exceeded;
-//   10   a property over random notes: open is valid and comes to rest when opened again from its own places, show and unshow invert, diff of the result against itself is empty.
+//   1c   a note at rest opens to itself again and again, DRAG.A3.narrow off (the independent review of 6257763);
+//   9    the safe result, the whole note as read: a value out of the engine's range, a bound exceeded, an area opened before the sheet
+//        failed, the shown layout past MAXCELL;
+//   10   a property over random notes, under the default rules or random switches: open is valid and comes to rest when opened again from its own places, show and unshow invert, diff of the result against itself is empty.
 // Seeded: node tests/layoutopen.mjs [seed] [N]
 import { open, show, unshow, diff } from '../public/layout/layout.js';
 import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check, columnChain, stackAt, showStack } from '../public/layout/gap.js';
 import { readingOrder, extent, range, hits, rowFromY, fxFromCol, MAXCELL, SHEETW } from '../public/layout/geometry.js';
 import { PLACE_FIELDS } from '../public/layout/shapes.js';
+import { resolve } from '../public/layout/rules.js';
 import { chars, ctxOf, eq, tally } from './lib/primcase.mjs';
 
 const t = tally(), ok = t.ok;
@@ -66,6 +69,16 @@ function sound(L) {
   ok('1 shown with no temporary height: the same places; diff against what was read: nothing', r.ok && eq(places(r.shown), places(r.layout)) && diff(storedOf(n), r.layout).size === 0, r.ok && [...diff(storedOf(n), r.layout)]);
   const head = note(20, [S('A', 2, 3, 3), S('B', 8, 5, 2)]), rh = open(head, ctxFor(head));
   ok('1 head rows kept: blocks that start low stay low, nothing lifts them', rh.ok && eq(rows(rh.layout), { A: 3, B: 5 }), rh.ok && rows(rh.layout));
+}
+
+/* ── 1c. a note at rest opens to itself again and again (the independent review of 6257763): with DRAG.A3.narrow off, the clamp took T,
+   narrowed by its neighbour R and not by the edge, to its natural width, so GAP.1 gave B the gap of a shorter T, which rest narrowed
+   again: B one row lower at every opening ── */
+{
+  const n0 = note(9, [T('T', 0, 0), S('R', 7, 0, 1), S('B', 0, 2, 1)]), ctx = ctxFor(n0, { T: 19 }, {}, resolve({ 'DRAG.A3.narrow': false }));
+  let n = n0; const seen = [];
+  for (let i = 0; i < 6; i++) { const r = open(n, ctx); if (!r.ok) { seen.push(r); break; } seen.push([r.layout.boxes.get('B').y, r.layout.boxes.get('T').w, r.layout.boxes.get('T').h]); n = reread(r.layout); }
+  ok('1c DRAG.A3.narrow off, opened six times from its own places: B stays at 2, T at its neighbour\'s width 7 and two rows', eq(seen, Array(6).fill([2, 7, 2])), seen);
 }
 
 /* ── 2. sizes ── */
@@ -149,6 +162,15 @@ function sound(L) {
   ok('9 a row out of the engine\'s range: failed, every block at its place and size as read, nothing separated', !r.ok && r.why === 'failed' && eq(rows(r.layout), { A: 0, B: -1 }) && r.layout.boxes.get('A').w === 4, r);
   const m = note(20, [S('A', 0, MAXCELL - 1, 3, 1), S('B', 1, MAXCELL - 1, 3)]), rm = open(m, ctxFor(m));
   ok('9 a separation that would pass MAXCELL: failed, the places as read', !rm.ok && rm.why === 'failed' && eq(rows(rm.layout), { A: MAXCELL - 1, B: MAXCELL - 1 }), rm.ok ? rows(rm.layout) : rm.errors);
+  // the whole note as read, never a partly opened one (the independent review of 6257763): an area's children opened before the sheet
+  // failed stayed separated with stacks, and a value out of range found before the areas left them empty
+  const stacked = (L) => [...L.boxes.values(), ...[...L.areas.values()].flatMap((A) => [...A.boxes.values()])].some((b) => b.above && b.above.length);
+  const t2 = note(30, [A('R', 0, 1, 12), S('X', 20, MAXCELL - 1, 2), S('Y', 20, MAXCELL - 1, 2)], { R: [S('a', 0, 0, 2), S('b', 0, 0, 2)] }), r2 = open(t2, ctxFor(t2));
+  ok('9 the sheet failing after its area opened: the area\'s children too at their rows as read (both 0), no stacks anywhere', !r2.ok && eq(rows(r2.layout.areas.get('R')), { a: 0, b: 0 }) && !stacked(r2.layout), r2.ok ? 'ok' : [rows(r2.layout.areas.get('R')), stacked(r2.layout)]);
+  const t3 = note(30, [A('R', 0, 1, 12), S('X', 20, -1, 2)], { R: [S('a', 0, 0, 2), S('b', 3, 0, 2)] }), r3 = open(t3, ctxFor(t3));
+  ok('9 a value out of range found before the areas: every area\'s children there, at their places as read', !r3.ok && eq(rows(r3.layout.areas.get('R')), { a: 0, b: 0 }) && r3.layout.areas.get('R').boxes.get('b').col === 3, r3.ok ? 'ok' : r3.layout.areas.get('R') && places(r3.layout.areas.get('R')));
+  const t4 = note(10, [S('X', 0, MAXCELL - 1, 2)]), r4 = open(t4, ctxFor(t4), new Map([['X', 2]]));
+  ok('9 the shown layout past MAXCELL by a temporary height: failed, the safe result', !r4.ok && r4.why === 'failed' && r4.layout.boxes.get('X').y === MAXCELL - 1, r4.ok ? places(r4.shown) : r4.errors);
 }
 
 /* ── 10. random notes ── */
@@ -156,7 +178,8 @@ function sound(L) {
   let seed = +process.argv[2] || 11; const seed0 = seed;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   const N = +process.argv[3] || 400;
-  let bad = 0, first = null, notes = 0, moved = 0, temps = 0;
+  const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'GAP.5.1', 'GAP.5.2', 'GAP.5.3', 'GAP.8', 'GAP.9', 'P-ASIDE', 'P-REST', 'P-SINK', 'DRAG.A3.narrow'];
+  let bad = 0, first = null, notes = 0, moved = 0, temps = 0, most = 0;
   for (let k = 0; k < N; k++) {
     const cols = int(10, 24), boxes = [], areas = {}, len = {}, temp = {};
     const leaf = (id, cmax) => { const r = rnd(); const b = r < 0.45 ? T(id, int(0, cmax), int(0, 8)) : S(id, int(0, cmax), int(0, 8), int(1, 6), rnd() < 0.2 ? int(2, 3) : undefined); if (b.cw == null) len[id] = int(1, 40); if (rnd() < 0.15) temp[id] = int(1, 2); return b; };
@@ -165,9 +188,12 @@ function sound(L) {
       const id = 'R' + i, a = A(id, int(0, cols), int(0, 8), int(4, cols + 2), rnd() < 0.15 ? { collapsed: true } : {}); boxes.push(a);
       areas[id] = []; for (let j = 0, m = int(0, 4); j < m; j++) areas[id].push(leaf(id + 'c' + j, a.cw));
     }
-    const n = note(cols, boxes, areas), ctx = ctxFor(n, len, temp), r = open(n, ctx, new Map(Object.entries(temp)));
+    // under the default rules or random switches (the independent review of 6257763 found a drift with DRAG.A3.narrow off)
+    let rules, off = [];
+    if (rnd() < 0.5) { const o = {}; for (const id of SWITCHES) if (rnd() < 0.2) o[id] = false; try { rules = resolve(o); off = Object.keys(o); } catch { rules = undefined; } }
+    const n = note(cols, boxes, areas), ctx = ctxFor(n, len, temp, rules), r = open(n, ctx, new Map(Object.entries(temp)));
     notes++;
-    const fail = (why, extra) => { bad++; if (!first) first = { k, seed0, why, cols, boxes, areas, len, temp, ...extra }; };
+    const fail = (why, extra) => { bad++; if (!first) first = { k, seed0, why, off, cols, boxes, areas, len, temp, ...extra }; };
     if (!r.ok) { fail('open failed: ' + r.errors[0]); continue; }
     const e = sound(r.layout); if (e.length) { fail('unsound: ' + e[0]); continue; }
     if (diff(storedOf(n), r.layout).size) moved++;
@@ -175,16 +201,18 @@ function sound(L) {
     // one, as under SETTLE), and at rest open keeps every place and size: a valid note keeps every place it was read at
     const all = (L) => JSON.stringify([places(L), [...L.areas].map(([id, A]) => [id, places(A)])]);
     let cur = r.layout, rested = false, again = null;
-    for (let i = 0; i < 8 && !rested; i++) { again = open(reread(cur), ctx); if (!again.ok) break; rested = all(again.layout) === all(cur); cur = again.layout; }
+    let opened = 0;
+    for (let i = 0; i < 8 && !rested; i++) { again = open(reread(cur), ctx); if (!again.ok) break; rested = all(again.layout) === all(cur); cur = again.layout; opened = i + 1; }
+    if (rested) most = Math.max(most, opened - 1);
     if (!rested) { fail('open does not come to rest within 8', { again: again && again.ok ? places(again.layout) : again && again.errors, was: places(r.layout) }); continue; }
     if (diff(storedOf(reread(r.layout)), r.layout).size) { fail('diff of a layout against its own fields is not empty', { d: [...diff(storedOf(reread(r.layout)), r.layout)] }); continue; }
     if (Object.keys(temp).length) temps++;
     const es = sound(r.shown); if (es.length) { fail('shown unsound: ' + es[0]); continue; }
     if (!eq(places(unshow(r.shown, ctx)), places(r.layout)) || !eq(rows(unshow(r.shown, ctx)), rows(r.layout))) { fail('unshow does not give the canonical layout back'); continue; }
     if ([...r.shown.boxes.values()].some((b) => (b.yc ?? b.y) !== r.layout.boxes.get(b.id).y)) { fail('a shown block\'s canonical row is not the canonical layout\'s'); continue; }
-    if (!eq(places(show(r.layout, new Map(), ctxFor(n, len, {}))), places(r.layout))) { fail('shown with no temporary height is not the canonical layout'); continue; }
+    if (!eq(places(show(r.layout, new Map(), ctxFor(n, len, {}, rules))), places(r.layout))) { fail('shown with no temporary height is not the canonical layout'); continue; }
   }
-  ok(`10 ${notes} random notes (${moved} with a place repaired, ${temps} with temporary heights): open sound and at rest within 8 openings, diff of the result against its own fields empty, show sound, unshow its inverse`, bad === 0, first);
+  ok(`10 ${notes} random notes (${moved} with a place repaired, ${temps} with temporary heights): open sound and at rest within 8 openings (at most ${most} openings again before it), diff of the result against its own fields empty, show sound, unshow its inverse`, bad === 0, first);
 }
 
 process.exit(t.fails ? 1 : 0);
