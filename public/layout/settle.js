@@ -113,7 +113,7 @@ export function settle(start, change, memory, ctx, hooks = {}) {
  *  temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, and FOLLOW shows the temporary heights again on
  *  its result. So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
  *  there wherever a temporary height shows it, RELINK gets the canonical rows, and no temporary push is written into a block, the moved
- *  block's or another's (the two measures, LAYOUT-RULES §1.2; the independent review of c5efdda, step 2c's groundwork, proposed). A block
+ *  block's or another's (the two measures, LAYOUT-RULES §1.2; the independent review of c5efdda; the owner's G23, O-31 (а), 2026-11-13). A block
  *  shows again the temporary rows it had when its width and canonical rows are those of start; one the run measured anew (a block at
  *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
  *  from it. @returns {Result} */
