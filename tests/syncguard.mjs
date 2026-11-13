@@ -302,7 +302,36 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
     const wa=failLoad? await edit(H,'g0',(C,t)=>({...(C||{}), id:'g0', title:'до стирання', blocks:[{id:'b',row:1,fx:0,text:'дописано після'}], created:t, updated:t})).then(res, erc) : 'epoch';
     ok('5s'+(failLoad? '6' : '5')+' a write called before an erase of this engine and ordered after its commit'+(failLoad? ', the erase\'s adopting load failing' : '')+' is refused ('+oh.join(', ')+'): the device stays empty, nothing queued',
       oh[0]===(failLoad? 'committed:UnknownError' : 'ok') && oh[1]==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner'));
-    if(failLoad) ok('5s7 a save called after an erase whose adopting load failed ('+wa+') is refused as well: nothing of the erased note comes back', wa==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0')); } }
+    if(failLoad) ok('5s7 a save called after an erase whose adopting load failed ('+wa+') is refused as well: nothing of the erased note comes back', wa==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0')); }
+  // two changes of owner overlapping, the newest committed one decides the guard of a failed erase: a store whose next reads are planned
+  // (pass, hold until released, fail, fail with a frozen error)
+  const planned=db=>{ const plan=[]; let release=null; const real=db.tx.bind(db);
+    const w={...db, all:s=>db.all(s), get:(s,k)=>db.get(s,k), plan, release:()=>release && release(),
+      tx:(st,mode,fn)=>{ const a=mode==='readonly' && plan.length? plan.shift() : 'pass';
+        if(a==='fail') return Promise.reject(Object.assign(new Error('load failed'),{name:'UnknownError'}));
+        if(a==='freeze') return Promise.reject(Object.freeze(Object.assign(new Error('load failed'),{name:'UnknownError', code:'frozen-x'})));
+        if(a==='hold') return new Promise(r=>{ release=r; }).then(()=>real(st,mode,fn));
+        if(a==='holdfail') return new Promise(r=>{ release=r; }).then(()=>{ throw Object.assign(new Error('load failed'),{name:'UnknownError'}); });
+        return real(st,mode,fn); } }; return w; };
+  const cErr=e=>(e.committed? 'committed'+(e.erase? '+erase' : '')+':' : '')+(e.code||e.name);
+  { const dbK=new MemStore(); const K0=await mk(cloud,'S9',{db:dbK}); await edit(K0,'k0',(C,t)=>({title:'старий', blocks:[{id:'b',row:1,fx:0,text:'старий'}], created:t, updated:t})); await K0.sync.idle(300); K0.sync.stop();
+    const W=planned(dbK), K=device(cloud,'S9',{db:W}); await K.sync.checkOwner();   // loaded
+    W.plan.push('hold'); const p1=K.sync.setOwner({env:'test', uid:'s10', email:'s10@test'}).then(()=>'ok', cErr); await new Promise(r=>setTimeout(r,20));
+    W.plan.push('fail'); const p2=await K.sync.setOwner({env:'test', uid:'s11', email:'s11@test'},{erase:true}).then(()=>'ok', cErr);
+    W.release(); const r1=await p1;
+    const wk=await edit(K,'k0',(C,t)=>({...(C||{}), id:'k0', title:'старий', blocks:[{id:'b',row:1,fx:0,text:'старий, повернутий'}], created:t, updated:t})).then(res, erc);
+    ok('5s8 an older change ending after a newer erase whose load failed ('+[r1, p2].join(', ')+') leaves the guard: a save of the erased note is refused ('+wk+')', p2==='committed+erase:UnknownError' && wk==='epoch' && !dbK.get('notes','k0')); }
+  { const dbL=new MemStore(); const L0=await mk(cloud,'S12',{db:dbL}); L0.sync.stop();
+    const W=planned(dbL), L=device(cloud,'S12',{db:W}); await L.sync.checkOwner();
+    W.plan.push('holdfail'); const p1=L.sync.setOwner({env:'test', uid:'s13', email:'s13@test'},{erase:true}).then(()=>'ok', cErr); await new Promise(r=>setTimeout(r,20));
+    const p2=await L.sync.setOwner({env:'test', uid:'s14', email:'s14@test'}).then(()=>'ok', cErr);
+    W.release(); const r1=await p1;
+    const wl=await edit(L,'l1',(C,t)=>({title:'новий', blocks:[{id:'b',row:1,fx:0,text:'під s14'}], created:t, updated:t})).then(res, erc);
+    ok('5s9 an older erase whose load fails after a newer change loaded ('+[r1, p2].join(', ')+') puts no guard over it: a new save lands ('+wl+')', r1==='committed+erase:UnknownError' && p2==='ok' && wl==='ok' && !!dbL.get('notes','l1') && L.sync.owner.uid==='s14'); }
+  { const dbM=new MemStore(); const M0=await mk(cloud,'S15',{db:dbM}); M0.sync.stop();
+    const W=planned(dbM), M=device(cloud,'S15',{db:W}); await M.sync.checkOwner();
+    W.plan.push('freeze'); const pm=await M.sync.setOwner(null,{erase:true}).then(()=>'ok', cErr);
+    ok('5s10 a frozen error of the adopting load still reports the committed erase ('+pm+'), with its code', pm==='committed+erase:frozen-x'); } }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});

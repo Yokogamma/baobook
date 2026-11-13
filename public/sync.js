@@ -236,7 +236,7 @@ function makeSync(deps){
   //   load: a step running on the old owner's memory must not act in the new owner's store. One refused because the store holds the owner this
   //   engine names itself (its own change) is refused quietly: that change resets the memory and loads again, so the page must not take it for
   //   another tab's change («reload», which locks the tab or reloads it)
-  let ERASES=0;
+  let ERASES=0, COMMITS=0;   // erases, and changes of owner, this engine committed
   const same3=(eid,ow,e,o)=>eid===e && (ow? ow.uid : null)===(o? o.uid : null) && (ow? ow.env : null)===(o? o.env : null);
   function adoptOwner(eid, ow){ S.epoch=eid; S.owner=ow||null; }
   async function check(t, u0){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); const eid=ep? ep.id : null;
@@ -977,11 +977,17 @@ function makeSync(deps){
       else t.del('sync','owner');
       S.loaded=false; });
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
-    if(mine.exp.erase) ERASES++; adoptOwner(mine.exp.epoch, owner? {k:'owner', ...owner} : null);   // committed: the user's writes from here on are the new owner's (check), and one called before an erase is refused
+    const gen=++COMMITS; if(mine.exp.erase) ERASES++; adoptOwner(mine.exp.epoch, owner? {k:'owner', ...owner} : null);   // committed: the user's writes from here on are the new owner's (check), and one called before an erase is refused
     // an adopting load that fails after an erase committed: the page still shows the erased records, and a write of them would bring them back
-    // under the new owner, so the user's writes are refused until a change of owner loads (S.erasedUnloaded); the error says the change committed
-    try{ resetMemory({owner:true}); await load({adopt:mine.exp}); }catch(e){ if(mine.exp.erase) S.erasedUnloaded=true; try{ e.committed=true; }catch(_){} throw e; }
-    S.erasedUnloaded=false; if(S.started) connectCloud(); }
+    // under the new owner, so the user's writes are refused until a later change of owner loads (S.erasedUnloaded). Only the newest committed
+    // change (gen) sets or clears it: an older one ending late must not undo the guard of a newer erase, nor put one over a newer change that
+    // loaded. The error says the change committed and whether it erased (committedError)
+    try{ resetMemory({owner:true}); await load({adopt:mine.exp}); }catch(e){ if(gen===COMMITS) S.erasedUnloaded=mine.exp.erase; throw committedError(e, mine.exp.erase); }
+    if(gen===COMMITS) S.erasedUnloaded=false; if(S.started) connectCloud(); }
+  // the error of a change of owner that committed and whose adopting load failed: `committed` and `erase` on the error itself, or on a wrapper
+  // that keeps its name, code and message (an error that cannot take them, a frozen one) with the original as `cause`
+  function committedError(e, erase){ try{ e.committed=true; e.erase=erase; if(e.committed===true && e.erase===erase) return e; }catch(_){}
+    const w=new Error(e && e.message || String(e)); w.name=(e && e.name) || 'Error'; if(e && e.code!==undefined) w.code=e.code; w.cause=e; w.committed=true; w.erase=erase; return w; }
   // «Створити копію нотатки» (§4.18): the note the rules refuse for its receipts stays here as it is; its job goes, so the copy syncs in its place
   async function unqueue(id){ const u0=ERASES; if(!S.loaded) await load(); return utx(u0, ['sync'], async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err!=='receipts') return {ok:false, code:'receipts'}; delete meta.err; putMeta(t,meta,after); dropJob(t,id,after); dropRefetch(t,id,after); return {ok:true}; }); }
   function connectCloud(){ if(!S.cloud || !S.owner) return; S.readOk=false; S.unverified=false; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); listenVersions(); }
