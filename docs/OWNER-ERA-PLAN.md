@@ -162,6 +162,14 @@ Each stage is a PR into `main`. New code is ES modules in `public/owner/`; `inde
 
 Each PR into `main` is deployed to `.dev`, so «released together» is not enough: no state of `main` may write the new contract or loosen an old check without the page and the barrier. Stage 2 therefore adds code that nothing in the app switches on, and stage 3 switches everything on in one PR: the era from the page, `era` in the store, the raw reads and writes, the messages, and `FORMAT` and `IDB_VER` 5. If the dormant form of stage 2 turns out to cost more than it saves, stages 2 and 3 become one PR; they are never two active halves.
 
+### 7.1 How the model reaches the core (stage 2; the owner's decision of 2026-11-13)
+
+1. The model reaches the core through `deps.ownerModel`: the exports of `public/owner/model.js`, handed to `makeSync` by whoever makes the engine. `public/sync.js` stays a classic script and imports nothing.
+2. Without `deps.era` the engine behaves exactly as on `main` today: the same checks, the same waits, the same records. This is the dormant stage 2, and every existing test passes over it unchanged.
+3. With `deps.era` the model is required. A missing `deps.ownerModel` (or one without a function the core calls) is an error thrown by `makeSync`, never a fall back to the old checks.
+4. The model is loaded before the engine is made. Nothing on the write path imports dynamically or waits for a load.
+5. `deps.era` is the era of the screen (§3.2). The engine never refreshes it from the store: not at a load, not after its own change of owner. A new screen is a new engine made with the era that screen was read over.
+
 ## 8. Tests
 
 ### 8.1 Node
