@@ -249,6 +249,34 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
     hold(); await rl; db.tx=tx0; await K.sync.setOwner({env:'test', uid:'w7', email:'w7@test'}); const own=K.sync._own();
     ok('5r6 a read beside a load whose adapter throws at once ('+threw+'): after the load and a change of owner nothing is left open '+JSON.stringify(own), threw==='sync throw' && own.open===0 && own.len===0 && own.loads===0); } }
 
+/* ── 5s. the user's writes ordered after this engine's own setOwner commit (the fourth owner-change race of #143): they take the owner being
+   written and land under it; with an erase they are refused, and the engine's own steps stay strict ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000});
+  const A=await mk(cloud,'S1',{db:new MemStore()}); await edit(A,'d1',(C,t)=>({title:'для видалення', blocks:[], created:t, updated:t, deleted:t}));
+  A.status.length=0;
+  const bind=A.sync.setOwner({env:'test', uid:'s2', email:'s2@test'}).then(()=>'ok', e=>e.code||e.name);   // its transaction is queued first
+  const w=edit(A,'s1',(C,t)=>({title:'під час зміни', blocks:[{id:'b',row:1,fx:0,text:'збережено'}], created:t, updated:t})).then(r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const im=A.sync.importNote({id:'s3', title:'імпорт', blocks:[], created:1, updated:1}).then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const pg=A.sync.purgeLocal('d1').then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const out=[await bind, await w, await im, await pg];
+  ok('5s the user\'s writes ordered right after this engine\'s own setOwner (bind, save, import, delete forever: '+out.join(', ')+') land under the new owner: no «reload» ('+A.status.filter(c=>c==='reload').length+'), the engine names '+A.sync.owner.uid,
+    out.every(c=>c==='ok') && !A.status.includes('reload') && A.sync.owner.uid==='s2' && !!A.db.get('notes','s1') && !!A.db.get('notes','s3') && !A.db.get('notes','d1') && await A.sync.checkOwner()===true);
+  ok('5s1 the saved note is queued for the new owner', !!A.db.get('sync','out:n:s1'));
+  // an erase (sign-out with «Прибрати нотатки», another account's data removed): a save ordered after it is refused, as before
+  const E=await mk(cloud,'S2',{db:new MemStore()}); E.status.length=0;
+  const er=E.sync.setOwner(null,{erase:true}).then(()=>'ok', e=>e.code||e.name);
+  const we=edit(E,'e1',(C,t)=>({title:'після стирання', blocks:[], created:t, updated:t})).then(r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const oe=[await er, await we];
+  ok('5s2 after an erase a save ordered behind it is still refused ('+oe.join(', ')+'), nothing of it stored', oe[0]==='ok' && oe[1]==='epoch' && !E.db.get('notes','e1'));
+  // an engine step (here tombstoneAuto, strict) ordered after this engine's own setOwner is refused, but quietly: the store holds the owner this
+  // engine is changing to, so it is no other tab's change and the page must not be told «reload» (it would lock the tab or reload it)
+  const Q=await mk(cloud,'S3',{db:new MemStore()}); await edit(Q,'q1',(C,t)=>({title:'кошик', blocks:[], created:t, updated:t, deleted:t})); Q.status.length=0;
+  const bq=Q.sync.setOwner({env:'test', uid:'s4', email:'s4@test'}).then(()=>'ok', e=>e.code||e.name);
+  const tq=Q.sync.tombstoneAuto('q1').then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const oq=[await bq, await tq];
+  ok('5s3 an engine step ordered right after this engine\'s own setOwner is refused quietly ('+oq.join(', ')+', «reload» '+Q.status.filter(c=>c==='reload').length+'), the engine names '+Q.sync.owner.uid,
+    oq[0]==='ok' && oq[1]==='epoch' && !Q.status.includes('reload') && Q.sync.owner.uid==='s4' && await Q.sync.checkOwner()===true); }
+
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
   for(let i=0;i<3;i++){ cloud.advance(1000); cloud.write('notes',{id:'o'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'o'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }
