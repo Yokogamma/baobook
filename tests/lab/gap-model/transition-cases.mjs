@@ -382,7 +382,7 @@ export function transitionCases(make = createModel) {
   // swap's keep another memory than one RELINK of the whole carry. X shrunk over N (N held at 6 by its column 3, slack in column 2),
   // carried down onto N and held (N pushed to 8), then swapped (N 7, X 9): the same rows either way, but split, N's stack in column 2 is
   // the row the swap put it at; whole, the slack from before the carry; X deleted and N narrowed to column 2, N stays at 7 or goes up to 3.
-  // No law makes the two equal; SETTLE splits (the owner's question O-29)
+  // No law makes the two equal; SETTLE splits (G20, the owner, 2026-11-13: O-29 (а))
   { const res = [];
     for (const whole of [false, true]) {
       const m = make().open([blk('X', 1, 2, 0, 4), blk('N', 2, 3, 6, 2)]); m.height('X', 1);

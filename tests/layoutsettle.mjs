@@ -321,8 +321,8 @@ const ctx = ctxOf();
   ok('22e carried up on its first move: dir up, nothing pressed above, nothing held', f1.ok && f1.memory.dir === 'up' && !f1.memory.through && f1.pressed === null, f1.ok ? [f1.memory.dir, f1.memory.through, f1.pressed] : f1);
 }
 
-/* ── 23. the swap relinked against the result the pointer saw (LAYOUT-RULES §5.1b; the independent review of 07d2a7f, the owner's question
-   O-29): the hold ends one stretch of GAP and the swap starts the next, so the memory of gaps is the one the swap showed, not one RELINK of
+/* ── 23. the swap relinked against the result the pointer saw (LAYOUT-RULES §5.1b; the independent review of 07d2a7f; G20, the owner,
+   2026-11-13, O-29 (а)): the hold ends one stretch of GAP and the swap starts the next, so the memory of gaps is the one the swap showed, not one RELINK of
    the whole carry's (tests/lab/gap-model transition-cases, «O-29», runs both on the model and the engine) ── */
 {
   // X (columns 1–2) shrunk over N (columns 2–3): N stays at 6, held by its column 3, slack in column 2; X carried down onto N and held
