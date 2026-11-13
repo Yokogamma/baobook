@@ -19,6 +19,7 @@ const textLeft=sel=>pg.evaluate(sel=>{ const t=document.querySelector(sel); cons
 
 await pg.goto(SITE); await pg.waitForTimeout(300); await pg.evaluate(()=>new Promise(r=>{ localStorage.clear(); const q=indexedDB.deleteDatabase('sheet'); q.onsuccess=q.onerror=q.onblocked=()=>r(); })); await pg.reload(); await pg.waitForTimeout(600);
 
+ok('0 in another theme the page does not ask for the theme\'s fonts', await pg.evaluate(()=>!document.getElementById('plexCss')));
 // 1 the cycle: light → dark → sand → «Клітинка» → light, the button names the next theme
 { const seen=[]; let title='';
   for(let i=0;i<4;i++){ await pg.locator('#themeBtn').click(); await pg.waitForTimeout(80); seen.push(await pg.evaluate(()=>document.documentElement.dataset.theme)); if(seen[i]==='sand') title=await pg.locator('#themeBtn').getAttribute('title'); }
@@ -27,7 +28,7 @@ await pg.goto(SITE); await pg.waitForTimeout(300); await pg.evaluate(()=>new Pro
   ok('1b the button in «Клітинка» shows its grid icon and names it', await pg.locator('#themeBtn').getAttribute('data-th')==='grid' && await pg.locator('#themeBtn .th-grid').isVisible() && /Тема: Клітинка/.test(await pg.locator('#themeBtn').getAttribute('title'))); }
 await pg.reload(); await pg.waitForTimeout(700);
 ok('2 «Клітинка» is saved and comes back after a reload', await pg.evaluate(()=>document.documentElement.dataset.theme==='grid' && JSON.parse(localStorage.getItem('sheet:settings')).theme==='grid'));
-ok('2b its fonts are a link of their own: the Inter link keeps its cached URL; the sheet asks for IBM Plex', await pg.evaluate(()=>{ const l=[...document.querySelectorAll('link[rel=stylesheet]')].map(x=>x.href); return l.some(h=>/family=Inter:wght@400;500;600&family=JetBrains\+Mono:wght@400;500&display=swap$/.test(h)) && l.some(h=>/IBM\+Plex\+Sans/.test(h) && !/Inter/.test(h)); })
+ok('2b its fonts come by a link of their own, added with the theme: the Inter link keeps its cached URL; the sheet asks for IBM Plex', await pg.evaluate(()=>{ const l=[...document.querySelectorAll('link[rel=stylesheet]')].map(x=>x.href); return l.some(h=>/family=Inter:wght@400;500;600&family=JetBrains\+Mono:wght@400;500&display=swap$/.test(h)) && /IBM\+Plex\+Sans/.test(document.getElementById('plexCss')?.href||'') && !/Inter/.test(document.getElementById('plexCss').href); })
   && /IBM Plex Sans/.test(await pg.evaluate(()=>getComputedStyle(document.body).fontFamily)));
 
 // 3 the lines and the numbers on the sheet's own grid
@@ -53,13 +54,16 @@ await pg.mouse.click(G.x+G.w-40, G.y+800); await pg.waitForTimeout(300);
   ok('4c the text stands a third of a cell right of the line', near(one.tx, line+G.g/3, 1.5));
   const long=cards.find(c=>c.text.startsWith('Заміряти')), bud=cards.find(c=>c.text==='Бюджет');
   ok('4d a text that wraps at its neighbour: its card ends before the neighbour\'s card begins', long && bud && long.h>G.g && long.left+long.w<bud.left);
-  const empty=cards.find(c=>c.text==='');
-  ok('4e an empty block shows no card', !empty || empty.display==='none'); }
+}
+await at(2,8); await pg.keyboard.type('x'); await pg.keyboard.press('Backspace'); await pg.waitForTimeout(250);
+{ const e=await pg.evaluate(()=>{ const b=document.activeElement.closest('.blk'), c=getComputedStyle(b.querySelector('.tcard'),'::before'); return {html:b.querySelector('.txt').innerHTML, shown:c.content!=='none' && c.display!=='none'}; });
+  ok('4e a block typed in and emptied again ('+JSON.stringify(e.html)+') shows no card', !e.shown); }
+await pg.keyboard.press('Escape'); await pg.mouse.click(G.x+G.w-40, G.y+800); await pg.waitForTimeout(250);
 
 // 5 a code card and an area on whole cells
 await at(2,9); await paste('const area = w * h;\nconst foam = 2;\nreturn area;'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); await pg.mouse.click(G.x+G.w-40, G.y+800); await pg.waitForTimeout(300);
-{ const c=await pg.evaluate(()=>{ const e=document.querySelector('#sheet .blk.is-code>.cblk'), b=e.getBoundingClientRect(); return {l:b.left, t:b.top, w:b.width, h:b.height, r:getComputedStyle(e).borderTopLeftRadius}; }), I=Math.max(1, G.g*.05);
-  ok('5 a code card starts on its line, fills whole rows and ends on a line', near(c.l, G.x+G.g/2+2*G.g+I, 1) && whole((c.h+2*I)/G.g, .03) && whole((c.w+2*I)/G.g, .03) && near(parseFloat(c.r), G.g*.18, .5)); }
+{ const c=await before('#sheet .blk.is-code>.cblk'), I=Math.max(1, G.g*.05), box=await pg.evaluate(()=>{ const b=document.querySelector('#sheet .blk.is-code'); return {h:b.querySelector('.cblk').offsetHeight, rows:+getComputedStyle(b).getPropertyValue('--rows')}; });
+  ok('5 a code card starts on its line, fills the rows the block takes and ends on a line', near(c.left, G.x+G.g/2+2*G.g+I, 1) && near(c.h+2*I, box.rows*G.g, 1) && box.rows===Math.ceil((box.h-2)/G.g) && whole((c.w+2*I)/G.g, .03) && near(parseFloat(c.radius), G.g*.18, .5)); }
 await pg.locator('#areaBtn').click(); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); await pg.mouse.click(G.x+G.w-40, G.y+800); await pg.waitForTimeout(300);
 { const a=await before('#sheet .blk.is-area>.ablk'), I=Math.max(1, G.g*.05), col=(a.left-I-G.x-G.g/2)/G.g, row=(a.top-I-G.y-G.g/2)/G.g;
   ok('5b an area draws its card on whole cells (column '+col.toFixed(2)+', row '+row.toFixed(2)+')', a.display!=='none' && whole(col, .05) && whole(row, .05) && whole((a.w+2*I)/G.g, .03) && whole((a.h+2*I)/G.g, .03)); }
@@ -91,6 +95,25 @@ await pg.setViewportSize({width:390,height:844}); await pg.reload(); await pg.wa
 G=await geo();
 { const f=await before('#sheet'), R=await rulers(), pad=16, cells=Math.floor((G.w-pad-1.5*G.g)/G.g);
   ok('9 on a phone the frame has '+cells+' cells, to the last line before the sheet\'s padding, numbered from its first line', near(f.w-1, cells*G.g) && f.left+f.w<=G.x+G.w-pad+1 && R.shown && near(R.cols[0].l, G.x+1.5*G.g+0.15*G.g, 3) && near(R.rows[0].cy, G.y+2.5*G.g+G.g/2, 2));
+  const over=await pg.evaluate(()=>({sw:document.documentElement.scrollWidth, iw:innerWidth, right:Math.max(...[...document.querySelectorAll('#sheet .tcard,#sheet .blk.is-code>.cblk,#sheet .blk.is-area>.ablk')].map(e=>{ const c=getComputedStyle(e,'::before'); return c.content==='none'? 0 : e.getBoundingClientRect().left+parseFloat(c.left)+parseFloat(c.width); }))}));
+  ok('9b a text wrapping at the sheet\'s edge keeps every card inside the frame, and the page does not scroll sideways ('+over.sw+'/'+over.iw+')', over.sw<=over.iw && over.right<=f.left+f.w+.5);
   await pg.screenshot({path:OUT+'/app-gridtheme-phone.png'}); }
+
+// 10 blocks laid out in another theme keep their rows in «Клітинка»: a code card of 3 lines and the text under it, switched there and back
+{ const p2=await ctx.newPage(); p2.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await p2.setViewportSize({width:1280,height:900});
+  await p2.evaluate?.(()=>{}); await p2.goto(SITE); await p2.waitForTimeout(500);
+  await p2.evaluate(()=>{ const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); s.theme='light'; localStorage.setItem('sheet:settings', JSON.stringify(s)); }); await p2.reload(); await p2.waitForTimeout(700);
+  await p2.locator('#newBtn').click(); await p2.waitForTimeout(300);
+  const s2=await p2.locator('#sheet').boundingBox(), g=24, at2=async(c,r)=>{ await p2.mouse.click(s2.x+g/2+c*g+4, s2.y+g/2+r*g+8); await p2.waitForTimeout(150); };
+  await at2(2,3); await p2.evaluate(text=>{ const dt=new DataTransfer(); dt.setData('text/plain',text); document.activeElement.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true})); }, 'let a = 1;\nlet b = 2;\nlet c = a + b;'); await p2.waitForTimeout(400); await p2.keyboard.press('Escape');
+  await p2.mouse.click(s2.x+900, s2.y+800); await p2.waitForTimeout(200);
+  const rows0=await p2.evaluate(()=>+getComputedStyle(document.querySelector('#sheet .blk.is-code')).getPropertyValue('--rows'));
+  await at2(2,3+rows0); await p2.keyboard.type('під кодом'); await p2.keyboard.press('Escape'); await p2.mouse.click(s2.x+900, s2.y+800); await p2.waitForTimeout(300);
+  const top=()=>p2.evaluate(()=>[...document.querySelectorAll('#sheet .tcard .txt')].find(t=>t.textContent==='під кодом').closest('.blk').offsetTop);
+  const t0=await top(); for(let i=0;i<3;i++){ await p2.locator('#themeBtn').click(); await p2.waitForTimeout(250); }
+  const th=await p2.evaluate(()=>document.documentElement.dataset.theme), t1=await top(), rows1=await p2.evaluate(()=>+getComputedStyle(document.querySelector('#sheet .blk.is-code')).getPropertyValue('--rows'));
+  await p2.locator('#themeBtn').click(); await p2.waitForTimeout(300); const t2=await top();
+  ok('10 a code block of '+rows0+' rows keeps them in «Клітинка», and the text right under it does not move ('+[t0,t1,t2].join(', ')+')', th==='grid' && rows1===rows0 && t1===t0 && t2===t0);
+  await p2.close(); }
 
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); await br.close(); process.exit(fails||errs.length?1:0);

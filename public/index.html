@@ -15,8 +15,6 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-maskable-512.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
-<!-- the «Клітинка» theme's fonts (docs/GRID-THEME-PLAN.md §7): a link of their own, so the cached URL of the one above stays and an offline start keeps it -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
 <style>
 /* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
    бо на темному тлі тонка крапка з прозорістю «лінії» майже зникає ─────────────── */
@@ -89,7 +87,7 @@ html{font-size:calc(100% * var(--k,1))}
   --dot:#dfe3ec;
   --code-bg:#eef0f5; --code-line:#dfe3ec; --accent:#3b5bdb;
   --pin-bg:#f6f7fa;
-  --grid-line:#dfe3ec; --blk-bg:#ffffff;   /* the cell lines; the standard text card: white with no border, so it covers the lines under the text (the owner's choice of 2026-11-14) */
+  --grid-line:#dfe3ec; --blk-bg:#ffffff; --blk-hover:#f3f5f9;   /* the cell lines; the standard text card: white with no border, so it covers the lines under the text (the owner's choice of 2026-11-14) */
   --gp-in:calc(var(--g) / 3); --gp-i:max(1px, calc(var(--g) * .05)); --gp-r:calc(var(--g) * .18);   /* the text's inset in its card, the card's inset from the lines, its corners */
   --sans:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   --mono:"IBM Plex Mono","JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -269,22 +267,26 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .gp-rulers span{position:absolute;white-space:nowrap}
 .gp-rulers .gp-c{transform:translate(calc(var(--g) * .15), calc(-100% - var(--g) * .2))}   /* a column's number: over its cell, from its left line */
 .gp-rulers .gp-r{transform:translate(calc(-100% - var(--g) * .26), -50%)}   /* a row's number: left of the frame, in the middle of the row */
-/* a text block: a card over whole cells, from the line its text starts on to the first line after the text, inset from the lines; the text a third of a cell in.
-   The card is wider than the text box only up to the next line, and a block's text never reaches past its neighbour's handle, so two cards never meet */
-:root[data-theme="grid"] .tcard{isolation:isolate}
-:root[data-theme="grid"] .tcard>.txt{padding:0 var(--gp-in) 0 calc(6px + var(--gp-in))}
-:root[data-theme="grid"] .tcard::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);bottom:var(--gp-i);width:calc(100% - 6px - 2 * var(--gp-i));background:var(--blk-bg);border-radius:var(--gp-r);pointer-events:none}
-@supports (width:round(up, 10px, 3px)){ :root[data-theme="grid"] .tcard::before{width:calc(round(up, 100% - 6px, var(--g)) - 2 * var(--gp-i))} }   /* Newly available: without it the card ends with the text */
-:root[data-theme="grid"] .tcard:has(>.txt:empty)::before{display:none}   /* an empty block, «Пишіть…», shows no card */
-:root[data-theme="grid"] .cblk,:root[data-theme="grid"] .blk.is-area .ablk{border-radius:var(--gp-r)}
-/* a code card on whole cells too: from the line its code starts on, inset as a text card, its height the rows it takes, its width to the last line it can reach */
-:root[data-theme="grid"] .blk.is-code>.cblk{margin:var(--gp-i) 0 0 calc(6px + var(--gp-i));min-height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));border-color:transparent;
-  width:calc(100% - var(--handle) - 8px - 2 * var(--gp-i));max-width:calc(100% - var(--handle) - 8px - 2 * var(--gp-i))}
-@supports (width:round(down, 10px, 3px)){ :root[data-theme="grid"] .blk.is-code>.cblk{width:calc(round(down, 100% - var(--handle) - 8px, var(--g)) - 2 * var(--gp-i));max-width:none} }
-/* an area keeps its box (its inner grid is the sheet's, LAYOUT-RULES AREA) and draws its card on whole cells under it, as a text card */
-:root[data-theme="grid"] .blk.is-area>.ablk{background:transparent;border-color:transparent;isolation:isolate}
-:root[data-theme="grid"] .blk.is-area>.ablk::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));width:calc(100% - 6px - 2 * var(--gp-i));background:var(--area-bg,var(--code-bg));border-radius:var(--gp-r);pointer-events:none}
-@supports (width:round(up, 10px, 3px)){ :root[data-theme="grid"] .blk.is-area>.ablk::before{width:calc(round(up, 100% - 6px, var(--g)) - 2 * var(--gp-i))} }
+/* the cards of «Клітинка»: each a ::before over whole cells, inset --gp-i from the lines, from the line its content starts on (xOf: 6px into the box)
+   to the first line after the box, but never past the last line the container lets the block reach (--cmax cells, set by render()): a text
+   wraps there, so neither a card nor its text can pass the sheet's edge or meet a neighbour's card. CSS round() is Newly available: without it
+   a card ends with its box */
+:root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{isolation:isolate;border-radius:var(--gp-r)}
+:root[data-theme="grid"] .tcard{max-width:min(100%, calc(var(--cmax,999) * var(--g) + 6px))}
+:root[data-theme="grid"] .tcard>.txt{padding:0 var(--gp-in) 0 calc(6px + var(--gp-in));background:transparent !important;outline:0 !important;box-shadow:none !important}   /* the text a third of a cell in; its hover, hold and selection show on the card */
+:root[data-theme="grid"] .tcard::before,:root[data-theme="grid"] .blk.is-code>.cblk::before,:root[data-theme="grid"] .blk.is-area>.ablk::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);
+  width:calc(min(100% - 6px, var(--cmax,999) * var(--g)) - 2 * var(--gp-i));border-radius:var(--gp-r);pointer-events:none}
+@supports (width:round(up, 10px, 3px)){ :root[data-theme="grid"] .tcard::before,:root[data-theme="grid"] .blk.is-code>.cblk::before,:root[data-theme="grid"] .blk.is-area>.ablk::before{width:calc(min(round(up, 100% - 6px, var(--g)), var(--cmax,999) * var(--g)) - 2 * var(--gp-i))} }
+:root[data-theme="grid"] .tcard::before{bottom:var(--gp-i);background:var(--blk-bg)}
+:root[data-theme="grid"] .blk.blank>.tcard::before{display:none}   /* an empty block, «Пишіть…», shows no card */
+:root[data-theme="grid"] .blk:hover>.tcard::before,:root[data-theme="grid"] .blk.held>.tcard::before,:root[data-theme="grid"] .tcard.resizing::before{background:var(--blk-hover)}
+:root[data-theme="grid"] .blk.focus>.tcard::before{background:var(--blk-bg)}
+:root[data-theme="grid"] .blk.sel>.tcard::before{box-shadow:0 0 0 2px var(--sel-line)}
+:root[data-theme="grid"] .blk.drag>.tcard::before{box-shadow:var(--shadow)}
+/* a code card and an area keep their boxes (an area's inner grid is the sheet's) and draw their cards under them, as tall as the rows they take (--rows) */
+:root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{background:transparent;border-color:transparent}
+:root[data-theme="grid"] .blk.is-code>.cblk::before{height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));background:var(--code-bg)}
+:root[data-theme="grid"] .blk.is-area>.ablk::before{height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));background:var(--area-bg,var(--code-bg))}
 /* стрічка (вузький екран): блоки однією колонкою в порядку читання, ручок розміру немає; огляд — полотно як на компʼютері, зменшене */
 .sheet.overview{width:1024px !important;max-width:none;pointer-events:none}
 .narrow-only{display:none} .app.narrow .narrow-only{display:inline-flex}
@@ -2504,11 +2506,12 @@ function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));
   if(b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
   if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
-  else if(b.kind==='code'){ const m=parseFloat(getComputedStyle(b.card).marginTop)||0;   // картка: шапка + рядки + відступ, цілими рядами
-    b.lines=Math.max(1, m? Math.ceil((b.card.offsetHeight+2*m-1)/G()) : Math.ceil((b.card.offsetHeight-2)/G())); }   // «Клітинка» insets the card from the lines (m): its rows hold the card and both insets
+  else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
   else if(b.kind==='area') areaMeasure(b);
   else { if(!b.resizing) b.txt.style.minHeight=b.ch? (b.ch*G())+'px' : ''; b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }   // текст: ch — мінімальна висота в рядах
-  b.el.style.setProperty('--rows', b.lines); }   // the rows the block takes: «Клітинка» fits a code card to them
+  /* «Клітинка» draws a card over the rows the block takes (--rows) and the cells up to the last line its container lets it reach (--cmax); an empty text has none */
+  b.el.style.setProperty('--rows', b.lines); b.el.style.setProperty('--cmax', Math.max(1, Math.floor((cW(ctn(b))-cPadR(ctn(b))-r.x0+.5)/G())));
+  if(b.txt && !b.kind) b.el.classList.toggle('blank', !b.txt.textContent.trim()); }
 /* область: ширина внутрішньої сітки — з DOM; висота — шапка + вміст (+ мінімум із ручки), рівно в рядах */
 function areaMeasure(b){ b.innerW=b.abody.clientWidth || (b.w-CL()-1); const g=G(), barH=b.card.querySelector('.cbar').offsetHeight;
   b.at=(g-(barH+1)%g)%g;                                       // верхній відступ: рядки дітей — на рядах сітки аркуша
@@ -3294,9 +3297,15 @@ themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme(
 /* «Клітинка» sets other fonts and a text inset, so a change into it or out of it re-measures the blocks, as a text size change does; its fonts,
    loaded only when used, re-measure once more when they arrive (offline before their first use the theme shows Inter: GRID-THEME-PLAN §7) */
 let laidGrid=null;
+const PLEX_CSS='https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap';
+let fontT=0;
 function themeLaid(){ const g=curTheme()==='grid'; if(g===laidGrid) return; const first=laidGrid!==null; laidGrid=g;
   if(first){ applyMode(); field(); }
-  if(g && document.fonts && document.fonts.load) Promise.all(['600 16px "IBM Plex Sans"','16px "IBM Plex Sans"','16px "IBM Plex Mono"'].map(f=>document.fonts.load(f))).then(()=>{ if(curTheme()==='grid'){ applyMode(); field(); } }, ()=>{}); }
+  if(!g || document.getElementById('plexCss')) return;
+  /* the theme's fonts come by a stylesheet of their own, added only when the theme is used: the other themes never wait for it, and the cached
+     URL of the Inter link stays. Every face that arrives (a Cyrillic subset loads only when text needs it) re-measures the blocks once */
+  const l=document.createElement('link'); l.id='plexCss'; l.rel='stylesheet'; l.href=PLEX_CSS; document.head.append(l);
+  if(document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone',()=>{ clearTimeout(fontT); fontT=setTimeout(()=>{ if(curTheme()==='grid'){ applyMode(); field(); } }, 120); }); }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
