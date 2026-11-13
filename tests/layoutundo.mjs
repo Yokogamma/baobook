@@ -11,7 +11,8 @@
 //   3–3c   the two measures (the independent review of c5efdda): its cell is canonical, RELINK gets its canonical row and FOLLOW shows it
 //          under the temporary heights there, over its cell (3), over one of its two columns (3a), on a block P-UP lifts (3b), on a block
 //          at the cell shown lower (3c, both found by the generator): SETTLE runs an undo on the canonical layout (settle.js `inverse`);
-//   4      G21 holds only a block that still stands under it in a column it keeps: one pressed out of it comes in by itself.
+//   4      G21 holds only a block that still stands under it in a column it keeps: one pressed out of it comes in by itself;
+//   5      the canonical measure an adapter of its own, so a frozen measure or a class serves (the independent review of f7900b2).
 import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check, resize, follow } from '../public/layout/gap.js';
 import { resolve, DEFAULT } from '../public/layout/rules.js';
@@ -75,6 +76,25 @@ const carry = (id, col, y, w, o = {}) => ({ type: 'carry', box: null, id, at: { 
   // folded, at 2
   const C1 = follow(resize(sheet(12, [set('K', 1, 0, 2, 1), set('X', 2, 0, 3, 1), set('B', 1, 1, 4, 1)]), 'K', 3, 2)), c = undo(C1, 'X', 2, 1, 3), cf = c.ok && fold(c.layout);
   ok('3c a block at the cell canonically, shown lower by a temporary height elsewhere: sunk under X, B canonically at 2, shown at 4; folded, at 2; sound', !!cf && eq(rows(c.layout), { K: 0, X: 1, B: 4 }) && c.layout.boxes.get('B').yc === 2 && eq(rows(cf), { K: 0, X: 1, B: 2 }) && !check(c.layout).length, c.ok ? [rows(c.layout), c.layout.boxes.get('B').yc] : c);
+}
+
+/* ── 5. the canonical measure (the independent review of f7900b2): `inverse` adapts the measure by delegating its two answers, so a frozen
+   measure, or one built as a class with its answers on the prototype, serves as it is; the undo of a block with nothing in its way is
+   taken, and the temporary rows a text shows by its measure are shown again ── */
+{
+  class Measure {
+    constructor(m) { this.m = m; }
+    rows(id, cells) { return this.m.rows(id, cells); }
+    natural(id) { return this.m.natural(id); }
+  }
+  const base = ctxOf({ X: { text: chars(4) }, T: { text: chars(4), temp: 2 } });
+  for (const [name, measure] of [['frozen', Object.freeze({ ...base.measure })], ['a class', new Measure(base.measure)]]) {
+    const ctx = { ...base, measure };
+    const L = sheet(12, [text('T', 6, 0, 3, 1), text('X', 0, 3, 3, 1)]);
+    const T1 = settle(L, { type: 'size', box: null, id: 'T' }, emptyMemory(), ctx);
+    const u = T1.ok && settle(T1.layout, carry('X', 0, 0, 3, { canonical: true }), emptyMemory(), ctx);
+    ok(`5 ${name} measure: the undo taken, X at its cell 0, T showing its temporary rows again; sound`, !!u && u.ok && u.layout.boxes.get('X').y === 0 && u.layout.boxes.get('T').t === 2 && !check(u.layout).length, u && (u.ok ? cells(u.layout) : u));
+  }
 }
 
 /* ── 4. G21 holds only a block that still stands under it in a column it keeps (the independent review of c5efdda): X back from columns

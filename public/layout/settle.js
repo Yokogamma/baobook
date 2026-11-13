@@ -118,7 +118,9 @@ export function settle(start, change, memory, ctx, hooks = {}) {
  *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
  *  from it. @returns {Result} */
 function inverse(start, change, memory, ctx, hooks) {
-  const m = ctx.measure, canonical = Object.assign(Object.create(m), { rows: (id, cells) => { const r = m.rows(id, cells); return { ...r, shown: r.rows }; } });
+  // the canonical measure: an adapter of its own over the two answers of `Measure`, each called on `m` itself, so that a frozen measure or
+  // one built as a class serves as it is (the independent review of f7900b2)
+  const m = ctx.measure, canonical = Object.freeze({ rows: (id, cells) => { const r = m.rows(id, cells); return { ...r, shown: r.rows }; }, natural: (id) => m.natural(id) });
   let folded = start;
   for (const b of start.boxes.values()) if (b.t > 0) folded = resize(folded, b.id, b.h - b.t, 0);
   if (folded !== start) folded = follow(folded);
