@@ -1,6 +1,6 @@
 # A change of owner: the era of the data and the owner of the transaction
 
-**Status: proposed on 2026-11-13; the contract (§3–§6) was agreed with the owner in three review passes of the architecture review of #146, and merged by #151. A preflight over main at 2ee9dfc the same day found three high and two medium gaps in paths the plan did not name (§11); they are written in below. Stage 1 (the model, `public/owner/model.js` with `tests/ownermodel.mjs`; nothing in the app imports it) is built; stages 2 and 3 follow this text, and nothing of them is implemented or tested yet.** The contract being agreed does not prove the implementation: the order of transactions, urgent saves and the behaviour of old tabs must be shown by the Node and browser scenarios of §8.
+**Status: proposed on 2026-11-13; the contract (§3–§6) was agreed with the owner in three review passes of the architecture review of #146, and merged by #151. A preflight over main at 2ee9dfc the same day found three high and two medium gaps in paths the plan did not name (§11); they are written in below. Stage 1 (the model, `public/owner/model.js` with `tests/ownermodel.mjs`; nothing in the app imports it) is built. Stage 2 (§3.3, §3.4, §3.6, §3.7 in `public/sync.js`, used only by an engine made with `deps.era`; `tests/syncera.mjs`, `tests/syncerasim.mjs`) is built and dormant: nothing in the app makes such an engine, and §7.2 says what it holds and what it proposes to change in this text. Stage 3 follows this text, and nothing of it is implemented or tested yet.** The contract being agreed does not prove the implementation: the order of transactions, urgent saves and the behaviour of old tabs must be shown by the Node and browser scenarios of §8.
 
 This plan replaces the approach of #146 (`fix-owner-save-race`). It keeps that PR's goal: a save made while this tab changes the owner must land, under the new owner, without locking the tab.
 
@@ -67,6 +67,8 @@ A Node probe on c6f1003 showed that the engine's API accepts a `writeLocal` of a
    - Inside the transaction the core compares it with what the owner it read makes of the action. Where the owner makes it reach further than confirmed (`here` confirmed, an owner in the store), nothing is deleted and the refusal has a code of its own (`reach`).
    - The page then asks again with the text of the new reach; only that confirmation deletes.
    - The same reach, or a narrower one, goes on.
+   - An operation that names no reach is taken as `here`, the narrowest: a caller that forgot to say what the user confirmed never widens a deletion.
+   - The reach is judged by the owner alone (`here` without one, `all` with one), not by what this deletion would do: «Видалити назавжди» of a note that never reached the cloud is still refused when it was confirmed as `here` and the store has an owner. The page then asks with the text of a device that has an owner, which is the text it would have shown had it known.
 
 ### 3.4 The engine's steps
 
@@ -92,6 +94,12 @@ The second path is idempotent. The «owner» message, a `resume` check and a ref
 Today `setOwner` writes `{...defMeta, lrev:1}` for every note, and `editorDelta` returns the editor's note without `merge3` when `E.lrev===meta.lrev`. With saves accepted in this window the numbers can collide: the screen remembers `lrev` 2, the change resets it to 1, another tab saves and gets 2, and this tab overwrites that edit.
 
 The rule: a change that keeps the records writes `lrev` = the previous `lrev` + 1 with `baseLrev` 0. The meaning «a local change ahead of no base» stays. The `LREV` map between tabs (the «Є зміни» strip, `takeNote`) compares the same numbers, so one rule covers both places. To check with it: the metas of versions (`meta:v:`), `restoreCopy` and `undoRestore`, repeated saves.
+
+Checked in stage 2, with two corrections of the rule (**proposed**, built that way in the mode of `deps.era`):
+
+- **An empty note.** `setOwner` does not write a meta for every note: an empty one (no title, no blocks) gets no job and no meta, so its `lrev` falls to 0 and the same collision is open for it. The rule above cannot be used as it is: `lrev` ahead of `baseLrev` means a local change, and an empty note with one would be merged with a document of its id (`merge0`, with conflict copies) where today the document replaces it. So an empty note that had a meta keeps its number too, with nothing ahead: `lrev` = the previous `lrev` + 1 and `baseLrev` = `lrev`. It still gets no job, and a document of its id still replaces it.
+- **The metas of versions start anew**, as today (`lrev` 1 through `queueV`). No screen remembers a version's `lrev` (the page's `LREV` map is of notes), and `lrev` over 1 is how receiving reads «renamed here»: kept across the change, every named version would look renamed and its name would win over the cloud's.
+- `restoreCopy`, `undoRestore` and repeated saves go through `putNote`, which adds one to whatever the meta holds; nothing to change.
 
 ### 3.8 Messages between tabs
 
@@ -156,11 +164,53 @@ Each stage is a PR into `main`. New code is ES modules in `public/owner/`; `inde
 | Stage | What it holds | What proves it |
 |---|---|---|
 | 1. The contract and the model | the rules of the era and of the two results as pure functions (`public/owner/model.js`); the compatibility table as cases | Node tests |
-| 2. Transactional writes, dormant | §3.3, §3.4, §3.7 in `public/sync.js`, with the 5s* cases of #146 carried over for the new mode and read again by §8.3 (some of them test the fix of the race, which the old mode keeps), used only by an engine that is given the era of a screen (`deps.era`); the page gives none yet, so the checks of main stay in force and `setOwner` writes no `era` | Node over `MemStore` with `deps.era`; without it, the whole suite of main as it is (main has no 5s* cases: they come from #146) |
+| 2. Transactional writes, dormant | §3.3, §3.4, §3.7 in `public/sync.js`, with the 5s* cases of #146 carried over for the new mode and read again by §8.3 (some of them test the fix of the race, which the old mode keeps), used only by an engine that is given the era of a screen (`deps.era`); the page gives none yet, so the checks of main stay in force and no `setOwner` of the app writes `era` (an engine with `deps.era` writes it: §7.2) | Node over `MemStore` with `deps.era`; without it, the whole suite of main as it is (main has no 5s* cases: they come from #146) |
 | 3. The page, and the switch | §3.2 (one read at start), §3.3 items 6–7, §3.5, §3.8, §3.9, §4, the urgent save; the page gives the era, `setOwner` writes `era`; `FORMAT` and `IDB_VER` 5 | browser scenarios (§8.2) |
 | 4. The engine made simpler | a separate PR after the others are green: `PENDING`, `OWN`, `allowance`, `LOADS` reduced; `setOwner`, the loads and the steps on one queue (allowed, since no write of the user waits for them) | late loads and callbacks do not spoil a new memory; a save still waits for nothing |
 
 Each PR into `main` is deployed to `.dev`, so «released together» is not enough: no state of `main` may write the new contract or loosen an old check without the page and the barrier. Stage 2 therefore adds code that nothing in the app switches on, and stage 3 switches everything on in one PR: the era from the page, `era` in the store, the raw reads and writes, the messages, and `FORMAT` and `IDB_VER` 5. If the dormant form of stage 2 turns out to cost more than it saves, stages 2 and 3 become one PR; they are never two active halves.
+
+### 7.1 How the model reaches the core (stage 2; the owner's decision of 2026-11-13)
+
+1. The model reaches the core through `deps.ownerModel`: the exports of `public/owner/model.js`, handed to `makeSync` by whoever makes the engine. `public/sync.js` stays a classic script and imports nothing.
+2. Without `deps.era` the engine behaves exactly as on `main` today: the same checks, the same waits, the same records. This is the dormant stage 2, and every existing test passes over it unchanged.
+3. With `deps.era` the model is required. A missing `deps.ownerModel` (or one without a function the core calls) is an error thrown by `makeSync`, never a fall back to the old checks.
+4. The model is loaded before the engine is made. Nothing on the write path imports dynamically or waits for a load.
+5. `deps.era` is the era of the screen (§3.2). The engine never refreshes it from the store: not at a load, not after its own change of owner. A new screen is a new engine made with the era that screen was read over.
+
+### 7.2 What stage 2 built (2026-11-13)
+
+Everything below is in `public/sync.js` behind `deps.era`. Without it no line decides differently from main: the existing Node suite passes with the same output, and the page makes its engine as before.
+
+**The user's writes (§3.3).** `writeLocal`, `purgeLocal`, `purgeOldLocal`, `importNote`, `importMany`, `importHistory`, `versionLocal`, `restoreCopy`, `undoRestore`, `dropCopies`, `putCopies`, `unqueue`, `deviceName` and the `typed` mark go through one transaction of their own kind (`utx`):
+
+- it is opened in the call, with no load before it (item 3);
+- it reads the `epoch`, `owner` and `device` records first; the era is judged by `judgeWrite` (the device name excepted, item 1), and a mismatch is the refusal `epoch` with the status `reload`;
+- every decision inside takes the owner that transaction read (`ownerIn(t)`: `ensureJob`, `queueV`, the versions that follow a deleted or revived note, `importHistory`, `vdeleteLocal`, `versionLocal`, `purgeLocal`; item 2);
+- the work queued for after the commit is of two kinds: cache updates (`after`), applied only when the memory is of the epoch and owner the transaction read, and events for the page (`after.ev`), which always go (the device name and the size hint of a deleted note go with the events: neither is of an epoch). A memory of another epoch is marked not loaded, as a flag (items 4 and 8). The steps' own transactions follow the same rule;
+- `purgeLocal` counts `S.everCaughtUp` only for a memory of the transaction's epoch (item 5), takes `{reach}` and refuses with `reach` (item 9); `versionLocal` delete takes `reach` the same way; `purgeOldLocal` does nothing once the store has an owner (item 7);
+- the mark `loop` of a note is lifted by the save of what was typed, by the store's word. `typed()` is called with every keystroke and opens a transaction only when the memory knows the mark, as on main; a memory of another epoch does not know it, so `writeLocal` lifts it inside its own transaction when the note was typed in within the loop window.
+
+**The steps (§3.4).** They keep main's check against `S.epoch` and `S.owner`, which only a load moves. Three things are added:
+
+- the queue is read again (`reloadQueue`) only for the epoch of the memory. On main that read has no check, so a stale engine takes another owner's jobs and attempts into its memory and runs such an attempt through its own cloud: the independent review reproduced the new owner's text in the previous owner's cloud, on main and on this branch without an era. The refusal of the local transaction afterwards undoes nothing. It is a separate task for the mode that runs today;
+- a cloud adapter that names another user than the owner (`cloud.uid`) is not used: no step, no listener, no send (item 2);
+- nothing of the previous owner's cloud outlives a change of owner: the listeners end with the change (and with `setCloud`, whether or not the new adapter may be used); every delivery waiting in the inbox names the epoch and the adapter it came under, and the step drops those of another; an answer of a cloud call that comes back after the epoch or the adapter changed is dropped as a lost call. The check of the memory inside a step's transaction is not enough here: after the engine's own change the memory is the new owner's;
+- a step that meets another owner's store ends idle instead of failing with a growing pause.
+
+**The two results, as far as the core reports them.** §3.5 is stage 3, but a core that accepts saves after a change that kept the records cannot go on saying `reload` for it. So with an era a refusal by the memory (a step, a load) reports the status `reload` when the era moved and a new status `stale` when only the queue is of another owner; a step refused by the owner this engine's own `setOwner` is writing reports nothing. The page reads neither yet. What `checkOwner` returns is unchanged and is stage 3's.
+
+**The reads (§3.2 item 4, for the engine's `rtx`).** `versionStates` is named by §3.3 item 2, and a read that waited for a load would be refused by a queue that is stale, which is the false lock the plan removes. So with an era the reads of the core (`versionStates`, `state`, `lrevOf`, `seenAll`, `copiesCount`, `countCopies`, `unsynced`) wait for no load, compare the era in their own transaction (`judgeRead`) and take the owner they read.
+
+**The change of owner.**
+
+- An engine with `deps.era` writes `era` in the `epoch` record (`nextEpoch`): the matrix of §8.1 cannot be run otherwise, because an `epoch` without `era` reads as a new era and column (a) would be refused. An engine without `deps.era` writes none, as main. Stage 3 changes which engine the page makes, not this.
+- `expectEpoch` is main's comparison, through `expected` (§3.6).
+- `lrev` is kept as §3.7 now says.
+- «The same owner again» is read from the store alone, never from the memory. The store names another owner than the one asked for: a change of its own (a new epoch, the queue rebuilt, the era kept), also when the memory names the owner asked for. The store already names the owner asked for: no new epoch, and the queue and the registry of deletions stay, also when the memory names another owner; then only the memory is read anew. Whether the memory must be refreshed and whether the epoch must be made anew are two questions.
+- An error of the adopting load carries `committed` and `erase` (§6), a copy of it when the error is frozen.
+
+**Not in stage 2:** the page, the raw reads and writes, the messages, the fallback copies, the export, `FORMAT` and `IDB_VER` (stage 3); `PENDING`, `OWN`, `allowance` and `LOADS` are as they were (stage 4).
 
 ## 8. Tests
 
@@ -217,6 +267,16 @@ Beside the matrix:
 
 Every other 5s* case is read again by the same sign before it is carried over.
 
+As carried over (`tests/syncera.mjs`):
+
+- 5s, 5s1, 5s4 (the user's writes right after this engine's own change, a first sign-in included): as on #146, and the deletion among them leaves a tombstone job.
+- 5s2 (a save behind an erase): refused, now by the era.
+- 5s3 (a step right after this engine's own change): refused and quiet, as on #146.
+- 5s5–5s7 change. On #146 a write called before an erase waited for the engine's first load and was therefore ordered after the erase, and refused. A write waits for nothing now: called first, it is ordered first, lands and is erased with the rest; called after the erase it is refused, whether the erase's adopting load succeeded or failed.
+- 5s8 (an older change ending after a newer erase whose load failed): the old screen is refused, by the era and not by a guard the engine keeps.
+- 5s9: the two cases above.
+- 5s10 (the hint of a committed change on a frozen error): as on #146.
+
 ## 9. Risks
 
 - The body of a write reads `S.owner` in about eight places, and the page branches on it before a write in three (§3.3 item 7); one left behind decides for the old owner. The matrix of §8.1 names each operation.
@@ -242,4 +302,6 @@ Not opened: Signal Desktop, Joplin, Logseq, AFFiNE, Excalidraw, automerge-repo, 
 - **The architecture review of #146 (2026-11-13), three passes with the owner.** Pass 1: five major gaps (the era read with the screen's records, the fallback copies, compatibility one way only, the false lock through reads and the lead, the `lrev` collision). Pass 2: two major and one minor (the `NK` exception, the tabs before the format guard, `syncguard` 5s9). Pass 3: none; the plan merged by #151.
 - **Preflight over main at 2ee9dfc (2026-11-13): three high, two medium.** High: the page chooses the path of a deletion by the owner in memory (§3.3 item 7); a message between tabs carries a note with no origin, `TABQ` included (§3.8); the export's history is read outside the rule of the era (§3.9). Medium: stages 2 and 3 as two active PRs leave an unsafe `main` on `.dev` (§7); the overlapping saves were called an open separate task though main has `laterSnap()` and `tests/appsaveoverlap.mjs` (§3.3 item 8, §8.2, §9). The Node matrix now names every operation (§8.1).
 - **Review of #153 at 263d85a (2026-11-13): one high, two minor.** High: the text a deletion is confirmed by was called cosmetic; a change of owner while the dialog is open widens the deletion to every device (§3.3 item 9). Minor: the device name's exception was in the matrix and not in the rule (§3.3 item 1); the dormant stage 2 named 5s* as a suite of main, where they are not (§7).
+- **The independent review of stage 2 at 877d7df (2026-11-13): three major, two minor, and one major of main.** Major: a listener of the previous owner's cloud outlived the change and its deliveries were applied under the new owner, after an erase too (§7.2, the steps: listeners end with the change, deliveries and answers carry their origin); «the same owner again» started from the memory, so an engine that remembered another owner made a new epoch over a store that already had the owner asked for and lost a deletion waiting to be sent (§7.2, the change of owner); `typed` decided by the memory, so a save accepted after a change kept the mark `loop` and was never sent (§7.2, the user's writes). Minor: `purgeOldLocal` got one more callback, so one more await, without an era (one callback again); three checks weaker than their names (5s called the writes after the bind had ended, `unqueue` was only refused by its own rule, the rename was told by a job the change queues itself). Each has a case in `tests/syncera.mjs` that fails on 877d7df. The major of main (`reloadQueue`, §7.2) is not changed in this PR. The review found the corrections of §3.7, the era written only by the new mode, the unnamed reach and the reading of 5s5–5s7 sound.
+- **Stage 2 (2026-11-13).** Three places where this text did not hold as written, corrected here and built that way: §3.7 gave a rule for «every note» though an empty one gets no meta, and gave none for versions (both now in §3.7, proposed); §7 said `setOwner` writes no `era` in stage 2, which leaves §8.1 column (a) unrunnable (§7.2: no engine of the app does); §3.3 item 9 did not say what an unnamed reach means (`here`). One finding about main, not changed there: `reloadQueue` reads the queue with no epoch check (§7.2, the steps).
 - **Stage 1 (2026-11-13).** Writing the rules as functions found one of them unsatisfiable: §4 rule 4 asked an old `FX` copy for the initial era and a matching epoch at once, and a device with an owner never reads as the initial era. The rule is now one condition for each kind of copy.
