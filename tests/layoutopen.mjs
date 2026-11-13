@@ -2,8 +2,8 @@
 // here as the bridge reads it: Boxes in the engine's cells with no width, height or stacks, an area's children in its own cells.
 //   1    a valid note keeps every place it was read at, its head rows and gaps included, in both measures; diff gives nothing;
 //   2    sizes (step 0): a set width its cw, an elastic text its rest width on the rows it stands on (SIZE.1, SIZE.8);
-//   3    clamp (step 1): a card past the right edge, an elastic one narrowed by the edge, a set width wider than its container, an area
-//        at row 0 with the block under it;
+//   3    clamp (step 1): a card past the right edge, an elastic one narrowed by the edge, one read near MAXCELL (both values of
+//        DRAG.A3.narrow), a set width wider than its container, an area at row 0 with the block under it;
 //   4    separate (step 2): as resolveIn, in reading order, a block alone down under the one it hits, an area's free cells, passes again;
 //   5    rest (step 4): a text a moved neighbour no longer presses widens again;
 //   6    areas: children first, in the columns the area shows; the frame round them, a collapsed one its header; a child past the edge;
@@ -93,6 +93,12 @@ function sound(L) {
   const n = note(12, [S('S', 10, 0, 5), T('E', 9, 3)]), ctx = ctxFor(n, { E: 30 });
   const r = open(n, ctx);
   ok('3 a set width past the right edge moves left to where it fits; an elastic one at the edge takes its floor (min(natural, MINC)) and moves left', r.ok && eq(places(r.layout).S, [6, 0, 6, 1]) && eq(places(r.layout).E, [5, 3, 7, 2]), r.ok && places(r.layout));
+  // from a column far past the edge, near MAXCELL: the width its neighbours leave it is found with no edge at all, so the edge, not a
+  // virtual one at MAXCELL, decides (the independent review of e6d1c57)
+  for (const [narrow, want] of [[true, [13, 7, 2]], [false, [9, 11, 1]]]) {
+    const f = note(20, [T('T', MAXCELL - 2, 0)]), rf = open(f, ctxFor(f, { T: 30 }, {}, resolve({ 'DRAG.A3.narrow': narrow })));
+    ok(`3 an elastic text read at column MAXCELL − 2, DRAG.A3.narrow ${narrow ? 'on' : 'off'}: (${want}) as at any column past the edge`, rf.ok && eq(places(rf.layout).T.filter((_, i) => i !== 1), want), rf.ok ? places(rf.layout) : rf);
+  }
   const w = note(12, [S('W', 4, 0, 20), S('B', 0, 2, 3)]), cw = ctxFor(w), rw = open(w, cw);
   ok('3 a set width wider than its container: shown at the full width from column 0, its cw as stored; diff writes no cw', rw.ok && eq(places(rw.layout).W, [0, 0, 12, 1]) && rw.layout.boxes.get('W').cw === 20 && !('cw' in (diff(storedOf(w), rw.layout).get('W') || {})), rw.ok && [places(rw.layout), [...diff(storedOf(w), rw.layout)]]);
   const sz = rw.ok && settle(rw.shown, { type: 'size', box: null, id: 'W' }, emptyMemory(), cw);
@@ -181,9 +187,11 @@ function sound(L) {
   const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'GAP.5.1', 'GAP.5.2', 'GAP.5.3', 'GAP.8', 'GAP.9', 'P-ASIDE', 'P-REST', 'P-SINK', 'DRAG.A3.narrow'];
   let bad = 0, first = null, notes = 0, moved = 0, temps = 0, most = 0;
   for (let k = 0; k < N; k++) {
-    const cols = int(10, 24), boxes = [], areas = {}, len = {}, temp = {};
-    const leaf = (id, cmax) => { const r = rnd(); const b = r < 0.45 ? T(id, int(0, cmax), int(0, 8)) : S(id, int(0, cmax), int(0, 8), int(1, 6), rnd() < 0.2 ? int(2, 3) : undefined); if (b.cw == null) len[id] = int(1, 40); if (rnd() < 0.15) temp[id] = int(1, 2); return b; };
-    for (let i = 0, n = int(1, 7); i < n; i++) boxes.push(leaf('B' + i, cols));
+    // a fifth of them larger, with long texts (the independent review of e6d1c57 needed two openings again there)
+    const big = rnd() < 0.2, cols = int(10, big ? 40 : 24), boxes = [], areas = {}, len = {}, temp = {};
+    const far = (cmax) => (rnd() < 0.05 ? MAXCELL - int(1, 6) : int(0, cmax));   // now and then read far past the edge
+    const leaf = (id, cmax) => { const r = rnd(); const b = r < 0.45 ? T(id, far(cmax), int(0, 8)) : S(id, far(cmax), int(0, 8), int(1, 6), rnd() < 0.2 ? int(2, 3) : undefined); if (b.cw == null) len[id] = int(1, big ? 160 : 40); if (rnd() < 0.15) temp[id] = int(1, 2); return b; };
+    for (let i = 0, n = int(1, big ? 16 : 7); i < n; i++) boxes.push(leaf('B' + i, cols));
     for (let i = 0, n = rnd() < 0.5 ? int(1, 2) : 0; i < n; i++) {
       const id = 'R' + i, a = A(id, int(0, cols), int(0, 8), int(4, cols + 2), rnd() < 0.15 ? { collapsed: true } : {}); boxes.push(a);
       areas[id] = []; for (let j = 0, m = int(0, 4); j < m; j++) areas[id].push(leaf(id + 'c' + j, a.cw));

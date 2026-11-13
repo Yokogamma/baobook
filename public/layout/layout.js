@@ -62,11 +62,13 @@ function sized(boxes, cols, inner, ctx) {
  *  left. A block its neighbours narrowed, not the edge, keeps the width step 0 gave it, so a note at rest opens to the same widths, rows
  *  and places (the independent review of 6257763). What a clamp puts on another block, step 2 separates. @returns {Map<string, Box>} */
 function clamped(boxes, cols, inner, ctx) {
-  const out = new Map(), wide = { ...layoutOf({ cols, measure: 'canonical' }, boxes), cols: MAXCELL };
+  const out = new Map(), L = layoutOf({ cols, measure: 'canonical' }, boxes);
   for (const b of boxes.values()) {
     let w = b.w;
     if (isElastic(b, ctx)) {
-      const want = restCells(wide, b, ctx) + 1;
+      // its rest width with no right edge: the container's edge put past the widest it gets by itself, from its own column, however far
+      // right that is (an edge at MAXCELL would bind a block near it; the independent review of e6d1c57)
+      const want = restCells({ ...L, cols: b.col + capCells(b, ctx) + 2 }, b, ctx) + 1;
       if (b.col + want + pad(b) > cols) {
         const k = ctx.kinds[b.kind], floor = Math.min(want, Math.max(k.minCells(b, ctx.measure), Math.min(ctx.measure.natural(b.id), ctx.settings.MINC)) + 1);
         w = Math.min(on(ctx.rules, 'DRAG.A3.narrow') ? Math.max(floor, cols - b.col - pad(b)) : want, cols - pad(b));
