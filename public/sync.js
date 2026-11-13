@@ -981,8 +981,8 @@ function makeSync(deps){
     // an adopting load that fails after an erase committed: the page still shows the erased records, and a write of them would bring them back
     // under the new owner, so the user's writes are refused until a later change of owner loads (S.erasedUnloaded). Only the newest committed
     // change (gen) sets or clears it: an older one ending late must not undo the guard of a newer erase, nor put one over a newer change that
-    // loaded. The error says the change committed and whether it erased (committedError)
-    try{ resetMemory({owner:true}); await load({adopt:mine.exp}); }catch(e){ if(gen===COMMITS) S.erasedUnloaded=mine.exp.erase; throw committedError(e, mine.exp.erase); }
+    // loaded. The error says the change committed and whether it erased (committedError), unless the load found another tab's owner (`epoch`)
+    try{ resetMemory({owner:true}); await load({adopt:mine.exp}); }catch(e){ if(gen===COMMITS) S.erasedUnloaded=mine.exp.erase; throw e && e.code==='epoch'? e : committedError(e, mine.exp.erase); }   // epoch: another tab changed the owner meanwhile, the page's race path (raced) takes it
     if(gen===COMMITS) S.erasedUnloaded=false; if(S.started) connectCloud(); }
   // the error of a change of owner that committed and whose adopting load failed: `committed` and `erase` on the error itself, or on a wrapper
   // that keeps its name, code and message (an error that cannot take them, a frozen one) with the original as `cause`
