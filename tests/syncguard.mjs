@@ -6,7 +6,8 @@
 // move decides over the stored record inside its own transaction. Section 5 (§4.10, two tabs of one device over one store): both engines write
 // as the device of the store's `device` record; a runner that read the cloud before another insured an attempt does not insure a second one
 // over it; two runners of one attempt leave one commit; a late delivery by a runner with an old memory never moves the cursor back; a tab
-// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab. Section 6 (§4.6):
+// that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab; an engine whose store went to another owner takes none of that owner's queue
+// into its memory and sends none of its attempts through its own cloud (5s). Section 6 (§4.6):
 // a listener the server ends with an error is started again by the step after a growing pause, from the cursor (one that keeps ending right after
 // its snapshot keeps the pause growing); a refused one is not; an error of a listener already replaced, or reported inside listen(), leaks nothing.
 import { loadCore } from './lib/core.mjs';
@@ -280,6 +281,32 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   H.sync.stop(); await G.sync.reload(); await G.sync.start(); await idle(G);
   cloud.advance(1000); cloud.write('notes',{id:'today1', title:'', blocks:[{id:'b',row:1,fx:0,text:'сьогодні'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); await idle(G);
   ok('5m the old tab leads again after reload(): not paused, it reads today\'s document ('+G.sync._S.quota.reads+' reads today)', !G.sync._S.paused && G.sync.status().code!=='limit' && !!db.get('notes','today1') && G.sync._S.quota.reads<40); }
+
+/* ── 5s. two engines over one store, each with its own cloud: the other tab bound another owner (records kept) and left an attempt of the new
+   owner's text unresolved. The old engine's step reads the queue again; it must not take that attempt into its memory and run it through the
+   previous owner's cloud (the refusal of the local transaction afterwards would undo nothing there) ── */
+{ const cloudA=new TestCloud({start:1_700_000_000_000}), cloudB=new TestCloud({start:1_700_000_000_000}), db=new MemStore();
+  const A=await mk(cloudA,'A',{db}); await edit(A,'k1',(C,t)=>({title:'kept', blocks:[{id:'b',row:1,fx:0,text:'text of u1'}], created:t, updated:t})); await idle(A);
+  const B=device(cloudB,'B',{db}); await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'}); await B.sync.start();
+  await edit(B,'a1',(C,t)=>({title:'private', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE text of u2'}], created:t, updated:t}));
+  cloudB.fault('fail',{dev:'B', op:'txn', n:1000}); await idle(B);   // u2's cloud does not answer: the attempts stay in the store (a1 sorts before the kept note, whose attempt the previous owner's cloud turns down by its revision)
+  const trB=db.get('sync','try:n:a1');
+  ok('5s the new owner\'s engine left an attempt with its text in the store ('+(trB||{}).op+'); the old engine still names u1 and nothing of a1 is in u1\'s cloud', !!trB && JSON.stringify(trB.result).includes('PRIVATE') && A.sync.owner.uid==='u1' && !cloudA.doc('notes','a1'));
+  const n0=A.status.filter(c=>c==='reload').length; let r=null; for(let i=0;i<5;i++){ r=await A.sync.step(); cloudA.advance(100); }
+  const inA=JSON.stringify([...cloudA.docs.notes.values(), ...cloudA.docs.versions.values()]);
+  ok('5s2 the old engine\'s steps sent nothing of the new owner to the previous owner\'s cloud (a1 there: '+!!cloudA.doc('notes','a1')+', versions there: '+cloudA.docs.versions.size+')', !cloudA.doc('notes','a1') && !inA.includes('PRIVATE') && cloudA.doc('notes','k1').rev===1);
+  ok('5s3 its memory took none of the new owner\'s queue (tries: '+A.sync.tries().join(',')+'; version tries: '+A.sync._S.vtries.size+'; jobs: '+A.sync._S.jobs.size+'), the status «reload» went out and the step ended idle ('+(r||{}).did+') with no error pause', !A.sync.tries().length && !A.sync._S.vtries.size && !A.sync._S.jobs.size && A.status.filter(c=>c==='reload').length>n0 && r.did==='idle' && !A.logs.some(e=>e.t==='step-error'));
+  ok('5s4 the attempt is still the new owner\'s in the store, and that engine sends it to its own cloud once it answers', (db.get('sync','try:n:a1')||{}).op===trB.op && (cloudB.faults.length=0, cloudB.advance(1000), await idle(B), true) && !!cloudB.doc('notes','a1') && JSON.stringify(cloudB.doc('notes','a1')).includes('PRIVATE') && !db.get('sync','try:n:a1')); }
+
+{ const cloud=new TestCloud({start:1_700_000_000_000}), A=await mk(cloud,'A'), X=A.sync._S; await idle(A);
+  // the same rule at the cloud call: an attempt stamped with another epoch, put into the memory by hand (no checked read lets one in), is not sent
+  X.tries.set('f1',{k:'try:n:f1', op:'oforeign', expect:0, result:{title:'', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE text of another epoch'}], created:1, updated:1}, sentLrev:1, epoch:'e-other'});
+  X.vtries.set('fv',{k:'try:v:fv', op:'oforeignv', expect:0, result:{note:'f1', name:'PRIVATE', created:1}, epoch:'e-other'}); await idle(A);
+  ok('5s5 an attempt of another epoch in the memory is dropped from it, not sent (notes in the cloud: '+cloud.docs.notes.size+', versions: '+cloud.docs.versions.size+'; logged: '+A.logs.filter(e=>e.t==='try-foreign').length+')', !cloud.docs.notes.size && !cloud.docs.versions.size && !X.tries.size && !X.vtries.size && A.logs.filter(e=>e.t==='try-foreign').length===2);
+  // a step inside this engine's own change of owner: the queue's read meets the owner being written and reports no «reload»
+  A.status.length=0; const bind=A.sync.setOwner({env:'test', uid:'u2', email:'v@test'}); let spins=0; while(X.loaded && spins<100000){ spins++; await Promise.resolve(); }
+  const inWindow=!X.loaded; X.loaded=true; X.queueAt=0; const st=await A.sync.step(); X.loaded=false; await bind; await idle(A);   // loaded forced: the step skips its lazy load and reads the queue with the memory of u1
+  ok('5s6 a step whose queue read lands inside this engine\'s own setOwner (in its window: '+inWindow+'): '+st.did+', no «reload» ('+A.status.filter(c=>c==='reload').length+'), the engine names '+A.sync.owner.uid+' and checkOwner says the same', inWindow && st.did!=='error' && !A.status.includes('reload') && A.sync.owner.uid==='u2' && await A.sync.checkOwner()===true); }
 
 /* ── 6. a listener the server ends (§4.6): the step starts it again after a growing pause, from the cursor, so what was written meanwhile
    arrives and the status comes back; a refused one is not restarted; an error of a listener already replaced changes nothing ── */
