@@ -13,7 +13,7 @@
    cached file never goes stale. The page's import map gives each SDK module its integrity, which the request carries: the network fetch
    enforces it, and a cached copy whose bytes do not match it (cached before the page carried the hashes, or damaged since) is dropped and
    fetched again, so it cannot fail the page's own check forever. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
-const BUILD=2026111303, PREFIX='baobook-', WAIT=5000;
+const BUILD=2026111304, PREFIX='baobook-', WAIT=5000;
 const SHELL=PREFIX+'shell-'+BUILD, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
 const KEEP=[SHELL, FONTS, SDK];
 const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;

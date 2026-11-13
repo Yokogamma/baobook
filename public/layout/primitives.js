@@ -21,7 +21,7 @@ import { push, resize, cut } from './gap.js';
 /** A working state over a layout, its moved block and the context; `insert` when the moved block comes in by rule 3 (created, or carried
  *  while away, DRAG.B1), which P-UP reads (G17). @param {Layout} L @param {?string} moved @param {Ctx} ctx @param {boolean} [insert]
  *  @returns {Work} */
-export function working(L, moved, ctx, insert = false) { return { L, base: L, moved, ctx, insert: !!insert, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
+export function working(L, moved, ctx, insert = false) { return { L, base: L, moved, ctx, insert: !!insert, steps: new Map(), follow: new Map(), reshaped: new Set(), n: 0, order: L.order.slice() }; }
 /** A phase starts: its visits go in the reading order of the layout it starts from (LAYOUT-RULES §5.1, INV-5). @param {Work} ws */
 export function phase(ws) { ws.order = ws.L.order.slice(); return ws; }
 
@@ -36,9 +36,9 @@ function put(L, box) { const boxes = new Map(L.boxes); boxes.set(box.id, box); r
 const skipOf = (ws) => new Set(ws.moved == null ? [] : [ws.moved]);
 const clone = (m) => new Map([...m].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
 /** @param {Work} ws */
-export function snapshot(ws) { return { L: ws.L, steps: clone(ws.steps), follow: new Map(ws.follow), n: ws.n }; }
+export function snapshot(ws) { return { L: ws.L, steps: clone(ws.steps), follow: new Map(ws.follow), reshaped: new Set(ws.reshaped), n: ws.n }; }
 /** @param {Work} ws */
-export function restore(ws, s) { ws.L = s.L; ws.steps = clone(s.steps); ws.follow = new Map(s.follow); ws.n = s.n; }
+export function restore(ws, s) { ws.L = s.L; ws.steps = clone(s.steps); ws.follow = new Map(s.follow); ws.reshaped = new Set(s.reshaped); ws.n = s.n; }
 /** The ids of the visit: the reading order of the phase's start, of the blocks still there. */
 const visit = (ws) => ws.order.filter((id) => ws.L.boxes.has(id));
 
@@ -56,7 +56,8 @@ function record(ws, before, after, by) {
  *  phases moved, by a primitive (a swap's own moves are its pair's), the moved block of the change, and the pair of a swap, in base's
  *  reading order. RELINK takes every one from the row it counts it from to where the phases left it and holds it there, one whose move adds
  *  up to nothing included (the owner, 2026-11-11, G15); the rows a push gave because a height changed are FOLLOW's and no move.
- *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o] @returns {{moved:string[], swap?:[string, string]}} */
+ *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string], canonical?:boolean}} [o] an undo's carry back is `canonical`
+ *  @returns {{moved:string[], swap?:[string, string]}} */
 export function transitionFacts(ws, base, o = {}) {
   // the blocks P-DOWN sank under a moved block that comes in by rule 3 (one base does not hold: created, or carried away and put), with the
   // blocks that followed them, are pushed by that block's arrival, FOLLOW's: not named, so that taking the moved block away again gives
@@ -67,7 +68,9 @@ export function transitionFacts(ws, base, o = {}) {
   // (`insert`, which P-UP read): a state that disagrees with base is SETTLE's error
   const putIn = ws.moved != null && !base.boxes.has(ws.moved), pushedOnly = new Set();
   if (ws.moved != null && putIn !== !!ws.insert) throw new Error(`transitionFacts: ${ws.moved} ${putIn ? 'comes in by rule 3' : 'is in base'}, the working state says ${ws.insert ? 'inserted' : 'not inserted'}`);
-  if (putIn) {
+  // an undo's carry back (`canonical`) is put by its canonical row and pushes nothing there (GAP.5 rule 3, LAYOUT-ENGINE-PLAN §6.4), so
+  // what the phases sank under it is named, held where they put it, and never left to its arrival (found by tests/layoutgestures.mjs)
+  if (putIn && !o.canonical) {
     const ids = [...ws.steps.keys()].filter((id) => id !== ws.moved && ws.L.boxes.has(id)), up = new Map(ids.map((id) => [id, id]));
     const root = (id) => { while (up.get(id) !== id) id = up.get(id); return id; };
     const spans = (id) => [base.boxes.get(id), ws.L.boxes.get(id)].filter(Boolean).map((b) => extent(b));
@@ -79,6 +82,23 @@ export function transitionFacts(ws, base, o = {}) {
   const moved = new Set([...ws.steps].filter(([id, l]) => !pushedOnly.has(id) && l.some((st) => st.by !== 'swap')).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
+  // an undo's carry back leaves every column and comes back into each (GAP's inputs, `back`): the block right under it in a column it keeps,
+  // which no phase moved, would rise into its place as it leaves. It stays where it stands, as a drop at the old cell would leave it, only
+  // the gaps around the block changing (G21, the owner, 2026-11-13: O-30 (а)): named, so RELINK holds it there (rule 5)
+  if (o.canonical && ws.moved != null && base.boxes.has(ws.moved) && ws.L.boxes.has(ws.moved)) {
+    const x = extent(base.boxes.get(ws.moved)), t = extent(ws.L.boxes.get(ws.moved));
+    for (let c = Math.max(x.c0, t.c0); c <= Math.min(x.c1, t.c1); c++) {
+      let next = null;
+      for (const b of base.boxes.values()) {
+        if (b.id === ws.moved) continue;
+        const e = extent(b); if (e.c0 > c || c > e.c1 || e.r0 <= x.r1) continue;
+        if (!next || e.r0 < extent(base.boxes.get(next)).r0) next = b.id;
+      }
+      // only while it still stands there after the phases changed columns: one pressed out of the column comes in by itself (`self`)
+      const n = next && ws.L.boxes.get(next), f = n && extent(n);
+      if (f && f.c0 <= c && c <= f.c1) moved.add(next);
+    }
+  }
   const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));
   return o.swap ? { moved: order, swap: o.swap } : { moved: order };
 }
@@ -101,9 +121,12 @@ function lift(ws, rows, by) {
   record(ws, before, after, by); ws.L = after;
 }
 /** A block at a new column and width: its height at that width (SIZE.6, through `resize`), the blocks under it following with their gaps,
- *  which is FOLLOW's and no step (LAYOUT-RULES §5.1 phase 4). @param {Work} ws */
+ *  which is FOLLOW's and no step (LAYOUT-RULES §5.1 phase 4). The one way a primitive changes a block's columns, so it records the block
+ *  (`reshaped`): the transition's columns are the geometry's, and SETTLE fails on a block that changed them with no primitive saying so
+ *  (the architecture review of 0a262d7, RC3). @param {Work} ws */
 export function reshape(ws, id, col, w) {
   const b = get(ws, id); if (col === b.col && w === b.w) return;
+  ws.reshaped.add(id);
   const before = ws.L, nb = { ...b, col, w };
   let after = put(before, nb);
   if (w !== b.w) {   // only a new width is measured: a block moved aside keeps its height, an area's included
