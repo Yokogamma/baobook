@@ -65,13 +65,16 @@ function atTarget(box, at, cols, ctx, fresh = false) {
 }
 
 /** The columns each block left and came into between two layouts, with why and how (GAP's inputs), from the geometry (transition.js
- *  `explain`): the moved block of a carry or a creation comes in `put` and leaves the columns it no longer covers `narrow` (M9), or, for an
+ *  `explain`), each block that changed them one SETTLE changed (`by`: the blocks the phases reshaped or sized): the moved block of a carry or a creation comes in `put` and leaves the columns it no longer covers `narrow` (M9), or, for an
  *  undo's carry back or a deleted block made again (`canonical`), leaves every column of base `away` and comes into every column it has
  *  `back`; the widened block of the width handle leaves `narrow` and comes in `self`; any other block leaves `narrow` when its width changed
  *  and `press` when it was pressed aside, and comes in `self`. */
-function columnsOf(base, after, moved, how) {
+function columnsOf(base, after, moved, how, by) {
   const g = explain(base, after), wOf = (L, id) => L.boxes.get(id)?.w;
   const leave = [], enter = [];
+  // the geometry's columns, each explained by what changed them: the moved block, or a block a primitive reshaped (P-ASIDE, P-SINK, P-REST),
+  // phase 9 (a) gave its rest width, or phase 1a its size; a block that changed columns with none of these is SETTLE's error (RC3)
+  for (const [id, c] of [...g.left, ...g.entered]) if (id !== moved && !by.has(id)) throw new Failed(`settle: ${id} changed its columns (${c}) and nothing in SETTLE moved it there`);
   if (how === 'canonical' && moved != null) {
     const B = base.boxes.get(moved), A = after.boxes.get(moved);
     if (B) for (let c = extent(B).c0; c <= extent(B).c1; c++) leave.push([moved, c, 'away']);
@@ -98,12 +101,43 @@ function columnsOf(base, after, moved, how) {
  *  @param {{trace?:(phase:string, layout:Layout, info?:{swap:string[]}) => void}} [hooks] the working layout after each phase of every
  *  run (phase 3: the swapped layout, with its pair), for the dev look and the tests @returns {Result} */
 export function settle(start, change, memory, ctx, hooks = {}) {
-  try { return wrapper(start, change, memory || emptyMemory(), ctx, hooks); }
+  try { return (change.canonical ? inverse : wrapper)(start, change, memory || emptyMemory(), ctx, hooks); }
   catch (e) {
     if (e instanceof Refused) return { ok: false, why: 'refused' };
     if (e instanceof Failed) return { ok: false, why: 'failed', errors: [e.message] };
     return { ok: false, why: 'failed', errors: [e.message] };
   }
+}
+
+/** An undo's change on the inverse path (LAYOUT-ENGINE-PLAN §6.4): its cell is canonical, so SETTLE runs on the canonical layout, every
+ *  temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, and FOLLOW shows the temporary heights again on
+ *  its result. So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
+ *  there wherever a temporary height shows it, RELINK gets the canonical rows, and no temporary push is written into a block, the moved
+ *  block's or another's (the two measures, LAYOUT-RULES §1.2; the independent review of c5efdda; the owner's G23, O-31 (а), 2026-11-13). A block
+ *  shows again the temporary rows it had when its width and canonical rows are those of start; one the run measured anew (a block at
+ *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
+ *  from it. @returns {Result} */
+function inverse(start, change, memory, ctx, hooks) {
+  // the canonical measure: an adapter of its own over the two answers of `Measure`, each called on `m` itself, so that a frozen measure or
+  // one built as a class serves as it is (the independent review of f7900b2)
+  const m = ctx.measure, canonical = Object.freeze({ rows: (id, cells) => { const r = m.rows(id, cells); return { ...r, shown: r.rows }; }, natural: (id) => m.natural(id) });
+  let folded = start;
+  for (const b of start.boxes.values()) if (b.t > 0) folded = resize(folded, b.id, b.h - b.t, 0);
+  if (folded !== start) folded = follow(folded);
+  const r = wrapper(folded, change, memory, { ...ctx, measure: canonical }, hooks);
+  let L = r.layout;
+  for (const b of r.layout.boxes.values()) {
+    const s = start.boxes.get(b.id);
+    let t = 0;
+    if (s && s.w === b.w && s.h - (s.t || 0) === b.h) t = s.t || 0;
+    else if (!isArea(b)) { const q = rowsAt(b, b.w - 1, ctx); t = q.shown - q.rows; }
+    if (t > 0) L = resize(L, b.id, b.h + t, t);
+  }
+  if (L !== r.layout) L = follow(L);
+  for (const b of L.boxes.values()) if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
+  const grew = change.box != null ? bottomOf(L) - bottomOf(start) : 0;
+  if (kindOf(change).contain.bottom === 'refuse' && grew > 0) throw new Refused('the handle would make the area taller');
+  return { ...r, layout: L, start, grew };
 }
 
 /** The letting-through wrapper (LAYOUT-RULES §5.1b; step 2b-2, its representation by the architecture review of 0a262d7): for a carry with
@@ -149,7 +183,7 @@ function wrapper(start, change, memory, ctx, hooks) {
         swappedWith.add(th.id);
         const ws = swapped(r.layout, g, th, ctx, stepsGuard(r.layout));
         if (hooks.trace) hooks.trace('3', ws.L, { swap: [g, th.id] });
-        const cl = columnsOf(r.layout, ws.L, g, 'put'), pass = [];
+        const cl = columnsOf(r.layout, ws.L, g, 'put', ws.reshaped), pass = [];
         for (const [c, p, q] of cl.reordered) {
           if (p === g || q === g) pass.push([g, c]);
           else if (p === th.id || q === th.id) pass.push([th.id, c]);
@@ -302,13 +336,18 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   if (!deferred && changed()) {
     ran.push('8');
     const how = change.canonical ? 'canonical' : kind.moved === 'target' ? 'put' : 'self';
-    const cl = columnsOf(base, ws.L, g, how);
+    // an undo's carry back is put by its canonical row (GAP.5 rule 3): the row it stands at after the phases, which run it on the canonical
+    // layout (`inverse`), its old cell's or lower where a phase moved it (P-UP stands it under a block that now stands at its cell and cannot
+    // go up), never the row of the place it was carried back from, which its box still holds (found by tests/layoutgestures.mjs)
+    if (change.canonical && g != null && ws.L.boxes.has(g)) { const X = ws.L.boxes.get(g); if (X.yc !== X.y) { const boxes = new Map(ws.L.boxes); boxes.set(g, { ...X, yc: X.y }); ws.L = { ...ws.L, boxes }; } }
+    const cl = columnsOf(base, ws.L, g, how, ws.reshaped);
     /** @type {Transition} */
     // the carried block is the moved block of a carry or a creation; the widened block of the width handle comes into its new columns by
     // itself and carries nothing (GAP's inputs)
-    const T = { base, after: ws.L, ...transitionFacts(ws, base), carried: kind.moved === 'target' ? g : null, leave: cl.leave, enter: cl.enter, pass: [] };
+    const T = { base, after: ws.L, ...transitionFacts(ws, base, { canonical: !!change.canonical }), carried: kind.moved === 'target' ? g : null, leave: cl.leave, enter: cl.enter, pass: [] };
     if (change.canonical) T.canonical = true;
-    if (fallback && g != null && base.boxes.has(g)) {   // the carried block passes the blocks the fallback put on its other side
+    // the carried block passes the blocks the fallback put on its other side; an undo's carry back keeps no place to pass from (GAP's inputs)
+    if (fallback && g != null && base.boxes.has(g) && !change.canonical) {
       const pass = cl.reordered.filter(([, p, q]) => p === g || q === g).map(([c]) => [g, c]);
       if (pass.length) { T.fallback = fallback; T.pass = pass; }
     }
@@ -325,12 +364,14 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   // ---- 9. rest: (a) RESTPASSES passes of SIZE.8, (b) the hits left, by P-REST or P-SEP, within RESTSTEPS, (c) RELINK against the layout
   // after phase 8 with the moves of (b) only
   let La = L8;
+  const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
   const passes = on(rules, 'SIZE.8') ? ctx.settings.RESTPASSES : 1;
   if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
     const before = La;
     for (const id of La.order) {
       const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
       const w = restCells(La, b, ctx) + 1; if (w === b.w) continue;
+      rested.add(id);
       const nb = measured(b, w, ctx);
       La = resize(put(La, { ...nb, h: b.h, t: b.t ?? 0 }), id, nb.h, nb.t ?? 0);
     }
@@ -350,7 +391,9 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   if (hooks.trace) hooks.trace('9', w9.L);
   if (w9.L !== b9) {
     ran.push('9');
-    const cl = columnsOf(b9, w9.L, null, 'self');
+    // what changed columns since b9: phase 9's own rest widths and P-REST, and for a kind that relinks only here, phase 1a's size
+    const by = new Set([...w9.reshaped, ...rested, ...(deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [])]);
+    const cl = columnsOf(b9, w9.L, null, 'self', by);
     const T = { base: b9, after: w9.L, ...transitionFacts(w9, b9), carried: null, leave: cl.leave, enter: cl.enter, pass: [] };
     const r = relink(T, rules);
     if (!r.ok) throw new Failed('settle: RELINK refused phase 9 (c): ' + (r.errors || []).join('; '));

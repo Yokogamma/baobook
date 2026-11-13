@@ -20,7 +20,7 @@ const WEIGHTS = {
   'layoutgap-oracle': 40, 'layoutgap-twin': 35, layoutrules: 1, layoutgeometry: 1, layoutsize: 1, 'layoutgap-follow': 1, 'layoutgap-resize': 1,
   'layoutgap-cap': 1, 'layoutgap-adjust': 1, 'layoutgap-leave': 1, 'layoutgap-stand': 1, 'layoutgap-fresh': 1, 'layoutgap-fit': 1,
   'layoutgap-removed': 2, 'layoutgap-shift': 1, 'layoutgap-laws': 90,
-  'layoutprim-aside': 1, 'layoutprim-sink': 1, 'layoutprim-up': 1, 'layoutprim-rest': 1, 'layoutprim-transition': 1, 'layoutprim-props': 8, layoutchanges: 1, layoutsettle: 1, layoutprops: 4, layoutgestures: 10,
+  'layoutprim-aside': 1, 'layoutprim-sink': 1, 'layoutprim-up': 1, 'layoutprim-rest': 1, 'layoutprim-transition': 1, 'layoutprim-props': 8, layoutchanges: 1, layoutsettle: 1, layoutprops: 4, layoutgestures: 12, layoutundo: 1, layoutref: 2,
 };
 const DEFAULT = 12;
 const SHARDS = 8;   // as the matrix in .github/workflows/tests.yml

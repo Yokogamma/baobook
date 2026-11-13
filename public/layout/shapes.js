@@ -109,12 +109,13 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  */
 
 /** The working state of SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2; primitives.js).
- * @typedef {{L:Layout, base:Layout, moved:?string, insert:boolean, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, n:number, order:string[]}} Work
+ * @typedef {{L:Layout, base:Layout, moved:?string, insert:boolean, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, reshaped:Set<string>, n:number, order:string[]}} Work
  *   // L: the layout as the phases left it, its stacks as the last RELINK left them; base: the layout the interval started from, whose
  *   // chains `push` departs by rule 2; moved: the moved block of the change, in no chain until
  *   // phase 8 (none for a size or a deletion); insert: the moved block comes in by rule 3 (created, or carried while away, DRAG.B1), so P-UP
  *   // lifts nothing over it (G17); steps: every step a call moved a block by, cut within the call (Moved, for the dev look);
- *   // follow: the rows pushes gave a block because a height changed (FOLLOW's, no step); n: the step counter; order: the reading order of
+ *   // follow: the rows pushes gave a block because a height changed (FOLLOW's, no step); reshaped: the blocks a primitive gave another
+   // column or width (`reshape`), which alone may leave or come into a column; n: the step counter; order: the reading order of
  *   // the layout the current phase started from, which every primitive visits (INV-5)
  */
 
