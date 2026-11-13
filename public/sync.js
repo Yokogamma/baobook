@@ -224,18 +224,22 @@ function makeSync(deps){
   const storeBase=doc=>{ const b={...doc}; delete b.id; return b; };   // the base keeps every field of the cloud document (rev, srv, tsrv, rcpt, dev…)
   const defMeta=(c,id)=>({k:K.meta(c,id), lrev:0, baseLrev:0, base:null});
   async function getMeta(t,c,id){ const m=await t.get('sync',K.meta(c,id)); return m? {...defMeta(c,id), ...m} : defMeta(c,id); }
-  // own: a write the user made (a save, an import, a delete, a version, a copy's restore): it also takes the owner this engine's own setOwner
-  // transaction is writing (PENDING, not an erase), so a save ordered after that commit and before the adopting load lands under the new owner
-  // instead of locking the tab with the text unsaved (the fourth owner-change race of #143). The engine's own steps stay strict: a step running
-  // then on the old owner's memory must not act in the new owner's store. It is refused quietly, though: the store holds the owner this engine is
-  // changing to itself, the change resets the memory and loads again, so the page must not take it for another tab's change («reload»)
-  async function check(t, own){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); const eid=ep? ep.id : null, uid=ow? ow.uid : null, env=ow? ow.env : null;
-    const mine=[...PENDING].filter(g=>sameOwner(g, eid, ow));
-    if(own && mine.some(g=>!g.erase)) return;
-    if(eid!==S.epoch || uid!==(S.owner? S.owner.uid : null) || env!==(S.owner? S.owner.env : null)){ if(own || !mine.length) setStatus('reload'); throw fail('epoch'); } }
+  // the owner check of every write. A step of the engine refused because the store holds the owner this engine is changing to itself (PENDING) is
+  // refused quietly: the change resets the memory and loads again, so the page must not take it for another tab's change («reload», which locks
+  // the tab or reloads it)
+  async function check(t){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); const eid=ep? ep.id : null, uid=ow? ow.uid : null, env=ow? ow.env : null;
+    if(eid!==S.epoch || uid!==(S.owner? S.owner.uid : null) || env!==(S.owner? S.owner.env : null)){ if(![...PENDING].some(g=>sameOwner(g, eid, ow))) setStatus('reload'); throw fail('epoch'); } }
   // one transaction with the epoch check; `after` queues work for after the commit (cache updates, UI events)
-  async function tx(stores, fn, own){ const after=[]; const t0=await db.tx(stores,'readwrite', async t=>{ await check(t, own); return fn(t, f=>after.push(f)); }); for(const f of after) await f(); return t0; }
-  const utx=(stores, fn)=>tx(stores, fn, true);   // a write the user made (see check)
+  async function tx(stores, fn){ const after=[]; const t0=await db.tx(stores,'readwrite', async t=>{ await check(t); return fn(t, f=>after.push(f)); }); for(const f of after) await f(); return t0; }
+  // a write the user makes (a save, an import, a delete, a version, a copy's restore) waits for this engine's own change of owner (CHANGES: every
+  // setOwner from its call to the end of its adopting load) and then runs on the memory that load gave, so its job, its version and its decisions
+  // are the new owner's; before, it reached the store after setOwner's commit, was checked against the old memory and refused as «epoch», and the
+  // tab locked with the text unsaved (the fourth owner-change race of #143). After an erase that ended meanwhile it is refused: the records it
+  // was made over are gone
+  const CHANGES=new Set();
+  async function utx(stores, fn){ let erased=false; while(CHANGES.size){ for(const c of [...CHANGES]) if(await c.p.then(()=>true, ()=>false) && c.erase) erased=true; }
+    if(erased){ setStatus('reload'); throw fail('epoch'); }
+    return tx(stores, fn); }
   // how long the store takes: a write over pace.slowTx makes the status say so for a minute (the device's storage, not the network, holds the sync back)
   function noteTx(ms){ if(ms>=pace.slowTx){ S.slowMs=ms; S.slowAt=Date.now(); } }
   const busyMs=()=>{ let first=0; for(const t of S.txOpen.values()) if(!first || t<first) first=t; return first? Date.now()-first : 0; };   // the oldest transaction still open, as long as it has waited so far
@@ -658,7 +662,7 @@ function makeSync(deps){
   // the history of an export file (VERSIONS-PLAN 3.8, §4.9 «Import»): records and bodies this device does not have yet, one transaction; a named
   // version deleted here (a tombstone base, a tombstone job or attempt, `gone`) is skipped, so an old export never brings it back; a new one is queued
   async function importHistory(h, noteIds){ if(!S.loaded) await load(); const ids=new Set(noteIds||[]);
-    try{ return await tx(['notes','versions','blobs','sync'], async(t,after)=>{ let added=0, size=0, skipped=0; const touched=new Set(), copied=new Set();
+    try{ return await utx(['notes','versions','blobs','sync'], async(t,after)=>{ let added=0, size=0, skipped=0; const touched=new Set(), copied=new Set();
       for(const b of h.blobs||[]){ if(!b || !ids.has(b.note) || typeof b.h!=='string' || typeof b.s!=='string') continue; if(!(await t.get('blobs',[b.note,b.h]))) t.put('blobs',{note:b.note, h:b.h, s:b.s, r:b.r? 1 : 0, z:+b.z||bytesOf(b.s)}); }
       for(const v of h.versions||[]){ if(!v || typeof v.id!=='string' || !ids.has(v.note) || !Array.isArray(v.blocks) || typeof v.sig!=='string') continue; if(await t.get('versions',v.id)) continue;
         if(v.name && v.reason!=='copy' && S.owner){ const m=await getMeta(t,'v',v.id), j=await t.get('sync',K.out('v',v.id)), tr=await t.get('sync',K.tr('v',v.id));
@@ -951,12 +955,13 @@ function makeSync(deps){
   /* ── owner, start, stop (the hook of PR 1; sign-in comes with PR 3) ── */
   // o.erase: the device's data go with the previous owner and the new one starts empty («Прибрати й увійти», §4.11), one transaction;
   // o.expectEpoch: the epoch the caller decided over (a dialog); another one in the store means another tab changed the owner first → `epoch`
-  async function setOwner(owner, o={}){ if(!S.loaded) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
+  async function setOwner(owner, o={}){ const mine={}, c={erase:!!o.erase || !owner}; c.p=(async()=>{ if(!S.loaded) await load(); return setOwnerNow(owner, o, mine); })(); CHANGES.add(c);   // the user's writes wait for it (utx)
+    try{ return await c.p; }finally{ CHANGES.delete(c); if(mine.exp) PENDING.delete(mine.exp); } }
   async function setOwnerNow(owner, o, mine){ const same=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
     await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ if(o.expectEpoch!==undefined){ const ep=await t.get('sync','epoch'); if((ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
       if(same){ t.put('sync',{k:'owner', ...owner}); return; }
       const epoch={k:'epoch', id:'e'+now().toString(36)+random().toString(36).slice(2,8)}; t.put('sync',epoch);
-      if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null, erase:!!o.erase || !owner}; ownAdd(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
+      if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; ownAdd(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'￿')) t.del('sync',r.k);
       const erase=!!o.erase || !owner;
       if(erase){ for(const n of await t.range('notes','','￿')) t.del('notes',n.id); for(const v of await t.range('versions','','￿')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['￿','￿'])) t.del('blobs',[b.note,b.h]); }
@@ -1054,7 +1059,7 @@ function makeSync(deps){
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   // «Назва пристрою» (§4.11): the store's `device` record first, then the engine's name; the next document this device writes carries it as `dn`
   async function deviceName(name){ if(!S.loaded) await load(); const n=cutName(String(name||'').trim());
-    try{ return await tx(['sync'], async(t,after)=>{ const dv=(await t.get('sync','device'))||{k:'device', id:devId}; t.put('sync',{...dv, k:'device', name:n}); after(()=>{ devName=n; }); return {ok:true, name:n}; }); }
+    try{ return await utx(['sync'], async(t,after)=>{ const dv=(await t.get('sync','device'))||{k:'device', id:devId}; t.put('sync',{...dv, k:'device', name:n}); after(()=>{ devName=n; }); return {ok:true, name:n}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
   async function countCopies(id){ if(!S.loaded) await load(); return rtx(['versions'], async t=>(await t.byNote('versions',id)).filter(v=>v.reason==='copy').length); }
   async function importOne(t, raw, body, after){ const id=String(raw.id), tt=now();

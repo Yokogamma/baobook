@@ -484,7 +484,8 @@
   "size.kb": "{n} KB",
   "size.mb": "{n} MB",
   "export.withHistory": "with version history",
-  "import.history": { "one": "; history: {n} version", "other": "; history: {n} versions" }
+  "import.history": { "one": "; history: {n} version", "other": "; history: {n} versions" },
+  "import.historyFailed": "; the history was not imported"
 ,
 
   "text.title": "Text size",

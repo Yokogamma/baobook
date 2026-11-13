@@ -275,7 +275,21 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const tq=Q.sync.tombstoneAuto('q1').then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
   const oq=[await bq, await tq];
   ok('5s3 an engine step ordered right after this engine\'s own setOwner is refused quietly ('+oq.join(', ')+', «reload» '+Q.status.filter(c=>c==='reload').length+'), the engine names '+Q.sync.owner.uid,
-    oq[0]==='ok' && oq[1]==='epoch' && !Q.status.includes('reload') && Q.sync.owner.uid==='s4' && await Q.sync.checkOwner()===true); }
+    oq[0]==='ok' && oq[1]==='epoch' && !Q.status.includes('reload') && Q.sync.owner.uid==='s4' && await Q.sync.checkOwner()===true);
+  // a first sign-in (the engine loaded with no owner): the user's writes ordered right after setOwner wait for it and run on the new owner's
+  // memory, so each one is queued for the cloud (a write accepted under the old memory, with no owner, queued nothing and the note never synced)
+  const F=device(cloud,'S5'); await F.sync.start(); await F.sync.idle(300); F.status.length=0;
+  const vr={id:'fv1', note:'f0', t:cloud.now(), w:cloud.now(), reason:'manual', name:'Названа', keep:1, inline:1, title:'', sig:'sf', blocks:[{id:'b',row:1,fx:0,s:'версія'}]};
+  await edit(F,'f0',(C,t)=>({title:'до входу', blocks:[{id:'b',row:1,fx:0,text:'є'}], created:t, updated:t}));
+  const bf=F.sync.setOwner({env:'test', uid:'s6', email:'s6@test'}).then(()=>'ok', e=>e.code||e.name);
+  const res=r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', erc=e=>e.code||e.name;
+  const wf=edit(F,'f1',(C,t)=>({title:'перший вхід', blocks:[{id:'b',row:1,fx:0,text:'новий'}], created:t, updated:t})).then(res, erc);
+  const imf=F.sync.importNote({id:'f2', title:'імпорт', blocks:[{id:'b',row:1,fx:0,text:'з файлу'}], created:1, updated:1}).then(res, erc);
+  const vf=F.sync.versionLocal({op:'create', rec:vr}).then(res, erc);
+  const hf=F.sync.importHistory({versions:[{...vr, id:'fv2', name:'З файлу', sig:'sf2'}], blobs:[]}, ['f0']).then(res, erc);
+  const of=[await bf, await wf, await imf, await vf, await hf]; await F.sync.idle(300); await F.sync.idle(300);
+  ok('5s4 a first sign-in: the save, the import, a named version and a history import ordered right after setOwner ('+of.join(', ')+') are queued for the new owner and reach its cloud (f1 '+!!cloud.doc('notes','f1')+', f2 '+!!cloud.doc('notes','f2')+', fv1 '+!!cloud.doc('versions','fv1')+', fv2 '+!!cloud.doc('versions','fv2')+'); no «reload»',
+    of.every(c=>c==='ok') && !F.status.includes('reload') && F.sync.owner.uid==='s6' && !!cloud.doc('notes','f1') && !!cloud.doc('notes','f2') && !!cloud.doc('notes','f0') && !!cloud.doc('versions','fv1') && !!cloud.doc('versions','fv2')); }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});

@@ -134,15 +134,18 @@ await okWhy('7b text typed right before the change, its autosave still pending: 
 // 7d: a file imported while this tab changes the owner: the imported note is stored under the new owner, nothing is locked or unsaved (a device of its own)
 const K7=await newDevice(br, cloud, SITE, 'K7', {ctx:CTX, connect:{owner:owner('u60'), pace:PACE}}), R7=K7.pg;
 const f7d=path.join(os.tmpdir(), 'baobook-import-7d-'+process.pid+'.json');
-fs.writeFileSync(f7d, JSON.stringify({app:'baobook', format:1, exported:new Date().toISOString(), notes:[{id:'imp7d', title:'імпорт під час зміни', blocks:[{id:'b1', row:1, fx:0, text:'з файлу'}], created:Date.now()-1000, updated:Date.now()-1000}]}));
+fs.writeFileSync(f7d, JSON.stringify({app:'baobook', format:1, exported:new Date().toISOString(), notes:[{id:'imp7d', title:'імпорт під час зміни', blocks:[{id:'b1', row:1, fx:0, text:'з файлу'}], created:Date.now()-1000, updated:Date.now()-1000}],
+  history:{versions:[{id:'v7d', note:'imp7d', t:Date.now()-900, w:Date.now()-900, reason:'manual', name:'Названа з файлу', keep:1, inline:1, title:'імпорт під час зміни', sig:'s7d', blocks:[{id:'b1', row:1, fx:0, s:'з файлу'}]}], blobs:[]}}));
 await R7.evaluate(()=>{ window.__g=0; window.__wg=new Promise(r=>{ window.__wopen=r; }); sheetDebug.saveGate=()=>(window.__g++, window.__wg); });
 await R7.evaluate(o=>{ window.__b7d=sheetDebug.sync.bind(o); }, owner('u62')); const g7d=await until(()=>R7.evaluate(()=>window.__g>0), 5000);
-await R7.setInputFiles('#importFile', f7d); await R7.waitForTimeout(500);
-await R7.evaluate(()=>{ sheetDebug.saveGate=null; window.__wopen(); }); const b7d=await R7.evaluate(()=>window.__b7d);
-await until(async()=>(await stored(R7,'notes')).some(n=>n.id==='imp7d'), 5000); await R7.waitForTimeout(400); fs.unlinkSync(f7d);
+await arm(R7); await R7.evaluate(()=>{ sheetDebug.saveGate=null; window.__wopen(); });   // setOwner's transaction commits, its adopting load is held
+const l7d=await until(async()=>(await held(R7))>0, 5000);
+await R7.setInputFiles('#importFile', f7d); await R7.waitForTimeout(500);   // the file comes in between that commit and the end of the load
+await open(R7); const b7d=await R7.evaluate(()=>window.__b7d);
+await until(async()=>(await stored(R7,'notes')).some(n=>n.id==='imp7d'), 5000); await R7.waitForTimeout(400); fs.unlinkSync(f7d); const toast7d=await R7.evaluate(()=>document.getElementById('toast').textContent), v7d=await stored(R7,'versions','v7d'), h7d=await R7.evaluate(()=>loc('import.history',{n:1}));
 const s7d=await strip(R7), un7d=await R7.evaluate(()=>sheetDebug.sync.unsavedCount()), st7d=await stored(R7,'notes');
-await okWhy('7d a file imported during a held change of owner: the note is stored under '+(await ownerOf(R7))+' (binding '+JSON.stringify(b7d)+', lock '+s7d.lock+', unsaved '+un7d+')', {
-  'setOwner was held': !!g7d, 'the binding ok': b7d && b7d.ok, 'not locked': !s7d.lock, 'nothing unsaved': un7d===0, 'the imported note is stored': st7d.some(n=>n.id==='imp7d' && n.blocks.some(b=>b.text==='з файлу'))}, ()=>diag({R7}));
+await okWhy('7d a file with history imported during a held change of owner: the note and its named version are stored under '+(await ownerOf(R7))+' (binding '+JSON.stringify(b7d)+', lock '+s7d.lock+', unsaved '+un7d+', «'+toast7d+'»)', {
+  'setOwner was held': !!g7d, 'its adopting load was held': !!l7d, 'the binding ok': b7d && b7d.ok, 'not locked': !s7d.lock, 'nothing unsaved': un7d===0, 'the imported note is stored': st7d.some(n=>n.id==='imp7d' && n.blocks.some(b=>b.text==='з файлу')), 'its named version is stored': !!v7d && v7d.name==='Названа з файлу', 'the toast counts the version': toast7d.includes(h7d)}, ()=>diag({R7}));
 
 const errs=[...A.errs, ...D.errs, ...G.errs, ...H6.errs, ...I7.errs, ...J7.errs, ...K7.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
