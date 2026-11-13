@@ -296,10 +296,13 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
     let ro=0; const real=dbG.tx.bind(dbG), dbH={...dbG, tx:(st,mode,fn)=>{ if(mode==='readonly' && failLoad && ++ro===2) return Promise.reject(Object.assign(new Error('load failed'),{name:'UnknownError'})); return real(st,mode,fn); }, all:s=>dbG.all(s), get:(s,k)=>dbG.get(s,k)};
     const H=device(cloud, failLoad? 'S8' : 'S7', {db:dbH});   // the same store opened anew (a reload): the engine is not loaded yet
     const wh=edit(H,'g0',(C,t)=>({...C, blocks:[{id:'b',row:1,fx:0,text:'старий, дописаний'}], updated:t})).then(res, erc);
-    const eh=H.sync.setOwner(null,{erase:true}).then(()=>'ok', erc);
+    const eh=H.sync.setOwner(null,{erase:true}).then(()=>'ok', e=>(e.committed? 'committed:' : '')+(e.code||e.name));
     const oh=[await eh, await wh];
+    // a save called after that erase (the page still showing the erased note): refused too while the erase's adopting load has failed
+    const wa=failLoad? await edit(H,'g0',(C,t)=>({...(C||{}), id:'g0', title:'до стирання', blocks:[{id:'b',row:1,fx:0,text:'дописано після'}], created:t, updated:t})).then(res, erc) : 'epoch';
     ok('5s'+(failLoad? '6' : '5')+' a write called before an erase of this engine and ordered after its commit'+(failLoad? ', the erase\'s adopting load failing' : '')+' is refused ('+oh.join(', ')+'): the device stays empty, nothing queued',
-      oh[0]===(failLoad? 'UnknownError' : 'ok') && oh[1]==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner')); } }
+      oh[0]===(failLoad? 'committed:UnknownError' : 'ok') && oh[1]==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner'));
+    if(failLoad) ok('5s7 a save called after an erase whose adopting load failed ('+wa+') is refused as well: nothing of the erased note comes back', wa==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0')); } }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});

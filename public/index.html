@@ -794,7 +794,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111203" integrity="sha384-8Aqk3jtznhf+WC5G6VusVFd6HwPg+8HBV4Sj29XouvwRMZ8cJf1kIAJOWbIHwBIz"></script>
+<script src="sync.js?b=2026111203" integrity="sha384-MzUGOEyLHp1W3ASoigAO7IpqsRYUsXZz7DUc5Q0UJes+Ddqzd+hW/BcFeZs7Axv2"></script>
 <script src="cloud.js?b=2026111203" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
@@ -1551,7 +1551,8 @@ async function showOwnerDialog(user, owner, ep0){ ACC.dialog=true; accStatus();
       const B={uid:user.uid, env:FB.env, email:user.email};
       if(c==='add'){ await bindOwner(B,{expectEpoch:ep0}); connectAccount(user); return; }
       DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
-  catch(e){ if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
+  catch(e){ if(e && e.committed){ snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; }   // the erase committed and only the load after it failed: the screen shows erased notes, so it goes as on success
+    if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
   finally{ ACC.dialog=false; accStatus(); } }
 // a choice dialog: askChoice({title, text, buttons:[{id, label, pri, danger}]}) → Promise<id | 'cancel'>; Esc, a click outside and Back cancel, like ask()
 const choiceDlg=$('choice'); let choiceEnd=null;
@@ -1611,7 +1612,7 @@ async function removeFromDevice(){ if(DYING || ACC.signingOut) return; setMenu(f
     if(c!=='remove') return;
     if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
     const ep=SYNC.epoch; DYING=true; await signOutCore();
-    try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && e.code==='epoch')) throw e; say(loc('account.raced')); }
+    try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && (e.code==='epoch' || e.committed))) throw e; if(e.code==='epoch') say(loc('account.raced')); }   // committed: erased, only the load after it failed; the page reloads as on success
     snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
 // the engine must sign in again (its token is refused): the user is signed out here and told so
 async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ await signOutCore(); ACC.probe='reauth'; accUI(); accStatus(); } finally{ ACC.reauth=false; } }
