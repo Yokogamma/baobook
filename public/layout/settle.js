@@ -65,13 +65,16 @@ function atTarget(box, at, cols, ctx, fresh = false) {
 }
 
 /** The columns each block left and came into between two layouts, with why and how (GAP's inputs), from the geometry (transition.js
- *  `explain`): the moved block of a carry or a creation comes in `put` and leaves the columns it no longer covers `narrow` (M9), or, for an
+ *  `explain`), each block that changed them one SETTLE changed (`by`: the blocks the phases reshaped or sized): the moved block of a carry or a creation comes in `put` and leaves the columns it no longer covers `narrow` (M9), or, for an
  *  undo's carry back or a deleted block made again (`canonical`), leaves every column of base `away` and comes into every column it has
  *  `back`; the widened block of the width handle leaves `narrow` and comes in `self`; any other block leaves `narrow` when its width changed
  *  and `press` when it was pressed aside, and comes in `self`. */
-function columnsOf(base, after, moved, how) {
+function columnsOf(base, after, moved, how, by) {
   const g = explain(base, after), wOf = (L, id) => L.boxes.get(id)?.w;
   const leave = [], enter = [];
+  // the geometry's columns, each explained by what changed them: the moved block, or a block a primitive reshaped (P-ASIDE, P-SINK, P-REST),
+  // phase 9 (a) gave its rest width, or phase 1a its size; a block that changed columns with none of these is SETTLE's error (RC3)
+  for (const [id, c] of [...g.left, ...g.entered]) if (id !== moved && !by.has(id)) throw new Failed(`settle: ${id} changed its columns (${c}) and nothing in SETTLE moved it there`);
   if (how === 'canonical' && moved != null) {
     const B = base.boxes.get(moved), A = after.boxes.get(moved);
     if (B) for (let c = extent(B).c0; c <= extent(B).c1; c++) leave.push([moved, c, 'away']);
@@ -149,7 +152,7 @@ function wrapper(start, change, memory, ctx, hooks) {
         swappedWith.add(th.id);
         const ws = swapped(r.layout, g, th, ctx, stepsGuard(r.layout));
         if (hooks.trace) hooks.trace('3', ws.L, { swap: [g, th.id] });
-        const cl = columnsOf(r.layout, ws.L, g, 'put'), pass = [];
+        const cl = columnsOf(r.layout, ws.L, g, 'put', ws.reshaped), pass = [];
         for (const [c, p, q] of cl.reordered) {
           if (p === g || q === g) pass.push([g, c]);
           else if (p === th.id || q === th.id) pass.push([th.id, c]);
@@ -306,7 +309,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     // phase moved it (P-UP stands it under a block that now stands at its cell and cannot go up), never the row of the place it was carried
     // back from, which its box still holds (found by tests/layoutgestures.mjs)
     if (change.canonical && g != null && ws.L.boxes.has(g)) { const X = ws.L.boxes.get(g); if (X.yc !== X.y) { const boxes = new Map(ws.L.boxes); boxes.set(g, { ...X, yc: X.y }); ws.L = { ...ws.L, boxes }; } }
-    const cl = columnsOf(base, ws.L, g, how);
+    const cl = columnsOf(base, ws.L, g, how, ws.reshaped);
     /** @type {Transition} */
     // the carried block is the moved block of a carry or a creation; the widened block of the width handle comes into its new columns by
     // itself and carries nothing (GAP's inputs)
@@ -330,12 +333,14 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   // ---- 9. rest: (a) RESTPASSES passes of SIZE.8, (b) the hits left, by P-REST or P-SEP, within RESTSTEPS, (c) RELINK against the layout
   // after phase 8 with the moves of (b) only
   let La = L8;
+  const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
   const passes = on(rules, 'SIZE.8') ? ctx.settings.RESTPASSES : 1;
   if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
     const before = La;
     for (const id of La.order) {
       const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
       const w = restCells(La, b, ctx) + 1; if (w === b.w) continue;
+      rested.add(id);
       const nb = measured(b, w, ctx);
       La = resize(put(La, { ...nb, h: b.h, t: b.t ?? 0 }), id, nb.h, nb.t ?? 0);
     }
@@ -355,7 +360,9 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   if (hooks.trace) hooks.trace('9', w9.L);
   if (w9.L !== b9) {
     ran.push('9');
-    const cl = columnsOf(b9, w9.L, null, 'self');
+    // what changed columns since b9: phase 9's own rest widths and P-REST, and for a kind that relinks only here, phase 1a's size
+    const by = new Set([...w9.reshaped, ...rested, ...(deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [])]);
+    const cl = columnsOf(b9, w9.L, null, 'self', by);
     const T = { base: b9, after: w9.L, ...transitionFacts(w9, b9), carried: null, leave: cl.leave, enter: cl.enter, pass: [] };
     const r = relink(T, rules);
     if (!r.ok) throw new Failed('settle: RELINK refused phase 9 (c): ' + (r.errors || []).join('; '));

@@ -21,7 +21,7 @@ import { push, resize, cut } from './gap.js';
 /** A working state over a layout, its moved block and the context; `insert` when the moved block comes in by rule 3 (created, or carried
  *  while away, DRAG.B1), which P-UP reads (G17). @param {Layout} L @param {?string} moved @param {Ctx} ctx @param {boolean} [insert]
  *  @returns {Work} */
-export function working(L, moved, ctx, insert = false) { return { L, base: L, moved, ctx, insert: !!insert, steps: new Map(), follow: new Map(), n: 0, order: L.order.slice() }; }
+export function working(L, moved, ctx, insert = false) { return { L, base: L, moved, ctx, insert: !!insert, steps: new Map(), follow: new Map(), reshaped: new Set(), n: 0, order: L.order.slice() }; }
 /** A phase starts: its visits go in the reading order of the layout it starts from (LAYOUT-RULES §5.1, INV-5). @param {Work} ws */
 export function phase(ws) { ws.order = ws.L.order.slice(); return ws; }
 
@@ -36,9 +36,9 @@ function put(L, box) { const boxes = new Map(L.boxes); boxes.set(box.id, box); r
 const skipOf = (ws) => new Set(ws.moved == null ? [] : [ws.moved]);
 const clone = (m) => new Map([...m].map(([k, v]) => [k, Array.isArray(v) ? v.slice() : v]));
 /** @param {Work} ws */
-export function snapshot(ws) { return { L: ws.L, steps: clone(ws.steps), follow: new Map(ws.follow), n: ws.n }; }
+export function snapshot(ws) { return { L: ws.L, steps: clone(ws.steps), follow: new Map(ws.follow), reshaped: new Set(ws.reshaped), n: ws.n }; }
 /** @param {Work} ws */
-export function restore(ws, s) { ws.L = s.L; ws.steps = clone(s.steps); ws.follow = new Map(s.follow); ws.n = s.n; }
+export function restore(ws, s) { ws.L = s.L; ws.steps = clone(s.steps); ws.follow = new Map(s.follow); ws.reshaped = new Set(s.reshaped); ws.n = s.n; }
 /** The ids of the visit: the reading order of the phase's start, of the blocks still there. */
 const visit = (ws) => ws.order.filter((id) => ws.L.boxes.has(id));
 
@@ -104,9 +104,12 @@ function lift(ws, rows, by) {
   record(ws, before, after, by); ws.L = after;
 }
 /** A block at a new column and width: its height at that width (SIZE.6, through `resize`), the blocks under it following with their gaps,
- *  which is FOLLOW's and no step (LAYOUT-RULES §5.1 phase 4). @param {Work} ws */
+ *  which is FOLLOW's and no step (LAYOUT-RULES §5.1 phase 4). The one way a primitive changes a block's columns, so it records the block
+ *  (`reshaped`): the transition's columns are the geometry's, and SETTLE fails on a block that changed them with no primitive saying so
+ *  (the architecture review of 0a262d7, RC3). @param {Work} ws */
 export function reshape(ws, id, col, w) {
   const b = get(ws, id); if (col === b.col && w === b.w) return;
+  ws.reshaped.add(id);
   const before = ws.L, nb = { ...b, col, w };
   let after = put(before, nb);
   if (w !== b.w) {   // only a new width is measured: a block moved aside keeps its height, an area's included
