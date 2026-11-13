@@ -6,6 +6,8 @@
 // hands out none of the new owner's data. `readGate` holds the engine's one-store reads of `sync` (the loads and lrevOf) while armed.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { serve, CTX } from './lib/server.mjs';
 import { TestCloud } from './lib/cloud.mjs';
 import { newDevice, newTab, lead, stored, typeAt } from './lib/cloudpage.mjs';
@@ -100,8 +102,8 @@ const mid6=await lead(P6); await open(P6); await P6.evaluate(()=>window.__rl); a
 await okWhy('6 an owner check waiting for a load ends after a pagehide: the tab stays without the lead (before the release '+JSON.stringify(mid6)+', after '+JSON.stringify(l6)+')', {
   'it led first': !!l6a, 'the load was held': !!h6, 'the pagehide let the lead go': !mid6.held && !mid6.on, 'not leading after': !l6.on, 'holds no lock after': !l6.held, 'the engine not started after': !l6.started}, ()=>diag({P6}));
 
-/* ── 7. text typed while this tab changes the owner (the fourth race of #143): the save waits for the change and lands under the new owner; before,
-   it reached the store after setOwner's transaction, was checked against the old memory, refused as «epoch», and the tab locked with the text
+/* ── 7. text typed while this tab changes the owner (the fourth race of #143): the save, ordered after setOwner's transaction, takes the owner that
+   transaction writes and lands under it; before, it was checked against the old memory, refused as «epoch», and the tab locked with the text
    unsaved. setOwner's write is held by `saveGate` so the typing falls inside the change ── */
 const I7=await newDevice(br, cloud, SITE, 'I7', {ctx:CTX, connect:{owner:owner('u50'), pace:PACE}}), P7=I7.pg;
 await typeAt(P7,500,300,'до зміни власника'); await P7.waitForTimeout(400);
@@ -118,7 +120,7 @@ await okWhy('7 text typed while this tab changes the owner (setOwner held: '+g7+
   'setOwner was held': !!g7, 'the binding ok': b7 && b7.ok, 'it names the new owner': o7==='u51', 'not locked': !s7.lock && !s7.strip, 'nothing unsaved': un7===0,
   'the text before is stored': has7('до зміни власника'), 'the text typed during the change is stored': has7('під час зміни власника')}, ()=>diag({P7}));
 
-// 7b: text typed right before the change, its autosave (300 ms) not yet run: bindOwner writes it first, under the owner it was typed for (a device of its own)
+// 7b: text typed right before the change, its autosave (300 ms) not yet run (a device of its own)
 const J7=await newDevice(br, cloud, SITE, 'J7', {ctx:CTX, connect:{owner:owner('u53'), pace:PACE}}), Q7=J7.pg;
 await Q7.bringToFront(); await Q7.mouse.click(500,540); await Q7.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet .blk')),null,{timeout:3000});
 await Q7.keyboard.type('перед зміною');
@@ -129,5 +131,18 @@ await okWhy('7b text typed right before the change, its autosave still pending: 
   'the binding ok': b7b && b7b.ok, 'it names the new owner': o7b==='u52', 'not locked': !s7b.lock && !s7b.strip, 'nothing unsaved': un7b===0,
   'the text is stored': st7b.some(n=>n.blocks.some(b=>b.text==='перед зміною'))}, ()=>diag({Q7}));
 
-const errs=[...A.errs, ...D.errs, ...G.errs, ...H6.errs, ...I7.errs, ...J7.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
+// 7d: a file imported while this tab changes the owner: the imported note is stored under the new owner, nothing is locked or unsaved (a device of its own)
+const K7=await newDevice(br, cloud, SITE, 'K7', {ctx:CTX, connect:{owner:owner('u60'), pace:PACE}}), R7=K7.pg;
+const f7d=path.join(os.tmpdir(), 'baobook-import-7d-'+process.pid+'.json');
+fs.writeFileSync(f7d, JSON.stringify({app:'baobook', format:1, exported:new Date().toISOString(), notes:[{id:'imp7d', title:'імпорт під час зміни', blocks:[{id:'b1', row:1, fx:0, text:'з файлу'}], created:Date.now()-1000, updated:Date.now()-1000}]}));
+await R7.evaluate(()=>{ window.__g=0; window.__wg=new Promise(r=>{ window.__wopen=r; }); sheetDebug.saveGate=()=>(window.__g++, window.__wg); });
+await R7.evaluate(o=>{ window.__b7d=sheetDebug.sync.bind(o); }, owner('u62')); const g7d=await until(()=>R7.evaluate(()=>window.__g>0), 5000);
+await R7.setInputFiles('#importFile', f7d); await R7.waitForTimeout(500);
+await R7.evaluate(()=>{ sheetDebug.saveGate=null; window.__wopen(); }); const b7d=await R7.evaluate(()=>window.__b7d);
+await until(async()=>(await stored(R7,'notes')).some(n=>n.id==='imp7d'), 5000); await R7.waitForTimeout(400); fs.unlinkSync(f7d);
+const s7d=await strip(R7), un7d=await R7.evaluate(()=>sheetDebug.sync.unsavedCount()), st7d=await stored(R7,'notes');
+await okWhy('7d a file imported during a held change of owner: the note is stored under '+(await ownerOf(R7))+' (binding '+JSON.stringify(b7d)+', lock '+s7d.lock+', unsaved '+un7d+')', {
+  'setOwner was held': !!g7d, 'the binding ok': b7d && b7d.ok, 'not locked': !s7d.lock, 'nothing unsaved': un7d===0, 'the imported note is stored': st7d.some(n=>n.id==='imp7d' && n.blocks.some(b=>b.text==='з файлу'))}, ()=>diag({R7}));
+
+const errs=[...A.errs, ...D.errs, ...G.errs, ...H6.errs, ...I7.errs, ...J7.errs, ...K7.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
