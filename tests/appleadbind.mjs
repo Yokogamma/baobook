@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { TestCloud } from './lib/cloud.mjs';
-import { newDevice, newTab, lead, stored } from './lib/cloudpage.mjs';
+import { newDevice, newTab, lead, stored, typeAt } from './lib/cloudpage.mjs';
 import { until } from './lib/wait.mjs';
 const srv=await serve(); const SITE=srv.url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
@@ -100,5 +100,34 @@ const mid6=await lead(P6); await open(P6); await P6.evaluate(()=>window.__rl); a
 await okWhy('6 an owner check waiting for a load ends after a pagehide: the tab stays without the lead (before the release '+JSON.stringify(mid6)+', after '+JSON.stringify(l6)+')', {
   'it led first': !!l6a, 'the load was held': !!h6, 'the pagehide let the lead go': !mid6.held && !mid6.on, 'not leading after': !l6.on, 'holds no lock after': !l6.held, 'the engine not started after': !l6.started}, ()=>diag({P6}));
 
-const errs=[...A.errs, ...D.errs, ...G.errs, ...H6.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
+/* ── 7. text typed while this tab changes the owner (the fourth race of #143): the save waits for the change and lands under the new owner; before,
+   it reached the store after setOwner's transaction, was checked against the old memory, refused as «epoch», and the tab locked with the text
+   unsaved. setOwner's write is held by `saveGate` so the typing falls inside the change ── */
+const I7=await newDevice(br, cloud, SITE, 'I7', {ctx:CTX, connect:{owner:owner('u50'), pace:PACE}}), P7=I7.pg;
+await typeAt(P7,500,300,'до зміни власника'); await P7.waitForTimeout(400);
+await P7.evaluate(()=>{ window.__g=0; window.__wg=new Promise(r=>{ window.__wopen=r; }); sheetDebug.saveGate=()=>(window.__g++, window.__wg); });
+await P7.evaluate(o=>{ window.__b7=sheetDebug.sync.bind(o); }, owner('u51'));
+const g7=await until(()=>P7.evaluate(()=>window.__g>0), 5000);   // setOwner's transaction is held
+await typeAt(P7,500,420,'під час зміни власника'); await P7.waitForTimeout(400);
+const mid7=await P7.evaluate(()=>window.__g);
+await P7.evaluate(()=>{ sheetDebug.saveGate=null; window.__wopen(); }); const b7=await P7.evaluate(()=>window.__b7);
+await until(()=>P7.evaluate(()=>!sheetDebug.sync.unsavedCount() && !sheetDebug.sync.locked()), 5000); await P7.waitForTimeout(300);
+const s7=await strip(P7), un7=await P7.evaluate(()=>sheetDebug.sync.unsavedCount()), o7=await ownerOf(P7), st7=await stored(P7,'notes');
+const has7=t=>st7.some(n=>n.blocks.some(b=>b.text===t));
+await okWhy('7 text typed while this tab changes the owner (setOwner held: '+g7+', writes held meanwhile: '+mid7+'): the binding '+JSON.stringify(b7)+', the tab names '+o7+', lock '+s7.lock+', unsaved '+un7, {
+  'setOwner was held': !!g7, 'the binding ok': b7 && b7.ok, 'it names the new owner': o7==='u51', 'not locked': !s7.lock && !s7.strip, 'nothing unsaved': un7===0,
+  'the text before is stored': has7('до зміни власника'), 'the text typed during the change is stored': has7('під час зміни власника')}, ()=>diag({P7}));
+
+// 7b: text typed right before the change, its autosave (300 ms) not yet run: bindOwner writes it first, under the owner it was typed for (a device of its own)
+const J7=await newDevice(br, cloud, SITE, 'J7', {ctx:CTX, connect:{owner:owner('u53'), pace:PACE}}), Q7=J7.pg;
+await Q7.bringToFront(); await Q7.mouse.click(500,540); await Q7.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet .blk')),null,{timeout:3000});
+await Q7.keyboard.type('перед зміною');
+const b7b=await Q7.evaluate(o=>sheetDebug.sync.bind(o), owner('u52'));
+await until(()=>Q7.evaluate(()=>!sheetDebug.sync.unsavedCount()), 3000); await Q7.keyboard.press('Escape'); await Q7.waitForTimeout(500);
+const s7b=await strip(Q7), un7b=await Q7.evaluate(()=>sheetDebug.sync.unsavedCount()), o7b=await ownerOf(Q7), st7b=await stored(Q7,'notes');
+await okWhy('7b text typed right before the change, its autosave still pending: the binding '+JSON.stringify(b7b)+', the tab names '+o7b+', lock '+s7b.lock+', unsaved '+un7b, {
+  'the binding ok': b7b && b7b.ok, 'it names the new owner': o7b==='u52', 'not locked': !s7b.lock && !s7b.strip, 'nothing unsaved': un7b===0,
+  'the text is stored': st7b.some(n=>n.blocks.some(b=>b.text==='перед зміною'))}, ()=>diag({Q7}));
+
+const errs=[...A.errs, ...D.errs, ...G.errs, ...H6.errs, ...I7.errs, ...J7.errs]; ok('no page errors'+(errs.length? ': '+errs.join(' | ') : ''), !errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);

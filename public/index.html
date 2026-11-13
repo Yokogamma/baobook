@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026111202">
+<meta name="baobook-build" content="2026111203">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111202" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
-<script src="cloud.js?b=2026111202" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026111203" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
+<script src="cloud.js?b=2026111203" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -808,7 +808,7 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
 const SRI={'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-vG4woYhb53YYEU4G/mCcmtkkHdZPVXwW0w9RAnPGhIuURPqTGXY3CpU4p+2egr+3', 'layout/gap.js':'sha384-Vu9YQjStP1fRYKlpBu//JJk9Toskvuz14fiZ2CMMKo7RQsDXt8Kd8CAz1XgjXv6k', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/primitives.js':'sha384-ncilcPuyPhJyJ9BUyGSLLCaPzn2tcs6K/Ifdj2W4Gf5UujMWLJB/ves5T0hLFgDO', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-iNlJG6aUoqb7jBzcCpKKmSwqBWM+1ZjCiVlro28wvzyugj01EgdPCCEJ/TUDJVH7', 'layout/size.js':'sha384-+X1IFotA9hPGyz2OtTcq9ylQDRXspYPvtXqoyq/UZHPgqxDCEvG1GQEazyqo92LY', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026111202;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026111203;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
 // on every one and the integrity of the SRI table beside it (a browser without import map integrity loads it unchecked; the service worker checks
 // its set against the same table). Written before any module is imported
@@ -1281,7 +1281,7 @@ async function vwriteNamed(note, m, blocks, meta){ const src=new Map(blocks.map(
   m.blocks.forEach(e=>{ const d=src.get(e.id), body=bodyOf(d); e.s=body; if(!d.kind && d.html) e.r=1; });
   const sig=hashOf(m.title+'\n'+JSON.stringify(m.blocks.map(e=>{ const x={...e}; delete x.s; delete x.r; return x; })));
   const rec={id:vid(), note, t:Math.min(meta.t, vnow()), w:meta.w, reason:meta.reason, title:m.title, sig, blocks:m.blocks, size:new Blob([JSON.stringify(m.blocks)]).size, sum:sumOf(m,prev||null), name:meta.name, keep:1, inline:1};
-  const r=await SYNC.versionLocal({op:'create', rec}); if(!r || !r.ok) throw (r && r.error) || new Error('version: '+((r && r.code)||'failed'));
+  if(BINDP) await BINDP; const r=await SYNC.versionLocal({op:'create', rec}); if(!r || !r.ok) throw (r && r.error) || new Error('version: '+((r && r.code)||'failed'));
   const out=r.rec||rec; VLAST.set(note,{id:out.id,t:out.t,w:out.w,sig:out.sig,reason:out.reason}); DEBUG.vers.size+=out.size||0; storageUI(); tellTabs({t:'vput', note}); syncWake(); return out; }   // vput: the leader reads its queue at once, an open «Історія» of the note elsewhere reloads
 function vwrite(note, m, blocks, meta){ if(DEBUG.vers.fail) return Promise.reject(new Error('vers.fail')); if(meta.name) return SYNC? vwriteNamed(note, m, blocks, meta) : Promise.reject(new Error('no sync core')); const src=new Map(blocks.map(d=>[d.id,d])); const L=VLAST.get(note); let size=0, rec=null;
   return idb.tx(['versions','blobs'],'readwrite',t=>{ const B=t.objectStore('blobs'), V=t.objectStore('versions'); const prevQ=L? V.get(L.id) : null; let pending=1;
@@ -1520,9 +1520,14 @@ async function accessProbe(user){ const fs=ACC.sdk.fs, d=fsDb(), root='env/'+FB.
   try{ await fs.deleteDoc(ref); }catch(_){} return 'open'; }
 function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=null; ACC.otherTab=false; if(!ACC.cloud || ACC.cloud.uid!==user.uid) ACC.cloud=makeCloud(user); CLOUD=ACC.cloud; leadAsk(); persistOnce(); accStatus(); tellTabs({t:'st?'}); }   // st?: the leader (if another tab) answers with its status
 // the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
+// a change of owner (SYNC-PLAN 4.10, the fourth race of #143): a save that reached the store after this engine's setOwner transaction but was checked
+// against the memory of before it was refused as «epoch» and locked the tab with the text unsaved. So what is typed is written first, and a write
+// begun while the change runs (BINDP) waits for it: the note's change and its delta are taken at the call, only the store is reached after
+let BINDP=null;
 async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
   if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
-  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); if(!o.erase){ snapOff=false; snapSave(); } }
+  flushSave(); const t0=Date.now(); while(inflight.size && Date.now()-t0<5000) await sleep(50);   // what is typed goes to storage under the owner it was typed for, before the change
+  let bound; BINDP=new Promise(r=>{ bound=r; }); try{ await SYNC.setOwner(owner, {...o, expectEpoch:ep}); }finally{ BINDP=null; bound(); } LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); if(!o.erase){ snapOff=false; snapSave(); } }
 // the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
 // anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
 async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
@@ -2107,7 +2112,7 @@ let saveP=null; const unsaved=new Map(), inflight=new Map(), REV=new Map(), STOR
    старіший запис, що завершився після новішого, не може ані зняти помилку, ані показати «Збережено». Nor does a write that succeeds while a newer
    edit still waits for its own write (dirty, inside the 300 ms delay) show ✓: «●» stays until that write lands. A field write (fieldWrite) clears the warning
    only when it is the retry of the failed write itself: the warning, and an older write's failure, go only with a write that stored the whole note */
-function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const whole=!(delta && delta.field), snap={...n}, D=noteSnap(n), p=db.save(n, delta && delta.make? delta.make(rev) : delta||editorDelta(n, rev)); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs; whole: it carries the note as it is in memory; make: a delta made for this revision from the note as it is now (a retry makes it again)
+function writeNote(n, delta){ if(DYING) return Promise.resolve({ok:false, code:'dying'}); const rev=(REV.get(n.id)||0)+1; REV.set(n.id,rev); inflight.set(n.id,rev); const whole=!(delta && delta.field), snap={...n}, D=noteSnap(n), arg=delta && delta.make? delta.make(rev) : delta||editorDelta(n, rev), p=BINDP? BINDP.then(()=>db.save(n, arg)) : db.save(n, arg); if(n===cur) saveP=p;   // snap: what this write stores, for the other tabs; whole: it carries the note as it is in memory; make: a delta made for this revision from the note as it is now (a retry makes it again)   // BINDP: a write begun while this tab changes the owner reaches the store after the change (bindOwner)
   p.then(r=>{ if(r.ok && (whole || r.whole)) STORED.set(n.id, Math.max(STORED.get(n.id)||0, rev)); if(r.ok && delta) OKREV.set(delta, Math.max(OKREV.get(delta)||0, rev));
     if(REV.get(n.id)!==rev){ if(!r.ok && r.code!=='purged') lagged(n, rev, r.reason, delta); else if(r.ok) covered(n, rev, whole || r.whole, delta); return; }   // a newer write decides the status, but this failure does not vanish, and this success covers an older one
     inflight.delete(n.id); const lag=LAG.get(n.id); LAG.delete(n.id); const left=lag && (STORED.get(n.id)||0)<lag.rev && !sameChange(lag, delta, rev)? lag : null;   // an older write failed and no write begun after it stored the whole note, nor did this one store the same change
@@ -3334,7 +3339,7 @@ function restoreBlock(id){ const v=H.view; if(!v || !cur) return; const d=verBlo
   offerUndo(loc('hist.blockRestored',{time:at}), ()=>{ if(cur!==n) return; flushSave(); putState(n, {title:n.title, blocks: old? n.blocks.map(x=>x.id===id? old : x) : n.blocks.filter(x=>x.id!==id)}); }, {big:true}); }   // undo puts back only this block
 function nameHist(){ histNameRow.hidden=false; histName.value=(H.view&&H.view.name)||''; histName.focus(); histName.select(); }
 async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if(!name || !n) return; histNameRow.hidden=true;
-  let done=true; if(v) await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:v.name? 'rename' : 'name', id:v.id, name}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } tellTabs({t:'vput', note:n.id}); syncWake(); });   // through the core (SYNC-PLAN 4.9): the name, keep/inline and the bodies the history still has (a missing one makes it «неповна»), with its job and lrev
+  let done=true; if(v) await vqueue(n.id, async()=>{ if(BINDP) await BINDP; const r=await SYNC.versionLocal({op:v.name? 'rename' : 'name', id:v.id, name}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } tellTabs({t:'vput', note:n.id}); syncWake(); });   // through the core (SYNC-PLAN 4.9): the name, keep/inline and the bodies the history still has (a missing one makes it «неповна»), with its job and lrev
   else { flushSave(); done=!!(await vcapture(n.id, {title:n.title, blocks:n.blocks, updated:n.updated}, 'manual', name)); }   // «Зараз» becomes a named version (R4)
   if(done) say(loc('hist.named',{name})); await loadHist(); }   // a refusal of the core (another owner, a locked tab) names nothing, so it says nothing
 // «Видалити версію» (SYNC-PLAN 4.9, 4.19): only a named version, through the core (a tombstone job when it is or may be in the cloud); no undo,
@@ -3342,7 +3347,7 @@ async function saveName(){ const name=histName.value.trim(), n=cur, v=H.view; if
 // kept only here included (local-only does not prove the cloud has no copy of the same id: another device may have sent it in full, §4.9)
 async function deleteVersion(){ const n=cur, v=H.view; if(!n || !v || !v.name) return;
   if(!await ask({title:loc('hist.deleteTitle',{name:v.name}), text:loc(SYNC.owner? 'hist.deleteAll' : 'hist.deleteHere'), ok:loc('hist.deleteOk')}) || cur!==n || !H.view || H.view.id!==v.id) return;
-  let done=true; await vqueue(n.id, async()=>{ const r=await SYNC.versionLocal({op:'delete', id:v.id}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } VLAST.delete(n.id); tellTabs({t:'vput', note:n.id}); syncWake(); });
+  let done=true; await vqueue(n.id, async()=>{ if(BINDP) await BINDP; const r=await SYNC.versionLocal({op:'delete', id:v.id}); if(!r || !r.ok){ done=false; throw (r && r.error) || new Error('version: '+((r && r.code)||'failed')); } VLAST.delete(n.id); tellTabs({t:'vput', note:n.id}); syncWake(); });
   if(!done) return; DEBUG.vers.size=Math.max(0, DEBUG.vers.size-(v.size||0)); H.sel='now'; showNow(); say(loc('hist.deleted',{name:v.name})); storageUI(); await loadHist(); }
 async function clearHist(){ const n=cur; if(!n || !await ask({title:loc('hist.clearTitle',{title:titleOf(n)}), text:loc('hist.clearText'), ok:loc('hist.clearOk')}) || cur!==n) return; H.sel='now'; showNow();
   await vqueue(n.id, async()=>{ const list=await vlist(n.id), stay=list.filter(v=>v.keep || v.name); await vdelete(n.id, list.filter(v=>!v.keep && !v.name), stay); const top=stay.sort((a,b)=>b.t-a.t)[0]; VLAST.set(n.id, top? {id:top.id,t:top.t,w:top.w,sig:top.sig,reason:top.reason} : null); }); storageUI(); await loadHist(); }   // only this device's automatic history goes; named versions and conflict copies stay (SYNC-PLAN §2)
