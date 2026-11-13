@@ -5,7 +5,8 @@
 // (1) both writes held by saveGate and released together: both transactions are made in one turn, so IndexedDB itself queues the second behind the
 // first, and the first one's result (microtasks after its commit) must reach the snapshot before the second one's first request (a later task);
 // (2) slow storage, every write delayed in the order it began (no gate held, as a slow IndexedDB on Android does); (3) the same with a text edited
-// twice. Cases 2 and 3 check first that the writes did overlap (the older one not landed when the newer one began), so a slow machine cannot pass them vacuously: the stored text is the last one and no conflict copy is made
+// twice: the stored text is the last one and no conflict copy is made. Cases 2 and 3 check first that the writes did overlap (the older one not landed
+// when the newer one began), so a slow machine cannot pass them vacuously
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
@@ -28,11 +29,12 @@ const into=async(text, ...keys)=>{ const bb=await pg.locator('#sheet .blk .txt',
   for(const k of keys) if(k.type!=null) await pg.keyboard.type(k.type); else await pg.keyboard.press(k); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600); };
 const del=text=>into(text, 'Control+a', 'Delete', 'Backspace');   // the text emptied, then Backspace on the empty block drops it
 // slow storage: every write that touches notes takes 2.5 s, in the order the writes began (the store queues them; nothing overtakes another);
-// __pend counts the writes waiting, drained() waits until none is left and the engine is idle (no fixed wait)
-const slow=()=>pg.evaluate(()=>{ let q=Promise.resolve(); window.__pend=0; sheetDebug.saveGate=st=>{ if(!st.includes('notes')) return Promise.resolve(); window.__pend++;
-  return q=q.then(()=>new Promise(r=>setTimeout(r,2500))).then(()=>{ window.__pend--; }); }; });
-const pending=()=>pg.evaluate(()=>window.__pend);
-const drained=async()=>{ await pg.waitForFunction(()=>window.__pend===0, null, {timeout:30000}); await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await settle(pg, 600); };
+// __pend.n counts the writes waiting (a counter of its own for each slow(): a write of an earlier gate cannot touch the next one's), drained() waits until
+// none is left and the engine is idle (no fixed wait), the gate cleared in the same turn as the last check
+const slow=()=>pg.evaluate(()=>{ let q=Promise.resolve(); const c=window.__pend={n:0}; sheetDebug.saveGate=st=>{ if(!st.includes('notes')) return Promise.resolve(); c.n++;
+  return q=q.then(()=>new Promise(r=>setTimeout(r,2500))).then(()=>{ c.n--; }); }; });
+const pending=()=>pg.evaluate(()=>window.__pend.n);
+const drained=async()=>{ await pg.waitForFunction(()=>{ if(window.__pend.n) return false; sheetDebug.saveGate=null; return true; }, null, {timeout:30000}); await settle(pg, 600); };
 const ids=new Set();
 
 /* ── 1. a block added and deleted, both writes held by the gate and released together ── */
