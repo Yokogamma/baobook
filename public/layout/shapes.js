@@ -124,8 +124,15 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  *   // pressed; a block may be in both
  */
 
+/** The neighbour letting the block through (LAYOUT-RULES §5.1b): its id, the row it stands at, the side it stands on, the moved block's
+ *  target when it was chosen or where the last swap put it (`at`: the block's own frame row there and that `frow`), and the last target
+ *  before that one (DRAG.B3 reads it), so that the pipeline runs again on what the choice was made on; after a swap, the `frow` line it
+ *  crossed, which takes the two back (null before any swap).
+ * @typedef {{id:string, row:number, side:'below'|'above', at:{col:number, y:number, frow:number}, last:?Target, line:?number}} Through
+ */
+
 /** The carry memory (LAYOUT-RULES §6.D): only what SETTLE reads.
- * @typedef {{away:boolean, sides:Map<string,'left'|'right'>, through:?{id:string, row:number, side:'below'|'above'}, areaBottoms:Map<string,number>, lastTarget:?Target, dir:'up'|'down'}} Memory
+ * @typedef {{away:boolean, sides:Map<string,'left'|'right'>, through:?Through, areaBottoms:Map<string,number>, lastTarget:?Target, dir:'up'|'down'}} Memory
  */
 
 /** Measuring (LAYOUT-ENGINE-PLAN §4.3): by block id, `rows` the canonical rows of its content at a card width of `cells`, `shown` the displayed

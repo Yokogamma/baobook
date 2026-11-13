@@ -55,7 +55,8 @@ export function restCells(layout, box, ctx) {
   if (!isElastic(box, ctx)) return cap;
   const inside = Math.max(1, layout.cols - (box.col + 1));
   if (!on(ctx.rules, 'SIZE.1')) return Math.min(cap, inside);
-  const floor = Math.max(kindOf(box, ctx).minCells(box, ctx.measure), Math.min(ctx.measure.natural(box.id), ctx.settings.MINC));
+  // its floor, but never past its container's last column (INV-4, core): a block nearer the right edge than its floor narrows to the edge
+  const floor = Math.min(inside, Math.max(kindOf(box, ctx).minCells(box, ctx.measure), Math.min(ctx.measure.natural(box.id), ctx.settings.MINC)));
   for (let w = Math.min(cap, inside); w > floor; w--) if (w <= roomAt(layout, box, w, ctx)) return w;
   return floor;   // it does not fit even at its floor: it hits, which P-REST or P-SEP settles (phase 9 (b))
 }

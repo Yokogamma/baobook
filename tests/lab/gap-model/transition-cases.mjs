@@ -378,6 +378,22 @@ export function transitionCases(make = createModel) {
       T(m, { X: { c0: 1, c1: 2, y: 3 }, Y: { y: 7 } }, { steps: [[['X'], 1], [['X', 'Y'], 2]], carried: 'X', leave: [['X', 0, 'narrow']], enter: [['X', 2, 'put']] }),
       (m) => { const r = [m.rows(), m.rows('canonical')]; m.show('X', 0); return [...r, m.rows()]; },
       [{ X: 3, Y: 7 }, { X: 3, Y: 4 }, { X: 3, Y: 4 }]); }
+  // a swap relinked against the result the pointer saw (LAYOUT-RULES §5.1b; the independent review of 07d2a7f): the hold's RELINK and the
+  // swap's keep another memory than one RELINK of the whole carry. X shrunk over N (N held at 6 by its column 3, slack in column 2),
+  // carried down onto N and held (N pushed to 8), then swapped (N 7, X 9): the same rows either way, but split, N's stack in column 2 is
+  // the row the swap put it at; whole, the slack from before the carry; X deleted and N narrowed to column 2, N stays at 7 or goes up to 3.
+  // No law makes the two equal; SETTLE splits (G20, the owner, 2026-11-13: O-29 (а))
+  { const res = [];
+    for (const whole of [false, true]) {
+      const m = make().open([blk('X', 1, 2, 0, 4), blk('N', 2, 3, 6, 2)]); m.height('X', 1);
+      const held = T(m, { X: { y: 7 }, N: { y: 8 } }, { steps: [[['X'], 5], [['X', 'N'], 2]], carried: 'X' });
+      const swap = { steps: [[['N'], -1], [['X'], 2]], carried: 'X', swap: ['X', 'N'], pass: [['X', 2]] };
+      if (whole) m.relink(T(m, { X: { y: 9 }, N: { y: 7 } }, { ...swap, steps: [...held.steps, ...swap.steps] }));
+      else { m.relink(held); m.relink(T(m, { X: { y: 9 }, N: { y: 7 } }, swap)); }
+      const r = [m.rows(), m.stack('N', 2)]; m.remove('X'); m.width('N', 2, 2); r.push(m.rows()); res.push(r);
+    }
+    out.push(['O-29: the hold\'s RELINK and the swap\'s keep another memory than one of the whole carry: N stays at 7 split, goes up to 3 whole', res,
+      [[{ N: 7, X: 9 }, 'top | _7 |', { N: 7 }], [{ N: 7, X: 9 }, 'top | _3 |', { N: 3 }]], []]); }
   return out;
 }
 
