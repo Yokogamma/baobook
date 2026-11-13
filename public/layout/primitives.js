@@ -94,7 +94,9 @@ export function transitionFacts(ws, base, o = {}) {
         const e = extent(b); if (e.c0 > c || c > e.c1 || e.r0 <= x.r1) continue;
         if (!next || e.r0 < extent(base.boxes.get(next)).r0) next = b.id;
       }
-      if (next && ws.L.boxes.has(next)) moved.add(next);
+      // only while it still stands there after the phases changed columns: one pressed out of the column comes in by itself (`self`)
+      const n = next && ws.L.boxes.get(next), f = n && extent(n);
+      if (f && f.c0 <= c && c <= f.c1) moved.add(next);
     }
   }
   const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));

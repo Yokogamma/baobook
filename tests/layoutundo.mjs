@@ -7,9 +7,13 @@
 //          stands it under a block that cannot go up (2a, settle.js phase 8), no pass declared for it under a fallback (2b), and its place
 //          measured with rule 5 made, the blocks the phases moved out of its way at their targets (2c, gap.js, as the model has it).
 //   1b     O-30, decided as G21 (the owner, 2026-11-13): a block right under it in a column it keeps, which no phase moved, stays where it
-//          stands, as a drop at the old cell would leave it (primitives.js \`transitionFacts\` names it, RELINK holds it).
+//          stands, as a drop at the old cell would leave it (primitives.js `transitionFacts` names it, RELINK holds it);
+//   3–3c   the two measures (the independent review of c5efdda): its cell is canonical, RELINK gets its canonical row and FOLLOW shows it
+//          under the temporary heights there, over its cell (3), over one of its two columns (3a), on a block P-UP lifts (3b), on a block
+//          at the cell shown lower (3c, both found by the generator): SETTLE runs an undo on the canonical layout (settle.js `inverse`);
+//   4      G21 holds only a block that still stands under it in a column it keeps: one pressed out of it comes in by itself.
 import { settle, emptyMemory } from '../public/layout/settle.js';
-import { check } from '../public/layout/gap.js';
+import { check, resize, follow } from '../public/layout/gap.js';
 import { resolve, DEFAULT } from '../public/layout/rules.js';
 import { sharesCol } from '../public/layout/geometry.js';
 import { set, text, area, chars, ctxOf, sheet, eq, tally } from './lib/primcase.mjs';
@@ -34,6 +38,53 @@ const carry = (id, col, y, w, o = {}) => ({ type: 'carry', box: null, id, at: { 
   const a = settle(L0, carry('X', 6, 3, 4, { away: true }), emptyMemory(), ctx);
   const b = a.ok && settle(a.layout, carry('X', 0, 0, 4, { away: true, canonical: true }), emptyMemory(), ctx);
   ok('1a X carried away (N up to 0), its undo from other columns: X back at 0, N sunk under it to 2, held there; sound', !!b && b.ok && eq(rows(b.layout), { X: 0, N: 2, M: 1 }) && !check(b.layout).length, b && (b.ok ? rows(b.layout) : b));
+}
+
+/* ── 3. the two measures (the independent review of c5efdda): an undo's cell is canonical; the phases see it where FOLLOW shows it, and
+   RELINK gets its canonical row, moved only by what a phase really moved it, never a temporary push ── */
+{
+  const ctx = ctxOf({});
+  // H over X's old cell in column 1, X carried away to columns 6–7; H then shows two temporary rows (h 3, t 2); X's undo to its cell
+  const L0 = sheet(12, [set('H', 0, 0, 2, 1), set('X', 0, 1, 3, 1)]);
+  const a = settle(L0, carry('X', 5, 7, 3, { away: true }), emptyMemory(), ctx), L1 = a.ok && follow(resize(a.layout, 'H', 3, 2));
+  const u = L1 && settle(L1, carry('X', 0, 1, 3, { away: true, canonical: true }), emptyMemory(), ctx);
+  const z = u && u.ok && follow(resize(u.layout, 'H', 1, 0));
+  ok('3 under a temporary height: H stays at 0, X canonically at 1 and shown at 3; when H folds, X at 1; sound', !!z && eq(rows(u.layout), { H: 0, X: 3 }) && u.layout.boxes.get('X').yc === 1 && eq(rows(z), { H: 0, X: 1 }) && !check(u.layout).length, u && (u.ok ? [rows(u.layout), u.layout.boxes.get('X').yc] : u));
+  // the temporary height over one of X's two columns: K over column 2 shows none; X canonically right under both, shown under H's shown
+  // rows, and back right under both when H folds, its gap in column 2 not lengthened by H's rows
+  const M0 = sheet(12, [set('H', 0, 0, 2, 1), set('K', 1, 0, 2, 1), set('X', 0, 1, 3, 1)]);
+  const b = settle(M0, carry('X', 5, 7, 3, { away: true }), emptyMemory(), ctx), M1 = b.ok && follow(resize(b.layout, 'H', 3, 2));
+  const v = M1 && settle(M1, carry('X', 0, 1, 3, { away: true, canonical: true }), emptyMemory(), ctx);
+  const y = v && v.ok && follow(resize(v.layout, 'H', 1, 0));
+  ok('3a a temporary height over one of its two columns: X shown at 3, canonically at 1, and at 1 under both when H folds; sound', !!y && eq(rows(v.layout), { H: 0, K: 0, X: 3 }) && v.layout.boxes.get('X').yc === 1 && eq(rows(y), { H: 0, K: 0, X: 1 }) && !check(y).length, v && (v.ok ? [rows(v.layout), v.layout.boxes.get('X').yc] : v));
+}
+
+/* ── 3b–3c. the canonical layout for the phases (found by tests/layoutgestures.mjs with temporary heights, after the review of c5efdda): no
+   single row on the screen carries an undo's cell when the phases move a block that shows temporary rows, or when a temporary height shows
+   a block that stands at the cell canonically under it; so SETTLE runs on the canonical layout and FOLLOW shows the temporary rows after ── */
+{
+  const ctx = ctxOf({});
+  const undo = (L, id, col, y, w) => settle(L, carry(id, col, y, w, { canonical: true }), emptyMemory(), ctx);
+  const fold = (L) => { let F = L; for (const b of L.boxes.values()) if (b.t > 0) F = resize(F, b.id, b.h - b.t, 0); return follow(F); };
+  // 3b: B stands over X in start, three rows shown, one canonical; X's undo to row 2 lifts B by P-UP canonically to row 1, and FOLLOW
+  // shows X under B's rows, at 4: X is canonically at its cell, never lowered by the rows B shows
+  const B1 = follow(resize(sheet(12, [set('B', 0, 4, 3, 1), set('X', 0, 5, 3, 1)]), 'B', 3, 2)), b = undo(B1, 'X', 0, 2, 3), bf = b.ok && fold(b.layout);
+  ok('3b P-UP lifts a block that shows temporary rows: B canonically at 1, X at its cell 2, shown at 4; folded, B at 1 and X at 2; sound', !!bf && eq(rows(b.layout), { B: 1, X: 4 }) && b.layout.boxes.get('X').yc === 2 && eq(rows(bf), { B: 1, X: 2 }) && !check(b.layout).length, b.ok ? [rows(b.layout), b.layout.boxes.get('X').yc] : b);
+  // 3c: B stands at X's cell canonically, shown three rows lower by K's temporary rows in a column X does not take; X comes back over it
+  // (B under X in start), so P-DOWN sinks B under X canonically: B at row 2, a row under K canonically, so shown at 4 under K's rows;
+  // folded, at 2
+  const C1 = follow(resize(sheet(12, [set('K', 1, 0, 2, 1), set('X', 2, 0, 3, 1), set('B', 1, 1, 4, 1)]), 'K', 3, 2)), c = undo(C1, 'X', 2, 1, 3), cf = c.ok && fold(c.layout);
+  ok('3c a block at the cell canonically, shown lower by a temporary height elsewhere: sunk under X, B canonically at 2, shown at 4; folded, at 2; sound', !!cf && eq(rows(c.layout), { K: 0, X: 1, B: 4 }) && c.layout.boxes.get('B').yc === 2 && eq(rows(cf), { K: 0, X: 1, B: 2 }) && !check(c.layout).length, c.ok ? [rows(c.layout), c.layout.boxes.get('B').yc] : c);
+}
+
+/* ── 4. G21 holds only a block that still stands under it in a column it keeps (the independent review of c5efdda): X back from columns
+   1–3 to 3–5 by its canonical row; B, columns 2–3 under it, is pressed aside to 1–2 by phase 4 and leaves the one column X keeps, so it
+   comes in by itself at its reference (row 4), not held at 6 ── */
+{
+  const ctx = ctxOf({});
+  const L0 = sheet(12, [set('X', 0, 4, 4, 2), set('B', 1, 6, 3, 3)]);
+  const u = settle(L0, carry('X', 2, 6, 4, { canonical: true }), emptyMemory(), ctx);
+  ok('4 B pressed out of the column X keeps: at its reference 4, columns 1–2; X at 6; sound', u.ok && eq(rows(u.layout), { X: 6, B: 4 }) && u.layout.boxes.get('B').col === 0 && !check(u.layout).length, u.ok ? cells(u.layout) : u);
 }
 
 /* ── 2. recorded by tests/layoutgestures.mjs (seeds 7 and 13), replayed as it runs them: the sheet at rest, the gestures dropped where they end,

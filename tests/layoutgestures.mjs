@@ -14,7 +14,7 @@
 //     owners and lends, not the geometry only.
 // Seeded: node tests/layoutgestures.mjs [seed] [N]
 import { settle, emptyMemory } from '../public/layout/settle.js';
-import { check } from '../public/layout/gap.js';
+import { check, resize, follow } from '../public/layout/gap.js';
 import { DECLS, resolve, DEFAULT, on } from '../public/layout/rules.js';
 import { readingOrder, extent, range, sharesCol } from '../public/layout/geometry.js';
 import { set, text, area, chars, ctxOf, sheet } from './lib/primcase.mjs';
@@ -98,7 +98,7 @@ function grewWrong(r, origin, c) {
   return null;
 }
 
-const fails = {}, firsts = [], stat = { sheets: 0, gestures: 0, moves: 0, refused: 0, holds: 0, swaps: 0, fixpoints: 0, homes: 0, still: 0, others: 0, walls: 0, undos: 0, undoLower: 0, areas: 0 };
+const fails = {}, firsts = [], stat = { sheets: 0, gestures: 0, moves: 0, refused: 0, holds: 0, swaps: 0, fixpoints: 0, homes: 0, still: 0, others: 0, walls: 0, undos: 0, undoLower: 0, temps: 0, areas: 0 };
 const inc = (m, k) => (m[k] = (m[k] || 0) + 1);
 
 for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
@@ -184,16 +184,51 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
         // that stands there now and cannot go up (P-UP), after phase 8's RELINK
         if (rnd() < 0.35) {
           const cur = L.boxes.get(id), cy = b.yc ?? b.y, u = { type: 'carry', box: d.box, id, at: { col: b.col, y: cy, frow: cy, w: b.w }, away: !sharesCol({ ...cur, col: b.col, w: b.w }, cur), canonical: true };
-          hist.push(['undo', b.col, cy, u.away ? 'away' : '']); stat.undos++;
-          let L8 = null; const ru = settle(L, u, emptyMemory(), ctx, { trace: (n, W) => { if (n === '8') L8 = W; } });
-          if (!ru.ok) { if (ru.why !== 'refused') { fail((ru.errors || ['failed'])[0]); dead = true; } }
+          // sometimes under temporary heights (the independent review of c5efdda): set blocks show rows that are not canonical, above the
+          // old cell where there are such, so that the cell's canonical row and the row FOLLOW shows it at differ; and a text, the moved
+          // block too, shows them by its measure (a size change measures it again), as «Розгорнути» or the caret in a fold does (§1.2)
+          let Lu = L; const temps = [];
+          if (rnd() < 0.5) {
+            const cell = { ...b, y: cy }, setb = (j) => j !== id && L.boxes.get(j).cw != null && L.boxes.get(j).kind !== 'area' && !(L.boxes.get(j).t > 0);
+            const over = ids.filter((j) => setb(j) && sharesCol(L.boxes.get(j), cell) && (L.boxes.get(j).yc ?? L.boxes.get(j).y) < cy), pool = over.length ? over : ids.filter(setb);
+            for (let n = int(1, 2); n > 0 && pool.length; n--) { const j = pool.splice(int(0, pool.length - 1), 1)[0], B = Lu.boxes.get(j), t = int(1, 3); Lu = follow(resize(Lu, j, B.h + t, t)); temps.push([j, t]); }
+            const texts = ids.filter((j) => L.boxes.get(j).cw == null && L.boxes.get(j).kind !== 'area' && !(L.boxes.get(j).t > 0));
+            if (texts.length && rnd() < 0.5) {
+              const j = texts[int(0, texts.length - 1)], t = int(1, 2); d.map[j] = { ...d.map[j], temp: t };
+              const rs = settle(Lu, { type: 'size', box: d.box, id: j }, emptyMemory(), ctx);
+              if (rs.ok) { Lu = rs.layout; temps.push([j, t, 'measure']); } else d.map[j] = { ...d.map[j], temp: 0 };
+            }
+            if (temps.length) { stat.temps++; const e = sound(Lu); if (e.length) { fail('unsound under temporary heights: ' + e[0]); dead = true; } }
+          }
+          hist.push(['undo', b.col, cy, u.away ? 'away' : '', temps]); stat.undos++;
+          let L8 = null; const ru = !dead && settle(Lu, u, emptyMemory(), ctx, { trace: (n, W) => { if (n === '8') L8 = W; } });
+          if (dead) {}
+          else if (!ru.ok) { for (const [j, , how] of temps) if (how === 'measure') d.map[j] = { ...d.map[j], temp: 0 }; if (ru.why !== 'refused') { fail((ru.errors || ['failed'])[0]); dead = true; } }
           else {
-            // at its cell after phase 8's RELINK, which places it; phase 9 may then rest a text over it to another height, and it follows
-            const e = sound(ru.layout), X = (L8 || ru.layout).boxes.get(id), gw = grewWrong(ru, L, u);
+            // at its cell after phase 8's RELINK, which places it (phase 9 may then rest a text over it to another height, and it follows),
+            // canonically: lower only under a block that stands at the cell canonically now, never because of rows that are not canonical
+            const e = sound(ru.layout), W = L8 || ru.layout, X = W.boxes.get(id), gw = grewWrong(ru, Lu, u), xc = X && (X.yc ?? X.y);
+            // by extents, an area's frame row included: a block's canonical rows reach into the cell's and stand over where it was put
+            const canonOf = (B) => extent({ ...B, y: B.yc ?? B.y, h: B.h - (B.t || 0) }), cell = X && extent({ ...X, y: cy }), put = X && extent({ ...X, y: xc });
+            const why = X && xc > cy && ![...W.boxes.values()].some((B) => { if (B.id === id || !sharesCol(B, X)) return false; const f = canonOf(B); return f.r1 >= cell.r0 && f.r0 < put.r0; });
             if (e.length) { fail('unsound: ' + e[0]); dead = true; }
             else if (gw) { fail(gw); dead = true; }
-            else if (!X || X.col !== b.col || (X.yc ?? X.y) < cy) { fail('an undo\'s carry back does not put the block at its old cell, or under what now stands there', { got: snap(ru.layout) }); dead = true; }
-            else { if ((X.yc ?? X.y) !== cy) stat.undoLower++; L = ru.layout; }
+            else if (!X || X.col !== b.col || xc < cy) { fail('an undo\'s carry back does not put the block at its old cell, or under what now stands there', { got: snap(ru.layout) }); dead = true; }
+            else if (why) { fail('an undo\'s carry back puts the block lower than its old cell with no block standing there canonically', { got: snap(ru.layout), yc: xc }); dead = true; }
+            else {
+              if (xc !== cy) stat.undoLower++;
+              // the temporary rows folded: every block back at its canonical row, the undone block where the undo put it canonically
+              for (const [j, , how] of temps) if (how === 'measure') d.map[j] = { ...d.map[j], temp: 0 };
+              let Lf = ru.layout;
+              for (const B of ru.layout.boxes.values()) if (B.t > 0) Lf = follow(resize(Lf, B.id, B.h - B.t, 0));
+              if (Lf !== ru.layout) {
+                const ef = sound(Lf), Xf = Lf.boxes.get(id), Xr = ru.layout.boxes.get(id), off = [...Lf.boxes.values()].find((B) => B.y !== (B.yc ?? B.y));
+                if (ef.length) { fail('unsound once the temporary rows fold: ' + ef[0]); dead = true; }
+                else if (off) { fail('a block not at its canonical row once the temporary rows fold', { got: snap(Lf) }); dead = true; }
+                else if (Xf.y !== (Xr.yc ?? Xr.y)) { fail('once the temporary rows fold, the undone block is not where the undo put it canonically', { got: snap(Lf), was: snap(ru.layout) }); dead = true; }
+              }
+              L = Lf;
+            }
           }
         }
       }
@@ -218,6 +253,6 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
 }
 
 const bad = Object.values(fails).reduce((s, n) => s + n, 0), ok = stat.sheets >= N && bad === 0;
-console.log((ok ? '✓ ' : '✗ ') + `${stat.sheets} sheets, ${stat.gestures} gestures of ${stat.moves} moves (${stat.holds} with a neighbour held, ${stat.swaps} swaps, ${stat.refused} refused) and ${stat.others} other changes: SETTLE never failed, every result sound, no phase reversed two blocks, the memory right against its neighbour; ${stat.fixpoints} fixpoints, ${stat.homes} gestures back home, ${stat.still} moves held still, ${stat.undos} undos carried back (${stat.undoLower} under what stands at the old cell), ${stat.walls} walls, ${stat.areas} sheets in an area ${JSON.stringify(fails)}`);
+console.log((ok ? '✓ ' : '✗ ') + `${stat.sheets} sheets, ${stat.gestures} gestures of ${stat.moves} moves (${stat.holds} with a neighbour held, ${stat.swaps} swaps, ${stat.refused} refused) and ${stat.others} other changes: SETTLE never failed, every result sound, no phase reversed two blocks, the memory right against its neighbour; ${stat.fixpoints} fixpoints, ${stat.homes} gestures back home, ${stat.still} moves held still, ${stat.undos} undos carried back (${stat.temps} under temporary heights, ${stat.undoLower} under what stands at the old cell), ${stat.walls} walls, ${stat.areas} sheets in an area ${JSON.stringify(fails)}`);
 for (const f of firsts) console.log('  first failure: ' + JSON.stringify(f).slice(0, 2000));
 process.exit(ok ? 0 : 1);

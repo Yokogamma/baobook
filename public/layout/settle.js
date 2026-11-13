@@ -101,12 +101,41 @@ function columnsOf(base, after, moved, how, by) {
  *  @param {{trace?:(phase:string, layout:Layout, info?:{swap:string[]}) => void}} [hooks] the working layout after each phase of every
  *  run (phase 3: the swapped layout, with its pair), for the dev look and the tests @returns {Result} */
 export function settle(start, change, memory, ctx, hooks = {}) {
-  try { return wrapper(start, change, memory || emptyMemory(), ctx, hooks); }
+  try { return (change.canonical ? inverse : wrapper)(start, change, memory || emptyMemory(), ctx, hooks); }
   catch (e) {
     if (e instanceof Refused) return { ok: false, why: 'refused' };
     if (e instanceof Failed) return { ok: false, why: 'failed', errors: [e.message] };
     return { ok: false, why: 'failed', errors: [e.message] };
   }
+}
+
+/** An undo's change on the inverse path (LAYOUT-ENGINE-PLAN §6.4): its cell is canonical, so SETTLE runs on the canonical layout, every
+ *  temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, and FOLLOW shows the temporary heights again on
+ *  its result. So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
+ *  there wherever a temporary height shows it, RELINK gets the canonical rows, and no temporary push is written into a block, the moved
+ *  block's or another's (the two measures, LAYOUT-RULES §1.2; the independent review of c5efdda, step 2c's groundwork, proposed). A block
+ *  shows again the temporary rows it had when its width and canonical rows are those of start; one the run measured anew (a block at
+ *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
+ *  from it. @returns {Result} */
+function inverse(start, change, memory, ctx, hooks) {
+  const m = ctx.measure, canonical = Object.assign(Object.create(m), { rows: (id, cells) => { const r = m.rows(id, cells); return { ...r, shown: r.rows }; } });
+  let folded = start;
+  for (const b of start.boxes.values()) if (b.t > 0) folded = resize(folded, b.id, b.h - b.t, 0);
+  if (folded !== start) folded = follow(folded);
+  const r = wrapper(folded, change, memory, { ...ctx, measure: canonical }, hooks);
+  let L = r.layout;
+  for (const b of r.layout.boxes.values()) {
+    const s = start.boxes.get(b.id);
+    let t = 0;
+    if (s && s.w === b.w && s.h - (s.t || 0) === b.h) t = s.t || 0;
+    else if (!isArea(b)) { const q = rowsAt(b, b.w - 1, ctx); t = q.shown - q.rows; }
+    if (t > 0) L = resize(L, b.id, b.h + t, t);
+  }
+  if (L !== r.layout) L = follow(L);
+  for (const b of L.boxes.values()) if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
+  const grew = change.box != null ? bottomOf(L) - bottomOf(start) : 0;
+  if (kindOf(change).contain.bottom === 'refuse' && grew > 0) throw new Refused('the handle would make the area taller');
+  return { ...r, layout: L, start, grew };
 }
 
 /** The letting-through wrapper (LAYOUT-RULES §5.1b; step 2b-2, its representation by the architecture review of 0a262d7): for a carry with
@@ -305,9 +334,9 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   if (!deferred && changed()) {
     ran.push('8');
     const how = change.canonical ? 'canonical' : kind.moved === 'target' ? 'put' : 'self';
-    // an undo's carry back is put by its canonical row (GAP.5 rule 3): the row it stands at after the phases, its old cell's or lower where a
-    // phase moved it (P-UP stands it under a block that now stands at its cell and cannot go up), never the row of the place it was carried
-    // back from, which its box still holds (found by tests/layoutgestures.mjs)
+    // an undo's carry back is put by its canonical row (GAP.5 rule 3): the row it stands at after the phases, which run it on the canonical
+    // layout (`inverse`), its old cell's or lower where a phase moved it (P-UP stands it under a block that now stands at its cell and cannot
+    // go up), never the row of the place it was carried back from, which its box still holds (found by tests/layoutgestures.mjs)
     if (change.canonical && g != null && ws.L.boxes.has(g)) { const X = ws.L.boxes.get(g); if (X.yc !== X.y) { const boxes = new Map(ws.L.boxes); boxes.set(g, { ...X, yc: X.y }); ws.L = { ...ws.L, boxes }; } }
     const cl = columnsOf(base, ws.L, g, how, ws.reshaped);
     /** @type {Transition} */
