@@ -60,8 +60,10 @@ self.addEventListener('fetch',e=>{
     return;
   }
   if(url.hostname==='www.gstatic.com' && url.pathname.startsWith('/firebasejs/')){
+    // the copy is stored before the response goes to the page: once an import has ended, the cache holds the module or never will (tests/appsw
+    // 7 and 7c look right after it). A failed write does not fail the load
     e.respondWith(caches.open(SDK).then(async cache=>{ const hit=await cache.match(req); if(hit && await intact(hit, req.integrity)) return hit;
-      if(hit) await cache.delete(req); const r=await fetch(req); if(r.ok) cache.put(req,r.clone()); return r; }));
+      if(hit) await cache.delete(req); const r=await fetch(req); if(r.ok) await cache.put(req,r.clone()).catch(()=>{}); return r; }));
   }
 });
 // a cached response against the integrity a request asks for: only one sha384 token is understood (the import map gives exactly one), and only a
