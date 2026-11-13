@@ -10,7 +10,8 @@
 //     against its leading edge on the side the memory gives, at the row the memory gives, and is `pressed`;
 //   - a sheet comes to rest under carries of a block to where it stands (a fixpoint within 8); a gesture that comes back to its start
 //     cell with no swap gives what a carry there with no memory gives: the memory leaves no trace; the pointer held still (the same
-//     target again from the result's start and memory) changes nothing.
+//     target again from the result's start and memory) changes nothing; «the same» counts the canonical rows and the stacks with their
+//     owners and lends, not the geometry only.
 // Seeded: node tests/layoutgestures.mjs [seed] [N]
 import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check } from '../public/layout/gap.js';
@@ -40,7 +41,10 @@ function draw() {
 }
 
 const snap = (L) => [...L.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]);
-const same = (A, B) => A.boxes.size === B.boxes.size && [...A.boxes].every(([id, a]) => { const b = B.boxes.get(id); return b && a.col === b.col && a.y === b.y && a.w === b.w && a.h === b.h; });
+// the same layout: every block's place, size and canonical row, and its stacks with their owners and lends (the memory of gaps, not the
+// geometry only; the independent review of 07d2a7f)
+const memoryOf = (b) => JSON.stringify([b.col, b.y, b.w, b.h, b.t ?? 0, b.yc ?? b.y, b.above || []]);
+const same = (A, B) => A.boxes.size === B.boxes.size && [...A.boxes].every(([id, a]) => { const b = B.boxes.get(id); return b && memoryOf(a) === memoryOf(b); });
 function sound(L) {
   const errs = check(L);
   const ro = readingOrder(L.boxes.values());

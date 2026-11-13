@@ -3,7 +3,7 @@
 // taken, the fallbacks of switched-off rules, the refusals and their reasons, and every result with its stacks found again (gap.js check:
 // INV-1, INV-2, INV-3) inside its container (INV-4) and in reading order (INV-5). The letting-through wrapper is step 2b's second part.
 import { settle, emptyMemory } from '../public/layout/settle.js';
-import { check, remove, stackAt, showStack } from '../public/layout/gap.js';
+import { check, remove, stackAt, showStack, relink } from '../public/layout/gap.js';
 import { DEFAULT, resolve } from '../public/layout/rules.js';
 import { readingOrder, extent } from '../public/layout/geometry.js';
 import { set, text, chars, ctxOf, sheet, eq, tally } from './lib/primcase.mjs';
@@ -319,6 +319,27 @@ const ctx = ctxOf();
   const F = sheet(9, [text('B1', 0, 1, 7, 2), set('B0', 6, 2, 2, 2), set('B2', 4, 5, 3, 1), set('B4', 4, 7, 4, 1), text('B3', 6, 8, 3, 1), set('B5', 2, 9, 5, 2)]);
   const f1 = settle(F, { ...carry('B1', 0, 0, 7), at: { col: 0, y: 0, frow: 0.5, w: 7 }, through: 'hold' }, emptyMemory(), f);
   ok('22e carried up on its first move: dir up, nothing pressed above, nothing held', f1.ok && f1.memory.dir === 'up' && !f1.memory.through && f1.pressed === null, f1.ok ? [f1.memory.dir, f1.memory.through, f1.pressed] : f1);
+}
+
+/* ── 23. the swap relinked against the result the pointer saw (LAYOUT-RULES §5.1b; the independent review of 07d2a7f, the owner's question
+   O-29): the hold ends one stretch of GAP and the swap starts the next, so the memory of gaps is the one the swap showed, not one RELINK of
+   the whole carry's (tests/lab/gap-model transition-cases, «O-29», runs both on the model and the engine) ── */
+{
+  // X (columns 1–2) shrunk over N (columns 2–3): N stays at 6, held by its column 3, slack in column 2; X carried down onto N and held
+  // (N pushed to 8), then past its middle: they swap, N at 7, X at 9. N's stack in column 2 is the row the swap put it at; X deleted and N
+  // narrowed off column 3 by itself (no primitive holding it), N stays at 7 (one RELINK of the whole carry would send it up to 3)
+  const c = ctxOf({ X: { text: 'x' }, N: { text: 'x' } });
+  const S0 = sheet(12, [set('X', 0, 0, 3, 4), set('N', 1, 6, 3, 2)]);
+  const s1 = settle(S0, { type: 'size', box: null, id: 'X', set: { ch: 1 } }, emptyMemory(), c);
+  const cx = (y, o = {}) => ({ ...carry('X', 0, y, 3), ...o });
+  const h = s1.ok && settle(s1.layout, cx(7, { through: 'hold' }), emptyMemory(), c);
+  const w = h && h.ok && settle(h.start, cx(9), h.memory, c);
+  const st2 = w && w.ok ? showStack(stackAt(w.layout, 'N', 2)) : null;
+  ok('23 X shrunk, held on N at 7 (N 8), carried on to 9: swapped, N at 7 and X at 9, N\'s stack in column 2 «top | _7 |»', s1.ok && rows(s1.layout).N === 6 && h && h.ok && eq(rows(h.layout), { X: 7, N: 8 }) && w && w.ok && w.start !== h.start && eq(rows(w.layout), { N: 7, X: 9 }) && st2 === 'top | _7 |', w && (w.ok ? [rows(w.layout), st2] : w));
+  const d = w && w.ok && settle(w.layout, { type: 'remove', box: null, id: 'X' }, emptyMemory(), c);
+  const L1 = d && d.ok && d.layout, N1 = L1 && L1.boxes.get('N');
+  const n = N1 && relink({ base: L1, after: { ...L1, boxes: new Map([...L1.boxes].map(([k, b]) => [k, k === 'N' ? { ...b, w: 2 } : b])) }, moved: [], carried: null, leave: [['N', 3, 'narrow']], enter: [], pass: [] }, DEFAULT);
+  ok('23a X deleted, N narrowed off column 3 by itself: N stays at 7, where the swap put it', !!n && n.ok && rows(n.layout).N === 7, n && (n.ok ? rows(n.layout) : n));
 }
 
 process.exit(t.fails ? 1 : 0);
