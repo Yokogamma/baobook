@@ -10,8 +10,10 @@
    browser refuses a file of another build that the server answers at that address after a deploy. So a page and its files are always of one build. build.json (the build on the server) is never
    cached. Google Fonts: served from cache, refreshed in the background. Notes live in IndexedDB and never pass through here.
    The Firebase SDK (www.gstatic.com/firebasejs/<version>/…, SYNC-PLAN 4.13): cached when first used; a version lives in its path, so a
-   cached file never goes stale. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
-const BUILD=2026111302, PREFIX='baobook-', WAIT=5000;
+   cached file never goes stale. The page's import map gives each SDK module its integrity, which the request carries: the network fetch
+   enforces it, and a cached copy whose bytes do not match it (cached before the page carried the hashes, or damaged since) is dropped and
+   fetched again, so it cannot fail the page's own check forever. Requests to /__/ (the Firebase Auth pages the Worker proxies) are left alone. */
+const BUILD=2026111303, PREFIX='baobook-', WAIT=5000;
 const SHELL=PREFIX+'shell-'+BUILD, FONTS=PREFIX+'fonts', SDK=PREFIX+'sdk';
 const KEEP=[SHELL, FONTS, SDK];
 const APP=new URL('./', self.registration.scope).href, BUILD_URL=new URL('./build.json', APP).pathname, B='?b='+BUILD;
@@ -58,6 +60,12 @@ self.addEventListener('fetch',e=>{
     return;
   }
   if(url.hostname==='www.gstatic.com' && url.pathname.startsWith('/firebasejs/')){
-    e.respondWith(caches.open(SDK).then(async cache=>{ const hit=await cache.match(req); if(hit) return hit; const r=await fetch(req); if(r.ok) cache.put(req,r.clone()); return r; }));
+    e.respondWith(caches.open(SDK).then(async cache=>{ const hit=await cache.match(req); if(hit && await intact(hit, req.integrity)) return hit;
+      if(hit) await cache.delete(req); const r=await fetch(req); if(r.ok) cache.put(req,r.clone()); return r; }));
   }
 });
+// a cached response against the integrity a request asks for: only one sha384 token is understood (the import map gives exactly one), and only a
+// definite mismatch counts, so anything else keeps the copy and the page's own check still has the last word
+async function intact(r, integrity){ const m=/^sha384-([A-Za-z0-9+/]+={0,2})$/.exec(String(integrity||'').trim()); if(!m) return true;
+  const d=new Uint8Array(await crypto.subtle.digest('SHA-384', await r.clone().arrayBuffer())); let s=''; for(const x of d) s+=String.fromCharCode(x);
+  return btoa(s)===m[1]; }

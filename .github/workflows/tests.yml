@@ -166,6 +166,11 @@ jobs:
               echo "::endgroup::"
             done
             exit $status'
+      # the scenarios above loaded the SDK through the page's import map, whose integrity is FB_SRI; this names a stale hash and its right
+      # value against the same files (tests/emu/.sdk, cached by the step above), also when the scenarios failed because of it
+      - name: FB_SRI matches the SDK files the scenarios loaded
+        if: always()
+        run: node tests/hashes.mjs
       - name: Scenario screenshots
         if: always()
         uses: actions/upload-artifact@v4
