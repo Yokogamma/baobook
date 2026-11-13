@@ -54,14 +54,19 @@ A Node probe on c6f1003 showed that the engine's API accepts a `writeLocal` of a
 
 ### 3.3 The user's writes
 
-1. A write the user makes (a save, an import, a delete, a version, a copy's restore or removal, the device name) compares, inside its transaction, the era of the store with the era of the screen. A mismatch refuses the write (`epoch`).
+1. A write the user makes (a save, an import, a delete, a version, a copy's restore or removal) compares, inside its transaction, the era of the store with the era of the screen. A mismatch refuses the write (`epoch`). The one exception is the device name (`deviceName`): the `device` record is of the device, not of an era, and outlives an erase, so it is written whatever the era. Every other limit holds for it as for any write: the `format` guard, the page's lock, a frozen store.
 2. The owner the write acts for is read from the store inside the same transaction. The decisions that depend on it (`ensureJob`, `queueV`, `importHistory`, `purgeLocal`, `versionLocal`, `versionStates`) take that owner, not `S.owner`. So a save ordered after a first sign-in's commit queues its `out:n:` job in that transaction.
 3. The write waits for nothing: no `await load()` before its transaction, so a save made in `idbLost` opens its transaction in that task. IndexedDB itself orders it against a `setOwner` transaction in flight.
 4. The cache updates a write queues for after its commit (`after`) apply only when the epoch of the engine's memory is the epoch the transaction read. Otherwise the memory is marked not loaded, and the next load reads the store.
 5. A memory value that belongs to the previous owner is not used across epochs: `S.everCaughtUp` in `purgeLocal` counts as false when the epochs differ (a tombstone job is queued).
 6. The raw writes of the page (`idb.tx`, `idb.run`: automatic versions, `idb.del`) compare the era in the same place where `fmtGuard` reads the `format` record first.
-7. **The page chooses no path by the owner in the engine's memory.** Today `purgeNote()` takes `SYNC.purgeLocal()` or the raw `db.remove()` and `vdrop()` by `SYNC.hasOwner()`, read before any transaction. After a first sign-in's commit and before the load, `S.owner` is still empty: the raw path deletes the note, the era check lets it (nothing was erased), no tombstone is queued, and a document of that note in the new owner's cloud comes back. So with IndexedDB every deletion the user makes goes through the core, and «only here, or a tombstone» is decided by the owner read inside that transaction. The same holds for the other branches of the page on `SYNC.owner` or `SYNC.hasOwner()` that lead to a write: `purgeOld()` (the 30-day rule without an owner) and `fbPutCopy()` (§4). Branches that only choose a text or a panel (`hist.deleteAll` against `hist.deleteHere`, the account panel) may read the memory.
+7. **The page chooses no path by the owner in the engine's memory.** Today `purgeNote()` takes `SYNC.purgeLocal()` or the raw `db.remove()` and `vdrop()` by `SYNC.hasOwner()`, read before any transaction. After a first sign-in's commit and before the load, `S.owner` is still empty: the raw path deletes the note, the era check lets it (nothing was erased), no tombstone is queued, and a document of that note in the new owner's cloud comes back. So with IndexedDB every deletion the user makes goes through the core, and «only here, or a tombstone» is decided by the owner read inside that transaction. The same holds for the other branches of the page on `SYNC.owner` or `SYNC.hasOwner()` that lead to a write: `purgeOld()` (the 30-day rule without an owner) and `fbPutCopy()` (§4). Branches that only show a state (the account panel, the status) may read the memory. A text the user confirms an action by is not such a branch: item 9.
 8. **The result of a write reaches the editor through microtasks only.** `laterSnap()` (the fix of the deleted block that came back after two saves held together, `tests/appsaveoverlap.mjs`) relies on it: the commit resolves the older write before the newer transaction's first request, which is a later task. So nothing between a write's commit and its result waits for a task: no load, no step, no `after` hook that awaits one. Item 4's «marked not loaded» is a flag set in that microtask, never a wait.
+9. **A confirmed action keeps the reach the user confirmed.** A dialog that says how far a deletion goes is part of the action. Today «Видалити версію» asks with `hist.deleteHere` («Її буде видалено з цього пристрою») or `hist.deleteAll` by `SYNC.owner` when the dialog opens. A first sign-in while it is open, then the confirmation: the transaction reads an owner and queues a tombstone, and the deletion the user confirmed for this device reaches every device. Reading the owner again just before the dialog shows does not close this; the change can come while it is open.
+   - The page passes the reach it showed (`here` or `all`) with the operation: a version's deletion, «Видалити назавжди» (`purgeLocal`, whose text names no reach but whose effect grows the same way), and any later action of the kind.
+   - Inside the transaction the core compares it with what the owner it read makes of the action. Where the owner makes it reach further than confirmed (`here` confirmed, an owner in the store), nothing is deleted and the refusal has a code of its own (`reach`).
+   - The page then asks again with the text of the new reach; only that confirmation deletes.
+   - The same reach, or a narrower one, goes on.
 
 ### 3.4 The engine's steps
 
@@ -141,7 +146,7 @@ Export files are not affected: the era is not part of a note.
 
 ## 6. What goes and what stays of #146
 
-- **Stays:** the tests (`syncguard` 5s*, `appleadbind`, `emu/erasefail`) as regressions, with the expectations of §8.3; the forced account check that runs again after one in flight (d6e0ab1); `committed` on the error of a change whose load failed, as a hint for the page (no longer what safety rests on).
+- **Stays:** the tests of #146 (`syncguard` 5s*, `appleadbind`, `emu/erasefail`; none of them is on main) carried over for the new mode, with the expectations of §8.3; the forced account check that runs again after one in flight (d6e0ab1); `committed` on the error of a change whose load failed, as a hint for the page (no longer what safety rests on).
 - **Goes:** `adoptOwner` at the commit, `S.stepEpoch`/`S.stepOwner`, `ERASES`, `COMMITS`, `S.erasedUnloaded`, `PENDING.erase`.
 
 ## 7. Stages
@@ -151,8 +156,8 @@ Each stage is a PR into `main`. New code is ES modules in `public/owner/`; `inde
 | Stage | What it holds | What proves it |
 |---|---|---|
 | 1. The contract and the model | the rules of the era and of the two results as pure functions (`public/owner/model.js`); the compatibility table as cases | Node tests |
-| 2. Transactional writes, dormant | §3.3, §3.4, §3.7 in `public/sync.js`, used only by an engine that is given the era of a screen (`deps.era`); the page gives none yet, so the checks of main stay in force and `setOwner` writes no `era` | Node over `MemStore` with `deps.era`; the existing `syncguard` 5s* unchanged without it |
-| 3. The page, and the switch | §3.2 (one read at start), §3.3 items 6–7, §3.5, §3.8, §3.9, §4, the urgent save; the page gives the era, `setOwner` writes `era`; `FORMAT` and `IDB_VER` 5 | browser scenarios (§8.2); `syncguard` 5s* with §8.3 |
+| 2. Transactional writes, dormant | §3.3, §3.4, §3.7 in `public/sync.js`, with the 5s* cases of #146 carried over for the new mode and read again by §8.3 (some of them test the fix of the race, which the old mode keeps), used only by an engine that is given the era of a screen (`deps.era`); the page gives none yet, so the checks of main stay in force and `setOwner` writes no `era` | Node over `MemStore` with `deps.era`; without it, the whole suite of main as it is (main has no 5s* cases: they come from #146) |
+| 3. The page, and the switch | §3.2 (one read at start), §3.3 items 6–7, §3.5, §3.8, §3.9, §4, the urgent save; the page gives the era, `setOwner` writes `era`; `FORMAT` and `IDB_VER` 5 | browser scenarios (§8.2) |
 | 4. The engine made simpler | a separate PR after the others are green: `PENDING`, `OWN`, `allowance`, `LOADS` reduced; `setOwner`, the loads and the steps on one queue (allowed, since no write of the user waits for them) | late loads and callbacks do not spoil a new memory; a save still waits for nothing |
 
 Each PR into `main` is deployed to `.dev`, so «released together» is not enough: no state of `main` may write the new contract or loosen an old check without the page and the barrier. Stage 2 therefore adds code that nothing in the app switches on, and stage 3 switches everything on in one PR: the era from the page, `era` in the store, the raw reads and writes, the messages, and `FORMAT` and `IDB_VER` 5. If the dormant form of stage 2 turns out to cost more than it saves, stages 2 and 3 become one PR; they are never two active halves.
@@ -170,11 +175,12 @@ Every operation of the user in the core is a row of one matrix, each run in two 
 | `purgeOldLocal` (the 30-day rule without an owner) | not run once the store has an owner | refused |
 | `importNote`, `importMany` | the job of every note written | refused |
 | `importHistory` | named versions queued | refused |
-| `versionLocal` create, name, rename, delete | the version job or its tombstone | refused |
+| `versionLocal` create, name, rename | the version job | refused |
+| `versionLocal` delete, `purgeLocal` confirmed as `here` | refused with `reach`, nothing deleted; with `all`, the tombstone | refused |
 | `restoreCopy`, `undoRestore` | the note's job | refused |
 | `dropCopies`, `putCopies` | local only, accepted | refused |
 | `unqueue` | accepted over the new metas | refused |
-| `deviceName` | accepted | accepted: the device record is not of an era |
+| `deviceName` | accepted | accepted: the exception of §3.3 item 1 |
 
 Beside the matrix:
 
@@ -196,6 +202,7 @@ Beside the matrix:
 - A frozen old tab: the upgrade waits and goes on by itself.
 - The `lrev` collision: a screen with `lrev` 2, a change of owner, one edit in another tab, a save here; the other tab's edit stays.
 - Two tabs, a change that keeps the records in one while the other types: no lock.
+- A change of owner between a dialog's showing and its confirmation: «Видалити версію» shown with «з цього пристрою», a first sign-in, then the confirmation. Nothing is deleted, no tombstone is queued, and the dialog asks again with «на всіх пристроях». The same for «Видалити назавжди».
 - «Delete forever» between a first sign-in's commit and the end of the load: a tombstone job is queued, and the note does not come back from the new owner's cloud.
 - A `put` delayed across an erase and the start of a new page (it waits in `TABQ`): nothing of it reaches the new screen or the store.
 - An export with history from an old screen locked after an erase, with the new owner's history already in the store: the file holds the old screen's notes and no history.
@@ -234,3 +241,4 @@ Not opened: Signal Desktop, Joplin, Logseq, AFFiNE, Excalidraw, automerge-repo, 
 
 - **The architecture review of #146 (2026-11-13), three passes with the owner.** Pass 1: five major gaps (the era read with the screen's records, the fallback copies, compatibility one way only, the false lock through reads and the lead, the `lrev` collision). Pass 2: two major and one minor (the `NK` exception, the tabs before the format guard, `syncguard` 5s9). Pass 3: none; the plan merged by #151.
 - **Preflight over main at 2ee9dfc (2026-11-13): three high, two medium.** High: the page chooses the path of a deletion by the owner in memory (§3.3 item 7); a message between tabs carries a note with no origin, `TABQ` included (§3.8); the export's history is read outside the rule of the era (§3.9). Medium: stages 2 and 3 as two active PRs leave an unsafe `main` on `.dev` (§7); the overlapping saves were called an open separate task though main has `laterSnap()` and `tests/appsaveoverlap.mjs` (§3.3 item 8, §8.2, §9). The Node matrix now names every operation (§8.1).
+- **Review of #153 at 263d85a (2026-11-13): one high, two minor.** High: the text a deletion is confirmed by was called cosmetic; a change of owner while the dialog is open widens the deletion to every device (§3.3 item 9). Minor: the device name's exception was in the matrix and not in the rule (§3.3 item 1); the dormant stage 2 named 5s* as a suite of main, where they are not (§7).
