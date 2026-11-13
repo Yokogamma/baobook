@@ -82,6 +82,21 @@ export function transitionFacts(ws, base, o = {}) {
   const moved = new Set([...ws.steps].filter(([id, l]) => !pushedOnly.has(id) && l.some((st) => st.by !== 'swap')).map(([id]) => id));
   if (ws.moved != null) moved.add(ws.moved);
   if (o.swap) for (const id of o.swap) moved.add(id);
+  // an undo's carry back leaves every column and comes back into each (GAP's inputs, `back`): the block right under it in a column it keeps,
+  // which no phase moved, would rise into its place as it leaves. It stays where it stands, as a drop at the old cell would leave it, only
+  // the gaps around the block changing (G21, the owner, 2026-11-13: O-30 (а)): named, so RELINK holds it there (rule 5)
+  if (o.canonical && ws.moved != null && base.boxes.has(ws.moved) && ws.L.boxes.has(ws.moved)) {
+    const x = extent(base.boxes.get(ws.moved)), t = extent(ws.L.boxes.get(ws.moved));
+    for (let c = Math.max(x.c0, t.c0); c <= Math.min(x.c1, t.c1); c++) {
+      let next = null;
+      for (const b of base.boxes.values()) {
+        if (b.id === ws.moved) continue;
+        const e = extent(b); if (e.c0 > c || c > e.c1 || e.r0 <= x.r1) continue;
+        if (!next || e.r0 < extent(base.boxes.get(next)).r0) next = b.id;
+      }
+      if (next && ws.L.boxes.has(next)) moved.add(next);
+    }
+  }
   const order = [...base.order.filter((id) => moved.has(id)), ...[...moved].filter((id) => !base.boxes.has(id))].filter((id) => ws.L.boxes.has(id));
   return o.swap ? { moved: order, swap: o.swap } : { moved: order };
 }

@@ -98,7 +98,7 @@ function grewWrong(r, origin, c) {
   return null;
 }
 
-const fails = {}, firsts = [], stat = { sheets: 0, gestures: 0, moves: 0, refused: 0, holds: 0, swaps: 0, fixpoints: 0, homes: 0, still: 0, others: 0, walls: 0, undos: 0, undoLower: 0, undoOpen: 0, areas: 0 };
+const fails = {}, firsts = [], stat = { sheets: 0, gestures: 0, moves: 0, refused: 0, holds: 0, swaps: 0, fixpoints: 0, homes: 0, still: 0, others: 0, walls: 0, undos: 0, undoLower: 0, areas: 0 };
 const inc = (m, k) => (m[k] = (m[k] || 0) + 1);
 
 for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
@@ -186,10 +186,7 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
           const cur = L.boxes.get(id), cy = b.yc ?? b.y, u = { type: 'carry', box: d.box, id, at: { col: b.col, y: cy, frow: cy, w: b.w }, away: !sharesCol({ ...cur, col: b.col, w: b.w }, cur), canonical: true };
           hist.push(['undo', b.col, cy, u.away ? 'away' : '']); stat.undos++;
           let L8 = null; const ru = settle(L, u, emptyMemory(), ctx, { trace: (n, W) => { if (n === '8') L8 = W; } });
-          // open (LAYOUT-RULES §15.1 O-30): a block right under it in a column it keeps rises into its place as it leaves, and RELINK refuses
-          // its canonical place there; counted apart until O-30 is decided (step 3 builds the undo), every other failure fails
-          if (!ru.ok && ru.why === 'failed' && /a canonical place overlaps/.test((ru.errors || [''])[0])) stat.undoOpen++;
-          else if (!ru.ok) { if (ru.why !== 'refused') { fail((ru.errors || ['failed'])[0]); dead = true; } }
+          if (!ru.ok) { if (ru.why !== 'refused') { fail((ru.errors || ['failed'])[0]); dead = true; } }
           else {
             // at its cell after phase 8's RELINK, which places it; phase 9 may then rest a text over it to another height, and it follows
             const e = sound(ru.layout), X = (L8 || ru.layout).boxes.get(id), gw = grewWrong(ru, L, u);
@@ -221,6 +218,6 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
 }
 
 const bad = Object.values(fails).reduce((s, n) => s + n, 0), ok = stat.sheets >= N && bad === 0;
-console.log((ok ? '✓ ' : '✗ ') + `${stat.sheets} sheets, ${stat.gestures} gestures of ${stat.moves} moves (${stat.holds} with a neighbour held, ${stat.swaps} swaps, ${stat.refused} refused) and ${stat.others} other changes: SETTLE never failed, every result sound, no phase reversed two blocks, the memory right against its neighbour; ${stat.fixpoints} fixpoints, ${stat.homes} gestures back home, ${stat.still} moves held still, ${stat.undos} undos carried back (${stat.undoLower} under what stands at the old cell, ${stat.undoOpen} refused by RELINK, O-30), ${stat.walls} walls, ${stat.areas} sheets in an area ${JSON.stringify(fails)}`);
+console.log((ok ? '✓ ' : '✗ ') + `${stat.sheets} sheets, ${stat.gestures} gestures of ${stat.moves} moves (${stat.holds} with a neighbour held, ${stat.swaps} swaps, ${stat.refused} refused) and ${stat.others} other changes: SETTLE never failed, every result sound, no phase reversed two blocks, the memory right against its neighbour; ${stat.fixpoints} fixpoints, ${stat.homes} gestures back home, ${stat.still} moves held still, ${stat.undos} undos carried back (${stat.undoLower} under what stands at the old cell), ${stat.walls} walls, ${stat.areas} sheets in an area ${JSON.stringify(fails)}`);
 for (const f of firsts) console.log('  first failure: ' + JSON.stringify(f).slice(0, 2000));
 process.exit(ok ? 0 : 1);

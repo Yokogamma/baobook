@@ -1,13 +1,13 @@
 // Node: an undo's carry back through SETTLE (LAYOUT-ENGINE-PLAN §6.4, the inverse path: the block carried back to its old cell as a
 // canonical place, `canonical: true`, RELINK putting it by its canonical row, GAP.5 rule 3). No test reached it before the gesture
 // generator did (tests/layoutgestures.mjs, step 2c's groundwork); each case here fails without its fix:
-//   1      a carry back with nothing in the way, and one from other columns into a cell a block rose into (the sinks named, held where the
+//   1–1a   a carry back with nothing in the way, and one from other columns into a cell a block rose into (the sinks named, held where the
 //          phases put them, never left to the arrival: primitives.js `transitionFacts`, `canonical`);
 //   2–2c   cases the generator recorded, replayed as it ran them: the sinks named (2), the block's canonical row going with it where P-UP
 //          stands it under a block that cannot go up (2a, settle.js phase 8), no pass declared for it under a fallback (2b), and its place
 //          measured with rule 5 made, the blocks the phases moved out of its way at their targets (2c, gap.js, as the model has it).
-// What stays open is LAYOUT-RULES §15.1 O-30: a block right under it in a column it keeps rises into its place when it leaves, and its
-// canonical place is refused there; the generator counts those apart.
+//   1b     O-30, decided as G21 (the owner, 2026-11-13): a block right under it in a column it keeps, which no phase moved, stays where it
+//          stands, as a drop at the old cell would leave it (primitives.js \`transitionFacts\` names it, RELINK holds it).
 import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check } from '../public/layout/gap.js';
 import { resolve, DEFAULT } from '../public/layout/rules.js';
@@ -25,7 +25,12 @@ const carry = (id, col, y, w, o = {}) => ({ type: 'carry', box: null, id, at: { 
   const L0 = sheet(12, [set('X', 0, 0, 4, 2), set('N', 0, 4, 4, 2), set('M', 5, 1, 4, 1)]);
   const d = settle(L0, carry('X', 0, 8, 4), emptyMemory(), ctx);
   const u = d.ok && settle(d.layout, carry('X', 0, 0, 4, { canonical: true }), emptyMemory(), ctx);
-  ok('1 X carried down from 0 to 8 (N pushed to 10), its undo carried back: X at its cell 0, N closed up to 8; sound', !!u && u.ok && eq(rows(u.layout), { X: 0, N: 8, M: 1 }) && !check(u.layout).length, u && (u.ok ? rows(u.layout) : u));
+  ok('1 X carried down from 0 to 8 (N pushed to 10), its undo carried back: X at its cell 0, N where it stands (10), as a drop at the cell would leave it (G21); sound', !!u && u.ok && eq(rows(u.layout), { X: 0, N: 10, M: 1 }) && !check(u.layout).length, u && (u.ok ? rows(u.layout) : u));
+  // O-30, decided as G21 ((а)): X carried one row down onto B (one free row between them before), then undone: B, right under X in its
+  // columns and moved by no phase, stays at 7; X back at 4. Before G21, B rose into X's place as X left and RELINK refused it there
+  const O = sheet(10, [set('X', 0, 4, 4, 2), set('B', 0, 7, 4, 1)]);
+  const o1 = settle(O, carry('X', 0, 5, 4), emptyMemory(), ctx), o2 = o1.ok && settle(o1.layout, carry('X', 0, 4, 4, { canonical: true }), emptyMemory(), ctx);
+  ok('1b O-30: X a row down onto B, undone: X back at 4, B stays at 7 (G21); sound', o1.ok && eq(rows(o1.layout), { X: 5, B: 7 }) && !!o2 && o2.ok && eq(rows(o2.layout), { X: 4, B: 7 }) && !check(o2.layout).length, o2 && (o2.ok ? rows(o2.layout) : o2));
   const a = settle(L0, carry('X', 6, 3, 4, { away: true }), emptyMemory(), ctx);
   const b = a.ok && settle(a.layout, carry('X', 0, 0, 4, { away: true, canonical: true }), emptyMemory(), ctx);
   ok('1a X carried away (N up to 0), its undo from other columns: X back at 0, N sunk under it to 2, held there; sound', !!b && b.ok && eq(rows(b.layout), { X: 0, N: 2, M: 1 }) && !check(b.layout).length, b && (b.ok ? rows(b.layout) : b));
