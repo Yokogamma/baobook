@@ -26,6 +26,10 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  * @typedef {{cols:number, measure:'canonical'|'displayed', boxes:Map<string,Box>, order:string[], areas:Map<string,Layout>}} Layout
  *   // its gaps are its boxes' `above`; column chains are an index built from them; order: the ids in reading order, built once per
  *   // layout, which every visitor walks (INV-5), never the Map; an area's `cols` is read from its Box's `cw`, not kept twice
+ * @typedef {{parent?:?string, col:number, row:number, fx?:number, cw?:number, ch?:number, open?:boolean, collapsed?:boolean}} Stored
+ *   // a block's stored fields as the bridge read them (LAYOUT-ENGINE-PLAN §3.4, §3.5), for layout.js's `diff`: col the engine's column
+ *   // (a sheet block's as §3.1 rounds it from fx), row the stored row as stored (fractional or negative included), fx as stored, cw and
+ *   // ch as read (rounded up to whole cells); the bridge updates them with every write of its own and with what an undo puts back
  * @typedef {{col:number, y:number, frow:number, w:number}} Target   // a moved block's cell, its unrounded row and its width at the target
  *   // the state of LAYOUT-RULES §1.4 («move», «home», «outside») stays in drag.js: at «home» or «outside» no change is made (PR-1), so SETTLE never sees it
  */

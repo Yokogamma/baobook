@@ -7,11 +7,11 @@
 
 import { on } from './rules.js';
 import { extent, isArea, hits, sharesCol, reaches, readingOrder, range, MAXCELL } from './geometry.js';
-import { isElastic, rowsAt, restCells } from './size.js';
+import { isElastic, rowsAt, restCells, canonicalCtx } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
 import { kindOf, judgeCarry, judgeWall } from './changes.js';
-import { working, phase, aside, up, down, sinkAside, sep, rest, transitionFacts } from './primitives.js';
+import { working, phase, aside, up, down, sinkAside, sep, rest as pRest, transitionFacts } from './primitives.js';
 import { chosen, heldChange, past, against, pastMiddle, lineOf, canSwap, swapped, flipped, pressedOf } from './through.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Ctx} Ctx
@@ -118,13 +118,10 @@ export function settle(start, change, memory, ctx, hooks = {}) {
  *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
  *  from it. @returns {Result} */
 function inverse(start, change, memory, ctx, hooks) {
-  // the canonical measure: an adapter of its own over the two answers of `Measure`, each called on `m` itself, so that a frozen measure or
-  // one built as a class serves as it is (the independent review of f7900b2)
-  const m = ctx.measure, canonical = Object.freeze({ rows: (id, cells) => { const r = m.rows(id, cells); return { ...r, shown: r.rows }; }, natural: (id) => m.natural(id) });
   let folded = start;
   for (const b of start.boxes.values()) if (b.t > 0) folded = resize(folded, b.id, b.h - b.t, 0);
   if (folded !== start) folded = follow(folded);
-  const r = wrapper(folded, change, memory, { ...ctx, measure: canonical }, hooks);
+  const r = wrapper(folded, change, memory, canonicalCtx(ctx), hooks);
   let L = r.layout;
   for (const b of r.layout.boxes.values()) {
     const s = start.boxes.get(b.id);
@@ -134,7 +131,7 @@ function inverse(start, change, memory, ctx, hooks) {
     if (t > 0) L = resize(L, b.id, b.h + t, t);
   }
   if (L !== r.layout) L = follow(L);
-  for (const b of L.boxes.values()) if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
+  bounds(L);
   const grew = change.box != null ? bottomOf(L) - bottomOf(start) : 0;
   if (kindOf(change).contain.bottom === 'refuse' && grew > 0) throw new Refused('the handle would make the area taller');
   return { ...r, layout: L, start, grew };
@@ -208,6 +205,71 @@ function wrapper(start, change, memory, ctx, hooks) {
   }
 }
 
+/** Phase 9, rest: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width; (b) the hits left, by P-REST or
+ *  P-SEP, within RESTSTEPS; (c) RELINK against `b9` with the moves of (b) only, the columns phase 9's widths changed, and `extra` (the
+ *  causes of a kind that relinks only here: phase 1a's size, the working state's reshapes). @returns {Layout} */
+function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
+  const rules = ctx.rules;
+  let La = L8;
+  const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
+  const passes = on(rules, 'SIZE.8') ? ctx.settings.RESTPASSES : 1;
+  if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
+    const before = La;
+    for (const id of La.order) {
+      const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
+      const w = restCells(La, b, ctx) + 1; if (w === b.w) continue;
+      rested.add(id);
+      const nb = measured(b, w, ctx);
+      La = resize(put(La, { ...nb, h: b.h, t: b.t ?? 0 }), id, nb.h, nb.t ?? 0);
+    }
+    if (La !== before) La = follow(La); else break;
+  }
+  const w9 = working(La, null, ctx); w9.base = b9;
+  if (firstHit(w9.L)) {
+    phase(w9);
+    for (let k = 0, n = stepsGuard(w9.L); ; k++) {
+      const h = firstHit(w9.L); if (!h) break;
+      if (k > n) throw new Failed('settle: phase 9 (b) exceeds RESTSTEPS');
+      if (!(on(rules, 'P-REST') && pRest(w9, h[0], h[1]))) sep(w9, h[0], h[1]);
+    }
+  }
+  if (hooks.trace) hooks.trace('9', w9.L);
+  if (w9.L === b9) return b9;
+  ran.push('9');
+  // what changed columns since b9: phase 9's own rest widths and P-REST, and the causes the caller names
+  const by = new Set([...w9.reshaped, ...rested, ...extra]);
+  const cl = columnsOf(b9, w9.L, null, 'self', by);
+  const T = { base: b9, after: w9.L, ...transitionFacts(w9, b9), carried: null, leave: cl.leave, enter: cl.enter, pass: [] };
+  const r = relink(T, rules);
+  if (!r.ok) throw new Failed('settle: RELINK refused phase 9 (c): ' + (r.errors || []).join('; '));
+  for (const [id, l] of w9.steps) moves.set(id, [...(moves.get(id) || []), ...l]);
+  return r.layout;
+}
+
+/** Phase 10's bounds: a block past MAXCELL refuses, and INV-4 across the columns, every card (an area with its free columns) inside the
+ *  container; a wall that leaves a block it could not press or sink inside stops (§5.4); no other kind leaves one outside, phase 1c having
+ *  clamped the moved block. */
+function bounds(L) {
+  for (const b of L.boxes.values()) {
+    if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
+    const r = range(b, L.cols);
+    if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) throw new Refused('a block would stand outside its container (INV-4)');
+  }
+}
+
+/** Phases 9 and 10 alone, for open()'s step 4 once GAP.1 has built the stacks (LAYOUT-ENGINE-PLAN §3.5): rest widths, the hits they leave,
+ *  RELINK, and the bounds; nothing else of the pipeline runs. @param {Layout} layout @param {Ctx} ctx
+ *  @returns {{ok:true, layout:Layout, ran:string[]}|{ok:false, why:'refused'|'failed', errors:string[]}} */
+export function rest(layout, ctx) {
+  try {
+    const ran = [], L = phase9(layout, layout, ctx, [], {}, new Map(), ran);
+    ran.push('10'); bounds(L);
+    return { ok: true, layout: L, ran };
+  } catch (e) {
+    return { ok: false, why: e instanceof Refused ? 'refused' : 'failed', errors: [e.message] };
+  }
+}
+
 /** One run of phases 1–10 from `start`; `origin`, the start the caller gave settle, which `grew` counts from across the runs again (§5.6). */
 function pipeline(start, change, memory, ctx, hooks, origin = start) {
   const kind = kindOf(change), rules = ctx.rules, ran = [];
@@ -238,7 +300,8 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     const set = change.set || {}, b = { ...b0 };
     for (const f of ['ch', 'open', 'collapsed']) if (f in set) b[f] = set[f];
     if ('cw' in set) { if (set.cw == null) delete b.cw; else b.cw = set.cw; }
-    let w = b.cw != null ? b.cw + 1 : b.w;
+    // a set width wider than its container is shown at the container's full width, its `cw` as stored (LAYOUT-ENGINE-PLAN §3.5, step 1)
+    let w = b.cw != null ? Math.min(b.cw + 1, L.cols - pad(b)) : b.w;
     if (isElastic(b, ctx)) w = restCells(L, b, ctx) + 1;   // its content changed: its rest width on the rows it stands on (SIZE.1)
     const nb = measured(b, w, ctx);
     L = follow(resize(put(L, { ...nb, h: b0.h, t: b0.t ?? 0 }), change.id, nb.h, nb.t ?? 0));
@@ -361,56 +424,14 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     for (const [id, l] of ws.steps) moves.set(id, [...(moves.get(id) || []), ...l]);
   }
 
-  // ---- 9. rest: (a) RESTPASSES passes of SIZE.8, (b) the hits left, by P-REST or P-SEP, within RESTSTEPS, (c) RELINK against the layout
-  // after phase 8 with the moves of (b) only
-  let La = L8;
-  const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
-  const passes = on(rules, 'SIZE.8') ? ctx.settings.RESTPASSES : 1;
-  if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
-    const before = La;
-    for (const id of La.order) {
-      const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
-      const w = restCells(La, b, ctx) + 1; if (w === b.w) continue;
-      rested.add(id);
-      const nb = measured(b, w, ctx);
-      La = resize(put(La, { ...nb, h: b.h, t: b.t ?? 0 }), id, nb.h, nb.t ?? 0);
-    }
-    if (La !== before) La = follow(La); else break;
-  }
-  let final = La;
-  const b9 = deferred ? base : L8;   // the layout phase 9 (c) relinks against
-  const w9 = working(La, null, ctx); w9.base = b9;
-  if (firstHit(w9.L)) {
-    phase(w9);
-    for (let k = 0, n = stepsGuard(w9.L); ; k++) {
-      const h = firstHit(w9.L); if (!h) break;
-      if (k > n) throw new Failed('settle: phase 9 (b) exceeds RESTSTEPS');
-      if (!(on(rules, 'P-REST') && rest(w9, h[0], h[1]))) sep(w9, h[0], h[1]);
-    }
-  }
-  if (hooks.trace) hooks.trace('9', w9.L);
-  if (w9.L !== b9) {
-    ran.push('9');
-    // what changed columns since b9: phase 9's own rest widths and P-REST, and for a kind that relinks only here, phase 1a's size
-    const by = new Set([...w9.reshaped, ...rested, ...(deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [])]);
-    const cl = columnsOf(b9, w9.L, null, 'self', by);
-    const T = { base: b9, after: w9.L, ...transitionFacts(w9, b9), carried: null, leave: cl.leave, enter: cl.enter, pass: [] };
-    const r = relink(T, rules);
-    if (!r.ok) throw new Failed('settle: RELINK refused phase 9 (c): ' + (r.errors || []).join('; '));
-    final = r.layout;
-    for (const [id, l] of w9.steps) moves.set(id, [...(moves.get(id) || []), ...l]);
-  }
+  // ---- 9. rest, against the layout after phase 8, or for a kind that relinks only here against base, phase 1a's size among the causes
+  const b9 = deferred ? base : L8;
+  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran);
 
   // ---- 10. contain: nothing moves here; a block past MAXCELL refuses the change, an area's own handle refuses to make it taller, any other
   // change inside an area reports how far its content's bottom moved (settleTree grows or shrinks the area, §5.6)
   ran.push('10');
-  for (const b of final.boxes.values()) {
-    if (extent(b).r1 + 1 > MAXCELL) throw new Refused('MAXCELL');
-    // INV-4 across the columns: every card (an area with its free columns) inside the container; a wall that leaves a block it could not
-    // press or sink inside stops (§5.4); no other kind leaves one outside, phase 1c having clamped the moved block
-    const r = range(b, final.cols);
-    if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) throw new Refused('a block would stand outside its container (INV-4)');
-  }
+  bounds(final);
   if (hooks.trace) hooks.trace('10', final);
   const grown = change.box != null ? bottomOf(final) - bottomOf(origin) : 0;
   if (kind.contain.bottom === 'refuse' && grown > 0) throw new Refused('the handle would make the area taller');
