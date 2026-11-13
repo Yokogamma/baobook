@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026111307">
+<meta name="baobook-build" content="2026111401">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -15,6 +15,8 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-maskable-512.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<!-- the «Клітинка» theme's fonts (docs/GRID-THEME-PLAN.md §7): a link of their own, so the cached URL of the one above stays and an offline start keeps it -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
 <style>
 /* ── палітри: світла (Notion-like), темна, пісок/папірус. Точки мають окремий токен --dot,
    бо на темному тлі тонка крапка з прозорістю «лінії» майже зникає ─────────────── */
@@ -76,6 +78,21 @@ html{font-size:calc(100% * var(--k,1))}
   --pin-bg:#f1e2c6;
   --c-yellow:#f3e3b0; --c-green:#dfe6c2; --c-blue:#d8e3e0; --c-pink:#f1d6cc; --c-purple:#e4d8d8;
   --paper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .40 0 0 0 0 .30 0 0 0 0 .14 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='l' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .98 0 0 0 0 .92 0 0 0 .07 0'/%3E%3C/filter%3E%3Cfilter id='h' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .5' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .035 0'/%3E%3C/filter%3E%3Cfilter id='v' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5 .008' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .44 0 0 0 0 .32 0 0 0 0 .14 0 0 0 .022 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E");
+}
+/* «Клітинка» (docs/GRID-THEME-PLAN.md): graph paper after the owner's reference. A white sheet, 1px cell lines through today's dots, numbered
+   cells along the edges (public/gridpaper/), text blocks on a white card that fills whole cells; IBM Plex Sans and Mono. Light only */
+:root[data-theme="grid"]{
+  --page:#ffffff; --ink:#1d2230; --ink-2:#5d6578; --ink-3:#8a91a3;
+  --line:rgba(29,34,48,.09); --line-2:rgba(29,34,48,.16);
+  --hover:rgba(29,34,48,.06); --hover-2:rgba(29,34,48,.12);
+  --sel:rgba(59,91,219,.14); --sel-line:rgba(59,91,219,.55);
+  --dot:#dfe3ec;
+  --code-bg:#eef0f5; --code-line:#dfe3ec; --accent:#3b5bdb;
+  --pin-bg:#f6f7fa;
+  --grid-line:#dfe3ec; --blk-bg:#ffffff;   /* the cell lines; the standard text card: white with no border, so it covers the lines under the text (the owner's choice of 2026-11-14) */
+  --gp-in:calc(var(--g) / 3); --gp-i:max(1px, calc(var(--g) * .05)); --gp-r:calc(var(--g) * .18);   /* the text's inset in its card, the card's inset from the lines, its corners */
+  --sans:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono","JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 @media (max-width:640px){ :root{ --pad:16px; --handle:20px; --fs:16px; } }
 
@@ -228,7 +245,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .tb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font-size:var(--t-md);cursor:pointer}
 .tb:hover{background:var(--hover);color:var(--ink)}
 .tb .i{font-size:1rem}
-.tb .th{display:none} .tb[data-th="light"] .th-light,.tb[data-th="dark"] .th-dark,.tb[data-th="sand"] .th-sand{display:block}
+.tb .th{display:none} .tb[data-th="light"] .th-light,.tb[data-th="dark"] .th-dark,.tb[data-th="sand"] .th-sand,.tb[data-th="grid"] .th-grid{display:block}
 .tb .off{display:none} .tb[aria-pressed="false"]{color:var(--ink-3)} .tb[aria-pressed="false"] .off{display:block}
 .cnt{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:var(--t-sm);padding:0 6px;white-space:nowrap}
 .saved{font-size:var(--t-sm);color:var(--ink-3);padding:0 6px;white-space:nowrap;opacity:0;transition:opacity .3s}
@@ -244,6 +261,30 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .sheet::before{content:"";position:absolute;left:var(--g);top:calc(2*var(--g));width:var(--fw,calc(100% - 2*var(--g)));height:var(--fh,calc(100% - 3*var(--g)));pointer-events:none;
   background-image:radial-gradient(var(--dot) .8px,transparent .9px);background-size:var(--g) var(--g);background-position:0 0}
 .sheet.nogrid::before{display:none}
+/* «Клітинка»: the frame starts on the first line crossing (xOf(1), yOf(2): today's first dot), one line per cell, the last line closed by the shadow */
+:root[data-theme="grid"] .sheet::before{left:calc(1.5 * var(--g));top:calc(2.5 * var(--g));width:calc(var(--gw,calc(var(--fw) - var(--g))) + 1px);height:calc(var(--fh) - var(--g) + 1px);
+  background-image:linear-gradient(to right,var(--grid-line) 1px,transparent 1px),linear-gradient(to bottom,var(--grid-line) 1px,transparent 1px);background-size:var(--g) var(--g);box-shadow:inset -1px -1px 0 var(--grid-line)}
+.gp-rulers{display:none}
+:root[data-theme="grid"] .sheet:not(.nogrid)>.gp-rulers{display:block;position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;user-select:none;-webkit-user-select:none;font-family:var(--mono);font-size:calc(var(--g) * .55);line-height:1;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.gp-rulers span{position:absolute;white-space:nowrap}
+.gp-rulers .gp-c{transform:translate(calc(var(--g) * .15), calc(-100% - var(--g) * .2))}   /* a column's number: over its cell, from its left line */
+.gp-rulers .gp-r{transform:translate(calc(-100% - var(--g) * .26), -50%)}   /* a row's number: left of the frame, in the middle of the row */
+/* a text block: a card over whole cells, from the line its text starts on to the first line after the text, inset from the lines; the text a third of a cell in.
+   The card is wider than the text box only up to the next line, and a block's text never reaches past its neighbour's handle, so two cards never meet */
+:root[data-theme="grid"] .tcard{isolation:isolate}
+:root[data-theme="grid"] .tcard>.txt{padding:0 var(--gp-in) 0 calc(6px + var(--gp-in))}
+:root[data-theme="grid"] .tcard::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);bottom:var(--gp-i);width:calc(100% - 6px - 2 * var(--gp-i));background:var(--blk-bg);border-radius:var(--gp-r);pointer-events:none}
+@supports (width:round(up, 10px, 3px)){ :root[data-theme="grid"] .tcard::before{width:calc(round(up, 100% - 6px, var(--g)) - 2 * var(--gp-i))} }   /* Newly available: without it the card ends with the text */
+:root[data-theme="grid"] .tcard:has(>.txt:empty)::before{display:none}   /* an empty block, «Пишіть…», shows no card */
+:root[data-theme="grid"] .cblk,:root[data-theme="grid"] .blk.is-area .ablk{border-radius:var(--gp-r)}
+/* a code card on whole cells too: from the line its code starts on, inset as a text card, its height the rows it takes, its width to the last line it can reach */
+:root[data-theme="grid"] .blk.is-code>.cblk{margin:var(--gp-i) 0 0 calc(6px + var(--gp-i));min-height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));border-color:transparent;
+  width:calc(100% - var(--handle) - 8px - 2 * var(--gp-i));max-width:calc(100% - var(--handle) - 8px - 2 * var(--gp-i))}
+@supports (width:round(down, 10px, 3px)){ :root[data-theme="grid"] .blk.is-code>.cblk{width:calc(round(down, 100% - var(--handle) - 8px, var(--g)) - 2 * var(--gp-i));max-width:none} }
+/* an area keeps its box (its inner grid is the sheet's, LAYOUT-RULES AREA) and draws its card on whole cells under it, as a text card */
+:root[data-theme="grid"] .blk.is-area>.ablk{background:transparent;border-color:transparent;isolation:isolate}
+:root[data-theme="grid"] .blk.is-area>.ablk::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));width:calc(100% - 6px - 2 * var(--gp-i));background:var(--area-bg,var(--code-bg));border-radius:var(--gp-r);pointer-events:none}
+@supports (width:round(up, 10px, 3px)){ :root[data-theme="grid"] .blk.is-area>.ablk::before{width:calc(round(up, 100% - 6px, var(--g)) - 2 * var(--gp-i))} }
 /* стрічка (вузький екран): блоки однією колонкою в порядку читання, ручок розміру немає; огляд — полотно як на компʼютері, зменшене */
 .sheet.overview{width:1024px !important;max-width:none;pointer-events:none}
 .narrow-only{display:none} .app.narrow .narrow-only{display:inline-flex}
@@ -745,7 +786,7 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="tb" id="areaBtn" data-i18n-attr="title:area.new.title"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 9.5h8"/></svg></button>
         <button class="tb" id="spellBtn" data-i18n-attr="title:spell.title" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><text x="12" y="13.5" text-anchor="middle" font-size="12" font-weight="600" font-family="Inter,system-ui,sans-serif" fill="currentColor" stroke="none">Aa</text><path d="M2.5 19.5c1.5-2 3-2 4.5 0s3 2 4.5 0s3-2 4.5 0s3 2 4.5 0"/><path class="off" d="M3 21L21 3"/></svg></button>
         <button class="tb" id="gridBtn" data-i18n-attr="title:grid.title" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/><path class="off" d="M3 21L21 3"/></svg></button>
-        <button class="tb" id="themeBtn" data-i18n-attr="title:theme.title" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg></button>
+        <button class="tb" id="themeBtn" data-i18n-attr="title:theme.title" data-th="light"><svg class="i th th-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i th th-dark" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><svg class="i th th-sand" viewBox="0 0 24 24"><rect x="3" y="6" width="4" height="13" rx="2"/><path d="M7 8a2 2 0 0 0-2-2h13a3 3 0 0 1 3 3v8a2 2 0 0 1-2 2H7"/><path d="M11 10h6M11 13h6"/></svg><svg class="i th th-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button>
         <button class="tb" id="histBtn" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg><span class="hbadge" id="histBadge" hidden aria-hidden="true"></span></button>
         <button class="tb" id="clearBtn" data-i18n-attr="title:sheet.clear"><svg class="i" viewBox="0 0 24 24"><path d="M21 3l-7.5 7.5"/><path d="M11.4 8.4l4.2 4.2"/><path d="M11.4 8.4 3.6 12.6 11.4 20.4 15.6 12.6"/><path d="M12.8 9.8 6.2 15.2M14.2 11.2 8.8 17.8"/></svg></button>
         <button class="tb" id="moreBtn" data-i18n-attr="title:menu.more;aria-label:menu.more" aria-haspopup="menu" aria-expanded="false">⋯</button>
@@ -794,8 +835,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111307" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
-<script src="cloud.js?b=2026111307" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026111401" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
+<script src="cloud.js?b=2026111401" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +847,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-9KDbsIjv5z6ca8baYzbX9Gndcx2zOvd9ly9532NfhdFW/cvbGwKiTB4GgDMesaLA', 'layout/gap.js':'sha384-otpVUi/cP0oFWx+78Ahq+QyzObdWTnwsH8KfxFaHj0rH6LEf2OvIuKttGjsq88ee', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-Zna/gVZm1nxv548VAqVVMUrLq2wvXbFpAnsjZ3jKAZ3nWLBl//hTikRmC5+ECaDw', 'layout/primitives.js':'sha384-mhUXbJWqEQcB5TVr2I5DjGvXp9dtK0Qt4ZvKMo1kBYmbjP3RAaNIyEtGE6TEYI0J', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-KI4/TZY+rjAawRMUrOwJ5frVE5hh5ztWDDOcTPR/ylwiZM1L86R+0x2ykzviDWBE', 'layout/size.js':'sha384-6RlhEsmi+4Mx8yEdhG6Xz72xaYHm1ra9smv6WnPsGQyoIWRJUF6k7+kxOH1j8XeP', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-Lfi3yOX19TfLmRkWllR3MsmogzqKABn68tRYLj4aDtQyJV3kUOZDXtOevkvTgm6d', 'layout/settle.js':'sha384-vc+hRscIG4S+hZ6VRQarHVjdvbbIZLLfVHPD7crc1MJbW9ZSBbYGRnyXJX1152cO', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
+const SRI={'gridpaper/model.js':'sha384-36zX2WiU8UaKc/pCg2pP4q4PEpoVezS/p+mMJmZ7fR4sOUliuLXK9L4gF3FCT0z0', 'gridpaper/view.js':'sha384-qQMitNZGk7CSEj5Gyyf9/tdB1SOB43POJCpvL3ot6SvKxdvlyl88i9MTlyBSCwE6', 'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-9KDbsIjv5z6ca8baYzbX9Gndcx2zOvd9ly9532NfhdFW/cvbGwKiTB4GgDMesaLA', 'layout/gap.js':'sha384-otpVUi/cP0oFWx+78Ahq+QyzObdWTnwsH8KfxFaHj0rH6LEf2OvIuKttGjsq88ee', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-Zna/gVZm1nxv548VAqVVMUrLq2wvXbFpAnsjZ3jKAZ3nWLBl//hTikRmC5+ECaDw', 'layout/primitives.js':'sha384-mhUXbJWqEQcB5TVr2I5DjGvXp9dtK0Qt4ZvKMo1kBYmbjP3RAaNIyEtGE6TEYI0J', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-KI4/TZY+rjAawRMUrOwJ5frVE5hh5ztWDDOcTPR/ylwiZM1L86R+0x2ykzviDWBE', 'layout/size.js':'sha384-6RlhEsmi+4Mx8yEdhG6Xz72xaYHm1ra9smv6WnPsGQyoIWRJUF6k7+kxOH1j8XeP', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-Lfi3yOX19TfLmRkWllR3MsmogzqKABn68tRYLj4aDtQyJV3kUOZDXtOevkvTgm6d', 'layout/settle.js':'sha384-vc+hRscIG4S+hZ6VRQarHVjdvbbIZLLfVHPD7crc1MJbW9ZSBbYGRnyXJX1152cO', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-mGIatlMzlez+sjK3va7W1D+07xCHly3dqOom1eHRNcWMWt/KR3axiOAflq6gbGTP', 'locales/uk.json':'sha384-t98f4jvcz/SI57cF7hAs4ddLGN5ZFtpWhRfhZSgR215Jx9v7ipSwLiSLcDHBo9N8'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026111307;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026111401;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the Firebase SDK (SYNC-PLAN 4.13), imported from gstatic when the account is first used: three self-contained modules (auth and firestore
 // import firebase-app.js by its full URL). Their integrity goes into the import map below too, so bytes other than the ones this page was built
 // with are refused, whether a CDN or a cache answers them. A change of FB_VER runs `node tests/hashes.mjs --write`, which downloads the three
@@ -2339,7 +2380,7 @@ async function storedWithLrev(){ const m=fbNewest(fbKeys()), lrev={}; let ok=tru
       return {notes:await t.range('notes','','\uffff'), meta:await t.range('sync','meta:n:','meta:n:\uffff')}; });
     if(r.moved) return {m:new Map(), lrev, ok:false, moved:true}; for(const n of r.notes) if(validNote(n)) m.set(n.id,n); for(const x of r.meta) lrev[x.k.slice(7)]=x.lrev||0; }catch(_){ ok=false; } } return {m, lrev, ok}; }
 function applySettings(s){ if(!s || typeof s!=='object') return false; const p={};   // theme, grid and spelling from an export file, by the same rules as at startup
-  if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); }
+  if(THEMES.includes(s.theme)){ p.theme=s.theme; document.documentElement.dataset.theme=s.theme; themeUI(); themeLaid(); }
   if(typeof s.grid==='boolean'){ p.grid=s.grid; sheet.classList.toggle('nogrid',!s.grid); gridUI(); }
   if(typeof s.spell==='boolean'){ p.spell=spell=s.spell; spellUI(); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); }
   const any=Object.keys(p).length>0; if(any) saveS(p); return any; }
@@ -2463,9 +2504,11 @@ function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));
   if(b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
   if(b.el===gbox) gbox.style.height=(b.lines*G())+'px';
-  else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
+  else if(b.kind==='code'){ const m=parseFloat(getComputedStyle(b.card).marginTop)||0;   // картка: шапка + рядки + відступ, цілими рядами
+    b.lines=Math.max(1, m? Math.ceil((b.card.offsetHeight+2*m-1)/G()) : Math.ceil((b.card.offsetHeight-2)/G())); }   // «Клітинка» insets the card from the lines (m): its rows hold the card and both insets
   else if(b.kind==='area') areaMeasure(b);
-  else { if(!b.resizing) b.txt.style.minHeight=b.ch? (b.ch*G())+'px' : ''; b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); } }   // текст: ch — мінімальна висота в рядах
+  else { if(!b.resizing) b.txt.style.minHeight=b.ch? (b.ch*G())+'px' : ''; b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }   // текст: ch — мінімальна висота в рядах
+  b.el.style.setProperty('--rows', b.lines); }   // the rows the block takes: «Клітинка» fits a code card to them
 /* область: ширина внутрішньої сітки — з DOM; висота — шапка + вміст (+ мінімум із ручки), рівно в рядах */
 function areaMeasure(b){ b.innerW=b.abody.clientWidth || (b.w-CL()-1); const g=G(), barH=b.card.querySelector('.cbar').offsetHeight;
   b.at=(g-(barH+1)%g)%g;                                       // верхній відступ: рядки дітей — на рядах сітки аркуша
@@ -2496,7 +2539,12 @@ let fullH=0;
 let sheetRoom=0;
 function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bottom, b.el.offsetTop+b.el.offsetHeight); }); bottom=placeBacklinks(bottom); sheet.style.minHeight=Math.max(fullH, window.innerHeight, bottom+Math.max(5*G(), sheetRoom))+'px'; field(); }
 function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
-  sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px'); }
+  sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px');
+  /* «Клітинка» closes its frame on the last line a block can reach (W − PAD), one cell further than the last dot on a phone, where PAD < G */
+  const gcols=Math.max(0, Math.floor((W()-PAD()-1.5*g)/g)); sheet.style.setProperty('--gw', gcols*g+'px');
+  if(RULERS) RULERS.update({cols:gcols+1, rows, g, on:curTheme()==='grid'}); }
+/* the numbered edges of «Клітинка» (public/gridpaper/): drawn by field() over the same frame as the lines */
+let RULERS=null; import('./gridpaper/view.js').then(m=>{ RULERS=m.mount(sheet); field(); }).catch(e=>console.error('gridpaper: the module did not load', e));
 
 function make(d, focus){
   const b={id:d.id||('b'+now().toString(36)+Math.random().toString(36).slice(2,6)), fx:d.fx, col:d.col, row:d.row, parent:d.parent, text:d.text||'', lines:1, w:MINW,
@@ -2929,7 +2977,7 @@ function pullOut(b){ const a=byId(b.parent); if(!a) return; const done=placeUndo
 function pickArea(b){ popMenu(b.el.querySelector('.bact'), b.card, 'bm', areas().map(a=>({label:areaName(a), act:()=>moveInto(b,a)}))); }
 function sizeMenu(b){ const cur=b.ch||b.lines||1; const set=ch=>{ const done=placeUndo(b, loc('undo.blockResized',{label:blockLabel(b)}), true); b.ch=ch; relayout(b); markDirty(); done(); };
   popMenu(b.el.querySelector('.bact'), b.card, 'bm', [ {label:loc('size.auto'), small: loc(b.ch? 'size.auto.byText' : 'size.auto.now'), act:()=>set(undefined)}, {label:loc('size.shorter'), small:loc('size.shorter.hint'), act:()=>set(Math.max(1,cur-2))}, {label:loc('size.taller'), small:loc('size.taller.hint'), act:()=>set(cur+2)} ]); }
-const THEME_NAMES={light:loc('theme.short.light'),dark:loc('theme.short.dark'),sand:loc('theme.short.sand')};
+const THEME_NAMES={light:loc('theme.short.light'),dark:loc('theme.short.dark'),sand:loc('theme.short.sand'),grid:loc('theme.short.grid')};
 moreBtn.addEventListener('click',()=>popMenu(moreBtn, moreBtn.closest('.top'), 'hm', [
   ...(ro()? [] : [{ico:areaBtn.querySelector('svg').outerHTML, label:loc('area.new'), small:loc('area.new.touchHint'), act:()=>areaBtn.click()}]),
   ...(undoStack().length && (!ro() || (undoStack()[undoStack().length-1].ro && !LOCK))? [{label:loc('undo.menu',{msg:undoStack()[undoStack().length-1].msg}), small:loc('undo.untilReload'), act:()=>doUndo()}] : []),
@@ -3237,12 +3285,18 @@ gridBtn.addEventListener('click',()=>{ sheet.classList.toggle('nogrid'); gridUI(
 let spell=false;
 function spellUI(){ sheet.spellcheck=spell; ttl.spellcheck=spell; spellBtn.setAttribute('aria-pressed', spell?'true':'false'); spellBtn.title=loc(spell?'spell.on.title':'spell.off.title'); }
 spellBtn.addEventListener('click',()=>{ spell=!spell; spellUI(); saveS({spell}); if(!spell) blocks.forEach(b=>{ if(b.txt) showTxt(b); }); });
-const THEMES=['light','dark','sand'], NAMES={light:loc('theme.light'),dark:loc('theme.dark'),sand:loc('theme.sand')};
+const THEMES=['light','dark','sand','grid'], NAMES={light:loc('theme.light'),dark:loc('theme.dark'),sand:loc('theme.sand'),grid:loc('theme.grid')};
 const sysTheme=()=>matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
 const curTheme=()=>document.documentElement.dataset.theme||sysTheme();
 function themeUI(){ const c=curTheme(), n=THEMES[(THEMES.indexOf(c)+1)%THEMES.length]; themeBtn.dataset.th=c; themeBtn.title=loc('theme.button',{cur:NAMES[c], next:NAMES[n]});
   requestAnimationFrame(()=>{ const m=document.querySelector('meta[name="theme-color"]'); if(m) m.content=getComputedStyle(document.documentElement).getPropertyValue('--page').trim()||'#ffffff'; }); }
-themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme())+1)%THEMES.length]; document.documentElement.dataset.theme=n; saveS({theme:n}); themeUI(); });
+themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme())+1)%THEMES.length]; document.documentElement.dataset.theme=n; saveS({theme:n}); themeUI(); themeLaid(); });
+/* «Клітинка» sets other fonts and a text inset, so a change into it or out of it re-measures the blocks, as a text size change does; its fonts,
+   loaded only when used, re-measure once more when they arrive (offline before their first use the theme shows Inter: GRID-THEME-PLAN §7) */
+let laidGrid=null;
+function themeLaid(){ const g=curTheme()==='grid'; if(g===laidGrid) return; const first=laidGrid!==null; laidGrid=g;
+  if(first){ applyMode(); field(); }
+  if(g && document.fonts && document.fonts.load) Promise.all(['600 16px "IBM Plex Sans"','16px "IBM Plex Sans"','16px "IBM Plex Mono"'].map(f=>document.fonts.load(f))).then(()=>{ if(curTheme()==='grid'){ applyMode(); field(); } }, ()=>{}); }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
@@ -3506,7 +3560,7 @@ async function start(){
   STARTED=true; roSync(); snapSave(); copiesLoad(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
-if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
+if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI(); themeLaid();
 if(S.grid===false) sheet.classList.add('nogrid'); gridUI();
 spell=S.spell===true; spellUI();
 app.classList.toggle('open', isMobile()? false : S.side!==false); sideBtn.setAttribute('aria-expanded', app.classList.contains('open')?'true':'false');

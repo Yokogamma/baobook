@@ -1,7 +1,6 @@
 # The «Клітинка» theme (grid paper)
 
-Status: **proposed** (2026-11-13), mockup 2 (2026-11-14), waiting for the owner's answers in §9 and a review round.
-Mockup: a private claude.ai artifact, «Baobook Grid Paper». Mockup 1 (pale cards around the text, small line numbers, hairlines on grey) was rejected by the owner: the theme follows the reference artifact as closely as the app's grid allows.
+Status: **built** (2026-11-14), in the PR that adds this plan's code. Mockup 1 (pale cards around the text, small line numbers, hairlines on grey) was rejected by the owner; the theme follows the reference artifact, compared with it at one cell scale in the app itself. The owner then chose the text card from seven variants shown in the app: **white, no border, regular weight, no padding above or below the text** (2026-11-14).
 
 ## 1. What the owner asked for
 
@@ -17,49 +16,43 @@ Names: «Клітинка» / "Grid paper" (short forms «клітинка» / "
 
 ## 3. Tokens
 
-`:root[data-theme="grid"]` sets the same token set as the other themes (every token the light theme defines), so every panel, menu and dialog follows:
+`:root[data-theme="grid"]` sets the same token set as the other themes, so every panel, menu and dialog follows:
 
 | Token | Value | Use |
 |---|---|---|
-| `--page` | `#ffffff` | the sheet (the reference's white panel), the list and the menus; also `<meta name="theme-color">` (set from `--page` already) |
-| `--ink` | `#1d2230` | text (16.8:1 on white, 6.3:1 on the reference grey) |
+| `--page` | `#ffffff` | the sheet, the list and the menus; also `<meta name="theme-color">` |
+| `--ink` | `#1d2230` | text (16.8:1 on white) |
 | `--ink-2` | `#5d6578` | captions and the numbers (5.9:1 on white) |
 | `--ink-3` | `#8a91a3` | placeholders (decorative only) |
-| `--grid-line` | `#dfe3ec` | the cell lines and the frame, new token, 1 px |
-| `--blk-bg` | `#9aa3b5` | the standard block card, new token: the reference's grey (§9 Q3 offers two lighter ones) |
-| `--code-bg` | `#eef0f5` | code cards |
-| `--line`, `--line-2`, `--hover*`, `--sel*`, `--accent`, `--c-*`, `--sw-*`, code colours | derived from the light theme, hue shifted toward the cool grey | |
+| `--grid-line` | `#dfe3ec` | the cell lines and the frame, 1 px |
+| `--blk-bg` | `#ffffff` | the text card: white, so it covers the lines under the text |
+| `--code-bg` | `#eef0f5` | code cards and areas without a colour (approved by the owner as they are) |
+| `--gp-in`, `--gp-i`, `--gp-r` | G/3, max(1px, 5 % of G), 18 % of G | the text's inset in its card, the card's inset from the lines, its corners |
+| `--line*`, `--hover*`, `--sel*`, `--accent` | the light theme's, toward the cool grey | |
 | `--sans` | `"IBM Plex Sans", "Inter", system-ui, …` | the whole interface in this theme |
 | `--mono` | `"IBM Plex Mono", "JetBrains Mono", ui-monospace, …` | numbers and code |
 
-The new tokens get a default in bare `:root` (`--grid-line: var(--dot)`, `--blk-bg: transparent`), so other themes are unaffected. Selection and focus outlines keep their accent, ≥ 3:1 against white and against the card. A selected text on the card uses a lighter selection colour so it stays readable (checked in the scenario).
-
 ## 4. The grid lines
 
-`.sheet::before` already has the frame (`left: G`, `top: 2G`, `--fw`/`--fh` from `field()`). In this theme the frame starts at the first line, `xOf(1)` and `yOf(2)` (the dots of today are the line crossings), its `background-image` becomes two 1 px `linear-gradient`s (vertical and horizontal) with `background-size: G G`, and an inset shadow closes the right and bottom edge. So a text row fills one row of cells, and a block standing on a dot stands on a crossing. Pure CSS, Baseline Widely available; it follows `--g`, so every text size (`G = round(1.5 × fs)`) and the zoomed overview on a phone redraw by themselves.
+In this theme `.sheet::before` starts on the first line crossing, `xOf(1)` and `yOf(2)` (today's first dot), and draws two 1 px `linear-gradient`s with `background-size: G G`; an inset shadow closes the last line. So a text row fills one row of cells and a block standing on a dot stands on a crossing. The frame reaches the last line a block can reach (`W − PAD`, `--gw` from `field()`), one cell further than the last dot on a phone, where `PAD < G`. Pure CSS: it follows `--g`, so every text size and the zoomed overview redraw by themselves.
 
 ## 5. The numbers
 
-As in the reference, the numbers name **cells**, centred on the cell: columns along the top every 5 (0, 5, 10, …), rows along the left (every row, §9 Q1). Cell 0 is the first cell a block can stand in: column 0 = stored `col 1`, row 0 = stored `row 2`. Plex Mono at half a cell (12 px at G = 24), `--ink-2`, `tabular-nums`. The row numbers stand in the left margin (1.5 G wide, enough for three digits), the column numbers in the band above row 0.
+As in the reference, the numbers name **cells**: columns along the top every 5 (0, 5, 10, …) from the cell's left line, every row along the left in the middle of its cell. Cell 0 is the first cell a block can stand in: column 0 = stored `col 1`, row 0 = stored `row 2`. Plex Mono at 55 % of a cell, `--ink-2`, `tabular-nums`.
 
-They cannot be a CSS gradient, so they are DOM: a module `public/gridpaper/`:
+The module `public/gridpaper/`:
 
-- `model.js` — pure: `labels({cols, rows, g, step})` returns the positions and texts of both rulers from the frame `field()` computes. A Node test (`tests/gridpaper.mjs`) checks the positions against `xOf`/`yOf`, the steps and the bounds.
-- `view.js` — keeps two absolutely placed `aria-hidden` rulers inside `.sheet`, so they scroll with it; re-rendered only when `cols`, `rows`, `g` or the theme change; `pointer-events: none`.
-- `index.html` wiring: `field()` calls `gridpaper.update(cols, rows, g)`; the theme switch calls `gridpaper.theme(on)`. Nothing else.
-
-The numbers live only in this theme. They are not selectable, not read by a screen reader, and not part of an export.
+- `model.js` — pure: `rulers({cols, rows, g})` returns the positions of both rulers; `tests/gridpaper.mjs` checks them in Node.
+- `view.js` — one `aria-hidden` layer inside `.sheet` (it scrolls and zooms with it), re-rendered only when the frame, `G` or the theme change.
+- `index.html` wiring: `field()` calls `RULERS.update(...)`; the module is imported once, with its SRI hashes in the import map and a `PRECACHE` entry.
 
 ## 6. The block card
 
-As in the reference, a text block is a card that fills **whole cells**: from the line its text starts on to the first line after the end of its text, over all its rows, inset 2 px from the lines, corners of 18 % of a cell (4 px at G = 24), filled with `--blk-bg`. The text is semibold as in the reference (§9 Q4).
+A text block is a **white card on whole cells**: from the line its text starts on to the first line after the end of its text, over its rows, inset `--gp-i` from the lines, corners `--gp-r`, regular weight, no padding above or below. The text stands a third of a cell right of the line, so it does not touch the card's edge; this is a view change only (stored `col`/`fx` and rows stay). The card is a `::before` on `.tcard` whose width is rounded up to a cell with CSS `round()` (Newly available: under `@supports`; without it the card ends with the text). A text block never reaches past its neighbour's handle (it wraps there), so a card rounded up to the next line never meets the neighbour's card. An empty block shows no card.
 
-The text cannot start on the line itself: it would touch the card's edge. So in this theme the text stands a third of a cell (8 px at G = 24) right of the line. This is a view change only: the stored `col`/`fx` and rows stay, and the other themes are unchanged. But the block becomes that much wider, so:
+A code card fills whole cells too: inset from its line, its height the rows it takes (`--rows`, set by `render()`; in this theme the rows of a code block count both insets), its width rounded down to the last line it can reach. An area keeps its box (its inner grid is the sheet's) and draws its card on whole cells under it, in its own colour.
 
-- the card's width is `ceil((P + text + P) / G) × G − 4`, set by the view as a custom property `--cw` whenever a block is rendered or re-measured;
-- the measuring in `index.html` that keeps blocks from overlapping counts the theme's inset (one constant beside `OFF()`), so two cards in one row never overlap; switching the theme re-measures as a text size change does and writes nothing by itself (§4.3 of `docs/LAYOUT-ENGINE-PLAN.md`; `public/layout/` itself is not touched — its P18 setting «where the text stands» is the same idea and will take this inset over later).
-
-Code cards fill cells the same way, with `--code-bg` and the same corners. Areas fill cells, keep their colours, with the same corners; blocks inside an area are cards too. Links, chips, highlights and the selection keep their look. An empty block shows no card (only the placeholder while focused).
+Switching into the theme or out of it re-measures the blocks as a text size change does, and once more when its fonts arrive; a round of themes writes no note (`tests/appgridtheme.mjs` 7b).
 
 ## 7. Fonts offline
 
@@ -71,25 +64,21 @@ Today the page links one Google Fonts stylesheet (Inter, JetBrains Mono) and the
 - «Сітка аркуша» (`.nogrid`) hides the lines and the numbers in this theme, as it hides the dots now. The block cards stay.
 - `applySettings` and import already accept only values in `THEMES`; an older build (production before the release, or an export opened on an older site) ignores `grid` and falls back to the system theme. No migration.
 - Settings are not synced, so no Firestore change.
-- Browser support: gradients, custom properties and `document.fonts` are Widely available; nothing Newly available is needed.
+- Browser support: gradients, custom properties, `:has()` and `document.fonts` are Widely available; CSS `round()` is Newly available and used only under `@supports`, with a card that ends with its text as the fallback.
 
-## 9. Questions for the owner
+## 9. Decided with the owner
 
-1. **Row numbers**: every row (as in the reference, recommended) or every 5 rows like the columns?
-2. **Cell 0**: the first cell a block can stand in (as in the mockup)?
-3. **The grey**: the reference's `#9aa3b5` (as in the mockup), or lighter `#c3c9d6` or `#dde1ea`? With a long note the dark grey is a lot of grey; the lighter ones are in the mockup.
-4. **The text on the card**: semibold as in the reference, or regular weight? Recommendation: regular for notes longer than a word or two; the mockup has both.
-5. **The interface font**: Plex Sans for the whole interface in this theme (list, menus), or only for the sheet? Recommendation: the whole interface.
-6. **Rulers while scrolling**: they scroll with the sheet (recommended, as in the reference) or stay pinned to the top and left edges of the window?
+1. Rows: every row is numbered, columns every 5, as in the reference.
+2. Cell 0 is the first cell a block can stand in.
+3. Text card: white, no border, regular weight, no padding above or below (seven variants seen in the app, 2026-11-14). Code and area cards as built.
+4. Plex for the whole interface in this theme; the numbers scroll with the sheet.
 
 ## 10. Later: several block colours (not in this PR)
 
 A separate plan: an optional block field (as the note's `color` of `docs/LIST-ACTIONS-PLAN.md`), its sync and export, the Firestore rules the owner publishes first and the index exemption (`docs/SYNC-PLAN.md` §6), the palette in the block's menu, and how the colours look in the other three themes.
 
-## 11. Tests and the PR
-
-One PR into `main`:
+## 11. Tests
 
 - `tests/gridpaper.mjs` (Node): the ruler model.
-- `tests/appgridtheme.mjs` (browser): the cycle has four themes and the button names the next one; `grid` is saved and restored after a reload; the sheet shows lines (no radial gradient) and rulers whose first numbers sit on `xOf(1)` and `yOf(2)`; a text block has the card colour and radius, its card fills whole cells and its text stands the theme's inset right of the line; two blocks in one row with cards never overlap; switching the theme writes no note; «Сітка аркуша» hides lines and rulers, keeps the cards; a text size change moves the rulers with `G`; the narrow view and the zoomed overview on a phone width keep the rulers aligned; an import with `theme:'grid'` into an empty app applies it, and the other themes show no rulers; offline start with the theme picked does not fail when Plex is not cached.
-- `tests/appi18n.mjs` and `tests/hashes.mjs` pass with the new keys; `BUILD` raised.
+- `tests/appgridtheme.mjs` (browser): the cycle of four themes and the button's names and icon; the saved theme after a reload; the fonts' own link; lines from the first crossing and the numbered edges; the white card on whole cells with the text a third of a cell in, two cards in a row apart, no card on an empty block; code and area cards on whole cells; «Сітка аркуша»; no note written by a round of themes; the text size; a phone width.
+- `tests/apptitle.mjs` clicks once more to come back to the light theme; every other scenario passes unchanged.
