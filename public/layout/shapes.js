@@ -83,11 +83,11 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
 
 /** One typedef per kind; `box` is the container the change is in (null, the sheet).
  * @typedef {{type:'carry', box:?string, id:string, at:Target, away:boolean, through?:'hold'|'shift', canonical?:boolean}} CarryChange
- * @typedef {{type:'create', box:?string, id:string, kind:string, at:Target, away:true, set?:{cw?:number, ch?:number}, canonical?:boolean}} CreateChange
- * @typedef {{type:'width', box:?string, id:string, cw:number, side?:'left'|'right', col?:number, rows?:number}} WidthChange
+ * @typedef {{type:'create', box:?string, id:string, kind:string, at:Target, away:true, set?:{cw?:number, ch?:number, open?:boolean}, rows?:number, t?:number, canonical?:boolean}} CreateChange
+ * @typedef {{type:'width', box:?string, id:string, cw:number, side?:'left'|'right', col?:number, rows?:number, t?:number}} WidthChange
  * @typedef {{type:'wall', box:string, side:'left'|'right', cols:number, shift?:number}} WallChange
  * @typedef {{type:'areaSide', box:?string, id:string, side:'left'|'right', col:number, cols:number}} AreaSideChange
- * @typedef {{type:'size', box:?string, id:string, set?:{cw?:null, ch?:?number, open?:boolean, collapsed?:boolean}}} SizeChange
+ * @typedef {{type:'size', box:?string, id:string, set?:{cw?:null, ch?:?number, open?:boolean, collapsed?:boolean}, rows?:number, t?:number}} SizeChange
  * @typedef {{type:'remove', box:?string, id:string}} RemoveChange
  * @typedef {{type:'enter', box:?string, id:string, to:string, at:Target}} EnterChange
  * @typedef {{type:'leave', box:string, id:string, to:?string, at:Target}} LeaveChange
@@ -95,6 +95,10 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  * @typedef {{type:'drawArea', box:?string, id:string, at:{col:number, y:number, cols:number, rows:number}}} DrawAreaChange
  * @typedef {CarryChange|CreateChange|WidthChange|WallChange|SizeChange|RemoveChange|EnterChange|LeaveChange|UngroupChange|AreaSideChange|DrawAreaChange} Change
  *  (each kind as LAYOUT-ENGINE-PLAN §2.1 describes it; enter, leave, ungroup, drawArea and areaSide are composite, taken apart by settleTree)
+ *  rows, t: an area's frame rows in the layout's measure and their temporary part, which settleTree gives a size change of an area, a
+ *  created area and an area's width change in its container from its children (LAYOUT-RULES §5.6): the passport cannot measure them there.
+ *  areaSide: col, the area's new handle column (its left free column), cols its new width with the handle cell (w); drawArea: cols and
+ *  rows the area's inner columns (cw) and its set height (ch).
  */
 
 /** The bridge, the one module that knows index.html's block objects (LAYOUT-ENGINE-PLAN §2.1, step 5).

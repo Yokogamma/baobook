@@ -303,7 +303,8 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     // a set width wider than its container is shown at the container's full width, its `cw` as stored (LAYOUT-ENGINE-PLAN §3.5, step 1)
     let w = b.cw != null ? Math.min(b.cw + 1, L.cols - pad(b)) : b.w;
     if (isElastic(b, ctx)) w = restCells(L, b, ctx) + 1;   // its content changed: its rest width on the rows it stands on (SIZE.1)
-    const nb = measured(b, w, ctx);
+    // an area's frame rows are its children's, which settleTree gives it (`rows`, `t`; §5.6): the passport cannot measure them here
+    const nb = isArea(b) && change.rows != null ? { ...b, w, h: change.rows, t: change.t ?? 0 } : measured(b, w, ctx);
     L = follow(resize(put(L, { ...nb, h: b0.h, t: b0.t ?? 0 }), change.id, nb.h, nb.t ?? 0));
   }
 
@@ -317,6 +318,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
       box = { id: g, kind: change.kind, col: change.at.col, y: change.at.y, w: change.at.w, h: 1, t: 0 };
       if (change.set?.cw != null) { box.cw = change.set.cw; box.w = change.set.cw + 1; }
       if (change.set?.ch != null) box.ch = change.set.ch;
+      if (change.set?.open) box.open = true;
     } else box = (start.boxes.get(g)) && { ...start.boxes.get(g) };
     if (!box) throw new Failed('settle: no block ' + g);
     if (kind.moved === 'target') box = atTarget(box, { ...change.at, w: change.type === 'create' ? box.w : change.at.w }, L.cols, ctx, change.type === 'create');
@@ -324,6 +326,8 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
       const col = change.col ?? box.col, w = Math.max(2, Math.min(change.cw + 1, L.cols - col - pad(box)));
       box = measured({ ...box, col, cw: w - 1 }, w, ctx);
     }
+    // a created area, or an area's side handle in its container, at the frame rows settleTree gives it (§5.6)
+    if (isArea(box) && change.rows != null) box = { ...box, h: change.rows, t: change.t ?? 0 };
     L = put(L, box);
   }
   const ws = working(L, g, ctx, insert); ws.base = base;
