@@ -25,11 +25,26 @@ const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.
 const canonicalBottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent({ ...b, y: b.yc ?? b.y, h: b.h - (b.t || 0) }).r1 + 1); return m; };
 /** An area's frame rows for children that take `inner` rows, by its passport (header, children, a larger `ch`; collapsed, the header). */
 const frameRows = (area, inner, ctx) => ctx.kinds[area.kind].container.height(area, inner, ctx.measure);
-/** An area's frame round its children: the rows shown, and their temporary part, the growth its children's temporary rows make. */
+/** An area's frame round its children, the one place it is computed (AREA.2): by its passport from the area's own fields as they are
+ *  or will be (its width, which its header is measured at, `ch`, `collapsed`) and the rows its children take; the rows shown, and their
+ *  temporary part, the growth its children's temporary rows make. Every change of an area, or of its children, takes its frame here. */
 function frameOf(area, children, ctx) {
-  const rows = frameRows(area, bottomOf(children), ctx);
-  return { rows, t: rows - frameRows(area, canonicalBottomOf(children), ctx) };
+  const rows = frameRows(area, children ? bottomOf(children) : 0, ctx);
+  return { rows, t: rows - frameRows(area, children ? canonicalBottomOf(children) : 0, ctx) };
 }
+/** The rows an area's frame at `area`'s width leaves its children without growing past `rows` (§5.4: an area's own handle never makes
+ *  it taller): its header measured at that width taken off; a collapsed area's children take nothing of it. Negative: the header alone
+ *  is too tall. */
+function roomOf(area, rows, ctx) {
+  const H = ctx.kinds[area.kind].container.headerRows(area, ctx.measure);
+  return area.collapsed ? (H <= rows ? Infinity : -1) : rows - H;
+}
+/** An area's children's container made with the area, and taken away with it: the one place the tree's `areas` change, so that every
+ *  area has its container and no container outlives its area. */
+const withArea = (T, id, children) => { const areas = new Map(T.areas); areas.set(id, { ...children, areas: new Map() }); return { ...T, areas }; };
+const withoutArea = (T, id) => { const areas = new Map(T.areas); areas.delete(id); return { ...T, areas }; };
+const emptyFor = (T, cw) => ({ cols: cw, measure: T.measure, boxes: new Map(), order: [], areas: new Map() });
+
 /** One SETTLE in one container of the tree, its refusal or failure the whole's. @returns {{tree, r}} */
 function one(T, change, memory, ctx) {
   const L = container(T, change.box ?? null);
@@ -50,10 +65,24 @@ function grow(T, id, ctx) {
 }
 const ranOf = (list) => [...new Set(list)];
 
-/** A change in one container, and the frames of the areas it ran in after it. */
+/** A change in one container, and the frames of the areas it ran in after it. A change of an area itself on the sheet takes its frame
+ *  from frameOf with the fields it sets (a collapse, `ch`), a creation of an area makes its empty container and a deletion takes its
+ *  container away with it; an area's width and its walls go only by `areaSide`, which changes both together. */
 function simple(T, change, memory, ctx) {
-  const box = change.box ?? null, { tree, r } = one(T, change, memory, ctx);
-  let out = tree; const ran = [box];
+  const box = change.box ?? null, area = box == null && change.id != null ? T.boxes.get(change.id) : null;
+  if (change.type === 'create' && change.kind === 'area') return createArea(T, change, ctx);
+  if (change.type === 'wall' && box != null) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: a wall in an area is areaSide\'s part'] });
+  if (area && isArea(area)) {
+    if (change.type === 'width' || (change.type === 'size' && change.set && 'cw' in change.set)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: an area\'s width changes by areaSide'] });
+    if (change.type === 'size') {
+      const next = { ...area };
+      for (const f of ['ch', 'collapsed', 'open']) if (change.set && f in change.set) { if (change.set[f] == null) delete next[f]; else next[f] = change.set[f]; }
+      change = { ...change, ...frameOf(next, T.areas.get(change.id), ctx) };
+    }
+  }
+  const { tree, r } = one(T, change, memory, ctx);
+  let out = change.type === 'remove' && area && isArea(area) ? withoutArea(tree, change.id) : tree;
+  const ran = [box];
   if (box != null) { const g = grow(out, box, ctx); out = g.tree; if (g.ran) ran.push(null); }
   return { ok: true, layout: out, start: put(T, box, r.start), memory: r.memory, pressed: r.pressed, moves: r.moves, ran: ranOf(ran) };
 }
@@ -83,8 +112,7 @@ function ungroup(T, change, ctx) {
   const area = T.boxes.get(change.id), C = T.areas.get(change.id);
   if (!area || !C || !isArea(area)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + change.id] });
   const H = ctx.kinds[area.kind].container.headerRows(area, ctx.measure);
-  let out = one(T, { type: 'remove', box: null, id: change.id }, emptyMemory(), ctx).tree;
-  const areas = new Map(out.areas); areas.delete(change.id); out = { ...out, areas };
+  let out = withoutArea(one(T, { type: 'remove', box: null, id: change.id }, emptyMemory(), ctx).tree, change.id);
   for (const id of C.order) {
     const c = C.boxes.get(id), cell = childToSheet(area, H, c);   // on the screen, as the tree is: a creation is put at its displayed cell
     const set = {}; for (const f of ['cw', 'ch']) if (c[f] != null) set[f] = c[f]; if (c.open) set.open = true;
@@ -93,40 +121,60 @@ function ungroup(T, change, ctx) {
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [null] };
 }
 
-/** Drawing an area (AREA.7b): a new block of kind 'area' at the cell pressed, its inner columns `cols` and its set height `rows` (at least
- *  4 × 2 cells, and never narrower than its kind's floor), put in as a new block is, so what it covers makes room by the same rules; its
- *  children an empty container. Areas are never nested. */
-function drawArea(T, change, ctx) {
+/** An area made, by any creation of kind 'area' in the sheet: its frame from frameOf with no children, its children an empty container
+ *  of its inner columns, made with it. Areas are never nested. */
+function createArea(T, change, ctx) {
   if ((change.box ?? null) != null) throw new Stop({ ok: false, why: 'refused' });
   if (T.boxes.has(change.id) || T.areas.has(change.id)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: ' + change.id + ' is already there'] });
-  const k = ctx.kinds.area, probe = { id: change.id, kind: 'area' };
-  const cw = Math.max(4, change.at.cols, k.minCells(probe, ctx.measure)), ch = Math.max(2, change.at.rows);
-  const box = { ...probe, cw, ch, w: cw + 1 };
-  const areas = new Map(T.areas); areas.set(change.id, { cols: cw, measure: T.measure, boxes: new Map(), order: [], areas: new Map() });
-  const make = { type: 'create', box: null, id: change.id, kind: 'area', at: { col: change.at.col, y: change.at.y, frow: change.at.y, w: cw + 1 }, away: true, set: { cw, ch }, rows: frameRows(box, 0, ctx), t: 0 };
-  const out = one({ ...T, areas }, make, emptyMemory(), ctx).tree;
+  const floor = ctx.kinds.area.minCells({ id: change.id, kind: 'area' }, ctx.measure), cw = Math.max(floor, change.set?.cw ?? floor);
+  const box = { id: change.id, kind: 'area', cw, w: cw + 1, ...(change.set?.ch != null ? { ch: change.set.ch } : {}) };
+  const make = { ...change, set: { ...change.set, cw }, at: { ...change.at, w: cw + 1 }, ...frameOf(box, null, ctx) };
+  const out = one(withArea(T, change.id, emptyFor(T, cw)), make, emptyMemory(), ctx).tree;
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [null, change.id] };
 }
 
-/** An area's side handle (§5.6, AREA.3, AREA.5, AREA.6, AREA.7a), from the gesture's start at every move: its outer rectangle clamped to
- *  the container's columns first (no narrower than the kind's floor, no wider than the container leaves it), so that both parts work with
- *  one width. In the area, the moving edge is a wall: for the left edge every child is first shifted by the edge's move with its stacks
- *  (GAP.10), so that it keeps its cell on the sheet, and the wall presses those left of column 0; the area's own handle never makes it
- *  taller (refused). Then, in the container, the area is a block whose set width changes, at its new column for the left edge, with its new
- *  frame rows in the same change: its moving edge presses what it now overlaps aside or sinks it. Accepted only when both are. */
+/** Drawing an area (AREA.7b): a new area at the cell pressed, its inner columns `cols` and its set height `rows`, at least 4 × 2 cells
+ *  and never narrower than its kind's floor, put in as a new block is (createArea), so what it covers makes room by the same rules. */
+function drawArea(T, change, ctx) {
+  const cw = Math.max(4, change.at.cols), ch = Math.max(2, change.at.rows);
+  return createArea(T, { type: 'create', box: change.box ?? null, id: change.id, kind: 'area', at: { col: change.at.col, y: change.at.y, frow: change.at.y, w: cw + 1 }, away: true, set: { cw, ch } }, ctx);
+}
+
+/** An area's side handle's rectangle, the one clamp both its parts use (§5.6): its right edge or its left edge moved to where the handle
+ *  asks, the other edge staying, the width no narrower than the kind's floor and no wider than the container leaves it. Where the
+ *  container leaves less than the floor (a sheet narrower than the area), the area keeps the width it is shown at and the handle moves
+ *  nothing. @returns {{col:number, w:number}} */
+function sideRect(area, change, cols, ctx) {
+  const floor = ctx.kinds.area.minCells(area, ctx.measure) + 1, right = area.col + area.w;
+  if (change.side === 'left') {
+    const most = right;                                   // the widest it gets from column 0
+    if (floor > most) return { col: area.col, w: area.w };
+    const col = Math.max(0, Math.min(change.col, right - floor));
+    return { col, w: right - col };
+  }
+  const most = cols - area.col - 1;                       // its free column on the right inside the container
+  if (floor > most) return { col: area.col, w: area.w };
+  return { col: area.col, w: Math.max(floor, Math.min(change.cols, most)) };
+}
+
+/** An area's side handle (§5.6, AREA.3, AREA.5, AREA.6, AREA.7a), from the gesture's start at every move: its rectangle clamped first
+ *  (sideRect), so that both parts work with one width. In the area, the moving edge is a wall: for the left edge every child is first
+ *  shifted by the edge's move with its stacks (GAP.10), so that it keeps its cell on the sheet, and the wall presses those left of column
+ *  0; the children may take the rows the area's frame leaves them at the new width, its header measured there and `ch` counted (`room`),
+ *  and no more: the area's own handle never makes it taller (§5.4). Then, in the container, the area is a block whose set width changes,
+ *  at its new column for the left edge, with its frame from frameOf in the same change: its moving edge presses what it now overlaps
+ *  aside or sinks it. Accepted only when both are. */
 function areaSide(T, change, ctx) {
   const box = change.box ?? null, L = container(T, box), area = L?.boxes.get(change.id), C = T.areas.get(change.id);
   if (!area || !C || !isArea(area) || box != null) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + change.id + ' on the sheet'] });
-  const floor = ctx.kinds.area.minCells(area, ctx.measure) + 1, right = area.col + area.w;
-  let col = area.col, w;
-  if (change.side === 'left') { col = Math.max(0, Math.min(change.col, right - floor)); w = right - col; }
-  else w = Math.max(floor, Math.min(change.cols, L.cols - area.col - 1));
+  const { col, w } = sideRect(area, change, L.cols, ctx);
   if (col === area.col && w === area.w) return { ok: true, layout: T, start: T, memory: emptyMemory(), pressed: null, ran: [] };
-  const wall = { type: 'wall', box: change.id, side: change.side, cols: w - 1 };
+  const next = { ...area, col, w, cw: w - 1 }, room = roomOf(next, area.h, ctx);
+  if (room < 0) throw new Stop({ ok: false, why: 'refused' });
+  const wall = { type: 'wall', box: change.id, side: change.side, cols: w - 1, room };
   if (change.side === 'left' && col !== area.col) wall.shift = area.col - col;
   let out = one(T, wall, emptyMemory(), ctx).tree;
-  const f = frameOf({ ...area, w, cw: w - 1 }, out.areas.get(change.id), ctx);
-  const width = { type: 'width', box: null, id: change.id, cw: w - 1, side: change.side, rows: f.rows, t: f.t };
+  const width = { type: 'width', box: null, id: change.id, cw: w - 1, side: change.side, ...frameOf(next, out.areas.get(change.id), ctx) };
   if (change.side === 'left') width.col = col;
   out = one(out, width, emptyMemory(), ctx).tree;
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [change.id, null] };

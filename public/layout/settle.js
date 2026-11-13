@@ -438,6 +438,9 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   bounds(final);
   if (hooks.trace) hooks.trace('10', final);
   const grown = change.box != null ? bottomOf(final) - bottomOf(origin) : 0;
-  if (kind.contain.bottom === 'refuse' && grown > 0) throw new Refused('the handle would make the area taller');
+  // an area's own handle never makes the area taller: its content may take the rows its frame leaves it at the new width (`room`, which
+  // settleTree gives from the frame, its header and `ch`; §5.4, AREA.3), and with no `room` given it may not grow at all
+  const over = change.room != null ? bottomOf(final) > change.room : grown > 0;
+  if (kind.contain.bottom === 'refuse' && over) throw new Refused('the handle would make the area taller');
   return { ok: true, layout: final, start, memory: { ...memory, sides: judged.sides || memory.sides }, pressed: null, moves, grew: grown, ran, met: judged.met };
 }
