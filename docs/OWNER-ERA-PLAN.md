@@ -146,7 +146,7 @@ Export files are not affected: the era is not part of a note.
 
 ## 6. What goes and what stays of #146
 
-- **Stays:** the tests of #146 (`syncguard` 5s*, `appleadbind`, `emu/erasefail`; none of them is on main) carried over for the new mode, with the expectations of §8.3; the forced account check that runs again after one in flight (d6e0ab1); `committed` on the error of a change whose load failed, as a hint for the page (no longer what safety rests on).
+- **Stays:** the tests of #146 (the `syncguard` 5s* cases and its additions to `appleadbind` and `emu/erasefail`; main has those two files without them, and no 5s* case) carried over for the new mode, with the expectations of §8.3; the forced account check that runs again after one in flight (d6e0ab1); `committed` on the error of a change whose load failed, as a hint for the page (no longer what safety rests on).
 - **Goes:** `adoptOwner` at the commit, `S.stepEpoch`/`S.stepOwner`, `ERASES`, `COMMITS`, `S.erasedUnloaded`, `PENDING.erase`.
 
 ## 7. Stages
