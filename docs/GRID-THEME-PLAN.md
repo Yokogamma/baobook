@@ -12,7 +12,7 @@ Names: «Клітинка» / "Grid paper" (short forms «клітинка» / "
 ## 2. What does not change
 
 - No stored field, no sync or export format change, no IndexedDB change. The theme is one more value of `theme` in `sheet:settings`.
-- Block placement does not change: the geometry of `xOf`/`yOf`, `G`, `fx` and rows is untouched, and `public/layout/` is not touched. The lines are drawn where the dots are now, so a block that stands on a dot stands on a line crossing.
+- Stored placement does not change: `G`, `fx`, columns and rows are untouched, and `public/layout/` is not touched. Only the view adds an inset of the text inside its card in this theme (§6). The lines are drawn where the dots are now, so a block that stands on a dot stands on a line crossing.
 - The theme cycle stays one button: light → dark → sand → grid → light.
 
 ## 3. Tokens
