@@ -302,13 +302,18 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   if (!deferred && changed()) {
     ran.push('8');
     const how = change.canonical ? 'canonical' : kind.moved === 'target' ? 'put' : 'self';
+    // an undo's carry back is put by its canonical row (GAP.5 rule 3): the row it stands at after the phases, its old cell's or lower where a
+    // phase moved it (P-UP stands it under a block that now stands at its cell and cannot go up), never the row of the place it was carried
+    // back from, which its box still holds (found by tests/layoutgestures.mjs)
+    if (change.canonical && g != null && ws.L.boxes.has(g)) { const X = ws.L.boxes.get(g); if (X.yc !== X.y) { const boxes = new Map(ws.L.boxes); boxes.set(g, { ...X, yc: X.y }); ws.L = { ...ws.L, boxes }; } }
     const cl = columnsOf(base, ws.L, g, how);
     /** @type {Transition} */
     // the carried block is the moved block of a carry or a creation; the widened block of the width handle comes into its new columns by
     // itself and carries nothing (GAP's inputs)
-    const T = { base, after: ws.L, ...transitionFacts(ws, base), carried: kind.moved === 'target' ? g : null, leave: cl.leave, enter: cl.enter, pass: [] };
+    const T = { base, after: ws.L, ...transitionFacts(ws, base, { canonical: !!change.canonical }), carried: kind.moved === 'target' ? g : null, leave: cl.leave, enter: cl.enter, pass: [] };
     if (change.canonical) T.canonical = true;
-    if (fallback && g != null && base.boxes.has(g)) {   // the carried block passes the blocks the fallback put on its other side
+    // the carried block passes the blocks the fallback put on its other side; an undo's carry back keeps no place to pass from (GAP's inputs)
+    if (fallback && g != null && base.boxes.has(g) && !change.canonical) {
       const pass = cl.reordered.filter(([, p, q]) => p === g || q === g).map(([c]) => [g, c]);
       if (pass.length) { T.fallback = fallback; T.pass = pass; }
     }

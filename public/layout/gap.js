@@ -184,7 +184,7 @@ function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, res
   const at = new Map(order.map((id, k) => [id, k]));
   const others = [...W.B.values()].filter((b) => b.id !== x.id && inChain.has(b.id))
     .sort((a, b) => (byCanon ? Y(a) - Y(b) || byId(a.id, b.id) : at.get(a.id) - at.get(b.id)));
-  if (byCanon && others.some((b) => Y(b) < Y(x) + x.h && Y(x) < Y(b) + b.h)) throw new Error('gap: a canonical place overlaps');
+  if (byCanon) { const o = others.find((b) => Y(b) < Y(x) + x.h && Y(x) < Y(b) + b.h); if (o) throw new Error(`gap: a canonical place overlaps: ${x.id} at ${Y(x)} and ${o.id} at ${Y(o)} in column ${c}`); }
   const lastUp = uppers ? others.reduce((m, b, k) => (uppers.has(b.id) ? k : m), -1) : -1;
   const below = byCanon ? others.find((b) => Y(b) >= Y(x) + x.h) : others.find((b, k) => k > lastUp && b.y >= x.y + shownH(x));
   if (!below) {   // rule 4, fresh: x anchors a stack of its own, rows of the anchor above (unowned under the top)
@@ -666,8 +666,13 @@ function relinkWork(T, rules) {
   for (const id of ids) {
     const putCs = cols(W.B.get(id)).filter((c) => own(id, c) && (EN.get(key(id, c)) === 'put' || PS.has(key(id, c))));
     if (putCs.length) putIn(id, putCs, (c) => PS.has(key(id, c)));
-    for (const c of cols(W.B.get(id))) if (own(id, c) && EN.get(key(id, c)) === 'back') {   // an undo, by its canonical row (plan §6.4)
-      const yb = rowsIn(W, 'canonical'); yb.set(id, canonTarget(id)); enter(W, W.B.get(id), c, yb, true);
+    // an undo's carry back, by its canonical row (plan §6.4), measured as a put block is, with rule 5 made: the blocks SETTLE moved out of
+    // its way stand at their targets, not where their stacks still have them (found through SETTLE by tests/layoutgestures.mjs)
+    const back = cols(W.B.get(id)).filter((c) => own(id, c) && EN.get(key(id, c)) === 'back');
+    if (back.length) {
+      const s0 = copyWork(W); followWork(W); fitWork(W, new Map([...fits].filter(([k]) => k !== id))); const yb = rowsIn(W, 'canonical'); restore(s0); atTargets();
+      yb.set(id, canonTarget(id));
+      for (const c of back) enter(W, W.B.get(id), c, yb, true);
     }
   }
   followWork(W);

@@ -56,7 +56,8 @@ function record(ws, before, after, by) {
  *  phases moved, by a primitive (a swap's own moves are its pair's), the moved block of the change, and the pair of a swap, in base's
  *  reading order. RELINK takes every one from the row it counts it from to where the phases left it and holds it there, one whose move adds
  *  up to nothing included (the owner, 2026-11-11, G15); the rows a push gave because a height changed are FOLLOW's and no move.
- *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string]}} [o] @returns {{moved:string[], swap?:[string, string]}} */
+ *  @param {Work} ws @param {Layout} base @param {{swap?:[string, string], canonical?:boolean}} [o] an undo's carry back is `canonical`
+ *  @returns {{moved:string[], swap?:[string, string]}} */
 export function transitionFacts(ws, base, o = {}) {
   // the blocks P-DOWN sank under a moved block that comes in by rule 3 (one base does not hold: created, or carried away and put), with the
   // blocks that followed them, are pushed by that block's arrival, FOLLOW's: not named, so that taking the moved block away again gives
@@ -67,7 +68,9 @@ export function transitionFacts(ws, base, o = {}) {
   // (`insert`, which P-UP read): a state that disagrees with base is SETTLE's error
   const putIn = ws.moved != null && !base.boxes.has(ws.moved), pushedOnly = new Set();
   if (ws.moved != null && putIn !== !!ws.insert) throw new Error(`transitionFacts: ${ws.moved} ${putIn ? 'comes in by rule 3' : 'is in base'}, the working state says ${ws.insert ? 'inserted' : 'not inserted'}`);
-  if (putIn) {
+  // an undo's carry back (`canonical`) is put by its canonical row and pushes nothing there (GAP.5 rule 3, LAYOUT-ENGINE-PLAN §6.4), so
+  // what the phases sank under it is named, held where they put it, and never left to its arrival (found by tests/layoutgestures.mjs)
+  if (putIn && !o.canonical) {
     const ids = [...ws.steps.keys()].filter((id) => id !== ws.moved && ws.L.boxes.has(id)), up = new Map(ids.map((id) => [id, id]));
     const root = (id) => { while (up.get(id) !== id) id = up.get(id); return id; };
     const spans = (id) => [base.boxes.get(id), ws.L.boxes.get(id)].filter(Boolean).map((b) => extent(b));

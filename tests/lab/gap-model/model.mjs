@@ -589,8 +589,13 @@ export function createModel(opts = {}) {
         const putCs = cols(B.get(id)).filter((c) => own(id, c) && (EN.get(key(id, c)) === 'put' || PS.has(key(id, c))));
         if (putCs.length) putIn(id, putCs, (c) => PS.has(key(id, c)));
         const x = B.get(id);
-        for (const c of cols(x)) if (own(id, c) && EN.get(key(id, c)) === 'back') {
-          const yb = rowsIn('canonical'); yb.set(id, T.after[id].yc != null ? T.after[id].yc - padOf(x) : x.y); enter(x, c, yb, true);
+        // an undo's carry back, by its canonical row, measured as a put block is, with rule 5 made: the blocks SETTLE moved out of its way
+        // stand at their targets, not where their stacks still have them (found through SETTLE by tests/layoutgestures.mjs)
+        const back = cols(x).filter((c) => own(id, c) && EN.get(key(id, c)) === 'back');
+        if (back.length) {
+          const s0 = copy(); follow(); raw.fit(Object.fromEntries(Object.entries(fits).filter(([k]) => k !== id && B.has(k)))); const yb = rowsIn('canonical'); put(s0); atTargets();
+          yb.set(id, T.after[id].yc != null ? T.after[id].yc - padOf(x) : x.y);
+          for (const c of back) enter(B.get(id), c, yb, true);
         }
       }
       follow();

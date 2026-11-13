@@ -17,7 +17,7 @@ import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check } from '../public/layout/gap.js';
 import { DECLS, resolve, DEFAULT, on } from '../public/layout/rules.js';
 import { readingOrder, extent, range, sharesCol } from '../public/layout/geometry.js';
-import { set, text, chars, ctxOf, sheet } from './lib/primcase.mjs';
+import { set, text, area, chars, ctxOf, sheet } from './lib/primcase.mjs';
 
 let seed = +process.argv[2] || 7; const seed0 = seed;
 const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
@@ -27,17 +27,25 @@ const known = new Set(DECLS.map((d) => d.id)); for (const s of SWITCHES) if (!kn
 
 function draw() {
   const cols = int(8, 16), n = int(2, 7), bs = [], map = {};
+  const clash = (b) => bs.some((o) => { const p = extent(o), q = extent(b); return p.c0 <= q.c1 && q.c0 <= p.c1 && p.r0 <= q.r1 && q.r0 <= p.r1; });
   for (let i = 0; i < n; i++) {
-    const id = 'B' + i, el = rnd() < 0.4, w = int(2, 6), col = int(0, cols - w), h = el ? 1 : int(1, 3);
-    let y = int(0, 8);
-    for (const o of bs) if (o.col < col + w && col < o.col + o.w && o.y < y + h && y < o.y + o.h) y = o.y + o.h + int(0, 1);
-    for (const o of bs) if (o.col < col + w && col < o.col + o.w && o.y < y + h && y < o.y + o.h) return null;
-    if (el) { map[id] = { text: chars((w - 1) * int(1, 6)) }; bs.push(text(id, col, y, w, 1)); } else { map[id] = { text: 'x' }; bs.push(set(id, col, y, w, h)); }
+    const id = 'B' + i, kind = rnd() < 0.15 ? 'area' : rnd() < 0.45 ? 'el' : 'set', w = int(kind === 'area' ? 3 : 2, 6), h = kind === 'el' ? 1 : int(kind === 'area' ? 2 : 1, 3);
+    const col = int(0, cols - w - (kind === 'area' ? 1 : 0));
+    let b = null;
+    for (let y = int(kind === 'area' ? 1 : 0, 8), k = 0; k < 4 && !b; k++, y += int(1, 3)) {
+      const c = kind === 'area' ? area(id, col, y, w, h) : kind === 'el' ? text(id, col, y, w, 1) : set(id, col, y, w, h);
+      if (!clash(c)) b = c;
+    }
+    if (!b) return null;
+    map[id] = { text: kind === 'el' ? chars((w - 1) * int(1, 6)) : 'x' }; bs.push(b);
   }
   let rules = DEFAULT, off = [];
   if (rnd() < 0.5) { const o = {}; for (const s of SWITCHES) if (rnd() < 0.12) o[s] = false; try { rules = resolve(o); off = Object.keys(o); } catch { return null; } }
   let L; try { L = sheet(cols, bs); } catch { return null; }
-  return { cols, bs, map, rules, off, L };
+  // a third of the sheets are an area's content: every change says so (`box`), SETTLE reports how far the bottom moved (`grew`), and the
+  // area's side handles are walls (§5.3, §5.6)
+  const box = rnd() < 0.35 ? 'AREA' : null;
+  return { cols, bs, map, rules, off, L, box };
 }
 
 const snap = (L) => [...L.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]);
@@ -80,16 +88,26 @@ function memoryWrong(r, g) {
   return null;
 }
 
-const fails = {}, firsts = [], stat = { sheets: 0, gestures: 0, moves: 0, refused: 0, holds: 0, swaps: 0, fixpoints: 0, homes: 0, still: 0, others: 0 };
+/** What SETTLE reports of an area's content (§5.6): `grew`, how far the bottom its content reaches moved from the start it was given,
+ *  0 outside an area; an area's own side handle (a wall) never makes the area taller (refused instead). */
+const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent(b).r1 + 1); return m; };
+function grewWrong(r, origin, c) {
+  const want = c.box != null ? bottomOf(r.layout) - bottomOf(origin) : 0;
+  if (r.grew !== want) return `grew is ${r.grew}, the content's bottom moved by ${want}`;
+  if (c.type === 'wall' && want > 0) return 'a wall made the area taller';
+  return null;
+}
+
+const fails = {}, firsts = [], stat = { sheets: 0, gestures: 0, moves: 0, refused: 0, holds: 0, swaps: 0, fixpoints: 0, homes: 0, still: 0, others: 0, walls: 0, undos: 0, undoLower: 0, undoOpen: 0, areas: 0 };
 const inc = (m, k) => (m[k] = (m[k] || 0) + 1);
 
 for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
   const d = draw(); if (!d) continue;
-  stat.sheets++;
+  stat.sheets++; if (d.box) stat.areas++;
   const ctx = ctxOf(d.map, d.rules), hist = [];
   const fail = (why, extra = {}) => {
     const w = String(why).replace(/B\d+/g, '·').slice(0, 100); inc(fails, w);
-    if (firsts.length < 4 && fails[w] === 1) firsts.push({ k, seed0, cols: d.cols, off: d.off, init: d.bs.map((b) => [b.id, b.col, b.y, b.w, b.h, b.cw == null ? 'el' : 'set']), lens: Object.fromEntries(Object.entries(d.map).map(([i, m]) => [i, m.text.length])), hist, why, ...extra });
+    if (firsts.length < 4 && fails[w] === 1) firsts.push({ k, seed0, cols: d.cols, off: d.off, init: d.bs.map((b) => [b.id, b.col, b.y, b.w, b.h, b.kind === 'area' ? 'area' : b.cw == null ? 'el' : 'set']), box: d.box, lens: Object.fromEntries(Object.entries(d.map).map(([i, m]) => [i, m.text.length])), hist, why, ...extra });
   };
   // the sheet at rest: its first block carried to where it stands, again and again until two carries in a row give the same layout (SIZE.8
   // runs RESTPASSES passes in each, so a long text may take more than one); a sheet that does not come to rest so is a cycle
@@ -97,7 +115,7 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
   {
     const id = L.order[0]; let rested = false;
     for (let t = 0; t < 8 && !rested; t++) {
-      const b = L.boxes.get(id), r = settle(L, { type: 'carry', box: null, id, at: { col: b.col, y: b.y, frow: b.y, w: b.w }, away: false }, emptyMemory(), ctx);
+      const b = L.boxes.get(id), r = settle(L, { type: 'carry', box: d.box, id, at: { col: b.col, y: b.y, frow: b.y, w: b.w }, away: false }, emptyMemory(), ctx);
       if (!r.ok) break;
       rested = same(r.layout, L); L = r.layout;
     }
@@ -123,7 +141,7 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
           // released there (towards it, the block stays pinned, and DRAG.A4 shows the start anyway)
           const th = mem.through, towards = th && (th.side === 'below' ? home.y >= th.at.y : home.y <= th.at.y);
           if (!swapped && on(d.rules, 'DRAG.A5') && !towards) {
-            const hc = { type: 'carry', box: null, id, at: { ...home, frow: home.y, w: b.w }, away: false };
+            const hc = { type: 'carry', box: d.box, id, at: { ...home, frow: home.y, w: b.w }, away: false };
             const rh = settle(st, hc, mem, ctx), r0 = settle(L, hc, emptyMemory(), ctx); stat.homes++;
             if (rh.ok !== r0.ok || (rh.ok && !same(rh.layout, r0.layout))) { fail('back at its start cell, the carry\'s memory leaves a trace' + (held ? ' (after a hold)' : ''), { got: rh.ok ? snap(rh.layout) : rh, want: r0.ok ? snap(r0.layout) : r0 }); dead = true; break; }
           }
@@ -134,7 +152,7 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
         if (!away && !sharesCol(card, place)) away = true;
         else if (away && sharesCol(card, place) && extent(card).r0 <= extent(place).r1 && extent(place).r0 <= extent(card).r1) away = false;
         const hold = rnd() < 0.3, frow = y + [0, 0, 0.3, 0.5, 0.8][int(0, 4)];
-        const c = { type: 'carry', box: null, id, at: { col, y, frow, w: b.w }, away, through: hold ? 'hold' : undefined };
+        const c = { type: 'carry', box: d.box, id, at: { col, y, frow, w: b.w }, away, through: hold ? 'hold' : undefined };
         hist.push([col, y, frow, away ? 'away' : '', hold ? 'hold' : '']);
         // the order of every phase, against phase 1 of the same run
         let ref = null, bad = null; const skip0 = new Set([id]);
@@ -148,6 +166,7 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
         if (bad) { fail(bad); dead = true; break; }
         if (!res.ok) { if (res.why === 'refused') { stat.refused++; continue; } fail((res.errors || ['failed'])[0]); dead = true; break; }
         const e = sound(res.layout); if (e.length) { fail('unsound: ' + e[0]); dead = true; break; }
+        const gw = grewWrong(res, st, c); if (gw) { fail(gw); dead = true; break; }
         const mw = memoryWrong(res, id); if (mw) { fail(mw, { memory: res.memory.through, got: snap(res.layout) }); dead = true; break; }
         if (res.start !== st) { stat.swaps++; swapped = true; }
         if (res.memory.through) { stat.holds++; held = true; }
@@ -158,23 +177,50 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
         }
         st = res.start; mem = res.memory; last = res;
       }
-      if (!dead && last) L = last.layout;   // the drop
+      if (!dead && last) {   // the drop
+        L = last.layout;
+        // sometimes its undo on the inverse path (LAYOUT-ENGINE-PLAN §6.4): the block carried back to its old cell as a canonical place,
+        // «away» by DRAG.B1 against where it was dropped; refused or sound, and the block back at that cell, canonically, or under a block
+        // that stands there now and cannot go up (P-UP), after phase 8's RELINK
+        if (rnd() < 0.35) {
+          const cur = L.boxes.get(id), cy = b.yc ?? b.y, u = { type: 'carry', box: d.box, id, at: { col: b.col, y: cy, frow: cy, w: b.w }, away: !sharesCol({ ...cur, col: b.col, w: b.w }, cur), canonical: true };
+          hist.push(['undo', b.col, cy, u.away ? 'away' : '']); stat.undos++;
+          let L8 = null; const ru = settle(L, u, emptyMemory(), ctx, { trace: (n, W) => { if (n === '8') L8 = W; } });
+          // open (LAYOUT-RULES §15.1 O-30): a block right under it in a column it keeps rises into its place as it leaves, and RELINK refuses
+          // its canonical place there; counted apart until O-30 is decided (step 3 builds the undo), every other failure fails
+          if (!ru.ok && ru.why === 'failed' && /a canonical place overlaps/.test((ru.errors || [''])[0])) stat.undoOpen++;
+          else if (!ru.ok) { if (ru.why !== 'refused') { fail((ru.errors || ['failed'])[0]); dead = true; } }
+          else {
+            // at its cell after phase 8's RELINK, which places it; phase 9 may then rest a text over it to another height, and it follows
+            const e = sound(ru.layout), X = (L8 || ru.layout).boxes.get(id), gw = grewWrong(ru, L, u);
+            if (e.length) { fail('unsound: ' + e[0]); dead = true; }
+            else if (gw) { fail(gw); dead = true; }
+            else if (!X || X.col !== b.col || (X.yc ?? X.y) < cy) { fail('an undo\'s carry back does not put the block at its old cell, or under what now stands there', { got: snap(ru.layout) }); dead = true; }
+            else { if ((X.yc ?? X.y) !== cy) stat.undoLower++; L = ru.layout; }
+          }
+        }
+      }
     } else {   // a size, a width or a deletion
       const r0 = rnd(); let c = null;
-      if (r0 < 0.4) { const el = ids.filter((i) => L.boxes.get(i).cw == null); if (el.length) { const i = el[int(0, el.length - 1)]; d.map[i] = { text: chars(int(1, 40)) }; c = { type: 'size', box: null, id: i }; hist.push(['size', i, d.map[i].text.length]); } }
-      else if (r0 < 0.7) { const sw = ids.filter((i) => L.boxes.get(i).cw != null); if (sw.length) { const i = sw[int(0, sw.length - 1)]; c = { type: 'width', box: null, id: i, cw: Math.max(1, L.boxes.get(i).cw + int(-2, 4)), side: 'right' }; hist.push(['width', i, c.cw]); } }
-      else { const i = ids[int(0, ids.length - 1)]; c = { type: 'remove', box: null, id: i }; hist.push(['remove', i]); }
+      if (d.box && rnd() < 0.35) {   // an area's side handle: a wall inside it (§5.3), the right edge or the left one with its `shift` (GAP.10)
+        if (rnd() < 0.5) c = { type: 'wall', box: d.box, side: 'right', cols: Math.max(3, Math.min(20, L.cols + int(-4, 3))) };
+        else { const k = int(-3, 3) || 1; c = { type: 'wall', box: d.box, side: 'left', cols: L.cols - k, shift: -k }; }
+        hist.push(['wall', c.side, c.cols, c.shift ?? 0]); stat.walls++;
+      } else if (r0 < 0.4) { const el = ids.filter((i) => L.boxes.get(i).cw == null); if (el.length) { const i = el[int(0, el.length - 1)]; d.map[i] = { text: chars(int(1, 40)) }; c = { type: 'size', box: d.box, id: i }; hist.push(['size', i, d.map[i].text.length]); } }
+      else if (r0 < 0.7) { const sw = ids.filter((i) => L.boxes.get(i).cw != null); if (sw.length) { const i = sw[int(0, sw.length - 1)]; c = { type: 'width', box: d.box, id: i, cw: Math.max(1, L.boxes.get(i).cw + int(-2, 4)), side: 'right' }; hist.push(['width', i, c.cw]); } }
+      else { const i = ids[int(0, ids.length - 1)]; c = { type: 'remove', box: d.box, id: i }; hist.push(['remove', i]); }
       if (!c) continue;
       stat.others++;
       const res = settle(L, c, emptyMemory(), ctx);
       if (!res.ok) { if (res.why !== 'refused') { fail((res.errors || ['failed'])[0]); dead = true; } continue; }
       const e = sound(res.layout); if (e.length) { fail('unsound: ' + e[0]); dead = true; break; }
+      const gw = grewWrong(res, L, c); if (gw) { fail(gw); dead = true; break; }
       L = res.layout;
     }
   }
 }
 
 const bad = Object.values(fails).reduce((s, n) => s + n, 0), ok = stat.sheets >= N && bad === 0;
-console.log((ok ? '✓ ' : '✗ ') + `${stat.sheets} sheets, ${stat.gestures} gestures of ${stat.moves} moves (${stat.holds} with a neighbour held, ${stat.swaps} swaps, ${stat.refused} refused) and ${stat.others} other changes: SETTLE never failed, every result sound, no phase reversed two blocks, the memory right against its neighbour; ${stat.fixpoints} fixpoints, ${stat.homes} gestures back home, ${stat.still} moves held still ${JSON.stringify(fails)}`);
+console.log((ok ? '✓ ' : '✗ ') + `${stat.sheets} sheets, ${stat.gestures} gestures of ${stat.moves} moves (${stat.holds} with a neighbour held, ${stat.swaps} swaps, ${stat.refused} refused) and ${stat.others} other changes: SETTLE never failed, every result sound, no phase reversed two blocks, the memory right against its neighbour; ${stat.fixpoints} fixpoints, ${stat.homes} gestures back home, ${stat.still} moves held still, ${stat.undos} undos carried back (${stat.undoLower} under what stands at the old cell, ${stat.undoOpen} refused by RELINK, O-30), ${stat.walls} walls, ${stat.areas} sheets in an area ${JSON.stringify(fails)}`);
 for (const f of firsts) console.log('  first failure: ' + JSON.stringify(f).slice(0, 2000));
 process.exit(ok ? 0 : 1);
