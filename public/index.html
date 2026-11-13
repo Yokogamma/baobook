@@ -1503,7 +1503,7 @@ function authChanged(u){ const prev=ACC.user; if(u && prev && prev.uid===u.uid){
   else if(prev && !ACC.signingOut){ saveS({fbUser:null}); dropCloud(); }   // signed out in another tab, or the session ended
   accUI(); accStatus(); }
 // §4.11: the access, the rules, the owner, only then the cloud. Once per user unless forced (a re-sign-in after «by invitation», the network back)
-function accountCheck(user, o={}){ if(!accOn() || DYING || ACC.dialog) return Promise.resolve(); if(ACC.checking) return ACC.checking; if(!o.force && ACC.checked===user.uid && (CLOUD || ACC.probe || ACC.otherTab)) return Promise.resolve();
+function accountCheck(user, o={}){ if(!accOn() || DYING || ACC.dialog) return Promise.resolve(); if(ACC.checking) return o.force? ACC.checking.then(()=>ACC.user===user? accountCheck(user, o) : undefined) : ACC.checking;   // a forced check (the owner moved under this tab) runs again after one in flight: that one decided over the old owner and may end connecting nothing if(!o.force && ACC.checked===user.uid && (CLOUD || ACC.probe || ACC.otherTab)) return Promise.resolve();
   ACC.checking=(async()=>{ try{ ACC.probe=null; accStatus(); let owner=SYNC.owner;
       if(owner && owner.uid===user.uid && owner.env===FB.env){ await bindOwner({...owner, email:user.email}); connectAccount(user); return; }   // the usual start of a signed-in device: the catch-up's own first read is the access check
       const r=await accessProbe(user); if(ACC.user!==user || DYING) return; if(r!=='ok'){ ACC.probe=r; return; }
