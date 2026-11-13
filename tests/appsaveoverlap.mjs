@@ -2,13 +2,15 @@
 // write's result lands while the newer one is still on its way, and the editor snapshot (ESNAP, the base the newer write merges over) must follow it:
 // otherwise the newer write merges over the snapshot of a write before both, and what the older write added and the newer one took away again (a block
 // made, then deleted) reads as another side's change and comes back, in the store and on the screen. One device on the test cloud, as a real one is.
-// (1) both writes held by saveGate and released together; (2) slow storage, every write delayed in the order it began (no gate held, as a slow
-// IndexedDB on Android does); (3) the same with a text edited twice: the stored text is the last one and no conflict copy is made
+// (1) both writes held by saveGate and released together: both transactions are made in one turn, so IndexedDB itself queues the second behind the
+// first, and the first one's result (microtasks after its commit) must reach the snapshot before the second one's first request (a later task);
+// (2) slow storage, every write delayed in the order it began (no gate held, as a slow IndexedDB on Android does); (3) the same with a text edited
+// twice. Cases 2 and 3 check first that the writes did overlap (the older one not landed when the newer one began), so a slow machine cannot pass them vacuously: the stored text is the last one and no conflict copy is made
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { TestCloud } from './lib/cloud.mjs';
-import { newDevice, stored, typeAt, curId } from './lib/cloudpage.mjs';
+import { newDevice, stored, typeAt, curId, settle } from './lib/cloudpage.mjs';
 const srv=await serve(); const SITE=srv.url;
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
@@ -25,15 +27,19 @@ const fresh=async()=>{ await pg.evaluate(()=>{ sheetDebug.saveGate=null; documen
 const into=async(text, ...keys)=>{ const bb=await pg.locator('#sheet .blk .txt', {hasText:text}).boundingBox(); await pg.mouse.click(bb.x+10, bb.y+bb.height/2); await pg.waitForTimeout(150);
   for(const k of keys) if(k.type!=null) await pg.keyboard.type(k.type); else await pg.keyboard.press(k); await pg.keyboard.press('Escape'); await pg.waitForTimeout(600); };
 const del=text=>into(text, 'Control+a', 'Delete', 'Backspace');   // the text emptied, then Backspace on the empty block drops it
-// slow storage: every write of a note takes 1.5 s, in the order the writes began (the store queues them; nothing overtakes another)
-const slow=()=>pg.evaluate(()=>{ let q=Promise.resolve(); sheetDebug.saveGate=st=>st.includes('notes')? (q=q.then(()=>new Promise(r=>setTimeout(r,1500)))) : Promise.resolve(); });
+// slow storage: every write that touches notes takes 2.5 s, in the order the writes began (the store queues them; nothing overtakes another);
+// __pend counts the writes waiting, drained() waits until none is left and the engine is idle (no fixed wait)
+const slow=()=>pg.evaluate(()=>{ let q=Promise.resolve(); window.__pend=0; sheetDebug.saveGate=st=>{ if(!st.includes('notes')) return Promise.resolve(); window.__pend++;
+  return q=q.then(()=>new Promise(r=>setTimeout(r,2500))).then(()=>{ window.__pend--; }); }; });
+const pending=()=>pg.evaluate(()=>window.__pend);
+const drained=async()=>{ await pg.waitForFunction(()=>window.__pend===0, null, {timeout:30000}); await pg.evaluate(()=>{ sheetDebug.saveGate=null; }); await settle(pg, 600); };
 const ids=new Set();
 
 /* ── 1. a block added and deleted, both writes held by the gate and released together ── */
 { const id=await fresh(); ids.add(id); await typeAt(pg, 400, 300, 'перший'); await pg.waitForTimeout(400);
   await pg.evaluate(()=>{ window.__wg=new Promise(r=>{ window.__wopen=r; }); sheetDebug.saveGate=()=>window.__wg; });
   await typeAt(pg, 400, 500, 'видалити'); await del('видалити'); const before=await screen();
-  await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__wopen(); }); await pg.waitForTimeout(1500);
+  await pg.evaluate(()=>{ sheetDebug.saveGate=null; window.__wopen(); }); await settle(pg, 600);
   const r=await record(id), s=await screen();
   okWhy('1 a block added, then deleted while its write was held: the record '+JSON.stringify(texts(r))+', the screen '+JSON.stringify(s), {
     'gone from the screen before the release': before.length===1, 'not stored': JSON.stringify(texts(r))==='["перший"]', 'not on the screen': JSON.stringify(s)==='["перший"]'}); }
@@ -41,19 +47,18 @@ const ids=new Set();
 /* ── 2. slow storage, no gate held: the deletion's write begins while the write that added the block is still on its way ── */
 { const id=await fresh(); ids.add(id); await typeAt(pg, 400, 300, 'перший'); await pg.waitForTimeout(400);
   await slow();
-  await typeAt(pg, 400, 500, 'видалити'); await del('видалити'); await pg.waitForTimeout(4000); await pg.evaluate(()=>{ sheetDebug.saveGate=null; });
+  await typeAt(pg, 400, 500, 'видалити'); await del('видалити'); const mid=texts(await record(id)), waiting=await pending(); await drained();
   const r=await record(id), s=await screen();
-  okWhy('2 slow storage, the block deleted while the write that added it was on its way: the record '+JSON.stringify(texts(r))+', the screen '+JSON.stringify(s), {
-    'not stored': JSON.stringify(texts(r))==='["перший"]', 'not on the screen': JSON.stringify(s)==='["перший"]'}); }
+  okWhy('2 slow storage, the block deleted while the write that added it was on its way ('+waiting+' writes waiting, the record then '+JSON.stringify(mid)+'): the record '+JSON.stringify(texts(r))+', the screen '+JSON.stringify(s), {
+    'the writes overlapped': waiting>=2 && JSON.stringify(mid)==='["перший"]', 'not stored': JSON.stringify(texts(r))==='["перший"]', 'not on the screen': JSON.stringify(s)==='["перший"]'}); }
 
 /* ── 3. a text edited twice on slow storage: the last text is stored, no conflict copy ── */
 { const id=await fresh(); ids.add(id); await typeAt(pg, 400, 300, 'перший'); await pg.waitForTimeout(400);
   await slow();
-  await into('перший', 'Control+a', {type:'другий'}); await into('другий', 'Control+a', {type:'третій'});
-  await pg.waitForTimeout(4000); await pg.evaluate(()=>{ sheetDebug.saveGate=null; });
+  await into('перший', 'Control+a', {type:'другий'}); await into('другий', 'Control+a', {type:'третій'}); const mid=texts(await record(id)), waiting=await pending(); await drained();
   const r=await record(id), s=await screen(), c=await copies(id);
-  okWhy('3 a text changed twice on slow storage: the record '+JSON.stringify(texts(r))+', the screen '+JSON.stringify(s)+', '+c+' conflict copies', {
-    'the last text stored': JSON.stringify(texts(r))==='["третій"]', 'on the screen': JSON.stringify(s)==='["третій"]', 'no conflict copy': c===0}); }
+  okWhy('3 a text changed twice on slow storage ('+waiting+' writes waiting, the record then '+JSON.stringify(mid)+'): the record '+JSON.stringify(texts(r))+', the screen '+JSON.stringify(s)+', '+c+' conflict copies', {
+    'the writes overlapped': waiting>=2 && JSON.stringify(mid)==='["перший"]', 'the last text stored': JSON.stringify(texts(r))==='["третій"]', 'on the screen': JSON.stringify(s)==='["третій"]', 'no conflict copy': c===0}); }
 
 ok('no page errors'+(A.errs.length? ': '+A.errs.join(' | ') : ''), !A.errs.length);
 await br.close(); srv.close(); console.log(fails? fails+' failed' : 'all passed'); process.exit(fails? 1 : 0);
