@@ -289,7 +289,17 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const hf=F.sync.importHistory({versions:[{...vr, id:'fv2', name:'З файлу', sig:'sf2'}], blobs:[]}, ['f0']).then(res, erc);
   const of=[await bf, await wf, await imf, await vf, await hf]; await F.sync.idle(300); await F.sync.idle(300);
   ok('5s4 a first sign-in: the save, the import, a named version and a history import ordered right after setOwner ('+of.join(', ')+') are queued for the new owner and reach its cloud (f1 '+!!cloud.doc('notes','f1')+', f2 '+!!cloud.doc('notes','f2')+', fv1 '+!!cloud.doc('versions','fv1')+', fv2 '+!!cloud.doc('versions','fv2')+'); no «reload»',
-    of.every(c=>c==='ok') && !F.status.includes('reload') && F.sync.owner.uid==='s6' && !!cloud.doc('notes','f1') && !!cloud.doc('notes','f2') && !!cloud.doc('notes','f0') && !!cloud.doc('versions','fv1') && !!cloud.doc('versions','fv2')); }
+    of.every(c=>c==='ok') && !F.status.includes('reload') && F.sync.owner.uid==='s6' && !!cloud.doc('notes','f1') && !!cloud.doc('notes','f2') && !!cloud.doc('notes','f0') && !!cloud.doc('versions','fv1') && !!cloud.doc('versions','fv2'));
+  // an erase that commits after a write was called and before that write's transaction (here the write waits for the engine's first load, the
+  // erase does not): the write is refused, the erased device stays empty; also when the erase's adopting load fails after its commit
+  for(const failLoad of [false, true]){ const dbG=new MemStore(); const G=await mk(cloud, failLoad? 'S8' : 'S7', {db:dbG}); await edit(G,'g0',(C,t)=>({title:'до стирання', blocks:[{id:'b',row:1,fx:0,text:'старий'}], created:t, updated:t})); await G.sync.idle(300); G.sync.stop();
+    let ro=0; const real=dbG.tx.bind(dbG), dbH={...dbG, tx:(st,mode,fn)=>{ if(mode==='readonly' && failLoad && ++ro===2) return Promise.reject(Object.assign(new Error('load failed'),{name:'UnknownError'})); return real(st,mode,fn); }, all:s=>dbG.all(s), get:(s,k)=>dbG.get(s,k)};
+    const H=device(cloud, failLoad? 'S8' : 'S7', {db:dbH});   // the same store opened anew (a reload): the engine is not loaded yet
+    const wh=edit(H,'g0',(C,t)=>({...C, blocks:[{id:'b',row:1,fx:0,text:'старий, дописаний'}], updated:t})).then(res, erc);
+    const eh=H.sync.setOwner(null,{erase:true}).then(()=>'ok', erc);
+    const oh=[await eh, await wh];
+    ok('5s'+(failLoad? '6' : '5')+' a write called before an erase of this engine and ordered after its commit'+(failLoad? ', the erase\'s adopting load failing' : '')+' is refused ('+oh.join(', ')+'): the device stays empty, nothing queued',
+      oh[0]===(failLoad? 'UnknownError' : 'ok') && oh[1]==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner')); } }
 
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});

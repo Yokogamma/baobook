@@ -182,6 +182,24 @@ const delDb=()=>new Promise(r=>{ const q=indexedDB.deleteDatabase('sheet'); q.on
   ok('3l with the engine\'s load held in flight ('+inFlight+'), the text typed just before the upgrade was written before the tab let go, nothing is left unsaved ('+msg+')', inFlight && has(notes,/під час завантаження/) && /оновився в іншій вкладці/.test(msg) && !/не вдалося/.test(msg));
   ok('3m no page errors', !a.errs.length); await ctx.close(); }
 
+/* ── 3n. the same while this tab's engine takes its first owner (#146): setOwner has committed, its adopting load is held; the save made in
+   idbLost opens its transaction at once, under the new owner, and lands before the tab lets go ── */
+{ const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const a=await fresh(ctx), b=await fresh(ctx);
+  await go(a,SITE); await ready(a);
+  await go(b,SITE+'blank.html');
+  await a.evaluate(()=>{ window.__readOpen=null; const held=new Promise(r=>{ window.__readOpen=r; }); let once=true;
+    sheetDebug.readGate=stores=>{ if(once && stores.length===1 && stores[0]==='sync'){ once=false; window.__held=true; return held; } return null; };
+    window.__bind=sheetDebug.sync.engine().setOwner({env:'test', uid:'u3n', email:'u3n@test'}).then(()=>'ok', e=>e && e.code); });
+  const held3n=await a.waitForFunction(()=>window.__held===true,null,{timeout:5000}).then(()=>true,()=>false);
+  await typeAt(a,500,300,'під час зміни власника');   // no wait: the autosave (300 ms) has not run yet
+  const notes=await b.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet',5); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('sync')) r.result.createObjectStore('sync',{keyPath:'k'}); };
+    r.onsuccess=()=>{ const d=r.result, q=d.transaction('notes','readonly').objectStore('notes').getAll(), j=d.transaction('sync','readonly').objectStore('sync').getAll(); let n=null, js=null; const done=()=>{ if(n && js){ d.close(); res({n, js}); } }; q.onsuccess=()=>{ n=q.result; done(); }; j.onsuccess=()=>{ js=j.result; done(); }; }; }));
+  await a.evaluate(()=>{ sheetDebug.readGate=null; window.__readOpen(); }); await a.waitForTimeout(300);
+  const msg=await strip(a), id3n=(notes.n.find(n=>(n.blocks||[]).some(b=>/під час зміни власника/.test(b.text||'')))||{}).id;
+  ok('3n with the first owner\'s adopting load held ('+held3n+'), the text typed just before the upgrade was written under that owner and queued for it before the tab let go ('+msg+')',
+    held3n && !!id3n && notes.js.some(r=>r.k==='owner' && r.uid==='u3n') && notes.js.some(r=>r.k==='out:n:'+id3n) && /оновився в іншій вкладці/.test(msg) && !/не вдалося/.test(msg));
+  ok('3o no page errors', !a.errs.length); await ctx.close(); }
+
 /* ── 3f. the same, but the last edit could not be written: the strip offers to export it ── */
 { const ctx=await br.newContext({...CTX, viewport:{width:1280,height:900}, acceptDownloads:true}); const a=await fresh(ctx), b=await fresh(ctx);
   await go(a,SITE); await ready(a); await a.evaluate(()=>{ window.sheetDebug.failSave=true; });
