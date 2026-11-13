@@ -17,7 +17,7 @@ const WEIGHTS = {
   appsync: 21, appundo: 20, appsri: 20, appmenu: 20, appupdate: 18, appeditor: 18, appcard: 18, appnav: 16, apparchive: 16,
   applinks: 15, appchip: 15, apptouch: 14, appconflict: 60, appaccpanel: 75, appfreezetx: 40,
   // the layout engine's Node tests (steps 1, 1b and 2): no browser, a second or so each, the model's suite, the twin and the laws on both more
-  'layoutgap-oracle': 40, 'layoutgap-twin': 35, layoutrules: 1, layoutgeometry: 1, layoutsize: 1, 'layoutgap-follow': 1, 'layoutgap-resize': 1,
+  'layoutgap-oracle': 40, 'layoutgap-twin': 35, layoutrules: 1, ownermodel: 1, layoutgeometry: 1, layoutsize: 1, 'layoutgap-follow': 1, 'layoutgap-resize': 1,
   'layoutgap-cap': 1, 'layoutgap-adjust': 1, 'layoutgap-leave': 1, 'layoutgap-stand': 1, 'layoutgap-fresh': 1, 'layoutgap-fit': 1,
   'layoutgap-removed': 2, 'layoutgap-shift': 1, 'layoutgap-laws': 90,
   'layoutprim-aside': 1, 'layoutprim-sink': 1, 'layoutprim-up': 1, 'layoutprim-rest': 1, 'layoutprim-transition': 1, 'layoutprim-props': 8, layoutchanges: 1, layoutsettle: 1, layoutprops: 4, layoutgestures: 12, layoutundo: 1, layoutref: 2, layoutopen: 1,
