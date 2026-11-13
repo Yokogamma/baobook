@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026111306">
+<meta name="baobook-build" content="2026111307">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111306" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
-<script src="cloud.js?b=2026111306" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026111307" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
+<script src="cloud.js?b=2026111307" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -808,12 +808,19 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
 const SRI={'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-9KDbsIjv5z6ca8baYzbX9Gndcx2zOvd9ly9532NfhdFW/cvbGwKiTB4GgDMesaLA', 'layout/gap.js':'sha384-otpVUi/cP0oFWx+78Ahq+QyzObdWTnwsH8KfxFaHj0rH6LEf2OvIuKttGjsq88ee', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-Zna/gVZm1nxv548VAqVVMUrLq2wvXbFpAnsjZ3jKAZ3nWLBl//hTikRmC5+ECaDw', 'layout/primitives.js':'sha384-mhUXbJWqEQcB5TVr2I5DjGvXp9dtK0Qt4ZvKMo1kBYmbjP3RAaNIyEtGE6TEYI0J', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-KI4/TZY+rjAawRMUrOwJ5frVE5hh5ztWDDOcTPR/ylwiZM1L86R+0x2ykzviDWBE', 'layout/size.js':'sha384-6RlhEsmi+4Mx8yEdhG6Xz72xaYHm1ra9smv6WnPsGQyoIWRJUF6k7+kxOH1j8XeP', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-Lfi3yOX19TfLmRkWllR3MsmogzqKABn68tRYLj4aDtQyJV3kUOZDXtOevkvTgm6d', 'layout/settle.js':'sha384-vc+hRscIG4S+hZ6VRQarHVjdvbbIZLLfVHPD7crc1MJbW9ZSBbYGRnyXJX1152cO', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026111306;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026111307;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+// the Firebase SDK (SYNC-PLAN 4.13), imported from gstatic when the account is first used: three self-contained modules (auth and firestore
+// import firebase-app.js by its full URL). Their integrity goes into the import map below too, so bytes other than the ones this page was built
+// with are refused, whether a CDN or a cache answers them. A change of FB_VER runs `node tests/hashes.mjs --write`, which downloads the three
+// files into tests/emu/.sdk/<FB_VER>/ and sets FB_SRI; the emulator scenarios load the real files through it
+const FB_VER='12.19.0', FB_BASE='https://www.gstatic.com/firebasejs/'+FB_VER+'/';
+const FB_SRI={'firebase-app.js':'sha384-RJIsoe0CFvPanuqLw3NPVreeQfBNBS6DotHoCTfrxasRhbZXK3oIK/kWJLO/hCaU', 'firebase-auth.js':'sha384-AgtBGZZ/u/7uqnj2oxrSf5J+QuQXF4sEG1w/6PUzbyR3RIG7mkXR2z8Tpdeqay0t', 'firebase-firestore.js':'sha384-sHPqHH0juNEgAdc08GltxAO7hXh1m6l79EG3kVc04m9yh0n7gPu0bciliVhHtIlL'};
 // the page's ES modules (CLAUDE.md «Modular»): each file of public/<feature>/ is imported by its plain path; the import map puts this build's ?b=
-// on every one and the integrity of the SRI table beside it (a browser without import map integrity loads it unchecked; the service worker checks
-// its set against the same table). Written before any module is imported
+// on every one and the integrity of the SRI table beside it, and the SDK's integrity from FB_SRI (a browser without import map integrity loads
+// them unchecked; the service worker checks its set against the same table). Written before any module is imported
 const MODS=Object.keys(SRI).filter(f=>f.endsWith('.js'));
 (()=>{ const m={imports:{}, integrity:{}}; for(const f of MODS){ const u=new URL(f+'?b='+BUILD, location.href).href; m.imports[new URL(f, location.href).href]=u; m.integrity[u]=SRI[f]; }
+  for(const f in FB_SRI) m.integrity[FB_BASE+f]=FB_SRI[f];
   const s=document.createElement('script'); s.type='importmap'; s.textContent=JSON.stringify(m); document.head.append(s); })();
 const buildName=b=>{ const s=String(b); return s.slice(2,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.'+(+s.slice(8)); };   // 2026102201 → 26.10.22.1: the date of the build and its number that day, as the settings menu shows it
 const IS_ANDROID=/Android/i.test(navigator.userAgent||'');   // Android only: a hint that names its settings (lock.waitHeldAndroid)
@@ -1341,8 +1348,8 @@ function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36
    came from ({dn, dev} of another device, {tab:true} for another tab of this one), for the strip «Є зміни з … · Оновити»;
    ARRIVED: id → when a document with an `updated` ahead of this clock arrived (shown instead of that time) */
 /* the hosts (SYNC-PLAN 4.12): the two sites have a project each by env, localhost has only the emulators and only with the `emulator` flag in the settings
-   (the tests set it); every other host has no sync. The Firebase config is public by design (the rules are the boundary); authDomain is the site itself */
-const FB_VER='12.19.0', FB_BASE='https://www.gstatic.com/firebasejs/'+FB_VER+'/';
+   (the tests set it); every other host has no sync. The Firebase config is public by design (the rules are the boundary); authDomain is the site itself.
+   FB_VER, FB_BASE and FB_SRI sit above the import map, which needs them before any module is imported */
 const FB_CONFIG={apiKey:'AIzaSyCLULj0vihoScW4YwBiAk_6iHIMUDLaNo4', projectId:'baobook-3fe7f', messagingSenderId:'901237593810', appId:'1:901237593810:web:b99fe784de1ce107cd7f0b'};
 const FB_HOSTS={'baobook.matamata.app':{env:'app'}, 'baobook.matamata.dev':{env:'dev'}};
 const FB_EMU={env:'dev', emulator:true, config:{apiKey:'demo-api-key', projectId:'demo-baobook', appId:'1:1:web:demo'}, auth:'http://127.0.0.1:9099', firestore:['127.0.0.1',8080]};
