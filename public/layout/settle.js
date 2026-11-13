@@ -140,7 +140,7 @@ function wrapper(start, change, memory, ctx, hooks) {
     const r = th ? pipeline(s, heldChange(change, th), { ...mem, lastTarget: th.last }, ctx, hooks, start) : pipeline(s, change, mem, ctx, hooks, start);
     if (th) {
       const row = against(r.layout, g, th);
-      // carried off it (sideways, or it went elsewhere): it leaves the memory, the result the one with no neighbour (step 2b, proposed)
+      // carried off it (sideways, or it went elsewhere): it leaves the memory, the result the one with no neighbour (G19, the owner, 2026-11-13)
       if (row == null) { mem = { ...mem, through: null }; continue; }
       if (pastMiddle(r.layout, g, th, change.at)) {
         // a carry away, or a neighbour judged by its middle: released, and its middle judges it (step 2b-2, proposed)

@@ -297,7 +297,7 @@ const ctx = ctxOf();
   const a = z.ok && settle(z.layout, { ...carry('B2', 14, 5, 3), through: 'hold' }, emptyMemory(), c);
   ok('22 held at once against B0 (the review\'s (a)): taken, B0 in the memory at 9, B2 right over it at 5 at its rest width 4; sound', a && a.ok && eq(nb(a.memory.through), { id: 'B0', row: 9, side: 'below' }) && eq(places(a.layout).B2, [14, 5, 4, 4]) && sound(a), a && (a.ok ? [places(a.layout), a.memory.through] : a));
   // (b) the review's second: X, wide, held against N; carried sideways off N's columns (still in its own, so not away) or away, N leaves
-  // the memory and the result is the one with no neighbour there (step 2b, proposed); sideways while still over N, it stays held
+  // the memory and the result is the one with no neighbour there (G19, the owner, 2026-11-13); sideways while still over N, it stays held
   const S = sheet(20, [set('X', 0, 0, 8, 1), set('N', 0, 4, 4, 3), set('Z', 0, 8, 4, 1)]), cx = (col, y, o = {}) => ({ ...carry('X', col, y, 8), ...o });
   const s0 = settle(S, cx(0, 5), emptyMemory(), ctx), s1 = s0.ok && settle(s0.start, cx(0, 5, { through: 'hold' }), s0.memory, ctx);
   const side = s1 && s1.ok && settle(s1.start, cx(4, 5), s1.memory, ctx), sideFree = s1 && s1.ok && settle(s1.start, cx(4, 5), { ...s1.memory, through: null }, ctx);
