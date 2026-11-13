@@ -1,6 +1,6 @@
 # A change of owner: the era of the data and the owner of the transaction
 
-**Status: proposed on 2026-11-13; the contract (§3–§6) was agreed with the owner in three review passes of the architecture review of #146. Nothing here is implemented or tested yet.** The contract being agreed does not prove the implementation: the order of transactions, urgent saves and the behaviour of old tabs must be shown by the Node and browser scenarios of §8.
+**Status: proposed on 2026-11-13; the contract (§3–§6) was agreed with the owner in three review passes of the architecture review of #146, and merged by #151. A preflight over main at 2ee9dfc the same day found three high and two medium gaps in paths the plan did not name (§11); they are written in below. Stage 1 can start; stages 2 and 3 follow this text. Nothing here is implemented or tested yet.** The contract being agreed does not prove the implementation: the order of transactions, urgent saves and the behaviour of old tabs must be shown by the Node and browser scenarios of §8.
 
 This plan replaces the approach of #146 (`fix-owner-save-race`). It keeps that PR's goal: a save made while this tab changes the owner must land, under the new owner, without locking the tab.
 
@@ -50,7 +50,7 @@ A Node probe on c6f1003 showed that the engine's API accepts a `writeLocal` of a
 1. The page holds the era its screen was read over. It is read **in one readonly transaction over `notes` and `sync`** together with the notes and their `lrev`. Today `start()` uses four transactions (`SYNC.reload()`, `db.move()`, `SYNC.lrevOf()`, `db.all()`); an erase between two of them would give old notes the new era, or a new screen the old one.
 2. The era of the screen changes only by reading the whole screen again, that is, by a reload of the page.
 3. `detachEngine()` and `ownerMoved()` hand the era of the screen to the new engine. A new engine never takes its permission to write from the store as it is now.
-4. Every later read that feeds the screen from the store (`takeStored`, `takeNote`, `syncTabs`, the engine's `rtx`) compares the era inside its own transaction. A mismatch means «the records were erased», never new data to show.
+4. Every later read that feeds the screen from the store (`takeStored`, `syncTabs`, the engine's `rtx`) compares the era inside its own transaction. A mismatch means «the records were erased», never new data to show. What reaches the screen without a read of the store (a message of another tab) is §3.8; what leaves the page as a file is §3.9.
 
 ### 3.3 The user's writes
 
@@ -60,6 +60,8 @@ A Node probe on c6f1003 showed that the engine's API accepts a `writeLocal` of a
 4. The cache updates a write queues for after its commit (`after`) apply only when the epoch of the engine's memory is the epoch the transaction read. Otherwise the memory is marked not loaded, and the next load reads the store.
 5. A memory value that belongs to the previous owner is not used across epochs: `S.everCaughtUp` in `purgeLocal` counts as false when the epochs differ (a tombstone job is queued).
 6. The raw writes of the page (`idb.tx`, `idb.run`: automatic versions, `idb.del`) compare the era in the same place where `fmtGuard` reads the `format` record first.
+7. **The page chooses no path by the owner in the engine's memory.** Today `purgeNote()` takes `SYNC.purgeLocal()` or the raw `db.remove()` and `vdrop()` by `SYNC.hasOwner()`, read before any transaction. After a first sign-in's commit and before the load, `S.owner` is still empty: the raw path deletes the note, the era check lets it (nothing was erased), no tombstone is queued, and a document of that note in the new owner's cloud comes back. So with IndexedDB every deletion the user makes goes through the core, and «only here, or a tombstone» is decided by the owner read inside that transaction. The same holds for the other branches of the page on `SYNC.owner` or `SYNC.hasOwner()` that lead to a write: `purgeOld()` (the 30-day rule without an owner) and `fbPutCopy()` (§4). Branches that only choose a text or a panel (`hist.deleteAll` against `hist.deleteHere`, the account panel) may read the memory.
+8. **The result of a write reaches the editor through microtasks only.** `laterSnap()` (the fix of the deleted block that came back after two saves held together, `tests/appsaveoverlap.mjs`) relies on it: the commit resolves the older write before the newer transaction's first request, which is a later task. So nothing between a write's commit and its result waits for a task: no load, no step, no `after` hook that awaits one. Item 4's «marked not loaded» is a flag set in that microtask, never a wait.
 
 ### 3.4 The engine's steps
 
@@ -85,6 +87,23 @@ The second path is idempotent. The «owner» message, a `resume` check and a ref
 Today `setOwner` writes `{...defMeta, lrev:1}` for every note, and `editorDelta` returns the editor's note without `merge3` when `E.lrev===meta.lrev`. With saves accepted in this window the numbers can collide: the screen remembers `lrev` 2, the change resets it to 1, another tab saves and gets 2, and this tab overwrites that edit.
 
 The rule: a change that keeps the records writes `lrev` = the previous `lrev` + 1 with `baseLrev` 0. The meaning «a local change ahead of no base» stays. The `LREV` map between tabs (the «Є зміни» strip, `takeNote`) compares the same numbers, so one rule covers both places. To check with it: the metas of versions (`meta:v:`), `restoreCopy` and `undoRestore`, repeated saves.
+
+### 3.8 Messages between tabs
+
+Today a `put` message carries the note itself (`{n, lrev}`), `takeNote()` puts it on the screen without a read of the store, and the messages that come during a start wait in `TABQ` and are applied after the screen is read. A `put` of the old era queued by a starting tab, then an erase in another tab, then the start reading the new era, then the queue: the old note lands on the new screen and is saved under the new owner. The era of the store and of the screen agree, and the content is of neither.
+
+1. Every message about records (`put`, `del`, `chg`, `gone`, `copy`, `copies`, `ver`, `vput`) carries the era of the sender's screen.
+2. A message whose era is not the era of this screen is not applied, when it comes and when `TABQ` is emptied alike. It starts the check of §3.5 instead: either the era moved here too, or the sender is the stale one.
+3. With IndexedDB a `put` is a notice: the receiver reads the record from the store in a transaction that compares the era (`takeStored`), and takes no content from the message. Without IndexedDB (the localStorage mode) there is no erase and one era, and the content is taken as today.
+4. A message without an era (a tab of code before this plan, stopped from writing by §5) is a notice at most, never content.
+
+### 3.9 Reads handed to the user
+
+The rule of the era covers every read that hands records to the user, not only those that feed the editor. Today `exportAll()` takes the notes from the page's memory and `historyOf()` reads every record of `versions` and `blobs` in raw readonly transactions that pass no check. A screen of A that stays locked after an erase, with its text unsaved, would export A's notes with B's history.
+
+1. The raw reads of the page (`idb.tx` readonly: `historyOf`, `vlist`, the counts of copies) compare the era as the raw writes do (§3.3 item 6).
+2. `historyOf()` reads the versions, the bodies and the era in one transaction.
+3. On a mismatch the export still gives what the old screen holds (its notes, the unsaved text included) and no history, and says so. It never mixes in records of another era.
 
 ## 4. Fallback copies in localStorage
 
@@ -132,15 +151,32 @@ Each stage is a PR into `main`. New code is ES modules in `public/owner/`; `inde
 | Stage | What it holds | What proves it |
 |---|---|---|
 | 1. The contract and the model | the rules of the era and of the two results as pure functions (`public/owner/model.js`); the compatibility table as cases | Node tests |
-| 2. Transactional writes | §3.3, §3.4, §3.7 in `public/sync.js`; `era` written by `setOwner` | Node over `MemStore`; the existing `syncguard` 5s* with §8.3 |
-| 3. The page | §3.2 (one read at start), §3.5, §4, the raw writes, the urgent save; `FORMAT` and `IDB_VER` 5 | browser scenarios (§8.2) |
+| 2. Transactional writes, dormant | §3.3, §3.4, §3.7 in `public/sync.js`, used only by an engine that is given the era of a screen (`deps.era`); the page gives none yet, so the checks of main stay in force and `setOwner` writes no `era` | Node over `MemStore` with `deps.era`; the existing `syncguard` 5s* unchanged without it |
+| 3. The page, and the switch | §3.2 (one read at start), §3.3 items 6–7, §3.5, §3.8, §3.9, §4, the urgent save; the page gives the era, `setOwner` writes `era`; `FORMAT` and `IDB_VER` 5 | browser scenarios (§8.2); `syncguard` 5s* with §8.3 |
 | 4. The engine made simpler | a separate PR after the others are green: `PENDING`, `OWN`, `allowance`, `LOADS` reduced; `setOwner`, the loads and the steps on one queue (allowed, since no write of the user waits for them) | late loads and callbacks do not spoil a new memory; a save still waits for nothing |
 
-Stages 2 and 3 are released together: the era check is whole only with the barrier of §5.
+Each PR into `main` is deployed to `.dev`, so «released together» is not enough: no state of `main` may write the new contract or loosen an old check without the page and the barrier. Stage 2 therefore adds code that nothing in the app switches on, and stage 3 switches everything on in one PR: the era from the page, `era` in the store, the raw reads and writes, the messages, and `FORMAT` and `IDB_VER` 5. If the dormant form of stage 2 turns out to cost more than it saves, stages 2 and 3 become one PR; they are never two active halves.
 
 ## 8. Tests
 
 ### 8.1 Node
+
+Every operation of the user in the core is a row of one matrix, each run in two columns: **(a)** ordered after the commit of a change that kept the records and before the adopting load, it is accepted and decides by the new owner (a job or a tombstone queued where that owner needs one); **(b)** called with the era of a screen read before an erase, it is refused.
+
+| Operation | (a) decides by the new owner | (b) old era |
+|---|---|---|
+| `writeLocal` | the `out:n:` job | refused |
+| `purgeLocal`, and the deletion without an owner that §3.3 item 7 moves into the core | a tombstone job, not a local-only delete | refused |
+| `purgeOldLocal` (the 30-day rule without an owner) | not run once the store has an owner | refused |
+| `importNote`, `importMany` | the job of every note written | refused |
+| `importHistory` | named versions queued | refused |
+| `versionLocal` create, name, rename, delete | the version job or its tombstone | refused |
+| `restoreCopy`, `undoRestore` | the note's job | refused |
+| `dropCopies`, `putCopies` | local only, accepted | refused |
+| `unqueue` | accepted over the new metas | refused |
+| `deviceName` | accepted | accepted: the device record is not of an era |
+
+Beside the matrix:
 
 - A save ordered after a first sign-in's commit and before the adopting load lands and has its `out:n:` job.
 - After an erase, a write with the old era is refused: with the erase by this engine and its load succeeded, with its load failed, and with the erase by another engine over the same store, a fresh engine included.
@@ -160,6 +196,10 @@ Stages 2 and 3 are released together: the era check is whole only with the barri
 - A frozen old tab: the upgrade waits and goes on by itself.
 - The `lrev` collision: a screen with `lrev` 2, a change of owner, one edit in another tab, a save here; the other tab's edit stays.
 - Two tabs, a change that keeps the records in one while the other types: no lock.
+- «Delete forever» between a first sign-in's commit and the end of the load: a tombstone job is queued, and the note does not come back from the new owner's cloud.
+- A `put` delayed across an erase and the start of a new page (it waits in `TABQ`): nothing of it reaches the new screen or the store.
+- An export with history from an old screen locked after an erase, with the new owner's history already in the store: the file holds the old screen's notes and no history.
+- `tests/appsaveoverlap.mjs` as it is, and its case again with a change of owner that keeps the records between the two saves: the deleted block stays deleted.
 
 ### 8.3 Expectations that change
 
@@ -172,10 +212,11 @@ Every other 5s* case is read again by the same sign before it is carried over.
 
 ## 9. Risks
 
-- The body of a write reads `S.owner` in about eight places; one left behind decides for the old owner. The Node cases of §8.1 name each operation.
+- The body of a write reads `S.owner` in about eight places, and the page branches on it before a write in three (§3.3 item 7); one left behind decides for the old owner. The matrix of §8.1 names each operation.
 - The one read at start replaces four transactions in a start that is sometimes slow on Android (the cause is still unknown, IDB-FALLBACK-PLAN). The boot journal shows whether it changes the longest step.
 - The `IDB_VER` raise can make a start wait behind a frozen old tab. That is the case IDB-BARRIER-PLAN PR 1 was built for.
-- Out of scope, a separate task: a deleted block coming back after two saves held together.
+- The rework of `after` and of the memory updates touches the order `laterSnap()` relies on (§3.3 item 8). `tests/appsaveoverlap.mjs` is a required regression of stages 2 and 3.
+- A `put` that becomes a notice costs the receiving tab one read per message. Typing in one tab with several open is the case to measure.
 
 ## 10. How others do it
 
@@ -188,3 +229,8 @@ Read in the sources on 2026-11-13. They support keeping a stable context for eac
 - `versionchange`: Dexie, Firestore, Standard Notes and PouchDB close the connection.
 
 Not opened: Signal Desktop, Joplin, Logseq, AFFiNE, Excalidraw, automerge-repo, ElectricSQL.
+
+## 11. Review rounds
+
+- **The architecture review of #146 (2026-11-13), three passes with the owner.** Pass 1: five major gaps (the era read with the screen's records, the fallback copies, compatibility one way only, the false lock through reads and the lead, the `lrev` collision). Pass 2: two major and one minor (the `NK` exception, the tabs before the format guard, `syncguard` 5s9). Pass 3: none; the plan merged by #151.
+- **Preflight over main at 2ee9dfc (2026-11-13): three high, two medium.** High: the page chooses the path of a deletion by the owner in memory (§3.3 item 7); a message between tabs carries a note with no origin, `TABQ` included (§3.8); the export's history is read outside the rule of the era (§3.9). Medium: stages 2 and 3 as two active PRs leave an unsafe `main` on `.dev` (§7); the overlapping saves were called an open separate task though main has `laterSnap()` and `tests/appsaveoverlap.mjs` (§3.3 item 8, §8.2, §9). The Node matrix now names every operation (§8.1).
