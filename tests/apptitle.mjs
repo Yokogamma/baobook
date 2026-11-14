@@ -34,6 +34,6 @@ await cb2.locator('.copy').click(); await pg.waitForTimeout(150); const clip=awa
 ok('7 копіюється лише код, без назви', clip.startsWith('SELECT') && !clip.includes('Топ нотаток'));
 await pg.mouse.move(10,10); await pg.evaluate(()=>window.scrollTo(0,0)); await pg.waitForTimeout(150); await pg.screenshot({path:OUT+'/app-title-light.png',clip:{x:280,y:0,width:1000,height:900}});
 await pg.locator('#themeBtn').click(); await pg.locator('#themeBtn').click(); await pg.waitForTimeout(200); await cb.locator('.cblk').hover(); await pg.waitForTimeout(150); await pg.screenshot({path:OUT+'/app-title-sand.png',clip:{x:280,y:200,width:1000,height:640}});
-await pg.locator('#themeBtn').click(); await pg.waitForTimeout(100);
+await pg.locator('#themeBtn').click(); await pg.locator('#themeBtn').click(); await pg.waitForTimeout(100);   // sand → «Клітинка» → light
 await pg.setViewportSize({width:390,height:844}); await pg.waitForTimeout(400); await pg.screenshot({path:OUT+'/app-title-mobile.png'});
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); await br.close(); process.exit(fails||errs.length?1:0);
