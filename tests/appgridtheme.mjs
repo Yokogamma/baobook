@@ -99,6 +99,13 @@ G=await geo();
   ok('9b a text wrapping at the sheet\'s edge keeps every card inside the frame, and the page does not scroll sideways ('+over.sw+'/'+over.iw+')', over.sw<=over.iw && over.right<=f.left+f.w+.5);
   await pg.screenshot({path:OUT+'/app-gridtheme-phone.png'}); }
 
+// 9c a width where the sheet's edge falls between two lines: a full-width code box stops at the last line with its card, and nothing scrolls sideways
+await pg.setViewportSize({width:401,height:844}); await pg.waitForTimeout(700);
+G=await geo();
+await pg.mouse.click(G.x+G.g/2+2*G.g+4, G.y+G.g/2+40*G.g+8); await pg.waitForTimeout(150); await paste('const veryLongLineOfCode = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+{ const f=await before('#sheet'), k=await pg.evaluate(()=>{ const e=[...document.querySelectorAll('#sheet .blk.is-code>.cblk')].pop(), c=getComputedStyle(e,'::before'), b=e.getBoundingClientRect(); return {box:b.right, card:b.left+parseFloat(c.left)+parseFloat(c.width), minH:getComputedStyle(e).minHeight, sw:document.documentElement.scrollWidth, iw:innerWidth}; });
+  ok('9c at 401px ('+((G.w-16-1.5*G.g)/G.g).toFixed(2)+' cells) a long code box ends with its card on the last line ('+Math.round(k.box)+'/'+Math.round(k.card)+'), no min-height holds it, no sideways scroll', k.box<=k.card+Math.max(1,G.g*.05)+6.5 && k.card<=f.left+f.w+.5 && (k.minH==='auto'||k.minH==='0px') && k.sw<=k.iw); }
+
 // 10 blocks laid out in another theme keep their rows in «Клітинка»: a code card of 3 lines and the text under it, switched there and back
 { const p2=await ctx.newPage(); p2.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await p2.setViewportSize({width:1280,height:900});
   await p2.evaluate?.(()=>{}); await p2.goto(SITE); await p2.waitForTimeout(500);

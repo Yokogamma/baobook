@@ -272,7 +272,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
    wraps there, so neither a card nor its text can pass the sheet's edge or meet a neighbour's card. CSS round() is Newly available: without it
    a card ends with its box */
 :root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{isolation:isolate;border-radius:var(--gp-r)}
-:root[data-theme="grid"] .tcard{max-width:min(100%, calc(var(--cmax,999) * var(--g) + 6px))}
+:root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk{max-width:min(100%, calc(var(--cmax,999) * var(--g) + 6px))}   /* a text wraps, a code box (its bar and scroller) stops, at the last line */
 :root[data-theme="grid"] .tcard>.txt{padding:0 var(--gp-in) 0 calc(6px + var(--gp-in));background:transparent !important;outline:0 !important;box-shadow:none !important}   /* the text a third of a cell in; its hover, hold and selection show on the card */
 :root[data-theme="grid"] .tcard::before,:root[data-theme="grid"] .blk.is-code>.cblk::before,:root[data-theme="grid"] .blk.is-area>.ablk::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);
   width:calc(min(100% - 6px, var(--cmax,999) * var(--g)) - 2 * var(--gp-i));border-radius:var(--gp-r);pointer-events:none}
@@ -3305,7 +3305,7 @@ function themeLaid(){ const g=curTheme()==='grid'; if(g===laidGrid) return; cons
   /* the theme's fonts come by a stylesheet of their own, added only when the theme is used: the other themes never wait for it, and the cached
      URL of the Inter link stays. Every face that arrives (a Cyrillic subset loads only when text needs it) re-measures the blocks once */
   const l=document.createElement('link'); l.id='plexCss'; l.rel='stylesheet'; l.href=PLEX_CSS; document.head.append(l);
-  if(document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone',()=>{ clearTimeout(fontT); fontT=setTimeout(()=>{ if(curTheme()==='grid'){ applyMode(); field(); } }, 120); }); }
+  if(document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone',()=>{ clearTimeout(fontT); fontT=setTimeout(()=>{ if(curTheme()==='grid'){ applyMode(); field(); if(H.view) placeVbtns(); } }, 120); }); }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */
