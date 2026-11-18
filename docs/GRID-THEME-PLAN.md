@@ -54,7 +54,9 @@ Every card of the theme is a `::before` over whole cells, inset `--gp-i` from th
 - **Code**: the code box is clamped to the last line too (its bar and scroller end with the card); in a code box narrowed by less than a cell, a header that wraps by its container query could take one row more than in another theme, the only case where the theme changes a row count (as a text size change does). Otherwise the card box keeps its size and its row count (`ceil((H − 2) / G)`, as in every theme); the card is drawn under it over the rows the block takes (`--rows`), so the theme moves no stored row and a code block that shrinks gives its rows back.
 - **Area**: keeps its box (its inner grid is the sheet's) and draws its card under it in its own colour.
 
-Switching into the theme or out of it re-measures the blocks as a text size change does; a round of themes writes no note and moves no block laid out in another theme (`tests/appgridtheme.mjs` 7b, 10).
+Another font and the text inset can wrap a text differently from the other themes, and the layout only ever pushes blocks down, so a re-measure that only the view asks for (a theme switch, a font face that arrives late) starts from the rows the note holds (`relayView()`): a push that another font caused does not stay, and the next edit does not store it. It does not reset while an edit is unsaved (those rows are the user's), while a version is shown or during a drag. A round of themes, or a start with the theme's fonts late, keeps every stored row (`tests/appgridtheme.mjs` 7b, 10, 12).
+
+The cards make no stacking context on a text block (its text is positioned and paints over the card by order), so a block's menu and resize handle stay over the blocks below (`tests/appgridtheme.mjs` 11).
 
 ## 7. Fonts offline
 

@@ -271,13 +271,16 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
    to the first line after the box, but never past the last line the container lets the block reach (--cmax cells, set by render()): a text
    wraps there, so neither a card nor its text can pass the sheet's edge or meet a neighbour's card. CSS round() is Newly available: without it
    a card ends with its box */
-:root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{isolation:isolate;border-radius:var(--gp-r)}
-:root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk{max-width:min(100%, calc(var(--cmax,999) * var(--g) + 6px))}   /* a text wraps, a code box (its bar and scroller) stops, at the last line */
-:root[data-theme="grid"] .tcard>.txt{padding:0 var(--gp-in) 0 calc(6px + var(--gp-in));background:transparent !important;outline:0 !important;box-shadow:none !important}   /* the text a third of a cell in; its hover, hold and selection show on the card */
+:root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{isolation:isolate}   /* (they are stacking contexts already by container-type) */
+:root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{border-radius:var(--gp-r)}
+:root[data-theme="grid"] .tcard,:root[data-theme="grid"] .blk.is-code>.cblk{max-width:min(100%, calc(var(--cmax,999) * var(--g) + 6px))}
+:root[data-theme="grid"] .blk.is-code>.cblk{min-width:min(288px, 100%, calc(var(--cmax,999) * var(--g) + 6px))}   /* a text wraps, a code box (its bar and scroller) stops, at the last line */
+:root[data-theme="grid"] .tcard>.txt{position:relative;padding:0 var(--gp-in) 0 calc(6px + var(--gp-in));background:transparent !important;outline:0 !important}
+:root[data-theme="grid"] .tcard>.txt:not(.lflash){box-shadow:none !important}   /* the text paints over its card by order: no stacking context on .tcard, so the block's menu and handle stay over the blocks below; a followed link still flashes */   /* the text a third of a cell in; its hover, hold and selection show on the card */
 :root[data-theme="grid"] .tcard::before,:root[data-theme="grid"] .blk.is-code>.cblk::before,:root[data-theme="grid"] .blk.is-area>.ablk::before{content:"";position:absolute;z-index:-1;left:calc(6px + var(--gp-i));top:var(--gp-i);
   width:calc(min(100% - 6px, var(--cmax,999) * var(--g)) - 2 * var(--gp-i));border-radius:var(--gp-r);pointer-events:none}
 @supports (width:round(up, 10px, 3px)){ :root[data-theme="grid"] .tcard::before,:root[data-theme="grid"] .blk.is-code>.cblk::before,:root[data-theme="grid"] .blk.is-area>.ablk::before{width:calc(min(round(up, 100% - 6px, var(--g)), var(--cmax,999) * var(--g)) - 2 * var(--gp-i))} }
-:root[data-theme="grid"] .tcard::before{bottom:var(--gp-i);background:var(--blk-bg)}
+:root[data-theme="grid"] .tcard::before{z-index:auto;bottom:var(--gp-i);background:var(--blk-bg)}
 :root[data-theme="grid"] .blk.blank>.tcard::before{display:none}   /* an empty block, «Пишіть…», shows no card */
 :root[data-theme="grid"] .blk:hover>.tcard::before,:root[data-theme="grid"] .blk.held>.tcard::before,:root[data-theme="grid"] .tcard.resizing::before{background:var(--blk-hover)}
 :root[data-theme="grid"] .blk.focus>.tcard::before{background:var(--blk-bg)}
@@ -286,6 +289,8 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 /* a code card and an area keep their boxes (an area's inner grid is the sheet's) and draw their cards under them, as tall as the rows they take (--rows) */
 :root[data-theme="grid"] .blk.is-code>.cblk,:root[data-theme="grid"] .blk.is-area>.ablk{background:transparent;border-color:transparent}
 :root[data-theme="grid"] .blk.is-code>.cblk::before{height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));background:var(--code-bg)}
+:root[data-theme="grid"] .blk.is-code>.cblk.editing{box-shadow:none}
+:root[data-theme="grid"] .blk.is-code>.cblk.editing::before{box-shadow:0 0 0 1.5px var(--sel-line),0 0 0 4px var(--sel)}
 :root[data-theme="grid"] .blk.is-area>.ablk::before{height:calc(var(--rows,1) * var(--g) - 2 * var(--gp-i));background:var(--area-bg,var(--code-bg))}
 /* стрічка (вузький екран): блоки однією колонкою в порядку читання, ручок розміру немає; огляд — полотно як на компʼютері, зменшене */
 .sheet.overview{width:1024px !important;max-width:none;pointer-events:none}
@@ -2501,7 +2506,8 @@ function overlaps(a,b){ const A=rect(a),B=rect(b); return A.r0<B.r1 && A.r1>B.r0
 function tooTight(b){ const a=ctn(b), r=rect(b); return r.xl+minw(b)>cW(a)-cPadR(a)+1 || rawWidth(b)<minw(b); }
 function fits(b){ return !tooTight(b) && !solid(ctn(b)).some(o=>o!==b && overlaps(b,o)); }
 const CL=()=>cssN('--handle')+2;   // від лівого краю блока до картки (ручка + gap)
-function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));   // стрічка: завжди на всю ширину
+function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));
+  b.el.style.setProperty('--cmax', Math.max(1, Math.floor((cW(ctn(b))-cPadR(ctn(b))-r.x0+.5)/G())));   // «Клітинка»: the cells up to the last line the container lets the block reach, set before the block is measured   // стрічка: завжди на всю ширину
   if(b.cw){ b.w=Math.min(avail, CL()+b.cw*G()); if(b.card && !b.resizing) b.card.style.width=(b.w-CL())+'px'; } else { b.w=b.kind? avail : Math.min(avail, Math.max(minw(b), CL()+TEXT_CW*G())); if(b.card && !b.resizing) b.card.style.width=''; }
   if(b.card) b.card.classList.toggle('sized', !!b.cw);
   b.el.style.left=r.xl+'px'; b.el.style.top=r.y0+'px'; b.el.style.width=b.w+'px';
@@ -2509,8 +2515,8 @@ function render(b){ const r=rect(b); const avail=Math.max(minw(b), rawWidth(b));
   else if(b.kind==='code') b.lines=Math.max(1, Math.ceil((b.card.offsetHeight-2)/G()));   // картка: шапка + рядки + відступ, цілими рядами
   else if(b.kind==='area') areaMeasure(b);
   else { if(!b.resizing) b.txt.style.minHeight=b.ch? (b.ch*G())+'px' : ''; b.lines=Math.max(1, Math.round(b.txt.offsetHeight/G())); }   // текст: ch — мінімальна висота в рядах
-  /* «Клітинка» draws a card over the rows the block takes (--rows) and the cells up to the last line its container lets it reach (--cmax); an empty text has none */
-  b.el.style.setProperty('--rows', b.lines); b.el.style.setProperty('--cmax', Math.max(1, Math.floor((cW(ctn(b))-cPadR(ctn(b))-r.x0+.5)/G())));
+  /* «Клітинка» draws a card over the rows the block takes (--rows); an empty text has none */
+  b.el.style.setProperty('--rows', b.lines);
   if(b.txt && !b.kind) b.el.classList.toggle('blank', !b.txt.textContent.trim()); }
 /* область: ширина внутрішньої сітки — з DOM; висота — шапка + вміст (+ мінімум із ручки), рівно в рядах */
 function areaMeasure(b){ b.innerW=b.abody.clientWidth || (b.w-CL()-1); const g=G(), barH=b.card.querySelector('.cbar').offsetHeight;
@@ -2544,7 +2550,7 @@ function growSheet(){ let bottom=0; live(null).forEach(b=>{ bottom=Math.max(bott
 function field(){ const g=G(), cols=Math.floor((W()-2.5*g)/g)+1, rows=Math.floor((sheet.offsetHeight-3.5*g)/g)+1;
   sheet.style.setProperty('--fw', Math.max(0,cols)*g+'px'); sheet.style.setProperty('--fh', Math.max(0,rows)*g+'px');
   /* «Клітинка» closes its frame on the last line a block can reach (W − PAD), one cell further than the last dot on a phone, where PAD < G */
-  const gcols=Math.max(0, Math.floor((W()-PAD()-1.5*g)/g)); sheet.style.setProperty('--gw', gcols*g+'px');
+  const gcols=Math.max(0, Math.floor((W()-PAD()-1.5*g+.5)/g)); sheet.style.setProperty('--gw', gcols*g+'px');   // the same bound as a block's --cmax in render()
   if(RULERS) RULERS.update({cols:gcols+1, rows, g, on:curTheme()==='grid'}); }
 /* the numbered edges of «Клітинка» (public/gridpaper/): drawn by field() over the same frame as the lines */
 let RULERS=null; import('./gridpaper/view.js').then(m=>{ RULERS=m.mount(sheet); field(); }).catch(e=>console.error('gridpaper: the module did not load', e));
@@ -3299,13 +3305,18 @@ themeBtn.addEventListener('click',()=>{ const n=THEMES[(THEMES.indexOf(curTheme(
 let laidGrid=null;
 const PLEX_CSS='https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap';
 let fontT=0;
+/* a view-only re-measure (a theme switch, a font face that arrives) starts from the rows the note holds: blocks are only ever pushed down, so a
+   push that another font's wrapping caused would otherwise stay, and the next edit would store it. Not while an edit is unsaved (its rows are the
+   user's), a version is shown or a block is being dragged */
+function relayView(){ if(cur && !dirty && !H.view && !blocks.some(b=>b.hidden)){ const at=new Map((cur.blocks||[]).map(d=>[d.id, d.row])); blocks.forEach(b=>{ if(at.has(b.id)) b.row=at.get(b.id); }); }
+  applyMode(); field(); if(H.view) placeVbtns(); }
 function themeLaid(){ const g=curTheme()==='grid'; if(g===laidGrid) return; const first=laidGrid!==null; laidGrid=g;
-  if(first){ applyMode(); field(); }
+  if(first) relayView();
   if(!g || document.getElementById('plexCss')) return;
   /* the theme's fonts come by a stylesheet of their own, added only when the theme is used: the other themes never wait for it, and the cached
      URL of the Inter link stays. Every face that arrives (a Cyrillic subset loads only when text needs it) re-measures the blocks once */
   const l=document.createElement('link'); l.id='plexCss'; l.rel='stylesheet'; l.href=PLEX_CSS; document.head.append(l);
-  if(document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone',()=>{ clearTimeout(fontT); fontT=setTimeout(()=>{ if(curTheme()==='grid'){ applyMode(); field(); if(H.view) placeVbtns(); } }, 120); }); }
+  if(document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone',()=>{ clearTimeout(fontT); fontT=setTimeout(()=>{ if(curTheme()==='grid') relayView(); }, 120); }); }
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',themeUI);
 
 /* ══ старт ════════════════════════════════════════════════════════════════ */

@@ -102,9 +102,17 @@ G=await geo();
 // 9c a width where the sheet's edge falls between two lines: a full-width code box stops at the last line with its card, and nothing scrolls sideways
 await pg.setViewportSize({width:401,height:844}); await pg.waitForTimeout(700);
 G=await geo();
-await pg.mouse.click(G.x+G.g/2+2*G.g+4, G.y+G.g/2+40*G.g+8); await pg.waitForTimeout(150); await paste('const veryLongLineOfCode = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
-{ const f=await before('#sheet'), k=await pg.evaluate(()=>{ const e=[...document.querySelectorAll('#sheet .blk.is-code>.cblk')].pop(), c=getComputedStyle(e,'::before'), b=e.getBoundingClientRect(); return {box:b.right, card:b.left+parseFloat(c.left)+parseFloat(c.width), minH:getComputedStyle(e).minHeight, sw:document.documentElement.scrollWidth, iw:innerWidth}; });
+await pg.mouse.click(G.x+G.g/2+2*G.g+4, G.y+G.g/2+40*G.g+8); await pg.waitForTimeout(150); await paste('const veryLongLineOfCode = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];\nconst b = 2;\nreturn veryLongLineOfCode;'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+{ const f=await before('#sheet'), k=await pg.evaluate(()=>{ const e=[...document.querySelectorAll('#sheet .blk.is-code>.cblk')].find(x=>/veryLongLineOfCode/.test(x.textContent)); if(!e) return {found:false}; const c=getComputedStyle(e,'::before'), b=e.getBoundingClientRect(); return {found:!!e, box:b.right, card:b.left+parseFloat(c.left)+parseFloat(c.width), minH:getComputedStyle(e).minHeight, sw:document.documentElement.scrollWidth, iw:innerWidth}; });
+  ok('9c-0 the long paste became a code block', k.found);
   ok('9c at 401px ('+((G.w-16-1.5*G.g)/G.g).toFixed(2)+' cells) a long code box ends with its card on the last line ('+Math.round(k.box)+'/'+Math.round(k.card)+'), no min-height holds it, no sideways scroll', k.box<=k.card+Math.max(1,G.g*.05)+6.5 && k.card<=f.left+f.w+.5 && (k.minH==='auto'||k.minH==='0px') && k.sw<=k.iw); }
+
+// 9d an odd cell (text size 18, G = 27) at a width where the frame and the cards used to disagree by a cell: every card ends inside the frame
+await pg.evaluate(()=>{ const s=JSON.parse(localStorage.getItem('sheet:settings')); localStorage.setItem('sheet:settings', JSON.stringify({...s, textSys:false, textSheet:18})); });
+await pg.setViewportSize({width:353,height:844}); await pg.reload(); await pg.waitForTimeout(900);
+{ const f=await before('#sheet'), k=await pg.evaluate(()=>({g:parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--g')), right:Math.max(...[...document.querySelectorAll('#sheet .tcard,#sheet .blk.is-code>.cblk,#sheet .blk.is-area>.ablk')].map(e=>{ const c=getComputedStyle(e,'::before'); return c.content==='none'? 0 : e.getBoundingClientRect().left+parseFloat(c.left)+parseFloat(c.width); }))}));
+  ok('9d at G = '+k.g+' and 353px every card ends inside the frame ('+Math.round(k.right)+' ≤ '+Math.round(f.left+f.w)+')', k.g===27 && k.right<=f.left+f.w+.5); }
+await pg.evaluate(()=>{ const s=JSON.parse(localStorage.getItem('sheet:settings')); delete s.textSys; delete s.textSheet; localStorage.setItem('sheet:settings', JSON.stringify(s)); });
 
 // 10 blocks laid out in another theme keep their rows in «Клітинка»: a code card of 3 lines and the text under it, switched there and back
 { const p2=await ctx.newPage(); p2.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await p2.setViewportSize({width:1280,height:900});
@@ -122,5 +130,45 @@ await pg.mouse.click(G.x+G.g/2+2*G.g+4, G.y+G.g/2+40*G.g+8); await pg.waitForTim
   await p2.locator('#themeBtn').click(); await p2.waitForTimeout(300); const t2=await top();
   ok('10 a code block of '+rows0+' rows keeps them in «Клітинка», and the text right under it does not move ('+[t0,t1,t2].join(', ')+')', th==='grid' && rows1===rows0 && t1===t0 && t2===t0);
   await p2.close(); }
+
+// 11 the block menu and the resize handle stay over the blocks below (a card makes no stacking context)
+{ const p3=await ctx.newPage(); p3.on('pageerror',e=>errs.push('PAGEERROR '+e.message)); await p3.setViewportSize({width:1280,height:900}); await p3.goto(SITE); await p3.waitForTimeout(400); await p3.evaluate(()=>{ const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); localStorage.setItem('sheet:settings', JSON.stringify({...s, theme:'grid'})); }); await p3.reload(); await p3.waitForTimeout(700);
+  await p3.locator('#newBtn').click(); await p3.waitForTimeout(300);
+  const s3=await p3.locator('#sheet').boundingBox(), g=24;
+  for(let i=0;i<10;i++){ await p3.mouse.click(s3.x+g/2+2*g+4, s3.y+g/2+(3+i)*g+8); await p3.waitForTimeout(120); await p3.keyboard.insertText('Рядок тексту номер '+(i+1)+' досить довгий щоб перекрити меню'); await p3.keyboard.press('Escape'); await p3.waitForTimeout(100); }
+  await p3.mouse.click(s3.x+900, s3.y+800); await p3.waitForTimeout(300);
+  const grip=p3.locator('#sheet>.blk .grip').first(); await grip.hover(); await grip.click({button:'right'}); await p3.waitForTimeout(300);
+  const m=await p3.evaluate(()=>{ const menu=document.querySelector('#sheet .amenu'); if(!menu) return null; const r=menu.getBoundingClientRect(); let hit=0, n=0;
+    for(let x=r.left+6;x<r.right-6;x+=20) for(let y=r.top+6;y<r.bottom-6;y+=12){ n++; const e=document.elementFromPoint(x,y); if(e && menu.contains(e)) hit++; } return {hit, n}; });
+  ok('11-0 the page is in «Клітинка»', await p3.evaluate(()=>document.documentElement.dataset.theme==='grid'));
+  ok('11 the block menu over the blocks below takes every touch ('+(m? m.hit+'/'+m.n : 'no menu')+')', m && m.n>4 && m.hit===m.n);
+  await p3.keyboard.press('Escape'); await p3.mouse.click(s3.x+900, s3.y+800); await p3.waitForTimeout(200);
+  await p3.locator('#sheet>.blk .txt').first().hover(); await p3.waitForTimeout(250);
+  const rz=await p3.evaluate(()=>{ const b=document.querySelector('#sheet>.blk'), h=b.querySelector('.tcard>.rz'), r=h.getBoundingClientRect(), e=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2); return !!(e && h.contains(e)); });
+  ok('11b the resize handle over the block below answers the pointer', rz);
+  await p3.close(); }
+
+// 12 wrapped paragraphs stored one right under another, in this theme, keep their rows when the theme's fonts come late (no service worker,
+// the font files delayed) and through a round of themes, and the edit after each stores the same rows (needs the network for IBM Plex)
+{ const c4=await br.newContext({...CTX, viewport:{width:1280,height:2000}, serviceWorkers:'block'}); const p4=await c4.newPage(); p4.on('pageerror',e=>errs.push('PAGEERROR '+e.message));
+  await p4.goto(SITE); await p4.waitForTimeout(500); await p4.evaluate(()=>localStorage.setItem('sheet:settings', JSON.stringify({theme:'grid'}))); await p4.reload(); await p4.waitForTimeout(1200);
+  const s4=await p4.locator('#sheet').boundingBox(), g=24, para='abcdefghij klmnopqrst uvwxyz 0123456789 lorem ipsum dolor sit amet. ';
+  const state=()=>p4.evaluate(()=>[...document.querySelectorAll('#sheet>.blk')].filter(b=>b.querySelector('.txt')?.textContent).map(b=>({t:b.querySelector('.txt').textContent.replace(/\s+/g,' ').trim(), rows:+getComputedStyle(b).getPropertyValue('--rows'), top:b.offsetTop})));
+  let row=3;
+  for(let k=0;k<12;k++){ await p4.mouse.click(s4.x+g/2+2*g+4, s4.y+g/2+row*g+8); await p4.waitForTimeout(150); const t=(para.repeat(3)+'xyz '.repeat(k*3)).trim(); await p4.keyboard.insertText(t); await p4.waitForTimeout(200);
+    row+=await p4.evaluate(()=>+getComputedStyle(document.activeElement.closest('.blk')).getPropertyValue('--rows')); await p4.keyboard.press('Escape'); await p4.waitForTimeout(150); }
+  await p4.mouse.click(s4.x+1000, s4.y+1950); await p4.waitForTimeout(1200);
+  const plex=await p4.evaluate(()=>document.fonts.check('16px "IBM Plex Sans"'));
+  const stored=()=>p4.evaluate(()=>new Promise(res=>{ const r=indexedDB.open('sheet'); r.onsuccess=()=>{ const d=r.result, t=d.transaction('notes','readonly').objectStore('notes').getAll(); t.onsuccess=()=>{ d.close(); const n=t.result.sort((a,b)=>b.updated-a.updated)[0]; res((n.blocks||[]).map(b=>b.row).join()); }; }; }));
+  const edit=async()=>{ const tx=p4.locator('#sheet>.blk .txt').last(); await tx.click(); await p4.keyboard.press('End'); await p4.keyboard.type('.'); await p4.keyboard.press('Escape'); await p4.mouse.click(s4.x+1000, s4.y+1950); await p4.waitForTimeout(1200); };
+  const r0=await stored();
+  await p4.route(/fonts\.gstatic\.com/, async r=>{ await new Promise(z=>setTimeout(z,300)); r.continue(); });
+  await p4.reload(); await p4.waitForTimeout(4500); await edit(); const r1=await stored();
+  ok('12 '+(plex? '' : '(IBM Plex not loaded here, so this proves less) ')+'twelve wrapped paragraphs written in «Клітинка» keep their rows when its fonts come late, and the edit after stores them'+(r1===r0? '' : ' ('+r0+' → '+r1+')'), r1===r0);
+  await p4.unroute(/fonts\.gstatic\.com/);
+  for(let i=0;i<4;i++){ await p4.locator('#themeBtn').click(); await p4.waitForTimeout(500); }
+  await edit(); const r2=await stored();
+  ok('12b the same note keeps its rows through a round of the four themes and the edit after it'+(r2===r0? '' : ' ('+r0+' → '+r2+')'), r2===r0);
+  await c4.close(); }
 
 console.log(errs.length? errs.join('\n') : '✓ без помилок'); await br.close(); process.exit(fails||errs.length?1:0);
