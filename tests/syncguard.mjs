@@ -249,6 +249,90 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
     hold(); await rl; db.tx=tx0; await K.sync.setOwner({env:'test', uid:'w7', email:'w7@test'}); const own=K.sync._own();
     ok('5r6 a read beside a load whose adapter throws at once ('+threw+'): after the load and a change of owner nothing is left open '+JSON.stringify(own), threw==='sync throw' && own.open===0 && own.len===0 && own.loads===0); } }
 
+/* ── 5s. the user's writes ordered after this engine's own setOwner commit (the fourth owner-change race of #143): they take the owner being
+   written and land under it; with an erase they are refused, and the engine's own steps stay strict ── */
+{ const cloud=new TestCloud({start:1_700_000_000_000});
+  const A=await mk(cloud,'S1',{db:new MemStore()}); await edit(A,'d1',(C,t)=>({title:'для видалення', blocks:[], created:t, updated:t, deleted:t}));
+  A.status.length=0;
+  const bind=A.sync.setOwner({env:'test', uid:'s2', email:'s2@test'}).then(()=>'ok', e=>e.code||e.name);   // its transaction is queued first
+  const w=edit(A,'s1',(C,t)=>({title:'під час зміни', blocks:[{id:'b',row:1,fx:0,text:'збережено'}], created:t, updated:t})).then(r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const im=A.sync.importNote({id:'s3', title:'імпорт', blocks:[], created:1, updated:1}).then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const pg=A.sync.purgeLocal('d1').then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const out=[await bind, await w, await im, await pg];
+  ok('5s the user\'s writes ordered right after this engine\'s own setOwner (bind, save, import, delete forever: '+out.join(', ')+') land under the new owner: no «reload» ('+A.status.filter(c=>c==='reload').length+'), the engine names '+A.sync.owner.uid,
+    out.every(c=>c==='ok') && !A.status.includes('reload') && A.sync.owner.uid==='s2' && !!A.db.get('notes','s1') && !!A.db.get('notes','s3') && !A.db.get('notes','d1') && await A.sync.checkOwner()===true);
+  ok('5s1 the saved note is queued for the new owner', !!A.db.get('sync','out:n:s1'));
+  // an erase (sign-out with «Прибрати нотатки», another account's data removed): a save ordered after it is refused, as before
+  const E=await mk(cloud,'S2',{db:new MemStore()}); E.status.length=0;
+  const er=E.sync.setOwner(null,{erase:true}).then(()=>'ok', e=>e.code||e.name);
+  const we=edit(E,'e1',(C,t)=>({title:'після стирання', blocks:[], created:t, updated:t})).then(r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const oe=[await er, await we];
+  ok('5s2 after an erase a save ordered behind it is still refused ('+oe.join(', ')+'), nothing of it stored', oe[0]==='ok' && oe[1]==='epoch' && !E.db.get('notes','e1'));
+  // an engine step (here tombstoneAuto, strict) ordered after this engine's own setOwner is refused, but quietly: the store holds the owner this
+  // engine is changing to, so it is no other tab's change and the page must not be told «reload» (it would lock the tab or reload it)
+  const Q=await mk(cloud,'S3',{db:new MemStore()}); await edit(Q,'q1',(C,t)=>({title:'кошик', blocks:[], created:t, updated:t, deleted:t})); Q.status.length=0;
+  const bq=Q.sync.setOwner({env:'test', uid:'s4', email:'s4@test'}).then(()=>'ok', e=>e.code||e.name);
+  const tq=Q.sync.tombstoneAuto('q1').then(r=>r && r.ok? 'ok' : (r && r.code)||'refused', e=>e.code||e.name);
+  const oq=[await bq, await tq];
+  ok('5s3 an engine step ordered right after this engine\'s own setOwner is refused quietly ('+oq.join(', ')+', «reload» '+Q.status.filter(c=>c==='reload').length+'), the engine names '+Q.sync.owner.uid,
+    oq[0]==='ok' && oq[1]==='epoch' && !Q.status.includes('reload') && Q.sync.owner.uid==='s4' && await Q.sync.checkOwner()===true);
+  // a first sign-in (the engine loaded with no owner): the user's writes ordered right after setOwner wait for it and run on the new owner's
+  // memory, so each one is queued for the cloud (a write accepted under the old memory, with no owner, queued nothing and the note never synced)
+  const F=device(cloud,'S5'); await F.sync.start(); await F.sync.idle(300); F.status.length=0;
+  const vr={id:'fv1', note:'f0', t:cloud.now(), w:cloud.now(), reason:'manual', name:'Названа', keep:1, inline:1, title:'', sig:'sf', blocks:[{id:'b',row:1,fx:0,s:'версія'}]};
+  await edit(F,'f0',(C,t)=>({title:'до входу', blocks:[{id:'b',row:1,fx:0,text:'є'}], created:t, updated:t}));
+  const bf=F.sync.setOwner({env:'test', uid:'s6', email:'s6@test'}).then(()=>'ok', e=>e.code||e.name);
+  const res=r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', erc=e=>e.code||e.name;
+  const wf=edit(F,'f1',(C,t)=>({title:'перший вхід', blocks:[{id:'b',row:1,fx:0,text:'новий'}], created:t, updated:t})).then(res, erc);
+  const imf=F.sync.importNote({id:'f2', title:'імпорт', blocks:[{id:'b',row:1,fx:0,text:'з файлу'}], created:1, updated:1}).then(res, erc);
+  const vf=F.sync.versionLocal({op:'create', rec:vr}).then(res, erc);
+  const hf=F.sync.importHistory({versions:[{...vr, id:'fv2', name:'З файлу', sig:'sf2'}], blobs:[]}, ['f0']).then(res, erc);
+  const of=[await bf, await wf, await imf, await vf, await hf]; await F.sync.idle(300); await F.sync.idle(300);
+  ok('5s4 a first sign-in: the save, the import, a named version and a history import ordered right after setOwner ('+of.join(', ')+') are queued for the new owner and reach its cloud (f1 '+!!cloud.doc('notes','f1')+', f2 '+!!cloud.doc('notes','f2')+', fv1 '+!!cloud.doc('versions','fv1')+', fv2 '+!!cloud.doc('versions','fv2')+'); no «reload»',
+    of.every(c=>c==='ok') && !F.status.includes('reload') && F.sync.owner.uid==='s6' && !!cloud.doc('notes','f1') && !!cloud.doc('notes','f2') && !!cloud.doc('notes','f0') && !!cloud.doc('versions','fv1') && !!cloud.doc('versions','fv2'));
+  // an erase that commits after a write was called and before that write's transaction (here the write waits for the engine's first load, the
+  // erase does not): the write is refused, the erased device stays empty; also when the erase's adopting load fails after its commit
+  for(const failLoad of [false, true]){ const dbG=new MemStore(); const G=await mk(cloud, failLoad? 'S8' : 'S7', {db:dbG}); await edit(G,'g0',(C,t)=>({title:'до стирання', blocks:[{id:'b',row:1,fx:0,text:'старий'}], created:t, updated:t})); await G.sync.idle(300); G.sync.stop();
+    let ro=0; const real=dbG.tx.bind(dbG), dbH={...dbG, tx:(st,mode,fn)=>{ if(mode==='readonly' && failLoad && ++ro===2) return Promise.reject(Object.assign(new Error('load failed'),{name:'UnknownError'})); return real(st,mode,fn); }, all:s=>dbG.all(s), get:(s,k)=>dbG.get(s,k)};
+    const H=device(cloud, failLoad? 'S8' : 'S7', {db:dbH});   // the same store opened anew (a reload): the engine is not loaded yet
+    const wh=edit(H,'g0',(C,t)=>({...C, blocks:[{id:'b',row:1,fx:0,text:'старий, дописаний'}], updated:t})).then(res, erc);
+    const eh=H.sync.setOwner(null,{erase:true}).then(()=>'ok', e=>(e.committed? 'committed:' : '')+(e.code||e.name));
+    const oh=[await eh, await wh];
+    // a save called after that erase (the page still showing the erased note): refused too while the erase's adopting load has failed
+    const wa=failLoad? await edit(H,'g0',(C,t)=>({...(C||{}), id:'g0', title:'до стирання', blocks:[{id:'b',row:1,fx:0,text:'дописано після'}], created:t, updated:t})).then(res, erc) : 'epoch';
+    ok('5s'+(failLoad? '6' : '5')+' a write called before an erase of this engine and ordered after its commit'+(failLoad? ', the erase\'s adopting load failing' : '')+' is refused ('+oh.join(', ')+'): the device stays empty, nothing queued',
+      oh[0]===(failLoad? 'committed:UnknownError' : 'ok') && oh[1]==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner'));
+    if(failLoad) ok('5s7 a save called after an erase whose adopting load failed ('+wa+') is refused as well: nothing of the erased note comes back', wa==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0')); }
+  // two changes of owner overlapping, the newest committed one decides the guard of a failed erase: a store whose next reads are planned
+  // (pass, hold until released, fail, fail with a frozen error)
+  const planned=db=>{ const plan=[]; let release=null; const real=db.tx.bind(db);
+    const w={...db, all:s=>db.all(s), get:(s,k)=>db.get(s,k), plan, release:()=>release && release(),
+      tx:(st,mode,fn)=>{ const a=mode==='readonly' && plan.length? plan.shift() : 'pass';
+        if(a==='fail') return Promise.reject(Object.assign(new Error('load failed'),{name:'UnknownError'}));
+        if(a==='freeze') return Promise.reject(Object.freeze(Object.assign(new Error('load failed'),{name:'UnknownError', code:'frozen-x'})));
+        if(a==='hold') return new Promise(r=>{ release=r; }).then(()=>real(st,mode,fn));
+        if(a==='holdfail') return new Promise(r=>{ release=r; }).then(()=>{ throw Object.assign(new Error('load failed'),{name:'UnknownError'}); });
+        return real(st,mode,fn); } }; return w; };
+  const cErr=e=>(e.committed? 'committed'+(e.erase? '+erase' : '')+':' : '')+(e.code||e.name);
+  { const dbK=new MemStore(); const K0=await mk(cloud,'S9',{db:dbK}); await edit(K0,'k0',(C,t)=>({title:'старий', blocks:[{id:'b',row:1,fx:0,text:'старий'}], created:t, updated:t})); await K0.sync.idle(300); K0.sync.stop();
+    const W=planned(dbK), K=device(cloud,'S9',{db:W}); await K.sync.checkOwner();   // loaded
+    W.plan.push('hold'); const p1=K.sync.setOwner({env:'test', uid:'s10', email:'s10@test'}).then(()=>'ok', cErr); await new Promise(r=>setTimeout(r,20));
+    W.plan.push('fail'); const p2=await K.sync.setOwner({env:'test', uid:'s11', email:'s11@test'},{erase:true}).then(()=>'ok', cErr);
+    W.release(); const r1=await p1;
+    const wk=await edit(K,'k0',(C,t)=>({...(C||{}), id:'k0', title:'старий', blocks:[{id:'b',row:1,fx:0,text:'старий, повернутий'}], created:t, updated:t})).then(res, erc);
+    ok('5s8 an older change ending after a newer erase whose load failed ('+[r1, p2].join(', ')+') leaves the guard: a save of the erased note is refused ('+wk+')', p2==='committed+erase:UnknownError' && wk==='epoch' && !dbK.get('notes','k0')); }
+  { const dbL=new MemStore(); const L0=await mk(cloud,'S12',{db:dbL}); L0.sync.stop();
+    const W=planned(dbL), L=device(cloud,'S12',{db:W}); await L.sync.checkOwner();
+    W.plan.push('holdfail'); const p1=L.sync.setOwner({env:'test', uid:'s13', email:'s13@test'},{erase:true}).then(()=>'ok', cErr); await new Promise(r=>setTimeout(r,20));
+    const p2=await L.sync.setOwner({env:'test', uid:'s14', email:'s14@test'}).then(()=>'ok', cErr);
+    W.release(); const r1=await p1;
+    const wl=await edit(L,'l1',(C,t)=>({title:'новий', blocks:[{id:'b',row:1,fx:0,text:'під s14'}], created:t, updated:t})).then(res, erc);
+    ok('5s9 an older erase whose load fails after a newer change loaded ('+[r1, p2].join(', ')+') puts no guard over it: a new save lands ('+wl+')', r1==='committed+erase:UnknownError' && p2==='ok' && wl==='ok' && !!dbL.get('notes','l1') && L.sync.owner.uid==='s14'); }
+  { const dbM=new MemStore(); const M0=await mk(cloud,'S15',{db:dbM}); M0.sync.stop();
+    const W=planned(dbM), M=device(cloud,'S15',{db:W}); await M.sync.checkOwner();
+    W.plan.push('freeze'); const pm=await M.sync.setOwner(null,{erase:true}).then(()=>'ok', cErr);
+    ok('5s10 a frozen error of the adopting load still reports the committed erase ('+pm+'), with its code', pm==='committed+erase:frozen-x'); } }
+
 /* ── 5n. a page of the old owner, applied after the owner changed, leaves nothing to the new one: no document, no cursor, no «done» (both collections) ── */
 { const cloud=new TestCloud({start:1_700_000_000_000}); const db=new MemStore(); db.data.sync.set('device',{k:'device', id:'D', name:'Device D'});
   for(let i=0;i<3;i++){ cloud.advance(1000); cloud.write('notes',{id:'o'+i, title:'', blocks:[{id:'b',row:1,fx:0,text:'o'+i}], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); }

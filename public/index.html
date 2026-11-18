@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026111307">
+<meta name="baobook-build" content="2026111801">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -794,8 +794,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026111307" integrity="sha384-hX4RZZa8PWUMXUxiaBF/+LfanbiswvEzsGBoeEJxEQuLrasx9L8il9KB4AAk0MCI"></script>
-<script src="cloud.js?b=2026111307" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026111801" integrity="sha384-kuxuoLTjMP6+9r5i7HhywQRceosympfANnYm1S4weuvpnPRwLyEUACSX12RtbyBh"></script>
+<script src="cloud.js?b=2026111801" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +806,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-9KDbsIjv5z6ca8baYzbX9Gndcx2zOvd9ly9532NfhdFW/cvbGwKiTB4GgDMesaLA', 'layout/gap.js':'sha384-otpVUi/cP0oFWx+78Ahq+QyzObdWTnwsH8KfxFaHj0rH6LEf2OvIuKttGjsq88ee', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-Zna/gVZm1nxv548VAqVVMUrLq2wvXbFpAnsjZ3jKAZ3nWLBl//hTikRmC5+ECaDw', 'layout/primitives.js':'sha384-mhUXbJWqEQcB5TVr2I5DjGvXp9dtK0Qt4ZvKMo1kBYmbjP3RAaNIyEtGE6TEYI0J', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-KI4/TZY+rjAawRMUrOwJ5frVE5hh5ztWDDOcTPR/ylwiZM1L86R+0x2ykzviDWBE', 'layout/size.js':'sha384-6RlhEsmi+4Mx8yEdhG6Xz72xaYHm1ra9smv6WnPsGQyoIWRJUF6k7+kxOH1j8XeP', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-Lfi3yOX19TfLmRkWllR3MsmogzqKABn68tRYLj4aDtQyJV3kUOZDXtOevkvTgm6d', 'layout/settle.js':'sha384-vc+hRscIG4S+hZ6VRQarHVjdvbbIZLLfVHPD7crc1MJbW9ZSBbYGRnyXJX1152cO', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
+const SRI={'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-9KDbsIjv5z6ca8baYzbX9Gndcx2zOvd9ly9532NfhdFW/cvbGwKiTB4GgDMesaLA', 'layout/gap.js':'sha384-otpVUi/cP0oFWx+78Ahq+QyzObdWTnwsH8KfxFaHj0rH6LEf2OvIuKttGjsq88ee', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-Zna/gVZm1nxv548VAqVVMUrLq2wvXbFpAnsjZ3jKAZ3nWLBl//hTikRmC5+ECaDw', 'layout/primitives.js':'sha384-mhUXbJWqEQcB5TVr2I5DjGvXp9dtK0Qt4ZvKMo1kBYmbjP3RAaNIyEtGE6TEYI0J', 'layout/rules.js':'sha384-6MJMqSU3bpu2G3WJTRRjzjhHOFvkEGXubht/HXVEfRAp5dD6kRGkoutiBeCoeZhJ', 'layout/shapes.js':'sha384-KI4/TZY+rjAawRMUrOwJ5frVE5hh5ztWDDOcTPR/ylwiZM1L86R+0x2ykzviDWBE', 'layout/size.js':'sha384-6RlhEsmi+4Mx8yEdhG6Xz72xaYHm1ra9smv6WnPsGQyoIWRJUF6k7+kxOH1j8XeP', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-Lfi3yOX19TfLmRkWllR3MsmogzqKABn68tRYLj4aDtQyJV3kUOZDXtOevkvTgm6d', 'layout/settle.js':'sha384-vc+hRscIG4S+hZ6VRQarHVjdvbbIZLLfVHPD7crc1MJbW9ZSBbYGRnyXJX1152cO', 'layout/transition.js':'sha384-x2pT8k+hKanBR2Br0Lsnd9WjNhXcVtviAJeqWkRmFUAp786pgyJPgFbS8DInk7cR', 'locales/en.json':'sha384-UCwzIVTZGfPxHaHS45aZCbZDhlWGfDgZqTYX15LfzTgmcPW6YWDEyEJOwOzA80X0', 'locales/uk.json':'sha384-2N7VIbOvKDY8+2UwzfcWNMSfmtMg+t8qHOjToLpi6rulmUboSXO70TBCMs+8ZQPw'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026111307;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026111801;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the Firebase SDK (SYNC-PLAN 4.13), imported from gstatic when the account is first used: three self-contained modules (auth and firestore
 // import firebase-app.js by its full URL). Their integrity goes into the import map below too, so bytes other than the ones this page was built
 // with are refused, whether a CDN or a cache answers them. A change of FB_VER runs `node tests/hashes.mjs --write`, which downloads the three
@@ -1510,7 +1510,8 @@ function authChanged(u){ const prev=ACC.user; if(u && prev && prev.uid===u.uid){
   else if(prev && !ACC.signingOut){ saveS({fbUser:null}); dropCloud(); }   // signed out in another tab, or the session ended
   accUI(); accStatus(); }
 // §4.11: the access, the rules, the owner, only then the cloud. Once per user unless forced (a re-sign-in after «by invitation», the network back)
-function accountCheck(user, o={}){ if(!accOn() || DYING || ACC.dialog) return Promise.resolve(); if(ACC.checking) return ACC.checking; if(!o.force && ACC.checked===user.uid && (CLOUD || ACC.probe || ACC.otherTab)) return Promise.resolve();
+function accountCheck(user, o={}){ if(!accOn() || DYING || ACC.dialog) return Promise.resolve(); if(ACC.checking) return o.force? ACC.checking.then(()=>ACC.user===user? accountCheck(user, o) : undefined) : ACC.checking;   // a forced check (the owner moved under this tab) runs again after one in flight: that one decided over the old owner and may end connecting nothing
+  if(!o.force && ACC.checked===user.uid && (CLOUD || ACC.probe || ACC.otherTab)) return Promise.resolve();
   ACC.checking=(async()=>{ try{ ACC.probe=null; accStatus(); let owner=SYNC.owner;
       if(owner && owner.uid===user.uid && owner.env===FB.env){ await bindOwner({...owner, email:user.email}); connectAccount(user); return; }   // the usual start of a signed-in device: the catch-up's own first read is the access check
       const r=await accessProbe(user); if(ACC.user!==user || DYING) return; if(r!=='ok'){ ACC.probe=r; return; }
@@ -1529,7 +1530,8 @@ function connectAccount(user){ if(ACC.user!==user || DYING) return; ACC.probe=nu
 // the owner of the store changes (a first sign-in, «Додати до хмари B»): one transaction in the core, then the per-note state of this tab starts over (§4.11)
 async function bindOwner(owner, o={}){ const cur0=SYNC.owner, ep=o.expectEpoch!==undefined? o.expectEpoch : SYNC.epoch, same=!o.erase && cur0 && cur0.uid===owner.uid && cur0.env===owner.env;   // ep: the epoch this tab's engine knows; another one in the store means another tab changed the owner meanwhile, and this engine's memory is stale (setOwner refuses it: `epoch`)
   if(same){ if(cur0.email!==owner.email) await SYNC.setOwner(owner, {expectEpoch:ep}); return; }
-  await SYNC.setOwner(owner, {...o, expectEpoch:ep}); LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); if(!o.erase){ snapOff=false; snapSave(); } }
+  try{ await SYNC.setOwner(owner, {...o, expectEpoch:ep}); }catch(e){ if(e && e.committed && !e.told){ e.told=true; DYING=true; snapDrop(); tellTabs({t:'owner', by:'account', erase:!!e.erase}); location.reload(); } throw e; }   // committed, only the load after it failed: the device is the new owner's, the page starts over as that owner's
+  LREV.clear(); for(const [id,l] of Object.entries(await SYNC.lrevOf())) LREV.set(id,l); for(const e of ESNAP.values()) e.lrev=null; RECEIPTS.clear(); snapDrop(); tellTabs({t:'owner', by:'account', erase:!!o.erase}); if(!o.erase){ snapOff=false; snapSave(); } }
 // the owner of the store moved under this tab (another tab decided, or this tab's binding was refused by the epoch): what is typed goes to storage first; with
 // anything not in storage (a failed write, a write in flight, typing) the screen stays as it is, view-only as «epoch» with the export (lock.epoch), else the page reloads
 async function epochMoved(text){ if(DYING || LOCK) return; flushSave(); await waitFree(3000);
@@ -1557,7 +1559,8 @@ async function showOwnerDialog(user, owner, ep0){ ACC.dialog=true; accStatus();
       const B={uid:user.uid, env:FB.env, email:user.email};
       if(c==='add'){ await bindOwner(B,{expectEpoch:ep0}); connectAccount(user); return; }
       DYING=true; leadOff(); await SYNC.setOwner(B,{erase:true, expectEpoch:ep0}); snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); location.reload(); return; } }
-  catch(e){ if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
+  catch(e){ if(e && e.committed){ if(!e.told){ DYING=true; snapDrop(); tellTabs({t:'owner', by:'account', erase:!!e.erase}); location.reload(); } return; }   // the change committed and only the load after it failed: the screen is the old owner's (or erased), so it goes as on success
+    if(e && e.code==='epoch'){ DYING=false; raced(); } else { dbg('owner:',e); DYING=false; } }
   finally{ ACC.dialog=false; accStatus(); } }
 // a choice dialog: askChoice({title, text, buttons:[{id, label, pri, danger}]}) → Promise<id | 'cancel'>; Esc, a click outside and Back cancel, like ask()
 const choiceDlg=$('choice'); let choiceEnd=null;
@@ -1617,7 +1620,7 @@ async function removeFromDevice(){ if(DYING || ACC.signingOut) return; setMenu(f
     if(c!=='remove') return;
     if(!(await saveNow())){ say(loc('account.unsaved')); continue; }
     const ep=SYNC.epoch; DYING=true; await signOutCore();
-    try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && e.code==='epoch')) throw e; say(loc('account.raced')); }
+    try{ await SYNC.setOwner(null,{expectEpoch:ep}); }catch(e){ if(!(e && (e.code==='epoch' || e.committed))) throw e; if(e.code==='epoch') say(loc('account.raced')); }   // committed: erased, only the load after it failed; the page reloads as on success
     snapDrop(); tellTabs({t:'owner', by:'account', erase:true}); setTimeout(()=>location.reload(), 300); return; } }
 // the engine must sign in again (its token is refused): the user is signed out here and told so
 async function reauthNeeded(){ if(ACC.reauth) return; ACC.reauth=true; try{ await signOutCore(); ACC.probe='reauth'; accUI(); accStatus(); } finally{ ACC.reauth=false; } }
@@ -2348,7 +2351,7 @@ importBtn.addEventListener('click',()=>importFile.click());
 importFile.addEventListener('change',async()=>{ const f=importFile.files[0]; importFile.value=''; if(!f || held()) return; let data=null; try{ data=JSON.parse(await f.text()); }catch(_){}
   const list=Array.isArray(data)? data : (data&&Array.isArray(data.notes)? data.notes : null); if(!list){ say(loc('import.notExport')); return; }
   const r=await importNotes(list, Array.isArray(data)? null : data.settings), hv=Array.isArray(data)? 0 : await importHistory(data.history);
-  say(loc('import.done',{n:r.added, updated:r.updated, skipped:r.skipped})+(r.failed? loc('import.failed',{n:r.failed}) : '')+(r.settings? loc('import.settings') : '')+(hv? loc('import.history',{n:hv}) : '')); });
+  say(loc('import.done',{n:r.added, updated:r.updated, skipped:r.skipped})+(r.failed? loc('import.failed',{n:r.failed}) : '')+(r.settings? loc('import.settings') : '')+(hv<0? loc('import.historyFailed') : hv? loc('import.history',{n:hv}) : '')); });
 ttl.addEventListener('input',()=>{ if(!cur) return; cur.title=ttl.textContent.replace(/\n/g,' '); markDirty(); document.title=docTitle(cur); });
 ttl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ttl.blur(); } if(e.key==='Escape') ttl.blur(); });
 ttl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\n/g,' ')); });
@@ -3423,7 +3426,7 @@ Object.assign(DEBUG.vers,{ openHist:()=>openHist(), closeHist:()=>closeHist() })
 async function historyOf(){ try{ const [versions,blobs]=await Promise.all([idb.tx(['versions'],'readonly',t=>t.objectStore('versions').getAll()), idb.tx(['blobs'],'readonly',t=>t.objectStore('blobs').getAll())]); return {versions, blobs}; }catch(_){ return null; } }
 // through the core (SYNC-PLAN 4.9 «Import»): one transaction with the queue, and a named version deleted here never comes back from an old file
 async function importHistory(h){ if(db.backend!=='idb' || !h || !Array.isArray(h.versions) || !Array.isArray(h.blobs) || !SYNC) return 0; const ids=notes.map(n=>n.id);
-  const r=await SYNC.importHistory(h, ids); if(!r || !r.ok) return 0;
+  const r=await SYNC.importHistory(h, ids); if(!r || !r.ok) return -1;   // refused: the import says the history was not added
   for(const v of h.versions) if(v && ids.includes(v.note)) VLAST.delete(v.note); DEBUG.vers.size+=r.size||0; storageUI(); return r.added; }
 
 /* ══ text size: «Як у системі» by default, otherwise the sheet text in px and a factor for the interface. Kept per device, never exported ══
