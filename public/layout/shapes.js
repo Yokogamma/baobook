@@ -26,6 +26,10 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  * @typedef {{cols:number, measure:'canonical'|'displayed', boxes:Map<string,Box>, order:string[], areas:Map<string,Layout>}} Layout
  *   // its gaps are its boxes' `above`; column chains are an index built from them; order: the ids in reading order, built once per
  *   // layout, which every visitor walks (INV-5), never the Map; an area's `cols` is read from its Box's `cw`, not kept twice
+ * @typedef {{parent?:?string, col:number, row:number, fx?:number, cw?:number, ch?:number, open?:boolean, collapsed?:boolean}} Stored
+ *   // a block's stored fields as the bridge read them (LAYOUT-ENGINE-PLAN §3.4, §3.5), for layout.js's `diff`: col the engine's column
+ *   // (a sheet block's as §3.1 rounds it from fx), row the stored row as stored (fractional or negative included), fx as stored, cw and
+ *   // ch as read (rounded up to whole cells); the bridge updates them with every write of its own and with what an undo puts back
  * @typedef {{col:number, y:number, frow:number, w:number}} Target   // a moved block's cell, its unrounded row and its width at the target
  *   // the state of LAYOUT-RULES §1.4 («move», «home», «outside») stays in drag.js: at «home» or «outside» no change is made (PR-1), so SETTLE never sees it
  */
@@ -79,11 +83,11 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
 
 /** One typedef per kind; `box` is the container the change is in (null, the sheet).
  * @typedef {{type:'carry', box:?string, id:string, at:Target, away:boolean, through?:'hold'|'shift', canonical?:boolean}} CarryChange
- * @typedef {{type:'create', box:?string, id:string, kind:string, at:Target, away:true, set?:{cw?:number, ch?:number}, canonical?:boolean}} CreateChange
- * @typedef {{type:'width', box:?string, id:string, cw:number, side?:'left'|'right', col?:number, rows?:number}} WidthChange
- * @typedef {{type:'wall', box:string, side:'left'|'right', cols:number, shift?:number}} WallChange
+ * @typedef {{type:'create', box:?string, id:string, kind:string, at:Target, away:true, set?:{cw?:number, ch?:number, open?:boolean}, rows?:number, t?:number, canonical?:boolean}} CreateChange
+ * @typedef {{type:'width', box:?string, id:string, cw:number, side?:'left'|'right', col?:number, rows?:number, t?:number}} WidthChange
+ * @typedef {{type:'wall', box:string, side:'left'|'right', cols:number, shift?:number, room?:number}} WallChange
  * @typedef {{type:'areaSide', box:?string, id:string, side:'left'|'right', col:number, cols:number}} AreaSideChange
- * @typedef {{type:'size', box:?string, id:string, set?:{cw?:null, ch?:?number, open?:boolean, collapsed?:boolean}}} SizeChange
+ * @typedef {{type:'size', box:?string, id:string, set?:{cw?:null, ch?:?number, open?:boolean, collapsed?:boolean}, rows?:number, t?:number}} SizeChange
  * @typedef {{type:'remove', box:?string, id:string}} RemoveChange
  * @typedef {{type:'enter', box:?string, id:string, to:string, at:Target}} EnterChange
  * @typedef {{type:'leave', box:string, id:string, to:?string, at:Target}} LeaveChange
@@ -91,6 +95,11 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  * @typedef {{type:'drawArea', box:?string, id:string, at:{col:number, y:number, cols:number, rows:number}}} DrawAreaChange
  * @typedef {CarryChange|CreateChange|WidthChange|WallChange|SizeChange|RemoveChange|EnterChange|LeaveChange|UngroupChange|AreaSideChange|DrawAreaChange} Change
  *  (each kind as LAYOUT-ENGINE-PLAN §2.1 describes it; enter, leave, ungroup, drawArea and areaSide are composite, taken apart by settleTree)
+ *  rows, t: an area's frame rows in the layout's measure and their temporary part, which settleTree gives a size change of an area, a
+ *  created area and an area's width change in its container from its children (LAYOUT-RULES §5.6): the passport cannot measure them there.
+ *  room: a wall's rows its area's frame leaves its content at the new width, which the content may not pass (§5.4).
+ *  areaSide: col, the area's new handle column (its left free column), cols its new width with the handle cell (w); drawArea: cols and
+ *  rows the area's inner columns (cw) and its set height (ch).
  */
 
 /** The bridge, the one module that knows index.html's block objects (LAYOUT-ENGINE-PLAN §2.1, step 5).
@@ -109,12 +118,13 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  */
 
 /** The working state of SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2; primitives.js).
- * @typedef {{L:Layout, base:Layout, moved:?string, insert:boolean, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, n:number, order:string[]}} Work
+ * @typedef {{L:Layout, base:Layout, moved:?string, insert:boolean, ctx:Ctx, steps:Map<string,Step[]>, follow:Map<string,number>, reshaped:Set<string>, n:number, order:string[]}} Work
  *   // L: the layout as the phases left it, its stacks as the last RELINK left them; base: the layout the interval started from, whose
  *   // chains `push` departs by rule 2; moved: the moved block of the change, in no chain until
  *   // phase 8 (none for a size or a deletion); insert: the moved block comes in by rule 3 (created, or carried while away, DRAG.B1), so P-UP
  *   // lifts nothing over it (G17); steps: every step a call moved a block by, cut within the call (Moved, for the dev look);
- *   // follow: the rows pushes gave a block because a height changed (FOLLOW's, no step); n: the step counter; order: the reading order of
+ *   // follow: the rows pushes gave a block because a height changed (FOLLOW's, no step); reshaped: the blocks a primitive gave another
+   // column or width (`reshape`), which alone may leave or come into a column; n: the step counter; order: the reading order of
  *   // the layout the current phase started from, which every primitive visits (INV-5)
  */
 
@@ -124,8 +134,15 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  *   // pressed; a block may be in both
  */
 
+/** The neighbour letting the block through (LAYOUT-RULES §5.1b): its id, the row it stands at, the side it stands on, the moved block's
+ *  target when it was chosen or where the last swap put it (`at`: the block's own frame row there and that `frow`), and the last target
+ *  before that one (DRAG.B3 reads it), so that the pipeline runs again on what the choice was made on; after a swap, the `frow` line it
+ *  crossed, which takes the two back (null before any swap).
+ * @typedef {{id:string, row:number, side:'below'|'above', at:{col:number, y:number, frow:number}, last:?Target, line:?number}} Through
+ */
+
 /** The carry memory (LAYOUT-RULES §6.D): only what SETTLE reads.
- * @typedef {{away:boolean, sides:Map<string,'left'|'right'>, through:?{id:string, row:number, side:'below'|'above'}, areaBottoms:Map<string,number>, lastTarget:?Target, dir:'up'|'down'}} Memory
+ * @typedef {{away:boolean, sides:Map<string,'left'|'right'>, through:?Through, areaBottoms:Map<string,number>, lastTarget:?Target, dir:'up'|'down'}} Memory
  */
 
 /** Measuring (LAYOUT-ENGINE-PLAN §4.3): by block id, `rows` the canonical rows of its content at a card width of `cells`, `shown` the displayed

@@ -1,10 +1,11 @@
 // Service worker over a real origin: it touches only its own caches, the app opens offline, a new deploy arrives on reload; requests to
-// /__/ (the sign-in pages the Worker proxies, SYNC-PLAN 4.13) pass it by and are never cached; the Firebase SDK is cached when used and
-// the cache survives an update of the worker.
+// /__/ (the sign-in pages the Worker proxies, SYNC-PLAN 4.13) pass it by and are never cached; the Firebase SDK is cached when used,
+// its modules must have the bytes of the page's FB_SRI (a mismatching cached copy is fetched again), and the cache survives an update of the worker.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { serve, CTX } from './lib/server.mjs';
 import { until } from './lib/wait.mjs';
+import { sri, withHashes, sdkVer } from './hashes.mjs';
 process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS='1';   // before the launch: route() then sees the fetches the service worker itself makes (the SDK step)
 const br=await chromium.launch(process.env.CHROMIUM? {executablePath:process.env.CHROMIUM} : fs.existsSync('/opt/pw-browsers/chromium')? {executablePath:'/opt/pw-browsers/chromium'} : {});
 let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
@@ -41,15 +42,33 @@ site.override.delete('/index.html'); await pg.reload(); await pg.waitForTimeout(
   const cached=await pg.evaluate(async()=>{ const out=[]; for(const k of await caches.keys()){ for(const q of await (await caches.open(k)).keys()) if(/\/__\//.test(q.url)) out.push(k+' '+q.url); } return out; });
   ok('6 /__/auth/* passes the worker by (the server\'s 404 comes through, '+r.join('/')+') and nothing under /__/ is cached', r[0]===404 && r[1]===404 && cached.length===0 && await controlled(pg)); }
 
-// the Firebase SDK (www.gstatic.com/firebasejs/<version>/…): a module fetched through the worker lands in baobook-sdk and comes from there next time
-let sdkHits=0; const SDK_URL='https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-await ctx.route('https://www.gstatic.com/firebasejs/**', r=>{ sdkHits++; r.fulfill({status:200, contentType:'text/javascript', headers:{'access-control-allow-origin':'*'}, body:'export const sdk="stub";'}); });
+// the Firebase SDK (www.gstatic.com/firebasejs/<version>/…): a module fetched through the worker lands in baobook-sdk and comes from there next time.
+// The route answers every SDK path with stub bytes; firebase-storage.js is not one of the page's three modules, so no integrity applies to it
+let sdkHits=0; const STUB='export const sdk="stub";', SDK='https://www.gstatic.com/firebasejs/'+sdkVer(html)+'/', SDK_URL=SDK+'firebase-storage.js', APP_URL=SDK+'firebase-app.js';
+await ctx.route('https://www.gstatic.com/firebasejs/**', r=>{ sdkHits++; r.fulfill({status:200, contentType:'text/javascript', headers:{'access-control-allow-origin':'*'}, body:STUB}); });
 { const v=await pg.evaluate(u=>import(u).then(m=>m.sdk), SDK_URL);
   const keys=await pg.evaluate(async()=>(await (await caches.open('baobook-sdk')).keys()).map(q=>q.url));
   ok('7 the SDK module loads through the worker ('+sdkHits+' network fetch) and is stored in baobook-sdk', v==='stub' && sdkHits===1 && keys.includes(SDK_URL));
   await pg.reload(); await pg.waitForTimeout(300);
   const v2=await pg.evaluate(u=>import(u).then(m=>m.sdk), SDK_URL);
   ok('7b after a reload the module comes from the cache: still '+sdkHits+' network fetch', v2==='stub' && sdkHits===1); }
+
+// firebase-app.js is one of the three: the import map gives it the integrity of FB_SRI, so the stub's bytes are refused, and the worker, whose
+// fetch carries the same integrity, stores nothing for it
+{ const n0=sdkHits, r=await pg.evaluate(u=>import(u).then(()=>'loaded', ()=>'refused'), APP_URL);
+  const stored=await pg.evaluate(async u=>!!(await (await caches.open('baobook-sdk')).match(u)), APP_URL);
+  ok('7c stub bytes for firebase-app.js are refused by the integrity of FB_SRI ('+(sdkHits-n0)+' network fetch), and baobook-sdk keeps nothing for it', r==='refused' && sdkHits>n0 && !stored); }
+
+// a cached copy that does not match the page's integrity (cached before the page carried the hashes, or damaged since) is dropped and fetched
+// again, so it cannot fail the import forever: a page whose FB_SRI names the stub's bytes, and other bytes already in the cache
+{ site.override.set('/index.html', withHashes(html, {'firebase-app.js':sri(STUB)})); await pg.reload(); await pg.waitForTimeout(500);
+  await pg.evaluate(async u=>{ await (await caches.open('baobook-sdk')).put(u, new Response('export const sdk="old";', {headers:{'content-type':'text/javascript'}})); }, APP_URL);
+  const n0=sdkHits, v=await pg.evaluate(u=>import(u).then(m=>m.sdk, e=>'refused: '+e.message), APP_URL);
+  const kept=await pg.evaluate(async u=>{ const r=await (await caches.open('baobook-sdk')).match(u); return r? await r.text() : null; }, APP_URL);
+  ok('7d a cached firebase-app.js that does not match FB_SRI is dropped and fetched again ('+(sdkHits-n0)+' network fetch): the import gets the right bytes ('+v+') and the cache now holds them', v==='stub' && sdkHits-n0===1 && kept===STUB);
+  const n1=sdkHits; await pg.reload(); await pg.waitForTimeout(300); const v2=await pg.evaluate(u=>import(u).then(m=>m.sdk, ()=>'refused'), APP_URL);
+  ok('7e the matching copy is then served from the cache: '+(sdkHits-n1)+' more network fetches', v2==='stub' && sdkHits===n1);
+  site.override.delete('/index.html'); await pg.reload(); await pg.waitForTimeout(500); }
 
 // an update of the worker (the next version of sw.js on the server): the old shell goes, the SDK and font caches stay
 { const sw=fs.readFileSync(new URL('../public/sw.js', import.meta.url),'utf8'); const OLD='baobook-shell-'+/const BUILD=(\d+)/.exec(sw)[1]; const B0=/const BUILD=(\d+)/.exec(sw)[1]; site.override.set('/sw.js', sw.replace(/const BUILD=\d+/,'const BUILD=99'));

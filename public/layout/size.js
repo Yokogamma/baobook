@@ -8,6 +8,13 @@ import { extent } from './geometry.js';
 /** @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Ctx} Ctx */
 
 const kindOf = (box, ctx) => { const k = ctx.kinds[box.kind]; if (!k) throw new Error('size: no passport for ' + box.kind); return k; };
+/** The canonical measure over a Ctx (LAYOUT-RULES §2.1): the same Ctx with a Measure whose rows show none of the temporary heights; an
+ *  adapter of its own over the two answers of `Measure`, each called on the given one, so that a frozen measure or one built as a class
+ *  serves as it is (the independent review of f7900b2). @param {Ctx} ctx @returns {Ctx} */
+export function canonicalCtx(ctx) {
+  const m = ctx.measure;
+  return { ...ctx, measure: Object.freeze({ rows: (id, cells) => { const r = m.rows(id, cells); return { ...r, shown: r.rows }; }, natural: (id) => m.natural(id) }) };
+}
 /** A box's card width in cells. */
 export const cellsOf = (box) => box.w - 1;
 
@@ -55,7 +62,8 @@ export function restCells(layout, box, ctx) {
   if (!isElastic(box, ctx)) return cap;
   const inside = Math.max(1, layout.cols - (box.col + 1));
   if (!on(ctx.rules, 'SIZE.1')) return Math.min(cap, inside);
-  const floor = Math.max(kindOf(box, ctx).minCells(box, ctx.measure), Math.min(ctx.measure.natural(box.id), ctx.settings.MINC));
+  // its floor, but never past its container's last column (INV-4, core): a block nearer the right edge than its floor narrows to the edge
+  const floor = Math.min(inside, Math.max(kindOf(box, ctx).minCells(box, ctx.measure), Math.min(ctx.measure.natural(box.id), ctx.settings.MINC)));
   for (let w = Math.min(cap, inside); w > floor; w--) if (w <= roomAt(layout, box, w, ctx)) return w;
   return floor;   // it does not fit even at its floor: it hits, which P-REST or P-SEP settles (phase 9 (b))
 }
