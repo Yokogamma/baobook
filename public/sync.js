@@ -286,9 +286,19 @@ function makeSync(deps){
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); S.vjobs.set(id, j); if(!j.tomb && !(await t.get('sync',K.meta('v',id)))) S.vjudge=true; }
     for(const r of await t.range('sync','try:v:','try:v:\uffff')) S.vtries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:v:','refetch:v:\uffff')) S.vrefetch.add(r.k.slice(10)); }
   function addWaiting(doc){ const list=S.waiting.get(doc.note)||[]; const i=list.findIndex(d=>d.id===doc.id); if(i<0) list.push(doc); else if((doc.rev||0)>=(list[i].rev||0)) list[i]=doc; S.waiting.set(doc.note,list); }   // a later state of the same version replaces the earlier one
-  // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work
-  async function reloadQueue(){ S.queueAt=now(); await db.tx(['sync'],'readonly', async t=>{ S.jobs.clear(); S.tries.clear(); S.refetch.clear();
-      for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); await loadV(t); }); }
+  // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work.
+  // Only the queue of this memory's epoch and owner is taken: after another tab's change of owner the store holds the new owner's jobs and attempts,
+  // and an attempt read into this memory would go through this engine's cloud, the previous owner's (the refusal of the local transaction after
+  // the cloud call undoes nothing there). Such a store is refused as in every step's transaction: the status «reload» and `epoch`, the maps left
+  // as they were. The owner this engine's own setOwner is writing is not another tab's: nothing is read and nothing reported, its load follows
+  async function reloadQueue(){ S.queueAt=now(); const own=allowance([...PENDING]); try{ await db.tx(['sync'],'readonly', async t=>{
+      const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!sameOwner(known(),eid,ow)){ if(own.ok(eid,ow)) return; setStatus('reload'); throw fail('epoch'); }
+      S.jobs.clear(); S.tries.clear(); S.refetch.clear();
+      for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); await loadV(t); }); }finally{ own.end(); } }
+  // an attempt carries the epoch it was insured in: one of another epoch is not this owner's and never goes through this engine's cloud. The checked
+  // reads (load, reloadQueue) let none into the memory; this is the same rule at the cloud call itself, by the memory alone (a store check here could
+  // not be atomic with the call). An attempt written before the field has none and goes as before
+  const foreignTry=tr=>tr.epoch!==undefined && tr.epoch!==S.epoch;
   // the memory that describes the owner's data and this engine's run; the device's own state (the quota, the pause) is reset only by reload()
   function resetMemory(o={}){ S.jobs.clear(); S.tries.clear(); S.refetch.clear(); S.err.clear(); S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear(); S.verr.clear(); S.vblocked.clear(); S.vrejected.clear(); S.vlastDelivered.clear(); S.vjudge=false; S.sends.clear(); S.waiting.clear(); S.lastDelivered.clear(); S.rejected.clear(); S.inbox.length=0;
     S.cursor={notes:null, versions:null}; S.scan={notes:null, versions:null}; S.catchup={notes:null, versions:null}; S.catchupDone={notes:false, versions:false}; S.snapshot={notes:false, versions:false}; S.relisten={notes:null, versions:null};
@@ -530,7 +540,7 @@ function makeSync(deps){
   // §4.5 step 4: the cloud transaction; the callback has no side effects and may run more than once
   // the receipt limit (§4.16): 200 devices over a document's lifetime; a device without a receipt there cannot change the document
   const atLimit=D=>!!(D && D.rcpt && !(devId in D.rcpt) && Object.keys(D.rcpt).length>=200);
-  async function runTry(id){ const tr=S.tries.get(id); if(!tr || !S.online){ log({t:'try-skip', id, has:!!tr, online:S.online}); return; } if(!S.ranAt.has(tr.op)) S.ranAt.set(tr.op, now()); S.netBusy=true; try{   // ranAt: when this engine first ran the attempt («Очікую підтвердження», §4.18)
+  async function runTry(id){ const tr=S.tries.get(id); if(!tr || !S.online){ log({t:'try-skip', id, has:!!tr, online:S.online}); return; } if(foreignTry(tr)){ S.tries.delete(id); log({t:'try-foreign', id}); return; } if(!S.ranAt.has(tr.op)) S.ranAt.set(tr.op, now()); S.netBusy=true; try{   // ranAt: when this engine first ran the attempt («Очікую підтвердження», §4.18)
       const res=await net(()=>S.cloud.txn('notes', id, D=>{ if(D && D.rcpt && D.rcpt[devId]===tr.op) return null; if((D? D.rev : 0)!==tr.expect) return null; if(atLimit(D)) return null; const w={...tr.result, v:1, rev:tr.expect+1, op:tr.op, dev:devId, rcpt:{...(D && D.rcpt || {}), [devId]:tr.op}}; if(devName) w.dn=devName; return w; }));
       if(res.error){ const code=res.error.code; if(isNetErr(code)){ await backoff(id, res.error); return; } if(code==='permission-denied'){ await refusedWrite(id, tr); return; } if(code==='resource-exhausted'){ pauseDay(); return; }
         await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op) return; dropTry(t,id,after); const meta=await getMeta(t,'n',id); meta.err=code==='too-large'? 'size' : 'invalid'; putMeta(t,meta,after); log({t:'rejected-write', id, code}); }); return; }
@@ -759,7 +769,7 @@ function makeSync(deps){
       if(base && rec.name===base.name){ dropVJob(t,id,after); meta.baseLrev=meta.lrev; putMeta(t,meta,after); after(()=>emit(deps.onChange,{id, kind:'version', note:rec.note})); return 'dropped'; }   // nothing to send (a rename back): «ще не надіслано» turns back to «у хмарі»
       if(!base){ const kind=vlocalKind(rec); if(kind){ meta.local=kind; putMeta(t,meta,after); dropVJob(t,id,after); after(()=>emit(deps.onChange,{id, kind:'version', note:rec.note})); return 'dropped'; } }
       setVTry(t,id,{k:K.tr('v',id), op, expect:base? base.rev : 0, result:vwire(rec, base), sentLrev:meta.lrev, epoch:S.epoch},after); return 'insured'; }); }
-  async function runVTry(id){ const tr=S.vtries.get(id); if(!tr || !S.online) return; if(!S.ranAt.has(tr.op)) S.ranAt.set(tr.op, now()); S.netBusy=true; try{
+  async function runVTry(id){ const tr=S.vtries.get(id); if(!tr || !S.online) return; if(foreignTry(tr)){ S.vtries.delete(id); log({t:'try-foreign', col:'v', id}); return; } if(!S.ranAt.has(tr.op)) S.ranAt.set(tr.op, now()); S.netBusy=true; try{
       const res=await net(()=>S.cloud.txn('versions', id, D=>{ if(D && D.rcpt && D.rcpt[devId]===tr.op) return null; if((D? D.rev : 0)!==tr.expect) return null; if(atLimit(D)) return null; const w={...tr.result, v:1, rev:tr.expect+1, op:tr.op, dev:devId, rcpt:{...(D && D.rcpt || {}), [devId]:tr.op}}; if(devName) w.dn=devName; return w; }));
       if(res.error){ const code=res.error.code; if(isNetErr(code)){ await vbackoff(id, res.error); return; } if(code==='permission-denied'){ await refusedVWrite(id, tr); return; } if(code==='resource-exhausted'){ pauseDay(); return; }
         await tx(['sync'], async(t,after)=>{ const cur=await t.get('sync',K.tr('v',id)); if(!cur || cur.op!==tr.op) return; dropVTry(t,id,after); const meta=await getMeta(t,'v',id); meta.err='invalid'; putMeta(t,meta,after); log({t:'rejected-write', col:'v', id, code}); after(()=>emit(deps.onChange,{id, kind:'version', note:tr.result.note})); }); return; }
@@ -908,7 +918,7 @@ function makeSync(deps){
     if((S.errorUntil||0)>nowT) return {did:'idle', next:S.errorUntil, status:status()};
     // no space (§4.6): receiving stops for an hour, deliveries meanwhile are dropped (the totals check finds them later); then the listener and catch-up start over
     if(S.nospace){ if(nowT<(S.nospaceAt||0)+3600000){ S.inbox.length=0; return {did:'idle', next:S.nospaceAt+3600000, status:status()}; } S.nospace=false; S.sweptOnce=false; log({t:'nospace-over'}); reconnect(); }
-    if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000) await reloadQueue();
+    if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000){ try{ await reloadQueue(); }catch(e){ if(e && e.code==='epoch') return {did:'idle', next:Infinity, status:status()}; throw e; } }   // the store is another owner's now: the refusal told the page («reload»), the step does nothing, with no error pause
     if(S.vjudge) await vmigrate({jobs:true});   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
     try{
       if(S.inbox.length){ const isNote=m=>m.col==='notes' && m.source==='delivery';
