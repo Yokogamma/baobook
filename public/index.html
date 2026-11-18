@@ -3307,11 +3307,11 @@ const PLEX_CSS='https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;
 let fontT=0;
 /* a view-only re-measure (a theme switch, a font face that arrives) starts from the rows the note holds: blocks are only ever pushed down, so a
    push that another font's wrapping caused would otherwise stay, and the next edit would store it. Not while an edit is unsaved (its rows are the
-   user's), a version is shown or a block is being dragged */
-function relayView(){ if(cur && !dirty && !H.view && !blocks.some(b=>b.hidden)){ const at=new Map((cur.blocks||[]).map(d=>[d.id, d.row])); blocks.forEach(b=>{ if(at.has(b.id)) b.row=at.get(b.id); }); }
+   user's), a version is shown, a merged record waits to be drawn (PENDING: the screen is behind cur.blocks) or a block is being dragged */
+function relayView(){ if(cur && !dirty && !H.view && !PENDING.has(cur.id) && !blocks.some(b=>b.hidden)){ const at=new Map((cur.blocks||[]).map(d=>[d.id, d.row])); blocks.forEach(b=>{ if(at.has(b.id)) b.row=at.get(b.id); }); }
   applyMode(); field(); if(H.view) placeVbtns(); }
 function themeLaid(){ const g=curTheme()==='grid'; if(g===laidGrid) return; const first=laidGrid!==null; laidGrid=g;
-  if(first) relayView();
+  if(first){ flushSave(); relayView(); }   // an edit typed a moment ago is stored with the rows the user saw, then the new look starts from them
   if(!g || document.getElementById('plexCss')) return;
   /* the theme's fonts come by a stylesheet of their own, added only when the theme is used: the other themes never wait for it, and the cached
      URL of the Inter link stays. Every face that arrives (a Cyrillic subset loads only when text needs it) re-measures the blocks once */

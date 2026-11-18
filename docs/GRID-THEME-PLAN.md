@@ -11,7 +11,7 @@ Names: «Клітинка» / "Grid paper" (short forms «клітинка» / "
 ## 2. What does not change
 
 - No stored field, no sync or export format change, no IndexedDB change. The theme is one more value of `theme` in `sheet:settings`.
-- Stored placement does not change: `G`, `fx`, columns and rows are untouched, and `public/layout/` is not touched. Only the view adds an inset of the text inside its card in this theme (§6). The lines are drawn where the dots are now, so a block that stands on a dot stands on a line crossing.
+- Stored placement does not change by itself: `G`, `fx`, columns and stored rows are untouched, and `public/layout/` is not touched; a theme switch or a late font writes nothing and keeps every row (§6). The view adds an inset of the text and uses other fonts, so a text can wrap to more or fewer lines than in another theme. **An edit made in one theme stores that theme's layout**: if a block grew there and pushed the blocks below, the next edit keeps the push, and the other theme then shows a gap. This is the same as editing a note on a phone and on a computer, and since the theme is a device setting, it also holds between two devices of the same width with different themes. The lines are drawn where the dots are now, so a block that stands on a dot stands on a line crossing.
 - The theme cycle stays one button: light → dark → sand → grid → light.
 
 ## 3. Tokens
