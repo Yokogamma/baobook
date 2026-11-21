@@ -48,9 +48,9 @@ Switches first, since the generator then has fewer states to cover; the frame be
 
 Structural invariants of one tree, in place of the four `sound()` of the tests (`layoutgestures.mjs`, `layoutopen.mjs`, `layoutsettle.mjs`, `layouttree.mjs`). It returns the errors and repairs nothing.
 
-- every block in exactly one container; every area on the sheet has its container in `areas` and no container is without its area; no area in an area; a child container's `areas` empty;
+- every block in exactly one container; every area on the sheet has its container in `areas` and no container is without its area; no area in an area; a child container's `areas` empty; a child container's `cols` equal its area's inner width (`area.w − 1`), which neither `gap.check` nor the frame's height shows (an area of 12 inner columns over children laid out in 20 passes both), with a negative case kept when the four `sound()` go;
 - in every container INV-1 to INV-4 and `gap.check`, in the measure the layout is in, and its canonical projection too;
-- every area's `h` and `t` equal `frameOf` (§6.1), its own temporary rows counted;
+- every area's `h` and `t` equal `frameOf` (§6.1), its own temporary rows (`tx`) counted; every block's `t` at least its `tx`;
 - bounds: `MAXCELL`, the container's edges, an area with its free cells.
 
 INV-5 (determinism) is a law of several runs, not of `validate`. `validate` is no oracle of memory: two valid trees can differ in what a later deletion gives.
@@ -70,8 +70,8 @@ After every accepted transition, on a copy:
 | | Law | Reference |
 |---|---|---|
 | L1 | Memory: the engine's RELINK and the lab model agree on every declared transition, and after each probe | `tests/lab/gap-model` |
-| L2 | Rows of SETTLE in the reference's domain; the domain widened (sideways, creation, size) | `tests/lab/settle-ref.mjs` |
-| L3 | The frame: `frameOf` against a formula written apart, with named cases (collapsed, `ch` larger, the header wrapping, own temporary rows with and without children's) | `tests/lab` |
+| L2 | Rows of SETTLE in the reference's domain; the domain widened (sideways, creation, size), its borders stated, and a least count of comparisons really made in each part of it (§4.5): a transition the reference answers «outside my domain» checks nothing | `tests/lab/settle-ref.mjs` |
+| L3 | The frame: `frameOf` against a formula written apart, with named cases (collapsed, `ch` larger, the header wrapping, own temporary rows with and without children's, the handle of an area that shows an own temporary row, §6.3) | `tests/lab` |
 | L4 | Determinism: the storage order permuted; the same input run twice, the gesture memory and the measure included | itself |
 | L5 | `unshow(show(C)) = C` with the same signatures, widths and rules and no action between | itself |
 | L6 | A refusal changes nothing: the input tree, the gesture memory, the written fields, the undo history. A success leaves its input unchanged too (snapshots and stacks are shared with undo entries) | a frozen copy |
@@ -83,16 +83,21 @@ After every accepted transition, on a copy:
 | L12 | `narrow` ↔ `press` exchanged for the blocks that are not carried, in a lawful declaration: the same result and memory | itself |
 | L13 | Translation: the same change far from the edges gives the translated result | itself |
 | L14 | Opening what the engine wrote: places and sizes compared, not stacks (0.1 stores neither owners nor lends). «One opening changes nothing» is stronger than today's test of convergence; what it finds is judged case by case, not taken for a regression | `diff` |
+| L15 | INV-6, nothing written without a user action: opening, a temporary height starting or ending, a window, a scale, a look change no stored field (L6 is another thing: the inputs unchanged and atomicity) | a snapshot of the stored fields, and in S5 the writes seen through the bridge |
 
 «A block created and removed» and «an action and its opposite» are not universal laws: decided rules limit them (G18, G5).
 
 ### 4.4 The old engine as the reference of a refactor
 
-For S1 and S3 (changes meant to keep the behaviour): the engine at `0d94f29`, copied once into `tests/lab/engine-0d94f29/` and removed when the stage ends, and the new one get the same sequence of commands and the same measuring answers under `DEFAULT`. Compared: accepted or refused, the tree, the gesture memory and `start`, the written fields (`diff`), and the stacks by value after normalising their representation (no object identity, no `Map` order). A difference is allowed only when explained: a confirmed defect, shown by an expected result written independently, or an approved change of contract; a named case records the decision and does not by itself justify it. Stricter answers to a caller's error (§6.3) are outside the common domain and tested apart.
+For S1 and S3 (changes meant to keep the behaviour): the engine at `0d94f29`, copied once into `tests/lab/engine-0d94f29/` (every module of `public/layout/`, passports and rules included, with no import from the `public/layout` that changes) and removed when the stage ends, and the new one get the same sequence of commands and the same measuring answers under `DEFAULT`. Compared: accepted or refused, the tree, the gesture memory and `start`, the written fields (`diff`), and the stacks by value after normalising their representation (no object identity, no `Map` order). A difference is allowed only when explained: a confirmed defect, shown by an expected result written independently, or an approved change of contract; a named case records the decision and does not by itself justify it. Stricter answers to a caller's error (§6.3) are outside the common domain and tested apart. The comparison runs in CI.
 
 ### 4.5 Quotas
 
-Counted on accepted transitions with substance, per 10 000 (the numbers are a start): every `Change` type at least 3 %, on the sheet and in an area; with a temporary height at least 15 %; a hold or a real swap at least 5 %; followed by an undo at least 20 %, a quarter of them after a signature changed; an outside update at least 2 %; a real change of width, a refused handle, each at least 1 %; each unlawful combination (an area into an area, a wall given directly, an area's width by `size`) at least 1 %, checked as a refusal. A carry accepted with nothing moved fills no quota. The test fails below a quota.
+Two counters with their own denominators (the numbers are a start); the test fails below a quota.
+
+- **Accepted transitions with substance**, shares of 10 000 of them: every `Change` type at least 3 %, on the sheet and in an area; with a temporary height at least 15 %; a hold or a real swap at least 5 %; followed by an undo at least 20 %, a quarter of them after a signature changed; an outside update at least 2 %; a real change of width at least 1 %. A carry accepted with nothing moved fills no quota.
+- **Negative attempts**, shares of the attempts made, each checked as a refusal or a failure with its reason: a refused handle; an area into an area; a wall given directly; an area's width by `size`; `enter` and `leave` against their direction (§6.3); each at least 1 % of the attempts, and the attempts at least 5 % of all commands.
+- **Comparisons really made** by a reference that has a domain (L2): at least 300 in each part of the domain per 10 000 accepted transitions.
 
 Templates: change → temporary height → another gesture → undo; delete → a linked note renamed → undo; an area's handle → typing in a child → undo; collapse an area → carry over it → open it; enter → leave → undo twice; a signature that changes and returns (§7's case).
 
@@ -123,12 +128,24 @@ Their fallbacks never written (steps 3–5): `AREA.6`, `DRAG.B1`, `RESIZE.2`, `R
 
 `frameOf(area, children, ctx)` in `public/layout/frame.js` → `{h, t}`: the frame rows by the area's passport (its header at its width, `ch`, `collapsed`) round the rows its children take; `t`, the growth its children's temporary rows make plus the area's **own temporary rows**. `bottomOf` (three copies today: `tree.js`, `settle.js`, `layout.js`) and `frameRows` (two) live there.
 
-**Own temporary rows** (the reviewer's finding: `show(…, new Map([['R', 1]]))` gives `h` 3, `t` 1 for a frame of 2, `layout.js:182–195`; a formula over the header and children alone would refuse it, or drop the row). `t` aggregates two sources and cannot give them back once the children change. So a displayed layout keeps the rows `show` was given for a block in a field of their own (`tx`, never stored, set by `show`, removed by `unshow`), and `t` is always «what the measure or the children give» plus `tx`. To be checked in S3 with a case: a text block measured anew in a gesture (`settle.js` `measured`) keeps its `tx` (P18's row), which by reading it loses today.
+**Own temporary rows** (the reviewer's finding: `show(…, new Map([['R', 1]]))` gives `h` 3, `t` 1 for a frame of 2, `layout.js:182–195`; a formula over the header and children alone would refuse it, or drop the row). `t` aggregates two sources and cannot give them back once the children change. So a displayed layout keeps the rows `show` was given for a block in a field of their own, `tx`: never stored, set by `show` from `temp`, removed by `unshow`, and `t` is always «what the measure or the children give» plus `tx`. Text blocks need it as areas do: the reviewer ran it on the base (a text shown with `h` 2, `t` 1 comes out of a change of width with `h` 1, `t` 0, and loses the row on entering an area too). That loss is a defect of the base, so §4.4 expects this difference, shown by cases written independently.
+
+`tx` goes with the block through every path that measures it again or makes its box again:
+
+| Path | Where | What holds |
+|---|---|---|
+| a size change, a width change, the moved block at its target | `settle.js` `measured()`, phases 1a and 1c | `t` = the measure's (or the frame's) temporary rows + `tx` |
+| pressed aside, rested, narrowed by a primitive | `primitives.js` `reshape` (`:127`), phase 9 (a) | the same: one function gives a box its height, in `frame.js` for an area and beside `rowsAt` for the others, and no path computes `h`, `t` by itself |
+| `enter`, `leave`, `ungroup` | `tree.js` `move`, `ungroup`, which make a new box from listed fields (`:101`) | the box of the same block keeps its `tx` |
+| a block made new | `create`, `drawArea` | `tx` 0; the bridge gives a new block's own temporary rows with the next `show` (P18's row) |
+| a canonical pass | `inverse` while it exists, §7's pass | folded with every temporary row, `tx` kept aside, and shown again after the pass by the same rule |
+
+Each row is a named case in S3, and the generator gives `tx` to texts and areas before changes of every kind.
 
 Readers:
 
 - `settle.js` `measured()` for an area calls `frameOf(box, L.areas.get(box.id), ctx)`; an area with no container in `L.areas` is `failed`, never its old `h`;
-- `rows` and `t` leave `SizeChange`, `CreateChange`, `WidthChange` (read at `settle.js:307`, `:330`); `room` stays: it is a condition of a composite change, not a derived number;
+- `rows` and `t` leave `SizeChange`, `CreateChange`, `WidthChange` (read at `settle.js:307`, `:330`); `room` stays: it is a condition of a composite change, not a derived number, and it counts no own temporary row (§6.3);
 - `open()`: the sheet's `openOne` gets the children it has already opened, in place of `inner` (`layout.js:163–172`), and `sized`, `clamped` call `frameOf`;
 - a canonical run reads canonical children: while `inverse` exists, it projects `areas` too (`settle.js:120–124` folds `start.boxes` only), and `frameOf` under a canonical `ctx` counts no temporary row.
 
@@ -139,6 +156,7 @@ Readers:
 ### 6.3 One clamp, and the input contract
 
 - `sideRect` stays the only clamp of an area's handle. For an area's width change, phase 1c (`settle.js:326`) checks that the rectangle lies in the container, the area with its free cells, and fails otherwise; the clamp of every other width change stays.
+- **The handle's budget.** An area's own handle never makes it taller (§5.4). Today `roomOf` takes the whole shown height and takes off the header, so an own temporary row becomes room for the children: the reviewer ran an area of canonical height 3 showing 4, narrowed so that a child grows a row, accepted with `h` 4, `t` 0; with `tx` kept and that budget it would show 5. So `room` is the area's shown height less its header and its `tx`, and the handle is refused when the shown height after the change is more than at the gesture's start. A named case, in L3 and in the handle's tests.
 - `enter` needs `box == null` and `to` an existing area; `leave` needs `box` an existing area and `to == null`; the source block must exist; anything else is `failed` (today `move` takes `from === to`). The branch `isArea(b)` of `move` goes once this holds.
 - Containers change only by `withArea` and `withoutArea`; deleting an area deletes its children and ungrouping moves them, as the operation says; `validate` checks and repairs nothing.
 
@@ -155,11 +173,11 @@ The exact path of `LAYOUT-ENGINE-PLAN.md` §6.4 (nothing applied since: the snap
 
 The other conditions of §6.4 stay: today's content is never replaced by the snapshot's; an outside change of the note drops the engine's entries (`undoStale`); a change of the rules drops them. Composite actions (enter, leave, ungroup, an area's handle) are undone by the snapshot of the whole tree, never by an inverse path.
 
-**The experiment** (`tests/lab/undo-snapshot/`): on the generator's histories, three paths: (A) `inverse` as built; (B); (B′) one `resize` and FOLLOW per container, then one `rest()`. Reported to the owner:
+**The experiment** (`tests/lab/undo-snapshot/`): on the generator's histories, three paths. (A) `inverse` as built, compared only where it is an undo today: the changes §6.4 of the engine plan lists one by one; it is no undo of a whole composite action, and those histories are reported as (B) and (B′) alone. (B), as above. (B′), stated in full before it runs: the same candidate and the same queues; in each area in reading order, every block whose signature differs is measured again at its restored width and its height applied by `resize`, all of them before anything follows; then one FOLLOW and one `rest()` of that container; then the area's frame by `frameOf`; the sheet last, the same way; canonical throughout. Reported to the owner:
 
 - shares: the same / other rows / the same rows and other probes (deleting, narrowing, ending temporary heights, after the undo);
 - how far step 2 depends on the order of its queue;
-- the refusals of each path;
+- for each path, apart: `refused`, `failed`, and a result returned as a success that `validate` rejects;
 - the 5–10 smallest differing cases as pictures, G21's apart;
 - the code that would go: `inverse`, `canonical` in `Change` and `Transition`, `back`, G21's branch of `transitionFacts`.
 
@@ -169,7 +187,7 @@ Required cases: a signature that returns to its old value; several undos in a ro
 
 ## 8. The narrow slice on `.dev` (S5, Q5)
 
-Behind the switch, off by default: open a real note; carry and drop on the sheet and in an area; enter and leave; typing; create and delete; the exact undo only, every other case dropping the engine's history until Q7. Handles, drawing an area, ungrouping and the hold are off. One note is never served by both layouts. The stored format does not change; on `failed`, the safe result and nothing written.
+Behind the switch, off by default: open a real note; carry and drop on the sheet and in an area; enter and leave; typing; create and delete; the exact undo only, every other case dropping the engine's history until Q7. Handles, drawing an area, ungrouping and the hold are off. One note is never served by both layouts. The stored format does not change; A refused or failed layout writes none of its places and sizes; content is another matter. What the user typed is saved by the ordinary path whatever SETTLE answers, and after a failure the note's geometry goes to the safe mode, as `LAYOUT-ENGINE-PLAN.md` §4.2 has it. The bridge's tests give typing a refusal and a failure: the text is saved, no place of the failed result is written.
 
 Its modules (`measure.js`, `bridge.js`, `drag.js`, `ops.js`) are the first versions of those of steps 3–5, with their Node tests, not code to throw away.
 
@@ -187,12 +205,13 @@ Its modules (`measure.js`, `bridge.js`, `drag.js`, `ops.js`) are the first versi
 
 ## 10. What step 3 may assume after this stage
 
-- `settleTree` takes no derived number: a change of an area or its children gives a tree whose frames `validate` accepts.
+- `settleTree` takes no frame rows from outside (`rows`, `t`): a change of an area or its children gives a tree whose frames `validate` accepts. `room` stays an input.
 - `validate` is the one check of a tree; the generator's sequences, probes and quotas are the bar a new action is drawn into before review.
 - The switches of §5 that are core have no fallback to write or test.
-- The undo's second path is the one the owner chose in Q7; composite actions are undone by the snapshot.
+- The undo's second path follows the contract the owner chose in Q7. S4 changes nothing in `public/`: the chosen path is built in step 3 (and `inverse` removed then, if (B) is chosen), not by this stage. Composite actions are undone by the snapshot.
 - Not covered by Node tests and shown only by the slice: real measuring (fonts, devices), speed on real notes. For 0.2, before stacks are stored (G12): how stacks are read and repaired, `fromPlaces` being the fallback.
 
 ## Review log
 
 - 2026-11-13, before the plan: the architecture decisions sent to the independent reviewer (read at `0d94f29`). Accepted: the one clamp, the input contract, dropping «the cause at its source». One major: (B) is not the counterfactual, shown by a case on the engine; §7 states the narrower meaning, fixes the queue and the canonical pass, and lists the required cases. One medium: an area's own temporary rows; §6.1 gives them their own field, and names `open` and `inverse` as places the function must be wired into. Conditions taken into §4 (justified refusals, two-step probes, input unchanged after a success, INV-5 as a law, the opening law compared by places, quotas by substance), §4.4 (a pinned commit, the same inputs, stacks by value, explained differences only) and §8 (the journal's fields, a missing measurement, one state of inputs).
+- 2026-11-21, the independent review of the plan (PR #160 at `c2404df`): 1 high, 3 medium, 1 low; the owner's decisions of §2 untouched, the earlier finding on the undo's meaning closed. High: §8 said nothing is written on `failed`, which would lose typed text; the content is saved by the ordinary path and only the failed places are not written. Medium: `tx` through every path that measures or remakes a box, text blocks included (the loss confirmed on the base; §6.1's table); an own temporary row is no room for the children under the area's handle (§6.3); `validate` keeps the check of a child container's width (§4.1). Low: accepted transitions and negative attempts counted apart, with a least count of the reference's real comparisons (§4.5). Also taken in: the whole engine copied for §4.4 and compared in CI; INV-6 as a law (L15); (B′) stated in full, (A)'s domain, and the three kinds of bad outcome told apart (§7); §10 narrowed.
