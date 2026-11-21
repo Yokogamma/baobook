@@ -1,6 +1,6 @@
 # The seams before step 3 (plan, proposed)
 
-Status: **proposed**, not approved. Written on 2026-11-13 against `main` at `0d94f29` (step 2 of `LAYOUT-ENGINE-PLAN.md` merged: #137, #144, #148, #152, #156). Everything here is a proposal unless a line names the owner's decision. The owner's open questions are in §2.
+Status: **proposed**, not approved. Written on 2026-11-13 against `main` at `0d94f29` (step 2 of `LAYOUT-ENGINE-PLAN.md` merged: #137, #144, #148, #152, #156). Everything here is a proposal unless a line names the owner's decision. The owner's decisions of 2026-11-21 are in §2: the order, the switches made core, `P-UP`, a carry over temporary heights, the slice, the process, and running the undo experiment. The designs of §4, §6, §7 and §8 are proposed.
 
 ## 1. Why
 
@@ -15,17 +15,17 @@ Step 3 (`drag.js`, `ops.js`) builds every action and its undo on `settleTree`, s
 
 **Dropped after reading the code: «record the cause of a column change at its source».** GAP gives `narrow` and `press` one branch (`gap.js:245`, the model's `model.mjs:203`, `laws.mjs:46`, `:89`); only `checkTransition` asks that the carried block leaves as `narrow` (`transition.js:109`). What `columnsOf` guesses by the width changes no memory; which columns a block left is the geometry by definition, guarded by RC3; `put`, `self` and `back` follow from the change kind; the groups of `transitionFacts` (G16) already read the recorded `by`. The reviewer confirmed it. Kept: RC3, the recorded steps, and one new law (§4.3, L12).
 
-## 2. The owner's questions (open)
+## 2. The owner's questions
 
-| # | Question | Proposed |
+| # | Question | Answer |
 |---|---|---|
-| Q1 | The order of the PRs (§3) | as §3; the reviewer has no objection |
-| Q2 | The switches made core, their branches removed (§5) | the list of §5 |
+| Q1 | The order of the PRs (§3) | **decided by the owner, 2026-11-21: as §3** (the reviewer had no objection) |
+| Q2 | The switches made core, their branches removed (§5) | **decided by the owner, 2026-11-21: the list of §5** |
 | Q3 | `P-UP`: core (а), or kept switchable on `.dev` (б) | **decided by the owner, 2026-11-21: (а)**, `P-UP` is core and its fallback goes. Whether a carry from other columns should push up too (G17, G18) stays left to practice |
 | Q4 | A carry folds the temporary heights at its start: (а) yes, G9, G10, G13, G14 lose their subject, at the cost of a jump when a carry starts; (б) no, as built | **decided by the owner, 2026-11-21: (б)**, a carry runs on what is shown, as built |
-| Q5 | The narrow slice on `.dev` before the rest of steps 3–5 (§8) | yes |
-| Q6 | The process rules (§9) | as §9 |
-| Q7 | What an undo after later edits means (§7): (A) the carry back, as built; (B) the layout before the action, reconciled with the content as it is now; (C) «the action never happened», with a journal of the edits between | decided on the experiment's report; (C) not recommended |
+| Q5 | The narrow slice on `.dev` before the rest of steps 3–5 (§8) | **decided by the owner, 2026-11-21: yes**, with the action journal |
+| Q6 | The process rules (§9) | **decided by the owner, 2026-11-21: as §9** |
+| Q7 | What an undo after later edits means (§7): (A) the carry back, as built; (B) the layout before the action, reconciled with the content as it is now; (C) «the action never happened», with a journal of the edits between | **decided by the owner, 2026-11-21: the experiment is run**; the choice between (A) and (B) is the owner's, on its report; (C) not recommended (proposed) |
 
 ## 3. The PRs
 
@@ -34,11 +34,11 @@ Each is one PR into `main`, reviewed, merged on the owner's word; one that chang
 | PR | What | Depends on |
 |---|---|---|
 | S0 | This plan | |
-| S1 | The branches of the switches made core removed (§5), under the old-engine comparison (§4.4), whose harness and pinned copy come with this PR | Q2 |
+| S1 | The branches of the switches made core removed (§5), under the old-engine comparison (§4.4), whose harness and pinned copy come with this PR | |
 | S2 | `validate`, the sequence generator, the probes, the laws, the quotas (§4) | |
 | S3 | The frame inside the solve, the one clamp, the input contract of the composite changes (§6), under §4.4 | S2 |
 | S4 | The undo experiment in `tests/lab` and its report to the owner (§7); nothing in `public/` | S2; beside S3 |
-| S5 | The narrow slice (§8), in its own PRs | Q5; S3; Q7 before its undo grows past the exact path |
+| S5 | The narrow slice (§8), in its own PRs | S3; Q7's choice before its undo grows past the exact path |
 
 Switches first, since the generator then has fewer states to cover; the frame before the slice, since the slice has areas. `inverse` is removed, if at all, only after Q7.
 
@@ -100,7 +100,7 @@ Templates: change → temporary height → another gesture → undo; delete → 
 
 `validate` in full and the probes run in tests and, in the dev look, at the end of an action; never on a pointer move. The budgets of `LAYOUT-ENGINE-PLAN.md` §4.5 are measured again before step 3 (one pointer move under 8 ms), on the generator's note of 120 blocks.
 
-## 5. The switches (S1; the owner's Q2; `P-UP` decided, Q3)
+## 5. The switches (S1; the owner's Q2 and Q3, decided)
 
 A switch made core leaves `DECLS`, §1.6 of `LAYOUT-RULES.md`, the «two forms» of its tests and its branch in the engine and in the lab model. Hiding a switch and keeping its branch is no simplification.
 
@@ -177,7 +177,7 @@ Its modules (`measure.js`, `bridge.js`, `drag.js`, `ops.js`) are the first versi
 
 **One state of inputs for a gesture** (the seam that remains once the frame is explicit): the bridge's tests show that the measurements of a gesture are stable, that an outside change cancels the gesture, and that a stale result is not written.
 
-## 9. Process (Q6)
+## 9. Process (the owner's Q6, decided)
 
 - A finding: first a minimal permanent case; then its class in the generator with a saved seed; the old code fails and the new passes; the case stays. Nobody waits for a random generator to find it again.
 - Reachable means a sequence of allowed commands from a valid state: import, the content of areas, fonts, renamed links and sync included. `failed` does not close a finding an allowed action leads to.
