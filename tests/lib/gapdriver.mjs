@@ -9,7 +9,6 @@
 // columns c0…c1 and the frame's row and height; the columns a transition names are GAP's, an area's extent.
 import { fromPlaces, follow, resize, relink, adjust, remove, fit, shift, showStack, stackAt, check } from '../../public/layout/gap.js';
 import { checkTransition } from '../../public/layout/transition.js';
-import { resolve } from '../../public/layout/rules.js';
 import { extent, isArea } from '../../public/layout/geometry.js';
 
 const pad = (b) => (isArea(b) ? 1 : 0);
@@ -36,11 +35,10 @@ export function layoutFromModel(state) {
 /** The engine's check of a transition in the model's form ({id: frame} for base and T.after), as declare.mjs's checkDeclaration takes it. */
 export function engineCheck(base, T) {
   const lay = (fr) => { const boxes = new Map(Object.entries(fr).map(([id, f]) => [id, { ...boxOf({ id, ...f }, f.e || 0), yc: f.yc ?? f.y }])); return { cols: 1 << 20, measure: 'displayed', boxes, order: [...boxes.keys()], areas: new Map() }; };
-  return checkTransition({ base: lay(base), after: lay(T.after), moved: T.moved, steps: T.steps, start: T.start, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave, enter: T.enter, pass: T.pass, swap: T.swap, fallback: T.fallback });
+  return checkTransition({ base: lay(base), after: lay(T.after), moved: T.moved, steps: T.steps, start: T.start, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave, enter: T.enter, pass: T.pass, swap: T.swap });
 }
 
 export function createEngineModel(opts = {}) {
-  const rules = resolve({ 'GAP.5.1': opts.gap51 !== false, 'GAP.5.2': opts.gap52 !== false, 'GAP.5.3': opts.gap53 !== false, 'GAP.8': opts.gap8 !== false, 'GAP.9': opts.gap9 !== false });
   let L = { cols: 1 << 20, measure: 'displayed', boxes: new Map(), order: [], areas: new Map() }, ids = [];
   const put = (layout, list = ids) => { L = layout; ids = list.filter((id) => L.boxes.has(id)); return api; };
   const withBoxes = (base, f) => { const boxes = new Map(base.boxes); f(boxes); return { ...base, boxes, order: [...boxes.keys()] }; };
@@ -68,7 +66,7 @@ export function createEngineModel(opts = {}) {
     // as moved, in reverse order (a set: its order changes nothing), and no path; otherwise the model's form, steps, start and moved
     const moved = [...new Set([...(T.steps || []).flatMap(([ids]) => ids), ...(T.moved || [])])].reverse();
     const path = opts.facts ? { moved } : { steps: T.steps || [], start: T.start, moved: T.moved };
-    const out = relink({ base, after, ...path, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave || [], enter: T.enter || [], pass: T.pass || [], swap: T.swap, fallback: T.fallback }, rules);
+    const out = relink({ base, after, ...path, carried: T.carried ?? null, canonical: !!T.canonical, leave: T.leave || [], enter: T.enter || [], pass: T.pass || [], swap: T.swap });
     if (!out.ok) throw new Error('relink: ' + out.errors[0]);
     return out.layout;
   }
@@ -76,7 +74,7 @@ export function createEngineModel(opts = {}) {
    *  no step moves FOLLOW's over base's stacks with those heights, the moved ones from there by their steps. */
   function declared(base, a, x = {}) {
     // as RELINK counts them: the blocks after does not hold taken away first (GAP.6), top to bottom
-    let b0 = base; for (const id of base.order.filter((k) => !a[k]).sort((p, q) => inner(base.boxes.get(p)).y - inner(base.boxes.get(q)).y || (p < q ? -1 : p > q ? 1 : 0))) b0 = remove(b0, id, rules);
+    let b0 = base; for (const id of base.order.filter((k) => !a[k]).sort((p, q) => inner(base.boxes.get(p)).y - inner(base.boxes.get(q)).y || (p < q ? -1 : p > q ? 1 : 0))) b0 = remove(b0, id);
     const hs = withBoxes(b0, (boxes) => { for (const [id, b] of boxes) if (a[id]) boxes.set(id, { ...b, h: a[id].h + (a[id].e || 0), t: a[id].e || 0 }); });
     const S = follow(hs), start = {}, by = new Map();
     for (const [list, d] of x.steps || []) for (const id of list) by.set(id, (by.get(id) || 0) + d);
@@ -151,7 +149,7 @@ export function createEngineModel(opts = {}) {
       const set = new Set(list); if (!set.size || !d) return api;
       for (const id of set) { const x = inner(L.boxes.get(id)); if (overlaps(L, { ...x, y: x.y + d }, id, set)) throw new Error('move overlaps'); }
       const want = new Map([...set].map((id) => [id, L.boxes.get(id).y + d])), yc = new Map([...set].map((id) => [id, L.boxes.get(id).yc]));
-      const out = adjust(L, moveSteps([[list, d]]), rules);   // the model's move is rule 1 alone: no rule 5 to give a block the rows it lacks
+      const out = adjust(L, moveSteps([[list, d]]));   // the model's move is rule 1 alone: no rule 5 to give a block the rows it lacks
       for (const id of set) {
         if (out.boxes.get(id).y !== want.get(id)) throw new Error('move: the stacks do not put ' + id + ' at its row');
         const dc = out.boxes.get(id).yc - yc.get(id);
@@ -161,7 +159,7 @@ export function createEngineModel(opts = {}) {
     },
     carry(id, d) { return api.move([id], d); },
     step(moves = [], widths = {}, carried = null) { return put(step(L, moves, widths, carried)); },
-    fit(targets) { return put(fit(L, targets, rules)); },
+    fit(targets) { return put(fit(L, targets)); },
     shift(k) { const out = shift(L, k); if ([...out.boxes.values()].some((b) => b.col + 1 < 0)) throw new Error('shift past the edge'); return put(out); },
     side(k, W) {
       let out = shift(L, -k); const widths = {};

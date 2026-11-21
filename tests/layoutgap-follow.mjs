@@ -3,7 +3,6 @@
 // blocks under it on the screen only; the binding stack decides a row and the others keep their slack; an area stands by its extent.
 import { follow, resize, check } from '../public/layout/gap.js';
 
-import { DEFAULT } from '../public/layout/rules.js';
 import { ok, eq, done, box, placed, edit, stack, rows, canon, clean, relink } from './lib/gapcase.mjs';
 
 const L = placed([box('A', 1, 3, 3), box('B', 1, 3, 7, 2), box('C', 5, 6, 2)]);
@@ -29,7 +28,7 @@ eq('4 an area stands by its extent: its frame at row 3, its top one row above, i
 clean('4a invariants', R);
 // check() reports a broken or stale stack, never throws on it (the dev look and 0.2's loading read it)
 const S0 = placed([box('A', 1, 1, 0), box('L', 1, 1, 10)]);
-const SX = relink(S0, edit(S0, (m) => m.set('X', box('X', 1, 1, 4))), {}, 'X', DEFAULT);
+const SX = relink(S0, edit(S0, (m) => m.set('X', box('X', 1, 1, 4))), {}, 'X');
 const gone = new Map(SX.boxes); gone.delete('X');
 let threw = false, e1 = []; try { e1 = check({ ...SX, boxes: gone, order: SX.order.filter((id) => id !== 'X') }); } catch { threw = true; }
 ok('5 a stand of a block the layout no longer holds: reported, not thrown (' + e1.join('; ') + ')', !threw && e1.some((e) => e.includes('a stand of X')));

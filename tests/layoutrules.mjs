@@ -12,7 +12,7 @@ const doc = readFileSync(new URL('../docs/LAYOUT-RULES.md', import.meta.url), 'u
 const sec = doc.slice(doc.indexOf('### 1.6 Switchable rules'), doc.indexOf('Settings whose value turns their rule off'));
 const rows = sec.split('\n').filter((l) => /^\| `[^`]+`/.test(l)).map((l) => l.split('|').map((c) => c.trim()));
 const table = rows.map((c) => ({ id: c[1].match(/^`([^`]+)`/)[1], needs: c[3] === '—' ? [] : [...c[3].matchAll(/`([^`]+)`/g)].map((m) => m[1]) }));
-ok(`1 the table of §1.6 has the 35 switches of 0.1 (${table.length})`, table.length === 35);
+ok(`1 the table of §1.6 has the 19 switches of 0.1 (${table.length})`, table.length === 19);
 const sorted = (a) => [...a].sort().join();
 ok('1a rules.js declares exactly them', sorted(DECLS.map((d) => d.id)) === sorted(table.map((t) => t.id)));
 const needsDiff = table.filter((t) => { const d = DECLS.find((x) => x.id === t.id); return !d || [...d.needs].sort().join() !== [...t.needs].sort().join(); });
@@ -33,16 +33,16 @@ const closure = (id) => {   // what turning `id` off must turn off, from the tab
 const wrong = DECLS.filter((d) => { const r = resolve({ [d.id]: false }), want = closure(d.id); return DECLS.some((x) => r[x.id] !== !want.has(x.id)); });
 ok('2a resolve turns off exactly the rules that need the one turned off, transitively' + (wrong.length ? ': ' + wrong.map((d) => d.id).join(', ') : ''), wrong.length === 0);
 const p = resolve({ 'SIZE.1': false });
-ok('2b SIZE.1 off takes SIZE.2, SIZE.8, P-REST (through SIZE.2), DRAG.A3.narrow, DRAG.A5 and RESIZE.2 with it (' + dependents('SIZE.1').join(',') + ')',
-  ['SIZE.2', 'SIZE.8', 'P-REST', 'DRAG.A3.narrow', 'DRAG.A5', 'RESIZE.2'].every((id) => !p[id]) && p['P-ASIDE'] && p['GAP.5.1']);
-const q = resolve({ 'GAP.5.1': false, 'GAP.5.2': false });
-ok('2c GAP.5.1 off takes GAP.8, GAP.5.2 off takes GAP.9, as the model\'s switches do', !q['GAP.8'] && !q['GAP.9'] && q['GAP.5.3']);
-const t = resolve({ 'GAP.8': true, 'GAP.5.1': false });
-ok('2d a rule asked on whose needs are off is off', t['GAP.8'] === false);
+ok('2b SIZE.1 off takes SIZE.2, SIZE.8, P-REST (through SIZE.2) and DRAG.A5 with it (' + dependents('SIZE.1').join(',') + ')',
+  ['SIZE.2', 'SIZE.8', 'P-REST', 'DRAG.A5'].every((id) => !p[id]) && p['P-ASIDE'] && p['P-SINK']);
+const t = resolve({ 'P-REST': true, 'P-ASIDE': false });
+ok('2d a rule asked on whose needs are off is off', t['P-REST'] === false);
+const core = ['GAP.5.1', 'GAP.5.2', 'GAP.5.3', 'GAP.8', 'GAP.9', 'P-UP', 'DRAG.A3.narrow', 'DRAG.B1', 'DRAG.B2.keep', 'DRAG.B3', 'DRAG.B5', 'RESIZE.2', 'RESIZE.3', 'AREA.3', 'AREA.6', 'AREA.7'];
+ok('2c the sixteen rules made core on 2026-11-21 are no switches: each refused', core.every((id) => { try { resolve({ [id]: false }); return false; } catch { return true; } }));
 let threw = false; try { resolve({ 'GAP.2': false }); } catch { threw = true; }
 let threw2 = false; try { on(DEFAULT, 'SIZE.9'); } catch { threw2 = true; }
 ok('2e a core rule or a typo is no switch: refused, never read as on', threw && threw2);
-ok('2f on() and variant() read a rule\'s value', on(p, 'SIZE.1') === false && on(p, 'GAP.5.1') === true && variant(p, 'SIZE.1') === false);
+ok('2f on() and variant() read a rule\'s value', on(p, 'SIZE.1') === false && on(p, 'P-ASIDE') === true && variant(p, 'SIZE.1') === false);
 
 /* ── 3. what each fallback relies on ── */
 const broken = DECLS.flatMap((d) => d.relies.filter((r) => !resolve({ [d.id]: false })[r]).map((r) => d.id + '→' + r));

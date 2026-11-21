@@ -117,11 +117,7 @@ export function transitionCases(make = createModel) {
     run('a real height: A grows from 1 row to 3, B under it follows with its gap to row 4 (FOLLOW, no move)', m,
       T(m, { A: { h: 3 }, B: { y: 4 } }, { start: { A: 0, B: 4 } }),
       (m) => m.rows(), { A: 0, B: 4 }); }
-  { const m = make().open([blk('Y', 1, 1, 3), blk('X', 1, 1, 6)]);
-    run('P-UP off: X carried up into Y, which is pushed down under it instead (the fallback of §1.6): X passes Y, Y stays and moves', m,
-      T(m, { X: { y: 3 }, Y: { y: 4 } }, { steps: [[['Y'], 1], [['X'], -3]], carried: 'X', fallback: 'P-UP', pass: [['X', 1]] }),
-      (m) => m.rows(), { X: 3, Y: 4 }); }
-  { const m = make({ gap8: false }).open([blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)]); m.show('a0', 2); m.show('a3', 1);
+  { const m = make().open([blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)]); m.show('a0', 2); m.show('a3', 1);
     // found by the laws (seed 11225, GEN_VERSION 6): a1 carried up pushes a0 and a2 up (P-UP) while a3 widens into column 1 by itself; a3
     // comes in there at its reference, over a2, and its temporary row pushes a2 on the screen, a row under where SETTLE put it, and a2
     // pushes a1 in column 3: both stand canonically where SETTLE put them, and there when the temporary rows end (§2.1)
@@ -145,13 +141,7 @@ export function transitionCases(make = createModel) {
         T(m, { X: { y: 0 }, N: { y: 1 } }, { steps: st, carried: 'X', swap: ['X', 'N'], pass: [['X', 1]] }),
         (m) => [m.rows(), m.rows('canonical')], [{ D: 9, N: 1, X: 0 }, { D: 9, N: 1, X: 0 }]);
     } }
-  { const m = make({ gap52: false }).open([blk('N', 0, 0, 0), blk('X', 0, 0, 3), blk('A', 0, 1, 5)]); m.insert(blk('B', 0, 0, 4));
-    // GAP.5.2 off: X passes N while A, the anchor under X's gap, is narrowed off column 0 in the same RELINK; the pass is made after A's
-    // departure, so A's stack losing its rows does not take what the pass keeps: B stays at 4, as with the narrowing first
-    run('GAP.5.2 off: a pass and the anchor under it leaving in one RELINK keep what the pass keeps', m,
-      T(m, { X: { y: 0 }, N: { y: 1 }, A: { c0: 1 } }, { steps: [[['X'], -2], [['X'], -1], [['N'], 1]], carried: 'X', swap: ['X', 'N'], pass: [['X', 0]], leave: [['A', 0, 'narrow']] }),
-      (m) => m.rows(), { A: 5, B: 4, N: 1, X: 0 }); }
-  { const m = make({ gap8: false }).open([blk('a1', 5, 5, 5), blk('a3', 5, 6, 16, 3), blk('a4', 6, 7, 11, 2)]); m.show('a1', 3); m.show('a4', 3);
+  { const m = make().open([blk('a1', 5, 5, 5), blk('a3', 5, 6, 16, 3), blk('a4', 6, 7, 11, 2)]); m.show('a1', 3); m.show('a4', 3);
     // seed 503898: a4 (three temporary rows) carried down and one column left, pushing a3; in column 5 it comes in under a1's temporary
     // rows, while column 6 holds it canonically at 16: the rows under it there keep a3 at its canonical row, so a3 lands where SETTLE put it
     run('a block put under another block\'s temporary rows, held by its other column: the block it pushed lands where SETTLE put it', m,
@@ -266,14 +256,6 @@ export function transitionCases(make = createModel) {
     run(`a move cut into steps beside a departure gives one step's owners: ${steps.length} step${steps.length > 1 ? 's' : ''}`, m,
       T(m, { X: { y: 10 }, P: { c0: 2, c1: 2 } }, { steps, carried: 'X', leave: [['P', 0, 'narrow']], enter: [['P', 2, 'self']] }),
       (m) => { const r = [m.stack('X', 0), m.stack('X', 1)]; m.width('X', 1, 1); return [...r, m.rows()]; }, ['Q | Q2 |', 'H | H4 |', { H: 5, P: 0, Q: 4, X: 10 }]);
-  }
-  for (const uy of [6, 7]) {
-    const m = make({ gap9: false }).open([blk('P', 0, 0, 0, 2), blk('Q', 0, 0, 4, 2), blk('U', 1, 1, uy), blk('X', 0, 1, 10)]);
-    // GAP.9 off: P narrowed off column 0 takes its rows under it and Q rises to 0; X carried up 3, pushing U in column 1 or not: column 0
-    // sees the same move either way and gives Q the same rows
-    run(`GAP.9 off: a move cut by a push in another column gives the same owners in this one: U at ${uy}`, m,
-      T(m, { X: { y: 7 }, U: { y: 6 }, P: { c0: 2, c1: 2 } }, { steps: uy === 6 ? [[['X'], -3]] : [[['X'], -2], [['X', 'U'], -1]], carried: 'X', leave: [['P', 0, 'narrow']], enter: [['P', 2, 'self']] }),
-      (m) => [m.rows(), m.stack('X', 0)], [{ P: 0, Q: 0, U: 6, X: 7 }, 'Q | Q1 |']);
   }
   // the same review: each of the following pins a line no random law reached (a mutation of it survived every other test)
   { const m = make().open([blk('A', 0, 0, 1, 2), blk('X', 0, 2, 4), blk('N', 1, 2, 7)]); m.show('A', 3);
@@ -431,8 +413,7 @@ export function declarationCases() {
     ['a step of a block after does not hold is refused', chk(base, { after: { b3: base.b3, a: base.a }, steps: [[['b1'], 1]], leave: [], enter: [], pass: [], carried: null }), 'which after does not hold'],
     ['two blocks on one cell in after are refused', D({ a: { ...base.a, c0: 3, c1: 3, y: 4 } }, { leave: [['a', 5, 'narrow']], enter: [['a', 3, 'self']] }), 'overlap in after'],
     ['a push declared after the move that makes it, which replayed carries one block past another, is refused', D({ b3: { ...base.b3, y: 7 }, b1: { ...base.b1, y: 8 } }, { steps: [[['b3'], 7], [['b1'], 4]], carried: 'b3' }), 'carries b3 past b1'],
-    ['a pass by the carried block outside a swap with no fallback declared is refused', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', pass: [['b3', 3]] }), 'only a block of a swap'],
-    ['the same pass under the fallback of P-UP off is accepted', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', fallback: 'P-UP', pass: [['b3', 3]] }), null],
+    ['a pass by the carried block outside a swap is refused', D({ b3: { ...base.b3, y: 5 } }, { steps: [[['b3'], 5]], carried: 'b3', pass: [['b3', 3]] }), 'only a block of a swap'],
     ['an undo carrying a block back past another needs no pass: it leaves its columns and comes back into them', chk({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 4, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 7, yc: 7, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 0, h: 1, e: 0 } }, steps: [], carried: 'A', canonical: true, leave: [['A', 1, 'away']], enter: [['A', 1, 'back']], pass: [] }), null],
     ['a deleted block made again by an undo coming in where it is put is refused', chk({ U: { c0: 1, c1: 1, y: 0, h: 1, e: 2 } }, { after: { U: { c0: 1, c1: 1, y: 0, h: 1, e: 2 }, X: { c0: 1, c1: 2, y: 4, yc: 2, h: 1, e: 0 } }, steps: [], carried: 'X', canonical: true, leave: [], enter: [['X', 1, 'put'], ['X', 2, 'put']], pass: [] }), 'comes back by its canonical row'],
     ['a height changed in columns far away does not turn off the check of the steps here', chk({ A: { c0: 1, c1: 1, y: 0, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 4, h: 1, e: 0 }, Z: { c0: 20, c1: 20, y: 0, h: 1, e: 0 } }, { after: { A: { c0: 1, c1: 1, y: 7, h: 1, e: 0 }, B: { c0: 1, c1: 1, y: 8, h: 1, e: 0 }, Z: { c0: 20, c1: 20, y: 0, h: 2, e: 0 } }, steps: [[['A'], 7], [['B'], 4]], carried: 'A', leave: [], enter: [], pass: [] }), 'carries A past B'],
@@ -451,14 +432,14 @@ export function declarationCases() {
     ['a swap whose carried block base does not hold is refused, not thrown', D({ x9: { c0: 3, c1: 3, y: 9, h: 1, e: 0 } }, { carried: 'x9', swap: ['x9', 'b1'], enter: [['x9', 3, 'put']] }), 'does not hold the carried block'],
     ['a step of a block after creates is refused, not thrown', D({ x9: { c0: 3, c1: 3, y: 9, h: 1, e: 0 } }, { steps: [[['x9'], 1]], enter: [['x9', 3, 'put']] }), 'not in base'],
     ['a block with no column in after is refused', D({ b1: { ...base.b1, c0: 4, c1: 3 } }, { leave: [['b1', 3, 'narrow']] }), 'has no column in after'],
-    // the independent review of f66efb3: an undo's carry back declared with passes and a fallback ran the passes first and lost its
+    // the independent review of f66efb3: an undo's carry back declared with passes ran the passes first and lost its
     // canonical row
     (() => { const f = (c0, c1, y, e = 0) => ({ c0, c1, y, h: 1, e }), b0 = { X: f(1, 2, 0), U: f(1, 1, 4, 2), V: f(2, 2, 4) };
-      return ['an undo\'s carry back declared to pass is refused, a fallback or not', chk(b0, { after: { X: { ...f(1, 2, 4), yc: 2 }, U: f(1, 1, 0, 2), V: f(2, 2, 0) }, steps: [], leave: [['X', 1, 'away'], ['X', 2, 'away']], enter: [['X', 1, 'back'], ['X', 2, 'back']], pass: [['X', 1], ['X', 2]], carried: 'X', canonical: true, fallback: 'P-UP' }), 'passes nothing']; })(),
+      return ['an undo\'s carry back declared to pass is refused', chk(b0, { after: { X: { ...f(1, 2, 4), yc: 2 }, U: f(1, 1, 0, 2), V: f(2, 2, 0) }, steps: [], leave: [['X', 1, 'away'], ['X', 2, 'away']], enter: [['X', 1, 'back'], ['X', 2, 'back']], pass: [['X', 1], ['X', 2]], carried: 'X', canonical: true }), 'passes nothing']; })(),
     // found while answering it: a pass declared in one column let the replayed steps put the passer on another block in another column; a
     // block passes only the blocks it changes its order with there (GAP.5 rule 2's pass, the steps one per common part)
     (() => { const b0 = { a1: { c0: 5, c1: 5, y: 1, h: 3, e: 1, area: true }, a2: { c0: 3, c1: 4, y: 7, h: 3, e: 0 }, a3: { c0: 3, c1: 5, y: 12, h: 3, e: 0 } };
-      return ['a pass in one column does not let the steps put the passer on a block of another', chk(b0, { after: { a1: { ...b0.a1, y: 13 }, a2: b0.a2, a3: { ...b0.a3, y: 18 } }, steps: [[['a1'], 12], [['a3'], 6]], leave: [], enter: [], pass: [['a1', 4]], carried: 'a1', fallback: 'DRAG.B2.keep' }), 'puts a1 on a3']; })(),
+      return ['a pass in one column does not let the steps put the passer on a block of another', chk(b0, { after: { a1: { ...b0.a1, y: 13 }, a2: b0.a2, a3: { ...b0.a3, y: 18 } }, steps: [[['a1'], 12], [['a3'], 6]], leave: [], enter: [], pass: [['a1', 4]], carried: 'a1' }), 'puts a1 on a3']; })(),
     // the independent review of 321c664 found it through step 2a's primitives: B5, one column wide, pressed aside out of the only column it
     // had, keeps no column, so no block passes it there; the replay took its empty range for a column it shares with B3, carried down past
     // its old row by P-DOWN
@@ -485,7 +466,7 @@ export function landingCases(make = createModel) {
     out.push(['the same swap with S widened into column 2 on the model: every law holds', runCase({ opts: {}, blocks, ins, temps, near, far: null }, make), false]); }
   // seed 11225: a block that came in by itself pushes, by its temporary row, a block through another: excused, since without that entry
   // the moved blocks stand where SETTLE put them
-  { const blocks = [blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)], temps = [['a0', 2], ['a3', 1]], opts = { gap8: false };
+  { const blocks = [blk('a0', 4, 6, 11, 3), blk('a1', 3, 6, 18, 3), blk('a2', 0, 3, 10, 3), blk('a3', 2, 5, 4, 3)], temps = [['a0', 2], ['a3', 1]], opts = {};
     const a = frames(build(opts, blocks, [], temps, [], make)); a.a0 = { ...a.a0, y: 8 }; a.a1 = { ...a.a1, y: 13 }; a.a2 = { ...a.a2, y: 10 }; a.a3 = { ...a.a3, c0: 1 };
     const near = { after: a, steps: [[['a1'], -4], [['a1', 'a0'], -3], [['a1', 'a0', 'a2'], -1]], carried: 'a1', leave: [], enter: [['a3', 1, 'self']], pass: [] };
     out.push(['seed 11225: a push by the temporary row of a block that came in by itself, through a block it pushes, is excused', runCase({ opts, blocks, ins: [], temps, near, far: null }, make), false]); }
