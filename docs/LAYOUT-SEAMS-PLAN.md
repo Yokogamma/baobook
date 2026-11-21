@@ -21,8 +21,8 @@ Step 3 (`drag.js`, `ops.js`) builds every action and its undo on `settleTree`, s
 |---|---|---|
 | Q1 | The order of the PRs (§3) | as §3; the reviewer has no objection |
 | Q2 | The switches made core, their branches removed (§5) | the list of §5 |
-| Q3 | `P-UP`: core (а), or kept switchable on `.dev` (б), G18 being «revisited in practice» | (а) |
-| Q4 | A carry folds the temporary heights at its start: (а) yes, G9, G10, G13, G14 lose their subject, at the cost of a jump when a carry starts; (б) no, as built | (б) for 0.1, asked again on the slice |
+| Q3 | `P-UP`: core (а), or kept switchable on `.dev` (б) | **decided by the owner, 2026-11-21: (а)**, `P-UP` is core and its fallback goes. Whether a carry from other columns should push up too (G17, G18) stays left to practice |
+| Q4 | A carry folds the temporary heights at its start: (а) yes, G9, G10, G13, G14 lose their subject, at the cost of a jump when a carry starts; (б) no, as built | **decided by the owner, 2026-11-21: (б)**, a carry runs on what is shown, as built |
 | Q5 | The narrow slice on `.dev` before the rest of steps 3–5 (§8) | yes |
 | Q6 | The process rules (§9) | as §9 |
 | Q7 | What an undo after later edits means (§7): (A) the carry back, as built; (B) the layout before the action, reconciled with the content as it is now; (C) «the action never happened», with a journal of the edits between | decided on the experiment's report; (C) not recommended |
@@ -34,7 +34,7 @@ Each is one PR into `main`, reviewed, merged on the owner's word; one that chang
 | PR | What | Depends on |
 |---|---|---|
 | S0 | This plan | |
-| S1 | The branches of the switches made core removed (§5), under the old-engine comparison (§4.4), whose harness and pinned copy come with this PR | Q2, Q3 |
+| S1 | The branches of the switches made core removed (§5), under the old-engine comparison (§4.4), whose harness and pinned copy come with this PR | Q2 |
 | S2 | `validate`, the sequence generator, the probes, the laws, the quotas (§4) | |
 | S3 | The frame inside the solve, the one clamp, the input contract of the composite changes (§6), under §4.4 | S2 |
 | S4 | The undo experiment in `tests/lab` and its report to the owner (§7); nothing in `public/` | S2; beside S3 |
@@ -100,7 +100,7 @@ Templates: change → temporary height → another gesture → undo; delete → 
 
 `validate` in full and the probes run in tests and, in the dev look, at the end of an action; never on a pointer move. The budgets of `LAYOUT-ENGINE-PLAN.md` §4.5 are measured again before step 3 (one pointer move under 8 ms), on the generator's note of 120 blocks.
 
-## 5. The switches (S1; the owner's Q2, Q3)
+## 5. The switches (S1; the owner's Q2; `P-UP` decided, Q3)
 
 A switch made core leaves `DECLS`, §1.6 of `LAYOUT-RULES.md`, the «two forms» of its tests and its branch in the engine and in the lab model. Hiding a switch and keeping its branch is no simplification.
 
@@ -109,7 +109,7 @@ A switch made core leaves `DECLS`, §1.6 of `LAYOUT-RULES.md`, the «two forms»
 | `GAP.5.1`, `GAP.8` | the branches of `gap.js` `moveIn` and the model's |
 | `GAP.5.2`, `GAP.9` | the branches of `leave`, `release` (G8 core) |
 | `GAP.5.3` | the branch of `enter` (S8 core; «r10.2» loses its cause) |
-| `DRAG.B2.keep`, `P-UP` (Q3) | `Transition.fallback`, the passes outside a swap, the branch `under` of phases 5–6, `FALLBACKS` of `transition.js` |
+| `DRAG.B2.keep`, `P-UP` (the owner's Q3) | `Transition.fallback`, the passes outside a swap, the branch `under` of phases 5–6, `FALLBACKS` of `transition.js` |
 | `DRAG.A3.narrow` | the branch of `atTarget` and of `layout.js` `clamped` |
 | `DRAG.B5`, `DRAG.B3` | the refusal branch of phase 4, the branch of `changes.js` |
 
