@@ -1,6 +1,6 @@
-# The seams before step 3 (plan, proposed)
+# The seams before step 3 (plan)
 
-Status: **proposed**, not approved. Written on 2026-11-13 against `main` at `0d94f29` (step 2 of `LAYOUT-ENGINE-PLAN.md` merged: #137, #144, #148, #152, #156). Everything here is a proposal unless a line names the owner's decision. The owner's decisions of 2026-11-21 are in §2: the order, the switches made core, `P-UP`, a carry over temporary heights, the slice, the process, and running the undo experiment. The designs of §4, §6, §7 and §8 are proposed.
+Status: **approved by the owner on 2026-11-21**, after three rounds of the independent review (PR #160); not built yet. Written on 2026-11-13 against `main` at `0d94f29` (step 2 of `LAYOUT-ENGINE-PLAN.md` merged: #137, #144, #148, #152, #156). The owner's decisions of 2026-11-21 are in §2; the one choice left open is Q7, what an undo after later edits means, made on the experiment's report (§7).
 
 ## 1. Why
 
@@ -217,3 +217,4 @@ Its modules (`measure.js`, `bridge.js`, `drag.js`, `ops.js`) are the first versi
 - 2026-11-21, the independent review of the plan (PR #160 at `c2404df`): 1 high, 3 medium, 1 low; the owner's decisions of §2 untouched, the earlier finding on the undo's meaning closed. High: §8 said nothing is written on `failed`, which would lose typed text; the content is saved by the ordinary path and only the failed places are not written. Medium: `tx` through every path that measures or remakes a box, text blocks included (the loss confirmed on the base; §6.1's table); an own temporary row is no room for the children under the area's handle (§6.3); `validate` keeps the check of a child container's width (§4.1). Low: accepted transitions and negative attempts counted apart, with a least count of the reference's real comparisons (§4.5). Also taken in: the whole engine copied for §4.4 and compared in CI; INV-6 as a law (L15); (B′) stated in full, (A)'s domain, and the three kinds of bad outcome told apart (§7); §10 narrowed.
 - 2026-11-21, the second round on the plan (`71b04de`): the five findings closed; one new medium, the budget of §6.3 had no branch for a collapsed area, whose handle a budget of 0 would refuse (run on the base); the two branches of `roomOf` are kept. No finding left that blocks the plan; Q7's choice stays the owner's, after the experiment.
 - 2026-11-21, the third round (`3bd0ebe`): the independent reviewer confirmed §6.3 and every finding closed; no new finding; the plan is ready to be built once the owner approves it.
+- 2026-11-21: the owner approved the plan.
