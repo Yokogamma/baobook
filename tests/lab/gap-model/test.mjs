@@ -308,7 +308,7 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   m.step([[['X'], -1]], { X: [1, 3] });
   eq([m.rows().X, m.rows('canonical').X, m.stack('L', 3), m.rows('canonical').L], [5, 3, 'S | S2 [X:S1] S16 |', 20], 'r7.1: moved and widened in one RELINK: entered at its reference 3, L keeps 20');
   eq(m.show('A', 0).rows().L, 20, 'r7.1: A folds: L at 20, no extra row');
-  // (2) a grown standing block carried in both states of GAP.5.1: the same lengths, L does not move
+  // (2) a grown standing block carried: rule 1 keeps the lengths, L does not move
   {
     const g = createModel().open([blk('A', 1, 1, 0), blk('L', 1, 1, 10)]).insert(blk('X', 1, 1, 2)).height('X', 3);
     eq([g.rows().L, g.stack('L', 1)], [12, 'A | A1 [X:A1] A7 |'], `r7.2:: X grew to 3, L pushed to 12`);
@@ -336,14 +336,14 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([z.stack('Z', 3), z.stack('A', 3)], ['top | _2 |', 'Z | Z2 |'], 'r8.3: arrivals top to bottom: Z first, then A under it');
   eq(z.remove('Z').width('A', 3, 3).rows().A, 2, 'r8.3: Z deleted and A narrowed to column 3: A at 2, as the order of arrival gives');
 }
-// ---- round 9: the oracle's one RELINK over several steps, fit at its end, and what the switch's owners change later
+// ---- round 9: the oracle's one RELINK over several steps, fit at its end
 {
   const m = createModel().open([blk('X', 1, 1, 3)]).step([[['X'], 1], [['X'], 1]]);
   eq(m.rows().X, 5, 'r9.1: two steps in one RELINK, each measured at the rows it starts from: X at 5');
   const f = createModel().open([blk('A', 1, 1, 0), blk('X', 1, 1, 3), blk('S', 2, 2, 0), blk('L', 2, 2, 20)]).show('A', 8).step([[['L'], 1]], { X: [1, 2] });
   eq([f.rows().L, f.rows('canonical').L], [29, 21], 'r9.2: L moved down one while X widens over it at its canonical row: FOLLOW puts L lower than its target on the screen, and that is the result (rule 5)');
 }
-// ---- the final review: a carry that keeps some columns, the switches GAP.5.2 and GAP.5.3, a uniform shift of the columns
+// ---- the final review: a carry that keeps some columns, a block that leaves giving back (GAP.5.2) and one that comes between standing (GAP.5.3), a uniform shift of the columns
 {
   // a carry one column sideways keeps two columns: the one it leaves it leaves as a narrowing does (the owner, 2026-11-10, M9, refining
   // the final review's G2 reading), so its rows stay there and L stays when X is deleted
