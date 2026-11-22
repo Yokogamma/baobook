@@ -6,18 +6,16 @@ import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check, remove, stackAt, showStack, relink } from '../public/layout/gap.js';
 import { DEFAULT, resolve } from '../public/layout/rules.js';
 import { readingOrder, extent } from '../public/layout/geometry.js';
+import { validateContainer } from '../public/layout/validate.js';
+import { KINDS } from '../public/layout/kinds.js';
 import { set, text, chars, ctxOf, sheet, eq, tally } from './lib/primcase.mjs';
 
 const t = tally(), ok = t.ok;
 const rows = (L) => Object.fromEntries([...L.boxes].map(([k, b]) => [k, b.y]));
 const places = (L) => Object.fromEntries([...L.boxes].map(([k, b]) => [k, [b.col, b.y, b.w, b.h]]));
 const nb = (m) => m && { id: m.id, row: m.row, side: m.side };   // the neighbour in the memory, without the target it was chosen at
-/** A result's layout is sound: its stacks pass gap.js's check, every card inside the container's columns, the order the reading order. */
-function sound(r) {
-  if (!r.ok) return false;
-  const L = r.layout, inside = [...L.boxes.values()].every((b) => b.col >= 0 && extent(b).c1 <= L.cols - 1 && b.y >= 0);
-  return check(L).length === 0 && inside && eq(L.order, readingOrder(L.boxes.values()));
-}
+/** A result's layout is sound: the engine's check of one container (validate.js) finds nothing. */
+const sound = (r) => r.ok && validateContainer(r.layout, { kinds: KINDS }).length === 0;
 const carry = (id, col, y, w, away = false) => ({ type: 'carry', box: null, id, at: { col, y, frow: y, w }, away });
 const create = (id, col, y, w, o = {}) => ({ type: 'create', box: null, id, kind: 'text', at: { col, y, frow: y, w }, away: true, ...o });
 const ctx = ctxOf();
