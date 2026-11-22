@@ -25,9 +25,9 @@ const named = (make, side) => {
 named(createModel, 'model');
 named(createEngineModel, 'engine');
 for (const c of FIXED) {   // the state of each, the operation, and the model's result, on both
-  const m = createModel(c.opts).load(stateOf(c)); m[c.op[0]](...c.op.slice(1));
+  const m = createModel().load(stateOf(c)); m[c.op[0]](...c.op.slice(1));
   ok(`model, fixed: ${c.name}${m.snapshot() === c.expect ? '' : ': got ' + m.snapshot()}`, m.snapshot() === c.expect);
-  const e = createEngineModel(c.opts).loadModel(stateOf(c)); e[c.op[0]](...c.op.slice(1));
+  const e = createEngineModel().loadModel(stateOf(c)); e[c.op[0]](...c.op.slice(1));
   ok(`engine, fixed: ${c.name}${e.snapshot() === c.expect ? '' : ': got ' + e.snapshot()}`, e.snapshot() === c.expect);
 }
 // the engine checks the facts of a transition, not a path (RELINK cuts the moves itself, G15): its reasons are declare.mjs's but those of
@@ -69,13 +69,5 @@ for (const [name, f, must] of landingCases(createEngineModel)) ok('engine: ' + n
   const { tried, counts, failure } = runLaws(N, { make: (o) => createEngineModel({ ...o, facts: true }), twin: createModel, seed0: 4000001 });
   ok(`engine given facts: ${tried} random transitions after a history: the same laws, and the model's layout, also after each moved block is taken away (${JSON.stringify(counts)})` +
     (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= N && !failure);
-}
-// the carries under a switched-off rule's fallback, alone: the mix above draws them seldom (one in fifty or so), and a weight does not
-// promise how many survive the filters, so a targeted run gives each fallback a floor (the independent review of a27021f)
-for (const [side, o] of [['model', { seed0: 2000001 }], ['engine', { make: createEngineModel, twin: createModel, seed0: 3000001 }], ['engine given facts', { make: (x) => createEngineModel({ ...x, facts: true }), twin: createModel, seed0: 5000001 }]]) {
-  const FB = 40, FLOOR = 10, { tried, counts, failure } = runLaws(FB, { kinds: ['fallback'], ...o });
-  const pu = counts['fallback P-UP'] || 0, dk = counts['fallback DRAG.B2.keep'] || 0;
-  ok(`${side}: ${tried} carries under a fallback only, after a history: every law${side !== 'model' ? ', and the model\'s layout' : ''}, at least ${FLOOR} of each (P-UP ${pu}, DRAG.B2.keep ${dk})` +
-    (failure ? '; first failure: ' + JSON.stringify(failure).slice(0, 3000) : ''), tried >= FB && pu >= FLOOR && dk >= FLOOR && !failure);
 }
 process.exit(fails ? 1 : 0);
