@@ -35,7 +35,7 @@ Each is one PR into `main`, reviewed, merged on the owner's word; one that chang
 |---|---|---|
 | S0 | This plan | |
 | S1 | The branches of the switches made core removed (§5), under the old-engine comparison (§4.4), whose harness and pinned copy come with this PR | |
-| S2 | `validate`, the sequence generator, the probes, the laws, the quotas (§4) | |
+| S2 | `validate`, the sequence generator, the probes, the laws, the quotas (§4), in two PRs: S2a, `validate` and the sequences with the laws one engine can judge by itself; S2b, the references wired into the sequences (L1 the lab model on the transitions SETTLE declares and after each probe, L2 the reference SETTLE with its domain widened and counted, L3 the frame's formula written apart) | |
 | S3 | The frame inside the solve, the one clamp, the input contract of the composite changes (§6), under §4.4 | S2 |
 | S4 | The undo experiment in `tests/lab` and its report to the owner (§7); nothing in `public/` | S2; beside S3 |
 | S5 | The narrow slice (§8), in its own PRs | S3; Q7's choice before its undo grows past the exact path |
@@ -100,6 +100,18 @@ Two counters with their own denominators (the numbers are a start); the test fai
 - **Comparisons really made** by a reference that has a domain (L2): at least 300 in each part of the domain per 10 000 accepted transitions.
 
 Templates: change → temporary height → another gesture → undo; delete → a linked note renamed → undo; an area's handle → typing in a child → undo; collapse an area → carry over it → open it; enter → leave → undo twice; a signature that changes and returns (§7's case).
+
+### 4.5a What S2a built
+
+- `public/layout/validate.js`: `validate(tree, ctx)` as §4.1 has it, and `validateContainer(layout, ctx)` for the tests of SETTLE in one container, where an area is a block with no children's container. An area's frame is an equality canonically; as shown it is «at least what its shown children give», since nothing keeps an area's own temporary rows apart until S3's `tx`. The four `sound()` of the tests call it. `tests/layoutvalidate.mjs`: what the engine makes is valid, and 24 ways of breaking a tree are each caught by name, the child container in other columns than its area among them.
+- `tests/lib/layout/seq.mjs`, the generator, with an executor that runs each command: the comparison of two engines (`pair.mjs`) and the laws (`laws.mjs`) draw the same sequences. It draws §4.2's commands but two that are the bridge's and come with S5: an outside update that drops the history, and the exact undo (a snapshot put back, which the engine has no call for).
+- `tests/lib/layout/laws.mjs`, `tests/layoutseq.mjs`: after every command, an answer and never a throw; a lawful command never `failed`; L6; the answer valid, and each container of its `start`; L4 (again, and the tree kept in another order); L5; L7; L9; L13 on the first command, 40 rows lower against 80; the probes (delete, narrow, end the temporary heights, and two steps), each result valid; L14 reported. The laws are shown to fail: an engine that moves a block with no stack, changes its input, answers otherwise when asked again, or accepts what nothing may do is caught by the law meant for it.
+- Left to S2b: L1 to L3. Left where they are: L8 in `tests/layoutgestures.mjs`, L10 in `tests/layoutprim-props.mjs`, whose conditions (which primitives moved a block) the sequences do not see. L11 and L15 are the bridge's, with S5.
+- **The quotas as built**, floors set under what the generator draws (shares of the accepted transitions that changed the tree): every type of change 2.5 %; `carry`, `create`, `width`, `size`, `remove` in an area 1 % each; an undo's change 10 %, a fifth of the carries back after typing; under a temporary height 15 %; a hold or Shift 5 % and a real swap seen; a width changed 5 %. Negative attempts apart: each kind at least three times, none accepted, a handle refused at least once. §4.5's first numbers for an undo (20 %) and for both places of every type (3 %) are not reached by one generator that also keeps gestures whole.
+- **Found by the laws**, counted and reported by the test, for S3 and the owner:
+  - a gesture's `start` is no tree `validate` accepts after a swap inside an area: its child container is the swap's and its sheet the gesture's start, so the area's frame there is not round those children. The next move settles the frame from them, so no wrong layout comes of it; §6.2 is where one tree of a gesture's start is decided.
+  - L7: a deletion far away widened a text the command before had set elastic. Phase 9 rests every elastic block of a container at every change, and `RESTPASSES` had ended before that text came to its rest width. Rare (once in about 9 000 commands). Whether a container must be at its rest widths before the next action is a question for the owner (proposed: decided with S3).
+  - L14: of the answers read again and opened, about 2.5 % open to other places (the opening normalises what an action left, as today's convergence test allows).
 
 ### 4.6 Cost
 
@@ -222,3 +234,4 @@ Its modules (`measure.js`, `bridge.js`, `drag.js`, `ops.js`) are the first versi
 - 2026-11-21: the owner approved the plan.
 - 2026-11-22: S1 built (the switches made core, the pinned copy and the comparison), for review.
 - 2026-11-22, the independent review of S1 (`99c2520`): no regression of the engine found; 2 medium, 1 low, all in the comparison and the descriptions. The written fields were not compared (`diff` given a tree for a `Map` threw on both sides, and the errors compared equal): the comparison builds the stored fields as the bridge keeps them, and a patch that cannot be computed fails the run. A field written as removed read as a field not written: patches are compared with a marker for it. Each has a negative control in `tests/layoutsame.mjs`. The descriptions of the model's README, `shapes.js` and the model's tests brought to the contract. Taken from its notes on the generator: code blocks, a deleted block made again by an undo, own temporary rows through `show`, targets past the right edge with a named case, headers that wrap, a run under `SIZE.1` off. Found while answering: all five fixed cases of the model had been removed where two were meant; three are back.
+- 2026-11-22: S1 merged by #161 (build 2026112201 on `.dev`). S2a built, for review.

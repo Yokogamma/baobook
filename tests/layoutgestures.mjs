@@ -17,6 +17,8 @@ import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check, resize, follow } from '../public/layout/gap.js';
 import { DECLS, resolve, DEFAULT, on } from '../public/layout/rules.js';
 import { readingOrder, extent, range, sharesCol } from '../public/layout/geometry.js';
+import { validateContainer } from '../public/layout/validate.js';
+import { KINDS } from '../public/layout/kinds.js';
 import { set, text, area, chars, ctxOf, sheet } from './lib/primcase.mjs';
 
 let seed = +process.argv[2] || 7; const seed0 = seed;
@@ -53,13 +55,7 @@ const snap = (L) => [...L.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h
 // geometry only; the independent review of 07d2a7f)
 const memoryOf = (b) => JSON.stringify([b.col, b.y, b.w, b.h, b.t ?? 0, b.yc ?? b.y, b.above || []]);
 const same = (A, B) => A.boxes.size === B.boxes.size && [...A.boxes].every(([id, a]) => { const b = B.boxes.get(id); return b && memoryOf(a) === memoryOf(b); });
-function sound(L) {
-  const errs = check(L);
-  const ro = readingOrder(L.boxes.values());
-  if (!L.order.every((id, i) => id === ro[i])) errs.push('not in reading order');
-  for (const b of L.boxes.values()) { const r = range(b, L.cols); if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) errs.push(b.id + ' outside its container'); }
-  return errs;
-}
+const sound = (L) => validateContainer(L, { kinds: KINDS });   // one container: an area here is a block with no children's container
 /** Two blocks that both cover a column in `ref` and in `L`, one wholly above the other in `ref` and wholly under it in `L` (overlaps are
  *  left to the phases after), neither in `skip`: the order RELINK keeps in a column among the blocks that stay in it. In a column a block
  *  came into (pressed aside, narrowed), its row is RELINK's by the landing law, not the phases' prediction (LAYOUT-ENGINE-PLAN §5.2). */
