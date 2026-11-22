@@ -181,7 +181,7 @@ function sound(Tr, ctx) {
   let seed = +process.argv[2] || 5; const seed0 = seed;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   const N = +process.argv[3] || 300;
-  const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'GAP.5.1', 'GAP.5.2', 'GAP.9', 'P-ASIDE', 'P-UP', 'P-REST', 'P-SINK', 'DRAG.A3.narrow', 'DRAG.B5'];
+  const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'P-ASIDE', 'P-REST', 'P-SINK'];
   const stat = { notes: 0, changes: 0, refused: 0 }, by = {};
   let bad = 0, first = null;
   for (let k = 0; k < N; k++) {

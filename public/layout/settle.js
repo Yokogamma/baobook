@@ -2,11 +2,11 @@
 // this order every time; which of them a change runs is derived from its kind (changes.js), so this file holds no table of changes. Each
 // phase reads only what the phases before it produced; the blocks they moved, with the columns each block left and came into and why, make
 // the transition the next RELINK reads (GAP's inputs, `moved`): phase 8 against `base` (the layout after phase 1b), phase 9 (c) against the
-// layout after phase 8. A switched-off rule skips its phase or takes the branch its fallback names (§1.6, rules.js DECLS). The letting-
+// layout after phase 8. A switched-off rule skips its phase or takes the branch its fallback names (§1.6, rules.js DECLS); the rules made core have neither. The letting-
 // through wrapper (phase 3 and phase 11 with the runs again, §5.1b) is here too, around the pipeline, its pure pieces through.js's.
 
 import { on } from './rules.js';
-import { extent, isArea, hits, sharesCol, reaches, readingOrder, range, MAXCELL } from './geometry.js';
+import { extent, isArea, hits, sharesCol, readingOrder, range, MAXCELL } from './geometry.js';
 import { isElastic, rowsAt, restCells, canonicalCtx } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
@@ -45,7 +45,7 @@ class Refused extends Error {}
 
 /** Phase 1c: the moved block of a carry or a creation at its target, clamped to its container by DRAG.A3: its top at row 0 or lower (an
  *  area's frame at row 1), at the left edge every block stops; past the right edge a set width stops where it fits whole, and an elastic
- *  block narrows instead, down to min(natural width, MINC) and its kind's floor, then stops (`DRAG.A3.narrow`; off, every block stops). Its
+ *  block narrows instead, down to min(natural width, MINC) and its kind's floor, then stops (DRAG.A3's narrowing, core; with SIZE.1 off every block stops). Its
  *  width is the target's (DRAG.A5 keeps the width the carry started with; off, the rest width at every target), and it is measured at the
  *  width it gets. @returns {Box} */
 function atTarget(box, at, cols, ctx, fresh = false) {
@@ -54,7 +54,7 @@ function atTarget(box, at, cols, ctx, fresh = false) {
   let col = Math.max(0, at.col);
   const colMax = cols - w - pad(box);
   if (col > colMax) {
-    if (isElastic(box, ctx) && on(ctx.rules, 'DRAG.A3.narrow')) {
+    if (isElastic(box, ctx) && on(ctx.rules, 'SIZE.1')) {
       const floor = Math.max(ctx.kinds[box.kind].minCells(box, ctx.measure), Math.min(ctx.measure.natural(box.id), ctx.settings.MINC)) + 1;
       w = Math.max(floor, cols - col - pad(box));
     }
@@ -187,7 +187,7 @@ function wrapper(start, change, memory, ctx, hooks) {
         }
         /** @type {Transition} */
         const T = { base: r.layout, after: ws.L, ...transitionFacts(ws, r.layout, { swap: [g, th.id] }), carried: g, leave: cl.leave, enter: cl.enter, pass };
-        const rl = relink(T, ctx.rules);
+        const rl = relink(T);
         if (!rl.ok) throw new Failed('settle: RELINK refused the swap: ' + (rl.errors || []).join('; '));
         // the blocks met from the side are cleared at a swap (§6.D): the run again judges them anew
         s = rl.layout; mem = { ...r.memory, lastTarget: last, sides: new Map(), through: flipped(s, g, th, last, lineOf(r.layout, g, th)) };
@@ -240,7 +240,7 @@ function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
   const by = new Set([...w9.reshaped, ...rested, ...extra]);
   const cl = columnsOf(b9, w9.L, null, 'self', by);
   const T = { base: b9, after: w9.L, ...transitionFacts(w9, b9), carried: null, leave: cl.leave, enter: cl.enter, pass: [] };
-  const r = relink(T, rules);
+  const r = relink(T);
   if (!r.ok) throw new Failed('settle: RELINK refused phase 9 (c): ' + (r.errors || []).join('; '));
   for (const [id, l] of w9.steps) moves.set(id, [...(moves.get(id) || []), ...l]);
   return r.layout;
@@ -287,7 +287,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   if (change.type === 'remove' || (change.type === 'carry' && change.away && L.boxes.has(change.id))) {
     ran.push('1b');
     if (!L.boxes.has(change.id)) throw new Failed('settle: no block ' + change.id);
-    L = remove(L, change.id, rules);
+    L = remove(L, change.id);
   }
   // every RELINK of this SETTLE compares with base (GAP.5, INV-7 b); the sizes of 1a are in the working layout only, so that a width they
   // change is a column the block leaves or comes into in phase 8's transition, and a height a phase changed is no move (GAP's inputs)
@@ -354,7 +354,6 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
       const by = change.type === 'wall' ? (side === 'left' ? { c0: ws.L.cols, c1: ws.L.cols } : { c0: -1, c1: 0 }) : g;
       if (on(rules, 'P-ASIDE') && aside(ws, id, by, side)) continue;
       if (kind.noRoom === 'side') {
-        if (!on(rules, 'DRAG.B5')) throw new Refused('DRAG.B5 off: no room aside');
         (sideOf(id) === 'above' ? above : below).add(id);
       } else if (kind.noRoom === 'sink') {
         if (!on(rules, 'P-SINK')) throw new Refused('P-SINK off: no room aside');
@@ -364,22 +363,12 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
   }
 
   if (judged.met.size) trace('4');
-  // ---- 5. push up (P-UP); off, the blocks judged above are pushed down under the moved block instead, the transition declaring it
-  // the switched-off rule whose fallback may put a block on the moved block's other side, declared in phase 8 when one did: P-UP off pushes
-  // the blocks above under it (and a neighbour held there stays there, §5.1b), DRAG.B2.keep off judges by the middle alone
-  const fallback = kind.judge !== 'carry' ? null : !on(rules, 'P-UP') ? 'P-UP' : !on(rules, 'DRAG.B2.keep') ? 'DRAG.B2.keep' : null;
-  const under = new Set();
-  if (g != null && above.size) {
-    if (on(rules, 'P-UP')) { ran.push('5'); phase(ws); up(ws, above); }
-    else {   // only the blocks P-UP would have moved: judged above and reaching the moved block (LAYOUT-RULES §5.3 «Reaches»)
-      const X = ws.L.boxes.get(g);
-      for (const id of above) if (reaches(ws.L.boxes.get(id), X, 'above')) { below.add(id); under.add(id); }
-    }
-  }
+  // ---- 5. push up (P-UP)
+  if (g != null && above.size) { ran.push('5'); phase(ws); up(ws, above); }
 
   trace('5');
   // ---- 6. push down (P-DOWN); then, for a kind that sinks what has no room aside, P-SINK
-  if (g != null && below.size) { ran.push('6'); phase(ws); down(ws, below, under); }
+  if (g != null && below.size) { ran.push('6'); phase(ws); down(ws, below); }
   if (sinkers.length) { if (!ran.includes('6')) ran.push('6'); phase(ws); for (const id of sinkers) sinkAside(ws, id, { inside: change.type === 'wall' }); }
 
   trace('6');
@@ -413,12 +402,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     // itself and carries nothing (GAP's inputs)
     const T = { base, after: ws.L, ...transitionFacts(ws, base, { canonical: !!change.canonical }), carried: kind.moved === 'target' ? g : null, leave: cl.leave, enter: cl.enter, pass: [] };
     if (change.canonical) T.canonical = true;
-    // the carried block passes the blocks the fallback put on its other side; an undo's carry back keeps no place to pass from (GAP's inputs)
-    if (fallback && g != null && base.boxes.has(g) && !change.canonical) {
-      const pass = cl.reordered.filter(([, p, q]) => p === g || q === g).map(([c]) => [g, c]);
-      if (pass.length) { T.fallback = fallback; T.pass = pass; }
-    }
-    const r = relink(T, rules);
+    const r = relink(T);
     if (!r.ok) throw new Failed('settle: RELINK refused phase 8: ' + (r.errors || []).join('; '));
     L8 = r.layout;
     if (hooks.trace) hooks.trace('8', L8);

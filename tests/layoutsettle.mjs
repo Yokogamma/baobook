@@ -1,6 +1,6 @@
 // Node: SETTLE's pipeline (public/layout/settle.js; docs/LAYOUT-RULES.md §5.1–§5.5, LAYOUT-ENGINE-PLAN §5.2 step 2b): each change kind
 // through phases 1–10 on layouts written by hand, the phases each kind runs (§5.2's column «Phases»), the transitions handed to RELINK
-// taken, the fallbacks of switched-off rules, the refusals and their reasons, and every result with its stacks found again (gap.js check:
+// taken, the fallbacks of the switchable rules, the refusals and their reasons, and every result with its stacks found again (gap.js check:
 // INV-1, INV-2, INV-3) inside its container (INV-4) and in reading order (INV-5). The letting-through wrapper is step 2b's second part.
 import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check, remove, stackAt, showStack, relink } from '../public/layout/gap.js';
@@ -58,7 +58,7 @@ const ctx = ctxOf();
   ok('4a X taken away again: T back at 0, U at 2', z && eq(rows(z), { T: 0, U: 2 }), z && rows(z));
 }
 
-/* ── 5. met from the side: P-ASIDE; with no room aside, by its side (DRAG.B5), or refused with DRAG.B5 off ── */
+/* ── 5. met from the side: P-ASIDE; with no room aside, by its side (DRAG.B5) ── */
 {
   const L = sheet(20, [set('X', 0, 6, 4, 2), set('A', 5, 0, 4, 2)]);
   const r = settle(L, carry('X', 3, 0, 4, true), emptyMemory(), ctx);
@@ -66,17 +66,8 @@ const ctx = ctxOf();
   const E = sheet(10, [set('X', 0, 6, 4, 2), set('A', 5, 0, 5, 2)]);
   const e = settle(E, carry('X', 3, 0, 4, true), emptyMemory(), ctx);
   ok('5a A at the sheet\'s edge has no room aside: judged below, it goes down under X (DRAG.B5)', e.ok && eq(places(e.layout).A, [5, 2, 5, 2]) && sound(e), e.ok ? places(e.layout) : e);
-  const off = settle(E, carry('X', 3, 0, 4, true), emptyMemory(), ctxOf({}, resolve({ 'DRAG.B5': false })));
-  ok('5b with DRAG.B5 off the move is refused', !off.ok && off.why === 'refused', off);
   const noAside = settle(L, carry('X', 3, 0, 4, true), emptyMemory(), ctxOf({}, resolve({ 'P-ASIDE': false })));
   ok('5c with P-ASIDE off, A goes at once to «no room aside»: down under X', noAside.ok && eq(places(noAside.layout).A, [5, 2, 4, 2]) && sound(noAside), noAside.ok ? places(noAside.layout) : noAside);
-}
-
-/* ── 6. P-UP off: a block judged above is pushed down under the moved block, the carried block passing it (a declared fallback) ── */
-{
-  const L = sheet(10, [set('A', 0, 2, 5, 4), set('X', 0, 8, 5, 2)]);
-  const r = settle(L, carry('X', 0, 4, 5), emptyMemory(), ctxOf({}, resolve({ 'P-UP': false })));
-  ok('6 P-UP off: X carried up into A, A pushed down under it (X 4, A 6), RELINK takes the declared pass', r.ok && eq(rows(r.layout), { X: 4, A: 6 }) && sound(r), r.ok ? rows(r.layout) : r);
 }
 
 /* ── 7. a size: a text typed into gets its rest width and height, the blocks under it following (phases 1a, 9, 10) ── */
@@ -119,8 +110,6 @@ const ctx = ctxOf();
   const S = sheet(20, [set('S', 0, 5, 11, 1)]);
   const s = settle(S, carry('S', 15, 0, 11), emptyMemory(), ctx);
   ok('10a a set width stops at the last column where it fits whole (col 9)', s.ok && eq(places(s.layout).S, [9, 0, 11, 1]), s.ok ? places(s.layout) : s);
-  const off = settle(L, carry('T', 15, 0, 11), emptyMemory(), ctxOf({ T: { text: chars(30) } }, resolve({ 'DRAG.A3.narrow': false })));
-  ok('10b with DRAG.A3.narrow off an elastic block stops too (col 9), then phase 9 gives it its rest width', off.ok && places(off.layout).T[0] === 9 && sound(off), off.ok ? places(off.layout) : off);
 }
 
 /* ── 11. a carry into a block that stood above in start: it keeps its side (DRAG.B2) and, at row 0, lowers the moved block (P-UP); phase 9
@@ -151,22 +140,10 @@ const ctx = ctxOf();
 /* ── 14. sides that keep the chains' order end to end (found by tests/layoutprops.mjs, k 202): B2 over B3, which keeps the side above,
    goes up with it instead of being sunk under the moved block, which dragged B3 past it and was refused ── */
 {
-  const c = ctxOf({ B0: { text: chars(12) }, B1: { text: chars(9) }, B2: { text: chars(9) }, B5: { text: chars(6) } }, resolve({ 'GAP.5.2': false, 'DRAG.B5': false }));
+  const c = ctxOf({ B0: { text: chars(12) }, B1: { text: chars(9) }, B2: { text: chars(9) }, B5: { text: chars(6) } });
   const L = sheet(9, [text('B0', 2, 7, 5, 1), text('B1', 1, 4, 4, 1), text('B2', 3, 8, 4, 1), set('B3', 1, 9, 5, 3), set('B4', 1, 12, 3, 3), text('B5', 6, 5, 3, 1)]);
   const r = settle(L, carry('B4', 2, 8, 3), emptyMemory(), c);
   ok('14 B4 carried up into B3: taken; B3 and every block over it go up, B4 under B3, sound', r.ok && rows(r.layout).B3 < rows(r.layout).B4 && rows(r.layout).B2 < rows(r.layout).B3 && sound(r), r.ok ? places(r.layout) : r);
-}
-
-/* ── 15. P-UP off: the blocks judged above that reach the moved block go under it in their own order, and the blocks judged below stay
-   under them (found by tests/layoutprops.mjs, k 1933: a block below sank against the moved block only and passed the one pushed under it);
-   a block above that the moved block does not reach stays where it is ── */
-{
-  const off = ctxOf({}, resolve({ 'P-UP': false }));
-  const L = sheet(12, [set('A', 0, 2, 5, 4), set('X', 0, 8, 5, 2), set('B', 0, 10, 5)]);
-  const r = settle(L, carry('X', 0, 4, 5), emptyMemory(), off);
-  ok('15 P-UP off: X carried up into A\'s lower half: A goes under X (6), B under A (10); taken, sound', r.ok && eq(rows(r.layout), { X: 4, A: 6, B: 10 }) && sound(r), r.ok ? rows(r.layout) : r);
-  const far = settle(sheet(12, [set('A', 0, 0, 5), set('X', 0, 4, 5, 2)]), carry('X', 0, 7, 5), emptyMemory(), off);
-  ok('15a P-UP off: a block above that the moved block does not reach stays where it is (A at 0, X carried down to 7)', far.ok && eq(rows(far.layout), { A: 0, X: 7 }), far.ok ? rows(far.layout) : far);
 }
 
 /* ── 16. a text typed into near the right edge narrows to the edge rather than past it (INV-4), its floor clamped to the container ── */
@@ -218,19 +195,19 @@ const ctx = ctxOf();
 {
   // k 628: B4 carried down and held against B0; B1, judged by its middle above, stood under B0, which the memory holds below: B1 is below
   // too, and P-UP no longer lifts it with B0 past the moved block
-  const c = ctxOf({ B3: { text: chars(9) }, B4: { text: chars(9) } }, resolve({ 'SIZE.8': false, 'DRAG.A3.narrow': false }));
+  const c = ctxOf({ B3: { text: chars(9) }, B4: { text: chars(9) } }, resolve({ 'SIZE.8': false }));
   const L = sheet(10, [set('B0', 2, 5, 5, 3), set('B1', 3, 8, 5, 1), set('B2', 0, 9, 6, 2), text('B3', 6, 4, 4, 1), text('B4', 0, 4, 4, 1)]);
   const r0 = settle(L, carry('B4', 1, 8, 4), { ...emptyMemory(), dir: 'down' }, c);
   const r1 = r0.ok && settle(r0.start, { ...carry('B4', 1, 11, 4), at: { col: 1, y: 11, frow: 11.4, w: 4 }, through: 'hold' }, { ...r0.memory, dir: 'down' }, c);
   ok('19 a block under the held neighbour keeps the side below (k 628): taken, B4 over B0 and B1, sound', r1 && r1.ok && rows(r1.layout).B4 < rows(r1.layout).B0 && rows(r1.layout).B4 < rows(r1.layout).B1 && sound(r1), r1 && (r1.ok ? places(r1.layout) : r1));
   // k 3383: going up, X (B1) swaps with B2; B2, now under X, meets B4 on the same row: B4 sinks, the pair of the swap stays where it put it
-  const u = ctxOf({ B2: { text: chars(12) } }, resolve({ 'GAP.5.2': false }));
+  const u = ctxOf({ B2: { text: chars(12) } });
   const U = sheet(16, [set('B0', 12, 2, 3, 2), set('B1', 14, 8, 2, 3), text('B2', 11, 6, 5, 1), set('B3', 4, 5, 3, 3), set('B4', 8, 8, 6, 1), set('B5', 7, 3, 3, 2)]);
   const s1 = settle(U, { ...carry('B1', 13, 6, 2), at: { col: 13, y: 6, frow: 6.4, w: 2 }, through: 'hold' }, { ...emptyMemory(), dir: 'up' }, u);
   const s2 = s1.ok && settle(s1.start, { ...carry('B1', 13, 3, 2), at: { col: 13, y: 3, frow: 3.4, w: 2 } }, { ...s1.memory, dir: 'up' }, u);
   ok('19a the swap\'s pair held while what it meets sinks (k 3383): B2 where the swap put it (8), B4 under it (9), B1 carried on to 3 over both; sound', s2 && s2.ok && rows(s2.layout).B2 === 8 && rows(s2.layout).B4 === 9 && rows(s2.layout).B1 === 3 && sound(s2), s2 && (s2.ok ? places(s2.layout) : s2));
   // k 643: P-SEP between two blocks that shared a column in base keeps their order: B1 (over B4 in column 7) stays over it
-  const p = ctxOf({ B1: { text: chars(6) }, B2: { text: chars(9) }, B3: { text: chars(15) } }, resolve({ 'P-UP': false, 'DRAG.B2.keep': false }));
+  const p = ctxOf({ B1: { text: chars(6) }, B2: { text: chars(9) }, B3: { text: chars(15) } });
   const P = sheet(9, [set('B0', 5, 1, 4, 3), text('B1', 6, 5, 3, 1), text('B2', 4, 4, 4, 1), text('B3', 3, 6, 6, 1), set('B4', 4, 7, 4, 2)]);
   const q = settle(P, carry('B3', 3, 3, 6), emptyMemory(), p);
   ok('19b P-SEP keeps base\'s order (k 643): B1 stays over B4; taken, sound', q.ok && rows(q.layout).B1 < rows(q.layout).B4 && sound(q), q.ok ? places(q.layout) : q);
@@ -261,29 +238,6 @@ const ctx = ctxOf();
   const S = sheet(20, [set('A', 5, 2, 3, 4), set('N', 4, 6, 4, 3), set('X', 5, 9, 5, 5), set('B', 7, 2, 5, 5)]);
   const sw = settle(S, { type: 'carry', box: null, id: 'X', at: { col: 4, y: 5, frow: 5.3, w: 5 }, away: false, through: 'shift' }, { ...emptyMemory(), dir: 'up' }, ctx);
   ok('20d after the swap B stands at column 7, row 9 (the old record would press it once more, to column 8); sound', sw.ok && eq(places(sw.layout).B.slice(0, 2), [7, 9]) && sound(sw), sw.ok ? places(sw.layout) : sw);
-}
-
-/* ── 21. found by the semantic checks of held carries (after the review of f920fb7) ── */
-{
-  // k 1635 (seed 3): P-UP off puts B1, judged above, under B0; held, B1 stays there: phase 8 declares the fallback from what passed the
-  // moved block, not from the blocks judged above, which a held neighbour is not
-  const c = ctxOf({ B1: { text: chars(9) } }, resolve({ 'SIZE.2': false, 'GAP.8': false, 'P-UP': false, 'P-REST': false }));
-  const L = sheet(8, [set('B0', 0, 1, 6, 2), text('B1', 3, 0, 4, 1)]);
-  // the direction kept down (the last target the same row, so the pointer moved only sideways): the hold takes the block under B0
-  const still = { ...emptyMemory(), dir: 'down', lastTarget: { col: 1, y: 0, frow: 0, w: 6 } };
-  const r0 = settle(L, carry('B0', 1, 0, 6), still, c);
-  const r1 = r0.ok && settle(r0.start, { ...carry('B0', 1, 0, 6), through: 'hold' }, r0.memory, c);
-  ok('21 P-UP off: B1 under B0, then held there: taken (the fallback\'s pass declared), B1 in the memory, sound', r1 && r1.ok && r1.memory.through?.id === 'B1' && rows(r1.layout).B1 === 2 && sound(r1), r1 && (r1.ok ? [rows(r1.layout), r1.memory.through] : r1));
-  // k 4425 (seed 21): B3 stopped at row 6, where RELINK lifted it (GAP.9 off, the block over it pressed aside); the phases' prediction has
-  // it lower, at 8: the pin puts it at 6, and the moved block right against it
-  const g = ctxOf({}, resolve({ 'SIZE.1': false, 'GAP.9': false, 'DRAG.A5': false }));
-  const G = sheet(11, [set('B0', 6, 0, 2, 3), set('B1', 5, 4, 6, 3), set('B2', 2, 8, 5, 2), set('B3', 7, 8, 2, 2)]);
-  const m0 = settle(G, carry('B0', 7, 1, 2), emptyMemory(), g);
-  const m1 = m0.ok && settle(m0.start, { ...carry('B0', 7, 3, 2), at: { col: 7, y: 3, frow: 3.4, w: 2 }, through: 'hold' }, m0.memory, g);
-  ok('21a held at the row RELINK gave it (6), not the phases\' prediction (8): B3 pinned there, B0 right against it at 3; sound', m1 && m1.ok && eq(nb(m1.memory.through), { id: 'B3', row: 6, side: 'below' }) && rows(m1.layout).B3 === 6 && rows(m1.layout).B0 === 3 && sound(m1), m1 && (m1.ok ? [rows(m1.layout), m1.memory.through] : m1));
-  const m2 = m1 && m1.ok && settle(m1.start, { ...carry('B0', 7, 5, 2), at: { col: 7, y: 5, frow: 5.4, w: 2 } }, m1.memory, g);
-  const f2 = m1 && m1.ok && settle(m1.start, { ...carry('B0', 7, 5, 2), at: { col: 7, y: 5, frow: 5.4, w: 2 } }, { ...m1.memory, through: null }, g);
-  ok('21b past B3\'s middle no swap can be declared (B0 shared no column with it in base): released, the result the one with no pin', m2 && m2.ok && !m2.memory.through && eq(rows(m2.layout), rows(f2.layout)), m2 && (m2.ok ? [rows(m2.layout), rows(f2.layout)] : m2));
 }
 
 /* ── 22. the architecture review of 0a262d7: the neighbour held by the target of the choice (LAYOUT-RULES §5.1b), and what the gesture

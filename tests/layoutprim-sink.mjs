@@ -72,7 +72,7 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   const ys = (L) => Object.fromEntries([...L.boxes].map(([k, b]) => [k, b.y]));
   // X put into A's gap over L: it stands in L's stack, A | A3 [X:A1] A5
   let H = placed([box('A', 1, 1, 0), box('L', 1, 1, 10)]);
-  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 1, 4))), {}, 'X', DEFAULT);
+  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 1, 4))), {}, 'X');
   ok('3e (X stands in L\'s stack under A)', stack(H, 'L', 1) === 'A | A3 [X:A1] A5 |' && eq(ys(H), { A: 0, X: 4, L: 10 }), [stack(H, 'L', 1), ys(H)]);
   ok('3f A down 2: the standing block and the anchor under it follow with their rows', eq(ys(push(H, mv(H, 'A', { y: 2 }))), { A: 2, X: 6, L: 12 }));
   ok('3g the standing block down 2: L under it follows', eq(ys(push(H, mv(H, 'X', { y: 6 }))), { A: 0, X: 6, L: 12 }));
@@ -89,19 +89,16 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   const w = ws(20, [set('A', 0, 0, 2), set('B', 0, 2, 3), set('C', 0, 4, 2)], ctx);
   place(w, 'B', { col: 1 }); sinkTo(w, 'A', 1, 'down');
   ok('3k GAP.9: B\'s body and its gap stay as rows, so C keeps its three rows under A: C to 5', eq(rows(w), { A: 1, B: 2, C: 5 }), rows(w));
-  const off = ws(20, [set('A', 0, 0, 2), set('B', 0, 2, 3), set('C', 0, 4, 2)], ctxOf({}, resolve({ 'GAP.9': false })));
-  place(off, 'B', { col: 1 }); sinkTo(off, 'A', 1, 'down');
-  ok('3l GAP.9 off: B\'s own rows go with it and its body leaves none, so C has one row under A and two of slack: C stays at 4', eq(rows(off), { A: 1, B: 2, C: 4 }), rows(off));
-  // X stands in L's stack in column 1 (and anchors under A in column 2); narrowed to column 2, it leaves its lend in column 1 either way
+  // X stands in L's stack in column 1 (and anchors under A in column 2); narrowed to column 2, it leaves its lend in column 1
   let H = placed([box('A', 1, 2, 0), box('L', 1, 1, 10)]);
-  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 2, 4))), {}, 'X', DEFAULT);
-  for (const rules of [DEFAULT, resolve({ 'GAP.9': false })]) {
-    const s2 = over(H, ctxOf({}, rules)); place(s2, 'X', { col: 1, w: 2 }); sinkTo(s2, 'A', 2, 'down');
-    ok(`3m a standing block narrowed off leaves its lend: L follows A by 2 through it in column 1 (GAP.9 ${rules === DEFAULT ? 'on' : 'off'})`, rows(s2).L === 12, rows(s2));
+  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 2, 4))), {}, 'X');
+  {
+    const s2 = over(H, ctxOf({})); place(s2, 'X', { col: 1, w: 2 }); sinkTo(s2, 'A', 2, 'down');
+    ok('3m a standing block narrowed off leaves its lend: L follows A by 2 through it in column 1', rows(s2).L === 12, rows(s2));
   }
 }
 
-/* ── 3n. the rows a departure leaves are rule 2's: the canonical slack, and GAP.5.2 (the independent review of 82be34a) ── */
+/* ── 3n. the rows a departure leaves are rule 2's: the canonical slack (the independent review of 82be34a) ── */
 {
   // D grew to three rows and pushed B to 5: in column 1 B's stack under A is two rows, with two of slack. B narrowed off column 1 leaves
   // its body and that slack (GAP.9), so C has six rows under A there: A sunk by 1 takes C from 7 to 8
@@ -110,12 +107,6 @@ const t = tally(), ok = t.ok, ctx = ctxOf();
   ok('3n (D grown: B at 5, C at 7)', eq(rows(w), { A: 0, D: 0, B: 5, C: 7 }), rows(w));
   place(w, 'B', { col: 1 }); sinkTo(w, 'A', 1, 'down');
   ok('3o B\'s canonical slack stays with its body: C follows A by 1, to 8', rows(w).C === 8, rows(w));
-  // GAP.5.2 off from the start: X stands in L's stack; narrowed off column 1, its lend goes with it, so L has eight rows under A there
-  const off = resolve({ 'GAP.5.2': false });
-  let H = placed([box('A', 1, 2, 0), box('L', 1, 1, 10)]);
-  H = relink(H, edit(H, (m) => m.set('X', box('X', 1, 2, 4))), {}, 'X', off);
-  const v = over(H, ctxOf({}, off)); place(v, 'X', { col: 1, w: 2 }); sinkTo(v, 'A', 2, 'down');
-  ok('3p GAP.5.2 off: a standing block narrowed off takes its lend along: A sunk by 2 takes L to 11, not 12', stack(H, 'L', 1) === 'A | A3 [X:A1] A5 |' && rows(v).L === 11, [stack(H, 'L', 1), rows(v)]);
 }
 
 /* ── 4. P-SINK ── */

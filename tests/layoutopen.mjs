@@ -71,14 +71,14 @@ function sound(L) {
   ok('1 head rows kept: blocks that start low stay low, nothing lifts them', rh.ok && eq(rows(rh.layout), { A: 3, B: 5 }), rh.ok && rows(rh.layout));
 }
 
-/* ── 1c. a note at rest opens to itself again and again (the independent review of 6257763): with DRAG.A3.narrow off, the clamp took T,
-   narrowed by its neighbour R and not by the edge, to its natural width, so GAP.1 gave B the gap of a shorter T, which rest narrowed
-   again: B one row lower at every opening ── */
-{
-  const n0 = note(9, [T('T', 0, 0), S('R', 7, 0, 1), S('B', 0, 2, 1)]), ctx = ctxFor(n0, { T: 19 }, {}, resolve({ 'DRAG.A3.narrow': false }));
+/* ── 1c. a note at rest opens to itself again and again (the independent review of 6257763): the clamp once took T, narrowed by its
+   neighbour R and not by the edge, to its natural width, so GAP.1 gave B the gap of a shorter T, which rest narrowed again: B one row
+   lower at every opening (seen with the edge's narrowing off, which is SIZE.1 off since DRAG.A3's narrowing is core) ── */
+for (const [name, rules, want] of [['the default rules', undefined, [2, 7, 2]], ['SIZE.1 off', resolve({ 'SIZE.1': false }), [2, 8, 1]]]) {
+  const n0 = note(9, [T('T', 0, 0), S('R', 7, 0, 1), S('B', 0, 2, 1)]), ctx = ctxFor(n0, { T: 19 }, {}, rules);
   let n = n0; const seen = [];
   for (let i = 0; i < 6; i++) { const r = open(n, ctx); if (!r.ok) { seen.push(r); break; } seen.push([r.layout.boxes.get('B').y, r.layout.boxes.get('T').w, r.layout.boxes.get('T').h]); n = reread(r.layout); }
-  ok('1c DRAG.A3.narrow off, opened six times from its own places: B stays at 2, T at its neighbour\'s width 7 and two rows', eq(seen, Array(6).fill([2, 7, 2])), seen);
+  ok(`1c ${name}, opened six times from its own places: B stays at 2, T at the same width and rows (${want.slice(1)})`, eq(seen, Array(6).fill(want)), seen);
 }
 
 /* ── 2. sizes ── */
@@ -96,8 +96,8 @@ function sound(L) {
   // from a column far past the edge, near MAXCELL: the width its neighbours leave it is found with no edge at all, so the edge, not a
   // virtual one at MAXCELL, decides (the independent review of e6d1c57)
   for (const [narrow, want] of [[true, [13, 7, 2]], [false, [9, 11, 1]]]) {
-    const f = note(20, [T('T', MAXCELL - 2, 0)]), rf = open(f, ctxFor(f, { T: 30 }, {}, resolve({ 'DRAG.A3.narrow': narrow })));
-    ok(`3 an elastic text read at column MAXCELL − 2, DRAG.A3.narrow ${narrow ? 'on' : 'off'}: (${want}) as at any column past the edge`, rf.ok && eq(places(rf.layout).T.filter((_, i) => i !== 1), want), rf.ok ? places(rf.layout) : rf);
+    const f = note(20, [T('T', MAXCELL - 2, 0)]), rf = open(f, ctxFor(f, { T: 30 }, {}, resolve({ 'SIZE.1': narrow })));
+    ok(`3 an elastic text read at column MAXCELL − 2, SIZE.1 ${narrow ? 'on (it narrows to its floor)' : 'off (it keeps its width)'}: (${want}) as at any column past the edge`, rf.ok && eq(places(rf.layout).T.filter((_, i) => i !== 1), want), rf.ok ? places(rf.layout) : rf);
   }
   const w = note(12, [S('W', 4, 0, 20), S('B', 0, 2, 3)]), cw = ctxFor(w), rw = open(w, cw);
   ok('3 a set width wider than its container: shown at the full width from column 0, its cw as stored; diff writes no cw', rw.ok && eq(places(rw.layout).W, [0, 0, 12, 1]) && rw.layout.boxes.get('W').cw === 20 && !('cw' in (diff(storedOf(w), rw.layout).get('W') || {})), rw.ok && [places(rw.layout), [...diff(storedOf(w), rw.layout)]]);
@@ -184,7 +184,7 @@ function sound(L) {
   let seed = +process.argv[2] || 11; const seed0 = seed;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   const N = +process.argv[3] || 400;
-  const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'GAP.5.1', 'GAP.5.2', 'GAP.5.3', 'GAP.8', 'GAP.9', 'P-ASIDE', 'P-REST', 'P-SINK', 'DRAG.A3.narrow'];
+  const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'P-ASIDE', 'P-REST', 'P-SINK'];
   let bad = 0, first = null, notes = 0, moved = 0, temps = 0, most = 0;
   for (let k = 0; k < N; k++) {
     // a fifth of them larger, with long texts (the independent review of e6d1c57 needed two openings again there)
