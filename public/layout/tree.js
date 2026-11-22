@@ -46,31 +46,31 @@ const withoutArea = (T, id) => { const areas = new Map(T.areas); areas.delete(id
 const emptyFor = (T, cw) => ({ cols: cw, measure: T.measure, boxes: new Map(), order: [], areas: new Map() });
 
 /** One SETTLE in one container of the tree, its refusal or failure the whole's. @returns {{tree, r}} */
-function one(T, change, memory, ctx) {
+function one(T, change, memory, ctx, hooks) {
   const L = container(T, change.box ?? null);
   if (!L) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no container ' + change.box] });
-  const r = settle(L, change, memory, ctx);
+  const r = settle(L, change, memory, ctx, hooks);
   if (!r.ok) throw new Stop(r);
   return { tree: put(T, change.box ?? null, r.layout), r };
 }
 /** The area `id`'s frame made to hold its children again: a size change of the area in the sheet, its frame rows from them (§5.6), so
  *  the blocks under an area that shrank come back by the path of those under one that grew (INV-7 b). Nothing when the frame is the same.
  *  @returns {{tree, ran:boolean}} */
-function grow(T, id, ctx) {
+function grow(T, id, ctx, hooks) {
   const area = T.boxes.get(id), C = T.areas.get(id);
   if (!area || !C) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + id] });
   const f = frameOf(area, C, ctx);
   if (f.rows === area.h && f.t === (area.t || 0)) return { tree: T, ran: false };
-  return { tree: one(T, { type: 'size', box: null, id, rows: f.rows, t: f.t }, emptyMemory(), ctx).tree, ran: true };
+  return { tree: one(T, { type: 'size', box: null, id, rows: f.rows, t: f.t }, emptyMemory(), ctx, hooks).tree, ran: true };
 }
 const ranOf = (list) => [...new Set(list)];
 
 /** A change in one container, and the frames of the areas it ran in after it. A change of an area itself on the sheet takes its frame
  *  from frameOf with the fields it sets (a collapse, `ch`), a creation of an area makes its empty container and a deletion takes its
  *  container away with it; an area's width and its walls go only by `areaSide`, which changes both together. */
-function simple(T, change, memory, ctx) {
+function simple(T, change, memory, ctx, hooks) {
   const box = change.box ?? null, area = box == null && change.id != null ? T.boxes.get(change.id) : null;
-  if (change.type === 'create' && change.kind === 'area') return createArea(T, change, ctx);
+  if (change.type === 'create' && change.kind === 'area') return createArea(T, change, ctx, hooks);
   if (change.type === 'wall' && box != null) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: a wall in an area is areaSide\'s part'] });
   if (area && isArea(area)) {
     if (change.type === 'width' || (change.type === 'size' && change.set && 'cw' in change.set)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: an area\'s width changes by areaSide'] });
@@ -80,50 +80,50 @@ function simple(T, change, memory, ctx) {
       change = { ...change, ...frameOf(next, T.areas.get(change.id), ctx) };
     }
   }
-  const { tree, r } = one(T, change, memory, ctx);
+  const { tree, r } = one(T, change, memory, ctx, hooks);
   let out = change.type === 'remove' && area && isArea(area) ? withoutArea(tree, change.id) : tree;
   const ran = [box];
-  if (box != null) { const g = grow(out, box, ctx); out = g.tree; if (g.ran) ran.push(null); }
+  if (box != null) { const g = grow(out, box, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   return { ok: true, layout: out, start: put(T, box, r.start), memory: r.memory, pressed: r.pressed, moves: r.moves, ran: ranOf(ran) };
 }
 
 /** A block into or out of an area (AREA.7, «В область…», «З області»): taken away from the container it leaves (GAP.6), and put into the
  *  one it enters as a new block, away from the start (DRAG.B1), at `at`; each area's frame following after its own part. An area never
  *  goes into an area (no nesting). */
-function move(T, change, ctx) {
+function move(T, change, ctx, hooks) {
   const from = change.box ?? null, to = change.to ?? null, b = container(T, from)?.boxes.get(change.id);
   if (!b) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no block ' + change.id] });
   if (to != null && isArea(b)) throw new Stop({ ok: false, why: 'refused' });
   if (to != null && !T.areas.has(to)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + to] });
   const ran = [from, to];
-  let out = one(T, { type: 'remove', box: from, id: change.id }, emptyMemory(), ctx).tree;
-  if (from != null) { const g = grow(out, from, ctx); out = g.tree; if (g.ran) ran.push(null); }
+  let out = one(T, { type: 'remove', box: from, id: change.id }, emptyMemory(), ctx, hooks).tree;
+  if (from != null) { const g = grow(out, from, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   const set = {}; for (const f of ['cw', 'ch']) if (b[f] != null) set[f] = b[f]; if (b.open) set.open = true;
   const make = { type: 'create', box: to, id: change.id, kind: b.kind, at: { frow: change.at.y, w: b.w, ...change.at }, away: true, set };
   if (isArea(b)) Object.assign(make, frameOf(b, T.areas.get(b.id), ctx));
-  out = one(out, make, emptyMemory(), ctx).tree;
-  if (to != null) { const g = grow(out, to, ctx); out = g.tree; if (g.ran) ran.push(null); }
+  out = one(out, make, emptyMemory(), ctx, hooks).tree;
+  if (to != null) { const g = grow(out, to, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: ranOf(ran) };
 }
 
 /** Ungrouping an area (§5.6, LAYOUT-ENGINE-PLAN §6): the area taken away and each child created on the sheet in reading order, at the
  *  sheet cell it stood on (§3.1), with its sizes. */
-function ungroup(T, change, ctx) {
+function ungroup(T, change, ctx, hooks) {
   const area = T.boxes.get(change.id), C = T.areas.get(change.id);
   if (!area || !C || !isArea(area)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + change.id] });
   const H = ctx.kinds[area.kind].container.headerRows(area, ctx.measure);
-  let out = withoutArea(one(T, { type: 'remove', box: null, id: change.id }, emptyMemory(), ctx).tree, change.id);
+  let out = withoutArea(one(T, { type: 'remove', box: null, id: change.id }, emptyMemory(), ctx, hooks).tree, change.id);
   for (const id of C.order) {
     const c = C.boxes.get(id), cell = childToSheet(area, H, c);   // on the screen, as the tree is: a creation is put at its displayed cell
     const set = {}; for (const f of ['cw', 'ch']) if (c[f] != null) set[f] = c[f]; if (c.open) set.open = true;
-    out = one(out, { type: 'create', box: null, id, kind: c.kind, at: { col: cell.col, y: cell.y, frow: cell.y, w: c.w }, away: true, set }, emptyMemory(), ctx).tree;
+    out = one(out, { type: 'create', box: null, id, kind: c.kind, at: { col: cell.col, y: cell.y, frow: cell.y, w: c.w }, away: true, set }, emptyMemory(), ctx, hooks).tree;
   }
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [null] };
 }
 
 /** An area made, by any creation of kind 'area' in the sheet: its frame from frameOf with no children, its children an empty container
  *  of its inner columns, made with it. Areas are never nested. */
-function createArea(T, change, ctx) {
+function createArea(T, change, ctx, hooks) {
   if ((change.box ?? null) != null) throw new Stop({ ok: false, why: 'refused' });
   if (T.boxes.has(change.id) || T.areas.has(change.id)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: ' + change.id + ' is already there'] });
   const floor = ctx.kinds.area.minCells({ id: change.id, kind: 'area' }, ctx.measure), cw = Math.max(floor, change.set?.cw ?? floor);
@@ -135,9 +135,9 @@ function createArea(T, change, ctx) {
 
 /** Drawing an area (AREA.7b): a new area at the cell pressed, its inner columns `cols` and its set height `rows`, at least 4 × 2 cells
  *  and never narrower than its kind's floor, put in as a new block is (createArea), so what it covers makes room by the same rules. */
-function drawArea(T, change, ctx) {
+function drawArea(T, change, ctx, hooks) {
   const cw = Math.max(4, change.at.cols), ch = Math.max(2, change.at.rows);
-  return createArea(T, { type: 'create', box: change.box ?? null, id: change.id, kind: 'area', at: { col: change.at.col, y: change.at.y, frow: change.at.y, w: cw + 1 }, away: true, set: { cw, ch } }, ctx);
+  return createArea(T, { type: 'create', box: change.box ?? null, id: change.id, kind: 'area', at: { col: change.at.col, y: change.at.y, frow: change.at.y, w: cw + 1 }, away: true, set: { cw, ch } }, ctx, hooks);
 }
 
 /** An area's side handle's rectangle, the one clamp both its parts use (§5.6): its right edge or its left edge moved to where the handle
@@ -164,7 +164,7 @@ function sideRect(area, change, cols, ctx) {
  *  and no more: the area's own handle never makes it taller (§5.4). Then, in the container, the area is a block whose set width changes,
  *  at its new column for the left edge, with its frame from frameOf in the same change: its moving edge presses what it now overlaps
  *  aside or sinks it. Accepted only when both are. */
-function areaSide(T, change, ctx) {
+function areaSide(T, change, ctx, hooks) {
   const box = change.box ?? null, L = container(T, box), area = L?.boxes.get(change.id), C = T.areas.get(change.id);
   if (!area || !C || !isArea(area) || box != null) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + change.id + ' on the sheet'] });
   const { col, w } = sideRect(area, change, L.cols, ctx);
@@ -173,10 +173,10 @@ function areaSide(T, change, ctx) {
   if (room < 0) throw new Stop({ ok: false, why: 'refused' });
   const wall = { type: 'wall', box: change.id, side: change.side, cols: w - 1, room };
   if (change.side === 'left' && col !== area.col) wall.shift = area.col - col;
-  let out = one(T, wall, emptyMemory(), ctx).tree;
+  let out = one(T, wall, emptyMemory(), ctx, hooks).tree;
   const width = { type: 'width', box: null, id: change.id, cw: w - 1, side: change.side, ...frameOf(next, out.areas.get(change.id), ctx) };
   if (change.side === 'left') width.col = col;
-  out = one(out, width, emptyMemory(), ctx).tree;
+  out = one(out, width, emptyMemory(), ctx, hooks).tree;
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [change.id, null] };
 }
 
@@ -184,15 +184,16 @@ function areaSide(T, change, ctx) {
  *  start or its last swap, `start` of the last result), the change, the carry memory of the change's container, and `ctx`. Returns the
  *  tree after it, `start` (the tree with the change's container's start for the next move of a carry), the memory, `pressed`, and `ran`,
  *  the containers it settled (null, the sheet), for the write; or `{ok: false, why: 'refused'|'failed'}`, for the whole.
- *  @param {Layout} root @param {Change} change @param {?Memory} memory @param {Ctx} ctx */
-export function settleTree(root, change, memory, ctx) {
+ *  `hooks`, settle.js's, for the tests and the dev look: every SETTLE of every container is given them.
+ *  @param {Layout} root @param {Change} change @param {?Memory} memory @param {Ctx} ctx @param {object} [hooks] */
+export function settleTree(root, change, memory, ctx, hooks = {}) {
   try {
     switch (change.type) {
-      case 'enter': case 'leave': return move(root, change, ctx);
-      case 'ungroup': return ungroup(root, change, ctx);
-      case 'drawArea': return drawArea(root, change, ctx);
-      case 'areaSide': return areaSide(root, change, ctx);
-      default: return simple(root, change, memory || emptyMemory(), ctx);
+      case 'enter': case 'leave': return move(root, change, ctx, hooks);
+      case 'ungroup': return ungroup(root, change, ctx, hooks);
+      case 'drawArea': return drawArea(root, change, ctx, hooks);
+      case 'areaSide': return areaSide(root, change, ctx, hooks);
+      default: return simple(root, change, memory || emptyMemory(), ctx, hooks);
     }
   } catch (e) {
     if (e instanceof Stop) return e.result;
