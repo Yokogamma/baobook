@@ -1,7 +1,7 @@
 // Node: the engine's GAP (public/layout/gap.js) against its executable model (tests/lab/gap-model/model.mjs), event by event
 // (docs/LAYOUT-ENGINE-PLAN.md step 1: «gap.js must give the model's results»). Random histories of creations, undos, deletions, heights,
 // temporary heights, widths with and without a new height, moves of one block and of several, carries sideways and away, steps that move
-// and change widths in one RELINK, rule 5 alone, shifts and an area's left side handle, under random sets of the GAP switches: after
+// and change widths in one RELINK, rule 5 alone, shifts and an area's left side handle: after
 // every event both implementations accept it or both refuse it, and their rows in both measures, owners and lends are the same. Among the
 // events are transitions as SETTLE would declare them (tests/lab/gap-model/gen.mjs: swaps with their passes, presses aside, undos, carries
 // with their pushes), each checked by declare.mjs and run by both through relink(T) (step 1b), so no event is left out.
@@ -19,12 +19,11 @@ const blk = (id, c0, c1, y, h = 1) => ({ id, c0, c1, y, h });
 let declared = 0;
 function history(seed) {
   const r = rng(seed), pick = (a) => a[Math.floor(r() * a.length)], int = (a, b) => a + Math.floor(r() * (b - a + 1)), W = 12;
-  const opts = { gap51: r() > 0.2, gap52: r() > 0.2, gap53: r() > 0.2, gap8: r() > 0.2, gap9: r() > 0.2 };
   const base = []; for (let i = 0; i < 4; i++) for (let t = 0; t < 30; t++) {
     const c0 = int(0, W - 3), b = blk('b' + i, c0, Math.min(W - 1, c0 + int(0, 5)), int(0, 24), int(1, 3));
     if (!base.some((o) => o.c0 <= b.c1 && b.c0 <= o.c1 && o.y < b.y + b.h + 1 && b.y < o.y + o.h + 1)) { base.push(b); break; }
   }
-  const m = createModel(opts).open(base), e = createEngineModel(opts).open(base);
+  const m = createModel().open(base), e = createEngineModel().open(base);
   if (m.snapshot() !== e.snapshot()) return { seed, at: 'open', m: m.snapshot(), e: e.snapshot() };
   let n = 0;
   for (let step = 0; step < 30; step++) {
@@ -58,12 +57,12 @@ function history(seed) {
     let em = null, ee = null;
     try { op(m); } catch (err) { em = err.message; }
     try { op(e); } catch (err) { ee = err.message; }
-    if ((em === null) !== (ee === null)) return { seed, step, kind, opts, model: em || 'accepted', engine: ee || 'accepted' };
-    if (m.snapshot() !== e.snapshot()) return { seed, step, kind, opts, m: m.snapshot(), e: e.snapshot() };
+    if ((em === null) !== (ee === null)) return { seed, step, kind, model: em || 'accepted', engine: ee || 'accepted' };
+    if (m.snapshot() !== e.snapshot()) return { seed, step, kind, m: m.snapshot(), e: e.snapshot() };
     const errs = e.check(); if (errs.length) return { seed, step, kind, errs };
   }
   // what 0.1 stores reopens to the same canonical rows in both
-  const pm = createModel(opts).open(m.places()), pe = createEngineModel(opts).open(e.places());
+  const pm = createModel().open(m.places()), pe = createEngineModel().open(e.places());
   if (pm.snapshot() !== pe.snapshot()) return { seed, at: 'places' };
   return null;
 }

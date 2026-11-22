@@ -4,7 +4,6 @@
 // met from the side, with the sides kept in the carry memory) and the wall's (an area's side handle inside the area, the width handle's
 // moving edge). The composite changes (enter, leave, ungroup, drawArea, areaSide) never reach here: tree.js takes them apart (§5.6).
 
-import { on } from './rules.js';
 import { extent, isArea, sharesCol, sharesRow, hits, upperNeighbours } from './geometry.js';
 
 /** @typedef {import('./shapes.js').ChangeKind} ChangeKind @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Box} Box
@@ -65,12 +64,10 @@ function keepOrder(side, start, S, g) {
  *  `away`, which its maker set and the judge reads alone, LAYOUT-ENGINE-PLAN §2.1) and the carry memory.
  *  - Above or below, every block that shares a column with the moved block (DRAG.B2): one that stood in its columns in `start` keeps the
  *    side it had there, unless the block is away; any other is below when its middle is strictly below `frow`, the unrounded row of the
- *    moved block's top (an area's frame, its stored and shown place), otherwise above. With `DRAG.B2.keep` off every block is judged by
- *    `frow` and its middle.
+ *    moved block's top (an area's frame, its stored and shown place), otherwise above.
  *  - Met from the side, every block that hits it (DRAG.B3): when the overlap across the columns is smaller than the overlap along the rows,
  *    or equal and the last move was sideways; pressed to the side its centre lies on, to the left when the centres coincide. Once met from
- *    the side, it stays so while it shares a row with the target's rows (the memory's `sides`). With `DRAG.B3` off nothing is met from the
- *    side.
+ *    the side, it stays so while it shares a row with the target's rows (the memory's `sides`).
  *  - The neighbour letting the block through is judged like any other: while it is held, the wrapper runs the pipeline at the target of
  *    the choice, where the judgements are the ones the choice was made on (LAYOUT-RULES §5.1b).
  *  The sides met are returned for the memory; nothing here writes it (PR-7).
@@ -78,7 +75,7 @@ function keepOrder(side, start, S, g) {
  *  @returns {Judged & {sides:Map<string,'left'|'right'>}} */
 export function judgeCarry(layout, start, change, memory, ctx) {
   const g = change.id, at = change.at, G = layout.boxes.get(g), eg = extent(G), side = new Map(), met = new Map(), sides = new Map();
-  const keep = on(ctx.rules, 'DRAG.B2.keep') && !change.away;
+  const keep = !change.away;
   const S = start ? start.boxes.get(g) : null, frow = at.frow ?? at.y;
   for (const id of layout.order) {
     if (id === g) continue;
@@ -88,7 +85,7 @@ export function judgeCarry(layout, start, change, memory, ctx) {
       const v = was && sharesCol(was, S) ? (extent(was).r0 < extent(S).r0 ? 'above' : 'below') : midRow(en) > frow ? 'below' : 'above';
       side.set(id, v);
     }
-    if (!on(ctx.rules, 'DRAG.B3') || !hits(n, G)) continue;
+    if (!hits(n, G)) continue;
     const kept = memory.sides && memory.sides.get(id);
     let m = null;
     if (kept && sharesRow(n, G)) m = kept;
