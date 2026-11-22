@@ -26,6 +26,7 @@ import { emptyMemory, rest } from '../../../public/layout/settle.js';
 import { open, show, unshow } from '../../../public/layout/layout.js';
 import { readingOrder, sharesCol, sharesRow, extent, isArea, SHEETW } from '../../../public/layout/geometry.js';
 import { KINDS } from '../../../public/layout/kinds.js';
+import { canonicalCtx } from '../../../public/layout/size.js';
 import { DEFAULT, SETTINGS } from '../../../public/layout/rules.js';
 import { stubMeasure } from '../measure.mjs';
 import { sequences, str } from './seq.mjs';
@@ -56,7 +57,7 @@ function reach(before, after, seeds) {
 }
 
 /** Run the sequences with the laws; `engine`, settleTree unless a test of the laws themselves gives one that breaks a law. @returns {{stat, by, violations:object[], counts:object, reopened:{same:number, other:number}}} */
-export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEFAULT, probes = 4, engine = settleTree } = {}) {
+export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEFAULT, probes = 4, engine = settleTree, drive = null } = {}) {
   const violations = [], counts = {}, reopened = { same: 0, other: 0, first: null };
   const inc = (k, n = 1) => { counts[k] = (counts[k] || 0) + n; };
   let p = (seed * 2654435761) >>> 0;   // the laws' own draws, apart from the generator's stream
@@ -149,7 +150,12 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       {
         const e = validate(r.start, ctx), box = change.box ?? null, isFrame = (x) => x.startsWith(`${box}: a canonical frame of `) || x.startsWith(`${box}: a frame of `);
         const inArea = change.type === 'carry' && box != null && r.start.areas.has(box) && root.areas.has(box);
-        const swapped = inArea && str(r.start.areas.get(box)) !== str(root.areas.get(box));
+        // a swap, told by what it is (LAYOUT-RULES §5.1b): the sheet of `start` the one the move was given, and in the area the
+        // carried block and the neighbour the gesture holds on the other side of each other than they were
+        const sideOf = (C, n) => { const g = C.boxes.get(change.id), o = C.boxes.get(n); return g && o && g.id !== o.id ? Math.sign(g.y - o.y) : 0; };
+        const held = [memory.through?.id, r.memory?.through?.id].filter((n) => n != null);
+        const swapped = inArea && str(r.start.areas.get(box)) !== str(root.areas.get(box)) && str([...r.start.boxes]) === str([...root.boxes])
+          && held.some((n) => sideOf(root.areas.get(box), n) * sideOf(r.start.areas.get(box), n) < 0);
         // a later move of the same gesture is given that `start` and answers with it again: the same error, word for word, is its own
         const given = inArea && !swapped ? validate(root, ctx).filter(isFrame) : [];
         const frame = (x) => inArea && isFrame(x) && (swapped || given.includes(x));
@@ -195,10 +201,11 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
           // (`rest`, the engine's own and not the one under test) on the container as the command found it must give each block out of
           // reach the very place it has now, its set sizes as they were. Anything else is the violation.
           // An undo's SETTLE runs on the canonical layout (G23), so there the same is asked of the canonical trees: a text with
-          // temporary rows rests by its canonical rows, which may have no neighbour beside them (found here: seed 4, note 21)
+          // temporary rows rests by its canonical rows, which may have no neighbour beside them (found here: seed 4, note 21); measured
+          // as the undo measures, with no temporary row (size.js `canonicalCtx`)
           const was = (id) => placeOf(B.boxes.get(id)), is = (id) => placeOf(Af.boxes.get(id)), pick = (T) => (name == null ? T : T.areas.get(name));
           let R, got;
-          if (change.canonical) { let cb, ca; try { cb = pick(unshow(root, ctx)); ca = pick(unshow(r.layout, ctx)); } catch { cb = null; } R = cb && ca ? rest(cb, ctx) : { ok: false }; got = (id) => ca.boxes.get(id); }
+          if (change.canonical) { let cb, ca; try { cb = pick(unshow(root, ctx)); ca = pick(unshow(r.layout, ctx)); } catch { cb = null; } R = cb && ca ? rest(cb, canonicalCtx(ctx)) : { ok: false }; got = (id) => ca.boxes.get(id); }
           else { R = rest(B, ctx); got = (id) => Af.boxes.get(id); }
           const sizes = (x) => str([x.cw ?? null, x.ch ?? null]);
           const wrong = off.find((id) => !R.ok || !R.layout.boxes.has(id) || !same(R.layout.boxes.get(id), got(id)) || sizes(B.boxes.get(id)) !== sizes(Af.boxes.get(id)));
@@ -244,6 +251,8 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       return { layout: S };
     },
   };
+  // `drive`, a sequence written by hand in the generator's place, for a named case: it calls the executor as seq.mjs does
+  if (drive) { drive(X); return { violations, counts, lateFirst, canonFirst }; }
   const { stat, by, types } = sequences(G, X, { seed, notes, steps });
   return { stat, by, types, violations, counts, reopened, lateFirst, canonFirst };
 }

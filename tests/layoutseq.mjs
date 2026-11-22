@@ -13,7 +13,13 @@
 import { runLaws } from './lib/layout/laws.mjs';
 import { KINDS_NOT } from './lib/layout/seq.mjs';
 import { settleTree } from '../public/layout/tree.js';
-import { sharesCol, sharesRow } from '../public/layout/geometry.js';
+import { sharesCol, sharesRow, readingOrder } from '../public/layout/geometry.js';
+import { emptyMemory, rest } from '../public/layout/settle.js';
+import { unshow } from '../public/layout/layout.js';
+import { canonicalCtx } from '../public/layout/size.js';
+import { KINDS } from '../public/layout/kinds.js';
+import { DEFAULT, SETTINGS } from '../public/layout/rules.js';
+import { stubMeasure } from './lib/measure.mjs';
 
 let fails = 0;
 const ok = (n, c, got) => { if (!c) fails++; console.log((c ? '✓ ' : '✗ ') + n + (c || got === undefined ? '' : ': ' + JSON.stringify(got, null, 1).slice(0, 5000))); };
@@ -62,6 +68,32 @@ console.log(`  L7, reported: ${c['L7: a text out of reach rested late'] || 0} te
 console.log(`  L7, reported: ${c['L7: a text out of reach rested by its canonical rows, under an undo'] || 0} texts out of an undo's reach rested by their canonical rows` + (r.canonFirst ? ' (the first: ' + JSON.stringify(r.canonFirst).slice(0, 400) + ')' : ''));
 console.log(`  a gesture's start whose area's frame is not round its children, after a swap inside the area: ${c['start: an area\'s frame not round its children (after a swap inside it)'] || 0}`);
 
+// ---- a named case (the independent review of a4e9bf4): an undo that rests a far text with temporary rows. A, 50 letters, shows two
+// temporary rows; W stands beside its shown rows only. A is made elastic and rests against W; F, far away, is deleted and made again
+// by an undo, whose SETTLE runs on the canonical layout: A rests by its canonical row, where W is not beside it, and widens. L7's
+// confirmation must measure as the undo does, with no temporary row: by the displayed measure the same rest gives A another height,
+// and the right engine would be told wrong
+{
+  const lay = (cols, boxes) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: readingOrder(boxes), areas: new Map() });
+  const map = { A: { text: 'x'.repeat(50), temp: 2 }, W: { text: 'x' }, F: { text: 'x' } };
+  const stored = lay(44, [{ id: 'A', kind: 'text', col: 2, y: 0, cw: 8 }, { id: 'W', kind: 'text', col: 14, y: 2, cw: 1, ch: 9 }, { id: 'F', kind: 'text', col: 36, y: 30, cw: 3 }]);
+  const seen = [];
+  const n = runLaws({ max: 5, probes: 2, drive: (X) => {
+    const hist = []; let T = X.note({ k: 0, seed: 0, stored, map, hist });
+    const step = (kind, c) => { hist.push([kind, c]); const a = X.settle(kind, c, T, emptyMemory()); if (a.ok) T = a.layout; seen.push(a.ok ? T : null); };
+    step('size set', { type: 'size', box: null, id: 'A', set: { cw: null } });
+    const f = T.boxes.get('F');
+    step('remove', { type: 'remove', box: null, id: 'F' });
+    step('create again', { type: 'create', box: null, id: 'F', kind: 'text', at: { col: f.col, y: f.y, frow: f.y, w: f.w }, away: true, set: { cw: f.cw }, canonical: true });
+  } });
+  const [, removed, undone] = seen, wA = (T) => T && T.boxes.get('A').w;
+  ok(`an undo far away widens a text that rests by its canonical row (A ${wA(removed) - 1} cells, then ${wA(undone) - 1}): no violation, A and the block it now pushes counted as an undo's rest`,
+    n.violations.length === 0 && wA(undone) > wA(removed) && n.counts['L7: a text out of reach rested by its canonical rows, under an undo'] === 2, [n.violations[0], n.counts]);
+  const ctx = { rules: DEFAULT, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) }, cb = removed && unshow(removed, ctx);
+  const byUndo = cb && rest(cb, canonicalCtx(ctx)), byScreen = cb && rest(cb, ctx), hA = (R) => R && R.ok && R.layout.boxes.get('A').h;
+  ok(`and the case tells the two measures apart: the canonical rest gives A ${hA(byUndo)} row, the displayed measure ${hA(byScreen)}`, hA(byUndo) === unshow(undone, ctx).boxes.get('A').h && hA(byScreen) !== hA(byUndo), [hA(byUndo), hA(byScreen)]);
+}
+
 // ---- the laws can fail: an engine that breaks one is caught by that law
 {
   const broken = (tamper, o = {}) => runLaws({ seed: 3, notes: 60, max: 1, probes: 0, ...o, engine: (root, change, memory, ctx) => tamper(settleTree(root, change, memory, ctx), root, change, memory) });
@@ -87,6 +119,17 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
     return { ...r2, start: { ...r2.start, boxes } };
   });
   ok('an area\'s frame of a start changed where no swap was made in it: caught', !!g2 && /^valid: the answer's start|^L4|^valid/.test(g2.law), show(g2));
+  // after a carry inside an area with no swap, every child of that area in `start` a row lower, the order and the stacks kept (a row
+  // more above each block that anchors from the top): a sound container, and a frame that is not round it, with no swap to explain it
+  const sunk = (C) => ({ ...C, boxes: new Map([...C.boxes].map(([id, x]) => [id, { ...x, y: x.y + 1, ...(x.yc != null ? { yc: x.yc + 1 } : {}),
+    ...(x.above ? { above: x.above.map((t) => (t.stack.u !== null ? t : { ...t, stack: { ...t.stack, parts: [t.stack.parts[0][0]?.o === null ? [{ o: null, n: t.stack.parts[0][0].n + 1 }, ...t.stack.parts[0].slice(1)] : [{ o: null, n: 1 }, ...t.stack.parts[0]], ...t.stack.parts.slice(1)] } })) } : {}) }])) });
+  const j = first((r2, root, change) => {
+    if (!r2.ok || change.type !== 'carry' || change.box == null || !r2.start.areas.has(change.box) || !r2.start.areas.get(change.box).boxes.size) return r2;
+    if (JSON.stringify([...r2.start.areas.get(change.box).boxes]) !== JSON.stringify([...root.areas.get(change.box).boxes])) return r2;   // not where the engine swapped
+    const areas = new Map(r2.start.areas); areas.set(change.box, sunk(areas.get(change.box)));
+    return { ...r2, start: { ...r2.start, areas } };
+  }, { notes: 200 });
+  ok('the children of a start a row lower in their area after a carry with no swap: caught as an invalid start, by the frame alone', !!j && /^valid: the answer's start/.test(j.law) && j.detail.every((x) => /frame of/.test(x)), show(j));
   // a block a cell narrower, its stacks cut to the columns it keeps, so that the tree stays one `validate` accepts
   const narrower = (x) => ({ ...x, w: x.w - 1, ...(x.above ? { above: x.above.filter((t) => t.c0 <= x.col + x.w - 2).map((t) => ({ ...t, c1: Math.min(t.c1, x.col + x.w - 2) })) } : {}) });
   // a deletion that narrows a text nothing links to the deleted block, and sets its width: the tree stays valid (its height and its
