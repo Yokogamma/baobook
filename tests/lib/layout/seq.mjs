@@ -56,13 +56,6 @@ export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
     for (let i = 0, n = int(0, 2); i < n; i++) {
       const id = 'R' + i;
       boxes.push({ id, kind: 'area', col: int(0, Math.max(0, cols - 16)), y: int(1, 10), cw: int(12, 20), ...(rnd() < 0.25 ? { ch: int(3, 8) } : {}), ...(rnd() < 0.1 ? { collapsed: true } : {}) });
-      map[id] = rnd() < 0.3 ? { text: chars(int(20, 90)) } : rnd() < 0.2 ? { kind: 'area', header: int(2, 3) } : { kind: 'area' };   // a header that wraps at a narrower width (the stub measures an entry with no kind as a text), or a tall one
-      areas[id] = []; for (let j = 0, m = int(0, 4); j < m; j++) areas[id].push(leaf(id + 'c' + j, 8));
-    }
-    for (let i = 0, n = int(1, 7); i < n; i++) boxes.push(leaf('B' + i, cols - 4));
-    for (let i = 0, n = int(0, 2); i < n; i++) {
-      const id = 'R' + i;
-      boxes.push({ id, kind: 'area', col: int(0, Math.max(0, cols - 16)), y: int(1, 10), cw: int(12, 20), ...(rnd() < 0.25 ? { ch: int(3, 8) } : {}), ...(rnd() < 0.1 ? { collapsed: true } : {}) });
       // a header that wraps at a narrower width (the stub measures an entry with no kind as a text), or a tall one
       map[id] = rnd() < 0.3 ? { text: chars(int(20, 90)) } : rnd() < 0.2 ? { kind: 'area', header: int(2, 3) } : { kind: 'area' };
       areas[id] = []; for (let j = 0, m = int(0, 4); j < m; j++) areas[id].push(leaf(id + 'c' + j, 8));
@@ -86,7 +79,7 @@ export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
 
     for (let s = 0; s < steps && !X.done(); s++) {
       const aids = [...Tr.areas.keys()], onSheet = [...Tr.boxes.keys()], leaves = onSheet.filter((id) => !Tr.areas.has(id));
-      const box = aids.length && rnd() < 0.4 ? pick(aids) : null, L = box == null ? Tr : Tr.areas.get(box), ids = [...L.boxes.keys()];
+      const box = aids.length && rnd() < 0.45 ? pick(aids) : null, L = box == null ? Tr : Tr.areas.get(box), ids = [...L.boxes.keys()];
       const which = rnd();
       let r = null, c = null, kind = null;
 
@@ -135,11 +128,11 @@ export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
         const el = ids.filter((i) => L.boxes.get(i).kind !== 'area'); if (!el.length) continue;
         const id = pick(el), code = L.boxes.get(id).kind === 'code';
         map[id] = { ...map[id], text: code ? Array.from({ length: int(1, 18) }, () => chars(int(1, 30))).join('\n') : chars(int(1, 70)) }; kind = code ? 'size code' : 'size'; c = { type: 'size', box, id };
-      } else if (which < 0.35) {   // a set size given or taken
+      } else if (which < 0.34) {   // a set size given or taken
         const el = ids.filter((i) => L.boxes.get(i).kind === 'text'); if (!el.length) continue;
         const id = pick(el), b = L.boxes.get(id);
         kind = 'size set'; c = { type: 'size', box, id, set: rnd() < 0.5 ? { ch: b.ch ? null : int(2, 6) } : b.cw != null ? { cw: null } : { ch: int(2, 6) } };
-      } else if (which < 0.46) {   // the width handle of a set width
+      } else if (which < 0.475) {   // the width handle of a set width
         const sw = ids.filter((i) => L.boxes.get(i).kind === 'text' && L.boxes.get(i).cw != null); if (!sw.length) continue;
         const id = pick(sw), b = L.boxes.get(id);
         kind = 'width'; c = rnd() < 0.7 ? { type: 'width', box, id, cw: Math.max(1, b.cw + int(-3, 5)), side: 'right' } : (() => { const d = int(-3, 3) || 1; return { type: 'width', box, id, cw: Math.max(1, b.cw - d), side: 'left', col: Math.max(0, b.col + d) }; })();
@@ -159,26 +152,26 @@ export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
           const set = {}; for (const f of ['cw', 'ch']) if (b[f] != null) set[f] = b[f];
           kind = 'create again'; c = { type: 'create', box, id, kind: b.kind, at: { col: b.col, y: cy, frow: cy, w: b.w }, away: true, set, canonical: true };
         }
-      } else if (which < 0.71 && aids.length && leaves.length) {
+      } else if (which < 0.7 && aids.length && leaves.length) {
         kind = 'enter'; c = { type: 'enter', box: null, id: pick(leaves), to: pick(aids), at: { col: int(0, 4), y: int(0, 4) } };
-      } else if (which < 0.78 && aids.length) {
+      } else if (which < 0.79 && aids.length) {
         const a = pick(aids), kids = [...Tr.areas.get(a).boxes.keys()]; if (!kids.length) continue;
         kind = 'leave'; c = { type: 'leave', box: a, id: pick(kids), to: null, at: { col: int(0, Math.max(0, cols - 8)), y: int(0, 14) } };
-      } else if (which < 0.86 && aids.length) {
+      } else if (which < 0.88 && aids.length) {
         const a = pick(aids), b = Tr.boxes.get(a);
         kind = 'areaSide'; c = rnd() < 0.5 ? { type: 'areaSide', box: null, id: a, side: 'right', col: b.col, cols: b.w + int(-6, 6) } : { type: 'areaSide', box: null, id: a, side: 'left', col: b.col + int(-4, 4), cols: 0 };
-      } else if (which < 0.9) {
+      } else if (which < 0.905) {
         const id = 'D' + k + '_' + s; map[id] = { kind: 'area' };
         kind = 'drawArea'; c = { type: 'drawArea', box: null, id, at: { col: int(0, Math.max(0, cols - 16)), y: int(0, 14), cols: int(12, 16), rows: int(2, 4) } };
-      } else if (which < 0.95 && aids.length) {
+      } else if (which < 0.96 && aids.length) {
         kind = 'ungroup'; c = { type: 'ungroup', box: null, id: pick(aids) };
       } else if (which < 0.97 && aids.length) {
         const a = pick(aids), b = Tr.boxes.get(a);
         kind = 'area size'; c = { type: 'size', box: null, id: a, set: rnd() < 0.5 ? { collapsed: !b.collapsed } : { ch: rnd() < 0.3 ? null : int(2, 12) } };
       } else if (which < 0.985 && aids.length) {   // what no command may do: checked as an answer that is not an acceptance (§4.5)
         const a = pick(aids), b = Tr.boxes.get(a), other = aids.find((x) => x !== a), w = rnd();
-        if (w < 0.34 && other) { kind = 'not: an area into an area'; c = { type: 'enter', box: null, id: a, to: other, at: { col: 0, y: 0 } }; }
-        else if (w < 0.67) { kind = 'not: a wall given directly'; c = { type: 'wall', box: a, side: 'right', cols: Math.max(3, b.w - 2) }; }
+        if (w < 0.6 && other) { kind = 'not: an area into an area'; c = { type: 'enter', box: null, id: a, to: other, at: { col: 0, y: 0 } }; }
+        else if (w < 0.8) { kind = 'not: a wall given directly'; c = { type: 'wall', box: a, side: 'right', cols: Math.max(3, b.w - 2) }; }
         else { kind = 'not: an area\'s width by a width change'; c = rnd() < 0.5 ? { type: 'width', box: null, id: a, cw: b.cw + 2, side: 'right' } : { type: 'size', box: null, id: a, set: { cw: b.cw + 2 } }; }
       } else {   // a temporary height starts or ends: nothing is settled, the same stacks are shown again
         const el = [...leaves, ...aids.flatMap((a) => [...Tr.areas.get(a).boxes.keys()])]; if (!el.length) continue;

@@ -72,6 +72,44 @@ caught('a value that is no whole number', withBox(tree, 'a', { col: 1.5 }), /she
 caught('a kind the engine does not know', withBox(tree, 'a', { kind: 'todo' }), /sheet: a: no kind todo/);
 caught('a box kept under another id', { ...tree, boxes: new Map([...tree.boxes].map(([id, b]) => (id === 'a' ? ['zz', b] : [id, b]))) }, /sheet: the box kept as zz is a/);
 caught('a container with no columns', withArea(tree, 'Q', (C) => ({ ...C, cols: 0 })), /Q: 0 columns/);
+caught('more columns than MAXCELL', { ...tree, cols: MAXCELL + 1 }, /sheet: \d+ columns/);
+caught('a kind that is only an inherited property of the passports', withBox(tree, 'a', { kind: 'toString' }), /sheet: a: no kind toString/);
+caught('a child container with no areas map', withArea(tree, 'R', (C) => { const { areas, ...rest } = C; return rest; }), /R: no areas/);
+caught('the sheet with no areas map', (() => { const { areas, ...rest } = tree; return rest; })(), /sheet: no areas/);
+caught('an order that names a box twice', { ...tree, order: [tree.order[0], ...tree.order.slice(0, -1)] }, /sheet: its order does not list its boxes/);
+{
+  // the independent review of S2a: gap.js adds a gap's lengths up and never asks what one is, so runs of -1 and 4 rows, or of 1.5 and
+  // 1.5, in the place of a seg of 3 give every row it reads. Found in the tree, not written by hand: a seg of one run of 2 rows or more
+  let at = null;
+  for (const [name, L] of [[null, shown], ...shown.areas]) for (const b of L.boxes.values()) (b.above || []).forEach((s, i) => s.stack.parts.forEach((p, j) => {
+    if (!at && j % 2 === 0 && p.length === 1 && p[0].n >= 2) at = { name, id: b.id, i, j, o: p[0].o, n: p[0].n };
+  }));
+  ok('2 (a seg of one run of two rows or more is in the tree)', !!at, at);
+  const withSeg = (rs) => {
+    const put = (L) => withBox(L, at.id, { above: L.boxes.get(at.id).above.map((s, i) => (i !== at.i ? s : { ...s, stack: { ...s.stack, parts: s.stack.parts.map((p, j) => (j === at.j ? rs : p)) } })) });
+    return at.name == null ? put(shown) : withArea(shown, at.name, put);
+  };
+  ok('2 (that seg as it is, written again, is no error)', !validate(withSeg([{ o: at.o, n: at.n }]), ctx).length, validate(withSeg([{ o: at.o, n: at.n }]), ctx));
+  caught('a run of -1 rows beside one that makes the sum right', withSeg([{ o: at.o, n: -1 }, { o: at.o === null ? at.id : null, n: at.n + 1 }]), /a run of -1 rows/);
+  caught('runs of 1.5 rows', withSeg([{ o: at.o, n: at.n - 1.5 }, { o: at.o === null ? at.id : null, n: 1.5 }]), /a run of 1\.5 rows/);
+  caught('a run of no rows', withSeg([{ o: at.o, n: at.n }, { o: at.o === null ? at.id : null, n: 0 }]), /a run of 0 rows/);
+  caught('two runs in a row of one owner', withSeg([{ o: at.o, n: 1 }, { o: at.o, n: at.n - 1 }]), /two runs in a row owned by/);
+  caught('a run that is no object', withSeg([null]), /run 0 is null/);
+  caught('a stack whose parts are no list', withBox(shown, shown.order[0], { above: [{ c0: 0, c1: 0, stack: { u: null, parts: null } }] }), /its parts do not alternate seg and stand/);
+  caught('stacks that are no list', withBox(shown, shown.order[0], { above: 'x' }), /its stacks are no list/);
+}
+{
+  // a broken shape is said and nothing is read on from it: no throw, on the sheet or in an area
+  const run = (T) => { try { return validate(T, ctx); } catch (e) { return ['threw: ' + e.message]; } };
+  const a = run({ ...tree, boxes: new Map([...tree.boxes].map(([id, b]) => (id === 'a' ? [id, null] : [id, b]))) });
+  ok('2 null in the place of a block of the sheet: said, not thrown', a.length === 1 && /sheet: the box kept as a is null/.test(a[0]), a);
+  const c = run(withArea(tree, 'R', (C) => ({ ...C, boxes: new Map([...C.boxes].map(([id, b]) => (id === 'c' ? [id, null] : [id, b]))) })));
+  ok('2 and of an area: said, not thrown, the rest of the tree still checked', c.length === 1 && /R: the box kept as c is null/.test(c[0]), c);
+  const d = run(withArea(tree, 'R', () => null));
+  ok('2 null in the place of a child container: said, not thrown', d.length === 1 && /R: no layout/.test(d[0]), d);
+  const e = run(withBox(tree, 'a', { kind: undefined }));
+  ok('2 a block with no kind: said, not thrown', e.length === 1 && /sheet: a: no kind undefined/.test(e[0]), e);
+}
 ok('2 no layout at all: said, not thrown', validate(null, ctx).length === 1 && validate({}, ctx).length === 1, [validate(null, ctx), validate({}, ctx)]);
 
 process.exit(t.fails ? 1 : 0);

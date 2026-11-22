@@ -2,14 +2,16 @@
 // sequences over the engine. After every command:
 //   - an answer, never a throw; a lawful command is never `failed`; a command nothing may do is never accepted;
 //   - L6, the inputs unchanged, accepted or not: the tree and the gesture memory the command was given;
-//   - the tree it answers with valid (validate.js), and every container of its `start`;
+//   - the tree it answers with valid (validate.js), and its `start` too, but for the frame of the area a swap was made in;
 //   - L4, determinism: the same input again, and the same tree kept in another order, give the same answer by value;
 //   - L5, `unshow(show(C)) = C` for the canonical layout C of the answer, C valid too;
 //   - L7, independence: a block that shares no column and no row with the blocks the change can reach, directly or through others, in
-//     the tree before or after, stands where it stood (a rest width reads the rows beside a text, a push the columns under a block);
-//     but for a text that only now comes to its rest width, counted apart;
+//     the tree before or after, stands where it stood (a rest width reads the rows beside a text, a push the columns under a block),
+//     its set sizes as they were; but for a text that only now comes to its rest width, told by phases 9 and 10 alone giving it that
+//     very place on the tree as the command found it, and counted apart;
 //   - L13, translation, on the first command after the note is opened: the same note read 40 rows lower and 80 rows lower, the same
-//     command aimed as much lower, give the same places but for those rows (far from the top edge both times);
+//     command aimed as much lower, give the same places but for those rows (far from the top edge both times). That is the opened
+//     state only: stacks and a gesture's memory after a history of commands are not carried lower here, which is the references' part;
 //   - the probes, each on the answer and none kept: delete a block (it must succeed), narrow a set width by a cell (it must succeed) or
 //     an area by its handle (accepted or refused, never failed), end every temporary height; and, sampled, two steps: narrow and then
 //     delete, end the temporary heights and then delete. Every result valid.
@@ -20,7 +22,7 @@
 
 import { validate, validateContainer } from '../../../public/layout/validate.js';
 import { settleTree } from '../../../public/layout/tree.js';
-import { emptyMemory } from '../../../public/layout/settle.js';
+import { emptyMemory, rest } from '../../../public/layout/settle.js';
 import { open, show, unshow } from '../../../public/layout/layout.js';
 import { readingOrder, sharesCol, sharesRow, extent, isArea, SHEETW } from '../../../public/layout/geometry.js';
 import { KINDS } from '../../../public/layout/kinds.js';
@@ -59,7 +61,7 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
   const inc = (k, n = 1) => { counts[k] = (counts[k] || 0) + n; };
   let p = (seed * 2654435761) >>> 0;   // the laws' own draws, apart from the generator's stream
   const rnd = () => (p = (p * 1664525 + 1013904223) >>> 0) / 2 ** 32, sample = (xs, n) => { const a = xs.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
-  let cur = null, ctx = null, opened = null, lateFirst = null;
+  let cur = null, ctx = null, opened = null, lateFirst = null, canonFirst = null;
   const ctxOf = (map) => ({ rules, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) });
   const bad = (law, detail, extra = {}) => { violations.push({ law, note: cur.k, seed: cur.seed, ...extra, detail, hist: cur.hist.slice() }); };
   const settleSafe = (root, change, memory, c = ctx) => { try { return engine(root, change, memory, c); } catch (e) { return { threw: String(e && e.message) }; } };
@@ -81,6 +83,7 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       inc(isArea(b) ? 'probe: narrow an area' : 'probe: narrow');
       if (w.threw || (!w.ok && (w.why !== 'refused' || !isArea(b)))) { bad('probe: a narrowing must succeed (an area\'s may be refused)', w, { ...extra, probe: c }); continue; }
       if (!w.ok) { inc('probe: narrow an area, refused'); continue; }
+      if (isArea(b)) inc('probe: narrow an area, accepted');
       if (!valid('probe: valid after a narrowing', w.layout, ctx, { ...extra, probe: c })) continue;
       if (rnd() < 0.25 && !isArea(b)) {   // two steps: narrow, then delete
         const d = settleSafe(w.layout, { type: 'remove', box, id: b.id }, emptyMemory());
@@ -137,15 +140,22 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         if (r.why === 'failed' && !negative) { bad('a lawful command is never failed', r.errors, extra); return { stop: true }; }
         return r;
       }
-      if (negative) { bad('a command nothing may do is not accepted', placesOf(r.layout), extra); return { stop: true }; }
+      if (negative) { bad('a command nothing may do is not accepted', r.layout ? placesOf(r.layout) : null, extra); return { stop: true }; }
       if (!valid('valid: the answer', r.layout, ctx, extra)) return { stop: true };
-      // `start`, the tree the next move of a gesture is given: each container sound by itself. It is no tree `validate` accepts after a
-      // swap inside an area: its child container is the swap's, its sheet the gesture's start, so the area's frame there is not round
-      // those children (the next move settles the frame again from them). Counted, and for the frame inside the solve to settle (§6.2)
+      // `start`, the tree the next move of a gesture is given: a valid tree, but for one thing. After a swap inside an area its child
+      // container is the swap's and its sheet the gesture's start, so that area's frame there is not round those children (the next
+      // move settles the frame again from them; §6.2 decides one tree). Only that is let through: a carry in an area, a `start` whose
+      // children of that area are not the ones the move was given, and the error that area's frame; anything else of `start` fails
       {
-        const e = containers(r.start).flatMap(([name, L]) => validateContainer(L, ctx, name ?? 'sheet'));
-        if (e.length) { bad('valid: each container of the answer\'s start', e.slice(0, 3), extra); return { stop: true }; }
-        if (validate(r.start, ctx).length) inc('start: an area\'s frame not round its children (after a swap inside it)');
+        const e = validate(r.start, ctx), box = change.box ?? null, isFrame = (x) => x.startsWith(`${box}: a canonical frame of `) || x.startsWith(`${box}: a frame of `);
+        const inArea = change.type === 'carry' && box != null && r.start.areas.has(box) && root.areas.has(box);
+        const swapped = inArea && str(r.start.areas.get(box)) !== str(root.areas.get(box));
+        // a later move of the same gesture is given that `start` and answers with it again: the same error, word for word, is its own
+        const given = inArea && !swapped ? validate(root, ctx).filter(isFrame) : [];
+        const frame = (x) => inArea && isFrame(x) && (swapped || given.includes(x));
+        const other = e.filter((x) => !frame(x));
+        if (other.length) { bad('valid: the answer\'s start', other.slice(0, 3), extra); return { stop: true }; }
+        if (e.length) inc('start: an area\'s frame not round its children (after a swap inside it)');
       }
       // L4: the same input again; the same tree kept in another order
       if (rnd() < 0.3) {
@@ -173,16 +183,29 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
           const seeds = seedsOf(name); if (seeds == null) continue;   // an area's side handle reaches every child
           const B = name == null ? root : root.areas.get(name), Af = name == null ? r.layout : r.layout.areas.get(name);
           if (!B || !Af) continue;
-          let can = reach(B, Af, seeds);
-          // a text out of reach that only now comes to its rest width (SIZE.8's passes ended before it had, after an earlier command):
-          // phase 9 rests every elastic block of the container at every change, so it moves with a change that never reached it.
-          // Found here (seed 3, note 15: a deletion far away widens a text set elastic by the command before); counted and kept as
-          // the first case, for the owner: whether a container at rest must be at its rest widths before the next action
-          const late = [...B.boxes.values()].filter((b) => !can.has(b.id) && b.cw == null && !isArea(b) && Af.boxes.has(b.id) && Af.boxes.get(b.id).w !== b.w).map((b) => b.id);
-          if (late.length) { inc('L7: a text out of reach rested late', late.length); lateFirst = lateFirst || { note: cur.k, seed: cur.seed, kind, change, block: late[0], was: placeOf(B.boxes.get(late[0])), is: placeOf(Af.boxes.get(late[0])) }; can = reach(B, Af, [...seeds, ...late]); }
-          inc('L7: blocks out of reach', [...B.boxes.keys()].filter((id) => !can.has(id) && Af.boxes.has(id)).length);
-          const moved = [...B.boxes.keys()].find((id) => !can.has(id) && Af.boxes.has(id) && str(placeOf(B.boxes.get(id))) !== str(placeOf(Af.boxes.get(id))));
-          if (moved) { bad('L7: a block out of the change\'s reach stands where it stood', { container: name, block: moved, was: placeOf(B.boxes.get(moved)), is: placeOf(Af.boxes.get(moved)) }, extra); return { stop: true }; }
+          const can = reach(B, Af, seeds), out = [...B.boxes.keys()].filter((id) => !can.has(id) && Af.boxes.has(id));
+          inc('L7: blocks out of reach', out.length); if (out.length) inc('L7: commands with a block out of reach');
+          const same = (x, y) => str(placeOf(x)) === str(placeOf(y)) && str([x.cw ?? null, x.ch ?? null]) === str([y.cw ?? null, y.ch ?? null]);
+          const off = out.filter((id) => !same(B.boxes.get(id), Af.boxes.get(id)));
+          if (!off.length) continue;
+          // One thing may move a block out of reach: phase 9 rests every elastic block of the container at every change, so a text
+          // whose rest width SIZE.8's passes had not reached after the command before comes to it now (found here: seed 3, note 15,
+          // a deletion far away widens a text set elastic by the command before; for the owner: whether a container at rest must be
+          // at its rest widths before the next action). That is told by what it is, not by the difference: phases 9 and 10 alone
+          // (`rest`, the engine's own and not the one under test) on the container as the command found it must give each block out of
+          // reach the very place it has now, its set sizes as they were. Anything else is the violation.
+          // An undo's SETTLE runs on the canonical layout (G23), so there the same is asked of the canonical trees: a text with
+          // temporary rows rests by its canonical rows, which may have no neighbour beside them (found here: seed 4, note 21)
+          const was = (id) => placeOf(B.boxes.get(id)), is = (id) => placeOf(Af.boxes.get(id)), pick = (T) => (name == null ? T : T.areas.get(name));
+          let R, got;
+          if (change.canonical) { let cb, ca; try { cb = pick(unshow(root, ctx)); ca = pick(unshow(r.layout, ctx)); } catch { cb = null; } R = cb && ca ? rest(cb, ctx) : { ok: false }; got = (id) => ca.boxes.get(id); }
+          else { R = rest(B, ctx); got = (id) => Af.boxes.get(id); }
+          const sizes = (x) => str([x.cw ?? null, x.ch ?? null]);
+          const wrong = off.find((id) => !R.ok || !R.layout.boxes.has(id) || !same(R.layout.boxes.get(id), got(id)) || sizes(B.boxes.get(id)) !== sizes(Af.boxes.get(id)));
+          if (wrong) { bad('L7: a block out of the change\'s reach stands where it stood', { container: name, block: wrong, was: was(wrong), is: is(wrong), rest: R.ok ? R.layout.boxes.has(wrong) && placeOf(R.layout.boxes.get(wrong)) : R }, extra); return { stop: true }; }
+          if (change.canonical) { inc('L7: a text out of reach rested by its canonical rows, under an undo', off.length); canonFirst = canonFirst || { note: cur.k, seed: cur.seed, kind, change, block: off[0], was: was(off[0]), is: is(off[0]) }; continue; }
+          inc('L7: a text out of reach rested late', off.length);
+          lateFirst = lateFirst || { note: cur.k, seed: cur.seed, kind, change, block: off[0], was: was(off[0]), is: is(off[0]) };
         }
       }
       // L13: translation, the first command on the note as opened
@@ -194,10 +217,13 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         }
       }
       // what the quotas count (§4.5): a transition under a temporary height, one that swapped, one that changed a width
-      inc('accepted');
-      if (containers(root).some(([, L]) => [...L.boxes.values()].some((b) => (b.t || 0) > 0))) inc('accepted under a temporary height');
-      if (change.type === 'carry' && r.start !== root && str(r.start) !== str(root)) inc('accepted with a swap');
-      { const was = placesOf(root), is = placesOf(r.layout); if (Object.keys(was).some((id) => is[id] && is[id][3] !== was[id][3])) inc('accepted with a width changed'); }
+      // of the commands that changed the tree, the denominator of every share
+      if (str(r.layout) !== str(root)) {
+        inc('moved');
+        if (containers(root).some(([, L]) => [...L.boxes.values()].some((b) => (b.t || 0) > 0))) inc('moved under a temporary height');
+        if (change.type === 'carry' && r.start !== root && str(r.start) !== str(root)) inc('moved with a swap');
+        { const was = placesOf(root), is = placesOf(r.layout); if (Object.keys(was).some((id) => is[id] && is[id][3] !== was[id][3])) inc('moved with a width changed'); }
+      }
       probe(r.layout, extra);
       if (violations.length >= max) return { stop: true };
       // L14, reported: what the engine wrote opens to the same places
@@ -219,5 +245,5 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
     },
   };
   const { stat, by, types } = sequences(G, X, { seed, notes, steps });
-  return { stat, by, types, violations, counts, reopened, lateFirst };
+  return { stat, by, types, violations, counts, reopened, lateFirst, canonFirst };
 }
