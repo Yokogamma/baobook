@@ -58,7 +58,7 @@ function sized(boxes, cols, inner, ctx) {
  *  that its free row above lies in the sheet; a card past the container's right edge moves left to the last column where it fits; a set
  *  width wider than its container already stands at its full width (step 0) and goes to column 0. An elastic block is past the edge only
  *  when the rest width its neighbours leave it, with no right edge, does not fit there: then it narrows to the edge but no further than its
- *  floor, min(natural width, MINC) and its kind's floor, and moves left (DRAG.A3); with DRAG.A3.narrow off it keeps that width and moves
+ *  floor, min(natural width, MINC) and its kind's floor, and moves left (DRAG.A3); with SIZE.1 off it keeps that width and moves
  *  left. A block its neighbours narrowed, not the edge, keeps the width step 0 gave it, so a note at rest opens to the same widths, rows
  *  and places (the independent review of 6257763). What a clamp puts on another block, step 2 separates. @returns {Map<string, Box>} */
 function clamped(boxes, cols, inner, ctx) {
@@ -71,7 +71,7 @@ function clamped(boxes, cols, inner, ctx) {
       const want = restCells({ ...L, cols: b.col + capCells(b, ctx) + 2 }, b, ctx) + 1;
       if (b.col + want + pad(b) > cols) {
         const k = ctx.kinds[b.kind], floor = Math.min(want, Math.max(k.minCells(b, ctx.measure), Math.min(ctx.measure.natural(b.id), ctx.settings.MINC)) + 1);
-        w = Math.min(on(ctx.rules, 'DRAG.A3.narrow') ? Math.max(floor, cols - b.col - pad(b)) : want, cols - pad(b));
+        w = Math.min(on(ctx.rules, 'SIZE.1') ? Math.max(floor, cols - b.col - pad(b)) : want, cols - pad(b));
       }
     }
     const r = range({ ...b, w }, cols), col = Math.max(r.colMin, Math.min(r.colMax, b.col)), y = Math.max(r.yMin, b.y);

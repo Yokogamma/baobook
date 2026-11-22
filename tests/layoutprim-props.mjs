@@ -2,15 +2,15 @@
 // sheets: free sheets of elastic texts and set widths, a block created or carried (sideways by a column at most); and stacks, a text across
 // the sheet with small blocks packed under it and a new block put over the text (the independent review of 517a8d7). The carry's judge,
 // P-ASIDE for every block met from the side (by its side, P-UP or P-DOWN, when it has no room), P-UP for the blocks judged above, P-DOWN
-// for those judged below, P-SEP for what still hits, under GAP.9 and GAP.5.2 on and off; then the transition, facts and no path
+// for those judged below, P-SEP for what still hits; then the transition, facts and no path
 // (`transitionFacts`, the architecture review of 2026-11-11), with the columns from the geometry, through transition.js `checkTransition`
 // and gap.js `relink`. What must hold: RELINK takes every transition the primitives make (a refusal is excused only by sides that
 // contradict each other, a block judged below over one judged above, which P-DOWN then drags past the moved block, step 2b's question,
 // when the refusal names one of them), its result breaks no invariant (relink's own check), and every block the phases moved stands at its
 // target or under it (rule 5, G15), lower only as GAP decides: at its reference after coming in by itself (1b's landing law), under its
 // old upper neighbour (O-25, G16), or under a block so put or pushed past its reference. A creation lifts no block: P-UP leaves the blocks
-// judged above it where they are and puts it under them (G17). A block created over blocks it pushes down, with nothing else moved and
-// GAP.5.2 on, taken away again leaves every block where it was (INV-7 b). RELINK's rows are the result (INV-8):
+// judged above it where they are and puts it under them (G17). A block created over blocks it pushes down, with nothing else moved,
+// taken away again leaves every block where it was (INV-7 b). RELINK's rows are the result (INV-8):
 // where a block the phases did not move stands elsewhere, the difference is reported, not failed. The property checks itself: SETTLE
 // dropping its facts must be caught. Seeded.
 import { set, text, chars, ctxOf, sheet, over, rows, hitting } from './lib/primcase.mjs';
@@ -18,7 +18,7 @@ import { aside, down, up, sep, transitionFacts, phase } from '../public/layout/p
 import { judgeCarry } from '../public/layout/changes.js';
 import { relink, remove } from '../public/layout/gap.js';
 import { checkTransition, explain } from '../public/layout/transition.js';
-import { DEFAULT, resolve } from '../public/layout/rules.js';
+import { DEFAULT } from '../public/layout/rules.js';
 import { readingOrder, hits, sharesCol } from '../public/layout/geometry.js';
 // a seed, and how many cases: node tests/layoutprim-props.mjs [seed] [N]
 let seed = +process.argv[2] || 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
@@ -32,11 +32,9 @@ const covers = (b, c) => b.col + 1 <= c && c <= b.col + b.w - 1;
  *  [block, why], empty when every one is explained.
  *  Lower: a block that came into a column by itself, no lower than its reference (RELINK's `refs`, GAP.5 rule 3), or a block under one so
  *  put, by no more rows.
- *  Higher: only with GAP.9 off, a block under one that left a column it keeps (it rises as after a deletion), or under one that rose, by no
- *  more rows. */
-function unexplained(base, after, rr, T, rules, refs = new Map(), count = true) {
-  const selfIn = new Set(T.enter.filter(([, , h]) => h === 'self').map(([b]) => b)), low = new Map(), high = new Map(), out = [];
-  const off9 = rules !== DEFAULT && rules['GAP.9'] === false;
+ *  Higher: never (GAP.9: a block narrowed or pressed off a column leaves its rows there). */
+function unexplained(base, after, rr, T, refs = new Map(), count = true) {
+  const selfIn = new Set(T.enter.filter(([, , h]) => h === 'self').map(([b]) => b)), low = new Map(), out = [];
   for (const b of after.order) {
     const B = after.boxes.get(b), dy = rr.get(b) - B.y; if (!dy) continue;
     const above = (a) => { const A = after.boxes.get(a); return a !== b && sharesCol(A, B) && A.y < B.y; };
@@ -52,13 +50,9 @@ function unexplained(base, after, rr, T, rules, refs = new Map(), count = true) 
       if ((selfIn.has(b) && refs.has(b) && rr.get(b) <= refs.get(b)) || follows || pushedSelf || [...low].some(([a, da]) => above(a) && dy <= da)) { low.set(b, dy); continue; }
       out.push([b, `${b} is ${dy} rows lower in RELINK${selfIn.has(b) ? `, past its reference ${refs.get(b)}` : ', with no block come in by itself over it'}`]); continue;
     }
-    const B0 = base.boxes.get(b);
-    const left = B0 && [...base.boxes.values()].some((X0) => { if (X0.id === b || X0.y + X0.h > B0.y) return false;
-      const XA = after.boxes.get(X0.id); for (let c = Math.max(X0.col + 1, B0.col + 1); c <= Math.min(X0.col + X0.w - 1, B0.col + B0.w - 1); c++) if (covers(B, c) && (!XA || !covers(XA, c))) return true; return false; });
-    if (off9 && (left || [...high].some(([a, da]) => above(a) && -dy <= da))) { high.set(b, -dy); continue; }
-    out.push([b, `${b} is ${-dy} rows higher in RELINK${off9 ? ', with no block over it that left a column it keeps' : ', with GAP.9 on'}`]);
+    out.push([b, `${b} is ${-dy} rows higher in RELINK`]);
   }
-  if (count && low.size) rep('lower at its reference (landing law)'); if (count && high.size) rep('GAP.9 off: rises at RELINK');
+  if (count && low.size) rep('lower at its reference (landing law)');
   return out;
 }
 /** O-25 (the owner, 2026-11-11, G16): a block pressed out of every column it had, standing on the screen over a
@@ -70,8 +64,8 @@ function o25(base, after, T) {
     return [...base.boxes.values()].some((U0) => { const U1 = after.boxes.get(U0.id); return U0.id !== s && U1 && sharesCol(U0, S0) && U0.y < S0.y && sharesCol(U1, S1) && S1.y < U1.y; }); });
 }
 // two families: free sheets (any blocks anywhere, a block created or carried), and stacks (the independent review of 517a8d7): an elastic
-// text across the sheet with a stack of small blocks packed under it, a new block put over the text that presses it aside, so that with
-// GAP.9 off the blocks under the text rise in GAP's origins in chains of several, some moved by the phases and some not
+// text across the sheet with a stack of small blocks packed under it, a new block put over the text that presses it aside, so that
+// the blocks under the text move in chains of several, some moved by the phases and some not
 for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   const stack = tried >= N;
   const cols = stack ? int(9, 14) : int(10, 16), map = {}, bs = [], n = stack ? int(3, 8) : int(3, 7);
@@ -91,7 +85,7 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
     for (const o of bs) if (o.col + 1 < col + w && col + 1 < o.col + o.w) y = Math.max(y, o.y + o.h + int(0, 2));
     bs.push(el ? text(id, col, y, w, h) : set(id, col, y, w, h));
   }
-  const rules = stack ? (rnd() < 0.7 ? resolve({ 'GAP.9': false, ...(rnd() < 0.3 ? { 'GAP.5.2': false } : {}) }) : DEFAULT) : rnd() < 0.3 ? resolve({ 'GAP.9': false }) : rnd() < 0.2 ? resolve({ 'GAP.5.2': false }) : DEFAULT;
+  const rules = DEFAULT;
   const ctx = ctxOf(map, rules);
   let base; try { base = sheet(cols, bs); } catch (e) { skip++; continue; }
   // the moved block: a new one (away), or one of base carried within its columns
@@ -125,7 +119,7 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   const g = explain(base, w.L);
   const T = { base, after: w.L, ...transitionFacts(w, base), carried: id,
     leave: g.left.map(([b, col]) => [b, col, b === id ? 'narrow' : 'press']), enter: g.entered.map(([b, col]) => [b, col, b === id ? 'put' : 'self']), pass: [] };
-  const errs = checkTransition(T); let r; try { r = relink(T, rules); } catch (e) { r = { ok: false, errors: [e.message] }; }
+  const errs = checkTransition(T); let r; try { r = relink(T); } catch (e) { r = { ok: false, errors: [e.message] }; }
   const rr = r.ok ? new Map([...r.layout.boxes].map(([b, x]) => [b, x.y])) : null;
   // contradictory sides (step 2b's question): a block judged above the moved block ends under it, or one judged below ends over it, in a
   // column both share; it excuses only a refused transition that names one of them
@@ -137,12 +131,12 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   // pushing it, the landing law): never above it, and never elsewhere unexplained
   const refs = r.refs || new Map();
   const movedWrong = (m, rf, count) => { const hi = T.moved.find((b) => m.has(b) && m.get(b) < w.L.boxes.get(b).y); if (hi) return `${hi} stands above its target`;
-    const u = unexplained(base, w.L, m, T, rules, rf, count).find(([b]) => T.moved.includes(b)); return u ? u[1] : null; };
+    const u = unexplained(base, w.L, m, T, rf, count).find(([b]) => T.moved.includes(b)); return u ? u[1] : null; };
   const wrong = movedWrong(rr, refs, true), isO25 = o25(base, w.L, T);
   if (wrong) { fail(wrong); continue; }
   // the report: RELINK's rows are the result (INV-8); where a block the phases did not move stands elsewhere, by what GAP decided, or as
   // the phases' push predicted otherwise (step 2b's question), counted apart where a block followed its old upper neighbour (O-25, G16)
-  const why = unexplained(base, w.L, rr, T, rules, refs, false);
+  const why = unexplained(base, w.L, rr, T, refs, false);
   if (isO25) rep('O-25 (G16): a block pressed out from under a block that sank past it follows it');
   if (why.length) { rep(isO25 ? 'other, with O-25' : 'other'); if (others.length < 3) others.push({ ...current, why: why[0][1] }); }
   // INV-7 b: a block created and taken away again leaves every block where it was, when nothing else changed columns (nothing pressed
@@ -150,16 +144,15 @@ for (let k = 0; k < (N + NS) * 3 && (tried < N || triedStack < NS); k++) {
   // and every block that shares no column with a block the facts name, is back at its row of base, whatever moved elsewhere (the
   // independent review of 0eda0ba); a named block keeps its move (P-SEP, P-SINK, P-REST: P-UP lifts nothing over a creation, G17)
   if (create && T.leave.length === 0 && T.enter.every(([b]) => b === id)) {
-    const z = remove(r.layout, id, rules), named = T.moved.filter((b) => b !== id).map((b) => w.L.boxes.get(b));
+    const z = remove(r.layout, id), named = T.moved.filter((b) => b !== id).map((b) => w.L.boxes.get(b));
     const free = base.order.filter((b) => !T.moved.includes(b) && !named.some((n) => sharesCol(n, w.L.boxes.get(b)) || sharesCol(n, base.boxes.get(b))));
     const back = free.filter((b) => z.boxes.get(b).y !== base.boxes.get(b).y);
-    if (rules['GAP.5.2'] === false) rep(back.length ? 'INV-7 b not asked, GAP.5.2 off: a standing block taken away keeps its lend' : 'INV-7 b not asked (GAP.5.2 off), every block back all the same');
-    else if (back.length) { fail(`INV-7 b: ${back[0]} at ${z.boxes.get(back[0]).y} once ${id} is taken away, at ${base.boxes.get(back[0]).y} in base`); continue; }
+    if (back.length) { fail(`INV-7 b: ${back[0]} at ${z.boxes.get(back[0]).y} once ${id} is taken away, at ${base.boxes.get(back[0]).y} in base`); continue; }
     else if (base.order.some((b) => w.L.boxes.get(b).y !== base.boxes.get(b).y)) rep(named.length ? 'INV-7 b: created over blocks it pushes, taken away again, every block not under a named move back' : 'INV-7 b: created over blocks it pushes down and taken away again, every block back');
   }
   // the property's own check: SETTLE dropping its facts (only the carried block held) must leave some moved block where RELINK cannot put it
   if (injected < 300 && T.moved.some((b) => b !== id)) {
-    injected++; let r2; try { r2 = relink({ ...T, moved: [id] }, rules); } catch (e) { r2 = { ok: false }; }
+    injected++; let r2; try { r2 = relink({ ...T, moved: [id] }); } catch (e) { r2 = { ok: false }; }
     if (!r2.ok || movedWrong(new Map([...r2.layout.boxes].map(([b, x]) => [b, x.y])), r2.refs || new Map(), false)) caught++;
   }
 }
@@ -173,9 +166,9 @@ let named = false;
   aside(w, 'A', 'X', 'right');
   const g = explain(base, w.L);
   const T = { base, after: w.L, ...transitionFacts(w, base), carried: 'X', leave: g.left.map(([b, col]) => [b, col, 'press']), enter: g.entered.map(([b, col]) => [b, col, b === 'X' ? 'put' : 'self']), pass: [] };
-  const r = relink(T, DEFAULT), rr = new Map([...r.layout.boxes].map(([b, x]) => [b, x.y]));
-  const wrong = (y) => { const m = new Map(rr); m.set('A', y); return unexplained(base, w.L, m, T, DEFAULT, r.refs, false).length > 0; };
-  named = r.ok && rr.get('A') === 0 && rr.get('X') === 0 && !unexplained(base, w.L, rr, T, DEFAULT, r.refs, false).length && wrong(1) && wrong(100);
+  const r = relink(T), rr = new Map([...r.layout.boxes].map(([b, x]) => [b, x.y]));
+  const wrong = (y) => { const m = new Map(rr); m.set('A', y); return unexplained(base, w.L, m, T, r.refs, false).length > 0; };
+  named = r.ok && rr.get('A') === 0 && rr.get('X') === 0 && !unexplained(base, w.L, rr, T, r.refs, false).length && wrong(1) && wrong(100);
 }
 const ok = tried >= N && triedStack >= NS && bad === 0 && named;
 console.log((ok ? '✓ ' : '✗ ') + `${tried} random creations and carries and ${triedStack} stacks under a text pressed aside, through the primitives: RELINK takes every transition, as facts, every moved block stands at its target or under it, and no creation lifts a block (G17; ${lowered} went under blocks judged above) (${JSON.stringify(fails)}); ${skip} draws with no valid state`);

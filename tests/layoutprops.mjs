@@ -13,7 +13,7 @@ import { set, text, chars, ctxOf, sheet } from './lib/primcase.mjs';
 
 let seed = +process.argv[2] || 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const N = +process.argv[3] || 2000;
-const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'GAP.5.1', 'GAP.5.2', 'GAP.5.3', 'GAP.8', 'GAP.9', 'P-ASIDE', 'P-UP', 'P-REST', 'P-SINK', 'DRAG.A3.narrow', 'DRAG.A5', 'DRAG.B2.keep', 'DRAG.B3', 'DRAG.B5'];
+const SWITCHES = ['SIZE.1', 'SIZE.2', 'SIZE.8', 'P-ASIDE', 'P-REST', 'P-SINK', 'DRAG.A5'];
 const known = new Set(DECLS.map((d) => d.id)); for (const s of SWITCHES) if (!known.has(s)) throw new Error('unknown switch ' + s);
 const fails = {}, firsts = [], refusals = {}, kinds = {}, inc = (m, k) => (m[k] = (m[k] || 0) + 1);
 let tried = 0, skipped = 0, inv7 = 0, held = 0;

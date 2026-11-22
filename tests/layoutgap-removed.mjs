@@ -2,16 +2,14 @@
 // by its height and its own rows wherever those lie; unowned rows and rows of others stay; a deletion never moves a block down.
 import { remove } from '../public/layout/gap.js';
 
-import { DEFAULT } from '../public/layout/rules.js';
 import { createEngineModel } from './lib/gapdriver.mjs';
 import { ok, eq, done, box, placed, edit, stack, rows, relink } from './lib/gapcase.mjs';
 
-const R = DEFAULT;
-const a = remove(placed([box('A', 1, 1, 0), box('X', 1, 1, 4), box('L', 1, 1, 8)]), 'X', R);
+const a = remove(placed([box('A', 1, 1, 0), box('X', 1, 1, 4), box('L', 1, 1, 8)]), 'X');
 eq('1 an anchor deleted: L rises by its height and its rows, A\'s rows stay', [rows(a).L, stack(a, 'L', 1)], [4, 'A | A3 |']);
-const H = placed([box('H', 1, 3, 10)]), h = remove(relink(H, edit(H, (m) => m.set('X', box('X', 1, 3, 5))), {}, 'X', R), 'X', R);
+const H = placed([box('H', 1, 3, 10)]), h = remove(relink(H, edit(H, (m) => m.set('X', box('X', 1, 3, 5))), {}, 'X'), 'X');
 eq('1a a block standing in free room deleted: the room is free room still, H stays', [rows(h).H, stack(h, 'H', 1)], [10, 'top | _10 |']);
-const r = remove(placed([box('A', 1, 6, 0), box('R', 2, 5, 3, 2, { area: true }), box('L', 1, 6, 8)]), 'R', R);
+const r = remove(placed([box('A', 1, 6, 0), box('R', 2, 5, 3, 2, { area: true }), box('L', 1, 6, 8)]), 'R');
 eq('2 an area deleted: L rises by its extent and the rows it owned; A\'s row stays', [rows(r).L, stack(r, 'L', 1)], [2, 'A | A1 |']);
 // a deletion never moves a block down, in either measure, over random histories
 function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }

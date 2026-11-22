@@ -10,7 +10,6 @@
 // extent's columns c0…c1, its extent's top row y (displayed) and its canonical height h with its temporary rows e; every operation writes a
 // new Layout and changes none it was given (stacks are replaced, never mutated).
 
-import { on, DEFAULT } from './rules.js';
 import { extent, isArea, readingOrder, byId } from './geometry.js';
 import { checkTransition } from './transition.js';
 
@@ -89,9 +88,9 @@ function toWork(layout) {
     const b = layout.boxes.get(id); B.set(id, gapBlock(b));
     for (const s of b.above || []) for (let c = s.c0; c <= s.c1; c++) S.set(key(id, c), cloneStack(s.stack));
   }
-  return { B, S, rules: null };
+  return { B, S };
 }
-const copyWork = (W) => ({ B: new Map([...W.B].map(([k, b]) => [k, { ...b }])), S: new Stacks([...W.S].map(([k, st]) => [k, cloneStack(st)])), rules: W.rules });
+const copyWork = (W) => ({ B: new Map([...W.B].map(([k, b]) => [k, { ...b }])), S: new Stacks([...W.S].map(([k, st]) => [k, cloneStack(st)])) });
 
 // ---- the chain of one column: anchors from the top; and every element of it, anchors and standing blocks, in order
 function chain(W, c) {
@@ -204,11 +203,6 @@ function enter(W, x, c, ys = null, byCanon = false, canon = null, yc = null, res
     after = slice(after, rlen(after) - Math.min(rlen(after), keep));
   }
   if (resident) { W.S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before] }); st.u = x.id; st.parts = [after, ...st.parts.slice(i + 1)]; return; }
-  if (!on(W.rules, 'GAP.5.3')) {   // GAP.5.3 off: it cuts the stack, an anchor over the rows above it, the rows under it its own, no lend
-    W.S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), remap(before, (o) => (o === x.id ? heirOf(st) : o))] });
-    st.u = x.id; st.parts = [fill(x.id, rlen(after)), ...st.parts.slice(i + 1)];
-    return;
-  }
   st.parts.splice(i, 1, before, entry, after);
 }
 // a standing block put at offset off from the start of the rows `rows`: the rows before it, its entry, the rows after it
@@ -218,7 +212,7 @@ function place(rows, off, x) {
   return [slice(rows, 0, off), { id: x.id, lend: slice(rows, off, off + x.h) }, slice(rows, off + x.h)];
 }
 
-// ---- x's rows in column c, wherever they lie (G2): those above it go; those under it go too, or, narrowed off with GAP.9 on (G8), become
+// ---- x's rows in column c, wherever they lie (G2): those above it go; those under it go too, or, narrowed or pressed off (GAP.9, G8), become
 // rows of the stack they lie in, its u's; in the stack whose u x is, the u that stack is about to get, x's own
 function release(W, x, c, keep, heir, all = false) {   // all: a pass, which keeps its rows above it too
   let past = false;
@@ -241,34 +235,31 @@ function release(W, x, c, keep, heir, all = false) {   // all: a pass, which kee
 // too, as the screen has them, until the neighbour's step uses them or it comes back (O-21)
 function leave(W, x, c, why, ys, shown = 0, ycPass = null) {
   const f = seq(W, c).find((el) => el.id === x.id); if (!f) return;
-  const pass = why === 'pass', gap52 = pass || on(W.rules, 'GAP.5.2'), tmpRows = pass ? fill(heirOf(f.st), shown) : [];
-  const keep = pass || ((why === 'narrow' || why === 'press') && on(W.rules, 'GAP.9'));   // G8: narrowing or pressing aside is not deleting
+  const pass = why === 'pass', tmpRows = pass ? fill(heirOf(f.st), shown) : [];
+  const keep = pass || why === 'narrow' || why === 'press';   // G8: narrowing or pressing aside is not deleting
   const yc = pass ? ycPass || rowsIn(W, 'canonical') : null;
   release(W, x, c, keep, heirOf(f.st), pass);
-  if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8); with GAP.5.2 off it goes with it
+  if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8, GAP.5.2)
     const { st, i } = f;
     if (pass) {   // its place stays as rows in place of its lend, which may be shorter than its body (it grew, G7)
       const sl = Math.max(0, Math.min(yc.get(x.id) - spans(W, st, 'canonical', yc)[i - 1][1], x.y - spans(W, st)[i - 1][1]));
       st.parts.splice(i - 1, 3, cat(st.parts[i - 1], fill(heirOf(st), x.h + sl), tmpRows, st.parts[i + 1]));
-    } else st.parts.splice(i - 1, 3, cat(st.parts[i - 1], gap52 ? st.parts[i].lend : [], st.parts[i + 1]));
+    } else st.parts.splice(i - 1, 3, cat(st.parts[i - 1], st.parts[i].lend, st.parts[i + 1]));
     return;
   }
   const mine = f.st; W.S.delete(key(x.id, c));
   const L = lowerOf(W, x.id, c);
-  // GAP.5.2 off: the stack of the block that went loses its rows, the blocks standing in it stand on with no lends, whether it joins the
-  // stack under it or, under the last anchor, its lowest standing block takes its place
-  const gone = (p, j) => (gap52 ? p : !isStand(j) ? [] : { id: p.id, lend: [] });
   if (L) {   // join: the stack above x and the stack under it become one
     const up = mine.parts.slice(), last = up.pop(), k = mine.parts.length - 1;
     // narrowed off: what its body stood on and its slack there stay, measured canonically, so that no temporary height is written
     const slack = !keep ? 0 : pass ? Math.max(0, Math.min(yc.get(x.id) - spans(W, mine, 'canonical', yc)[k][1], x.y - spans(W, mine)[k][1]))
       : ys.get(x.id) - spans(W, mine, 'canonical', ys)[k][1];
     const body = keep ? cat(fill(heirOf(mine), x.h + slack), tmpRows) : [];   // x.h: its height in base, rule 2 running before the heights of after
-    L.u = mine.u; L.parts = [...up.map(gone), cat(gone(last, 0), body, L.parts[0]), ...L.parts.slice(1)];
+    L.u = mine.u; L.parts = [...up, cat(last, body, L.parts[0]), ...L.parts.slice(1)];
   } else if (mine.parts.length > 1) {   // the last anchor: the lowest block standing in its stack becomes the stack's anchor, the others
     // stand on in it; its lend and the rows under it go (GAP.3), and the room above it that was its own becomes the gap's
     const k = mine.parts.length - 2, s = mine.parts[k], to = heirOf(mine), g = (seg) => remap(seg, (o) => (o === s.id ? to : o));
-    W.S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (!isStand(j) ? g(p) : { id: p.id, lend: g(p.lend) })).map(gone) });
+    W.S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (!isStand(j) ? g(p) : { id: p.id, lend: g(p.lend) })) });
   }
 }
 
@@ -299,7 +290,6 @@ function moveIn(W, c, ids, d, sw = null, added = { own: new Map(), room: new Map
     runs.push({ r: top.id, head: a === 0, run: new Set(q.slice(a, z + 1).map((el) => el.id)), ust, ui, lst, li, sameStack: top.i >= 0 && lst === ust, holds: slack <= 0, slack: Math.max(0, slack) });
     a = z;
   }
-  const gap51 = on(W.rules, 'GAP.5.1'), gap8 = on(W.rules, 'GAP.8');
   for (const { r, head, run, ust, ui, lst, li, sameStack, holds, slack } of runs) {
     if (d > 0) {
       // the swap's neighbour moving down, the swap going up (O-21): in a column the carried block comes into over it, the gap under it
@@ -324,11 +314,9 @@ function moveIn(W, c, ids, d, sw = null, added = { own: new Map(), room: new Map
       const k = -d, used = Math.min(k, slack), seg0 = ust.parts[ui], n = Math.min(rlen(seg0), k - used);
       const left = slice(seg0, rlen(seg0) - n); ust.parts[ui] = slice(seg0, 0, rlen(seg0) - n);
       if (lst) {
-        // the owners of what comes under the run: its top's own, the rows it left with theirs (G5, S7, G6/GAP.8); with GAP.5.1 off, rows
-        // of the stack they come into, its u's, free room staying free; the lengths are the same either way. Going down under the swap's
+        // the owners of what comes under the run: its top's own, the rows it left with theirs (G5, S7, G6/GAP.8, GAP.5.1). Going down under the swap's
         // neighbour, the carried block's temporary rows its pass kept come out (O-21)
-        const into = heirOf(lst), mine = !gap51 ? (head ? null : into) : head && !gap8 ? null : r;
-        const owner = (o) => (!gap51 ? (o === null ? null : into) : o === null && head ? mine : o);
+        const mine = r, owner = (o) => (o === null && head ? mine : o);
         let cutN = sw && sw.under.has(c) ? sw.tmp : 0;
         const own = used - Math.min(used, cutN); cutN -= used - own;
         // the slack this RELINK's earlier steps put under the run stays first, before the rows this step leaves
@@ -384,14 +372,14 @@ const layoutOf = (from, boxes) => {
   const order = readingOrder(boxes.values());
   return { cols: from.cols, measure: from.measure, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order, areas: from.areas || new Map() };
 };
-const work = (layout, rules) => { const W = toWork(layout); W.rules = rules; return W; };
+const work = (layout) => toWork(layout);
 
 // ====================================================================== the operations
 /** GAP.1 Stacks from places: in every column, top to bottom by its canonical rows, every block an anchor whose stack holds the rows from the
  *  block above (or the top) to it, owned by the block above, unowned under the top; nothing stands yet. Then FOLLOW. Places that overlap are
  *  a caller's bug (open()'s separation comes first). @param {Layout} layout @returns {Layout} */
 export function fromPlaces(layout) {
-  const W = { B: new Map(), S: new Stacks(), rules: null };
+  const W = { B: new Map(), S: new Stacks() };
   for (const id of layout.order) { const b = layout.boxes.get(id); W.B.set(id, gapBlock({ ...b, y: b.yc ?? b.y })); }
   for (const c of allCols(W)) {
     const col = [...W.B.values()].filter((b) => covers(b, c)).sort((a, b) => a.y - b.y || byId(a.id, b.id));
@@ -406,24 +394,24 @@ export function fromPlaces(layout) {
 }
 
 /** FOLLOW: every row from the stacks (INV-2), y in the layout's measure and yc in the canonical one; no stack changes. @returns {Layout} */
-export function follow(layout) { return toLayout(work(layout, null), layout); }
+export function follow(layout) { return toLayout(work(layout), layout); }
 
 /** A push with its followers, for SETTLE's phases between two RELINKs (LAYOUT-ENGINE-PLAN §5.2): `after` is `before` with some blocks moved
  *  down or grown; every block they reach is pushed down so that it keeps its gap under them, in the order of the chains: in each column of
  *  a chain, under the element above it there, at most the stack's rows and at most the distance it had in `before`, so a gap P-UP closed
  *  stays closed and a column with slack takes the push into its slack first. The chains are those of `base` (the layout the RELINK interval
  *  started from, whose stacks the working state keeps) once every element that no longer covers a column of its chain there has left it by
- *  RELINK's own rule 2 (`leave`, as narrowed or pressed off): its body and the canonical slack above it stay as rows with GAP.9, its own
- *  rows go with it without, a standing block's lend comes back with GAP.5.2 and goes with it without; so the next element follows the one
+ *  RELINK's own rule 2 (`leave`, as narrowed or pressed off): its body and the canonical slack above it stay as rows (GAP.9), a
+ *  standing block's lend comes back (GAP.5.2); so the next element follows the one
  *  above it with the rows RELINK will give it. An element leads the next one only while the next one still stands under it on the screen
  *  (an earlier phase may have put it beside or over it, for P-SEP to settle). The blocks of `skip` (the moved block of the change, in no
  *  chain until phase 8) neither lead nor follow where they still stand in a chain, and the chain stops at them, the held place keeping
  *  the blocks under it where they are (DRAG.B1). Blocks only go down; no stack of the layout changes, RELINK's alone.
- *  @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @param {?Rules} [rules] @param {Layout} [base]
+ *  @param {Layout} before @param {Layout} after @param {Set<string>} [skip] @param {Layout} [base]
  *  @returns {Layout} */
-export function push(before, after, skip = new Set(), rules = null, base = before) {
+export function push(before, after, skip = new Set(), base = before) {
   const W = toWork(after), W0 = toWork(before), H = (b) => b.h + b.e;
-  const D = work(base, rules || DEFAULT);
+  const D = work(base);
   departAll(D, (id, c) => (W.B.has(id) && !covers(W.B.get(id), c) ? 'narrow' : null), rowsIn(D, 'canonical'), null);
   const preds = new Map([...W.B.keys()].map((id) => [id, []])), succs = new Map([...W.B.keys()].map((id) => [id, []]));
   const lead = (p, q, gap, c) => {
@@ -500,13 +488,13 @@ function departAll(W, out, ys, swap) {
  *  then the blocks put at a place, top to bottom (the carried block, a created one and a block of a swap coming back at its displayed
  *  target, a block moved by hand measured from its canonical row, G11's anchors coming back as anchors; an undo's by its canonical row);
  *  and M, W with rule 5 made, where the blocks that come in by themselves are measured, each at its reference. Then rule 5 and FOLLOW,
- *  whose rows are the result. @param {Transition} T @param {Rules} rules @returns {Relinked} */
-export function relink(T, rules) {
+ *  whose rows are the result. @param {Transition} T @returns {Relinked} */
+export function relink(T) {
   let out;
   try {
     const errors = checkTransition(T);
     if (errors.length) return { ok: false, why: 'failed', errors };
-    out = relinkWork(T, rules);
+    out = relinkWork(T);
   } catch (e) { return { ok: false, why: 'failed', errors: [e.message] }; }
   const errs = check(out.layout);
   return errs.length ? { ok: false, why: 'failed', errors: errs } : { ok: true, layout: out.layout, refs: out.refs };
@@ -521,11 +509,11 @@ function projected(W, tg) {
 }
 /** The rows RELINK counts every move from (LAYOUT-RULES GAP's inputs, `moved`): FOLLOW over `base`'s stacks, the blocks `after` does not
  *  hold taken away first (GAP.6), with `after`'s heights, a height a phase changed being no move. Box rows by id, for the blocks both hold;
- *  for the tests and the dev look. @param {Layout} base @param {Layout} after @param {Rules} rules @returns {Map<string, number>} */
-export function startRows(base, after, rules) {
+ *  for the tests and the dev look. @param {Layout} base @param {Layout} after @returns {Map<string, number>} */
+export function startRows(base, after) {
   const gb = new Map(base.order.map((id) => [id, gapBlock(base.boxes.get(id))]));
-  let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id, rules);
-  const W = work(b0, rules), tg = new Map(after.order.filter((id) => W.B.has(id)).map((id) => [id, gapBlock(after.boxes.get(id))]));
+  let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id);
+  const W = work(b0), tg = new Map(after.order.filter((id) => W.B.has(id)).map((id) => [id, gapBlock(after.boxes.get(id))]));
   return new Map([...projected(W, tg)].map(([id, y]) => [id, y + (isArea(after.boxes.get(id)) ? 1 : 0)]));
 }
 
@@ -564,14 +552,14 @@ function movesOf(T, W, tg, start, gb) {
   return { moved, steps: [...cut(d, g && g[1] < 0 ? -1 : 1), ...tail] };
 }
 
-function relinkWork(T, rules) {
+function relinkWork(T) {
   const { base, after } = T, carried = T.carried ?? null, canonical = !!T.canonical;
   const kv = (list) => new Map((list || []).map(([id, c, w]) => [key(id, c), w]));
   const LV = kv(T.leave), EN = kv(T.enter), PS = new Map((T.pass || []).map(([id, c]) => [key(id, c), 'pass'])), passers = new Set((T.pass || []).map(([id]) => id));
   // GAP.6 first, top to bottom, for every block after does not hold
   const gb = new Map(base.order.map((id) => [id, gapBlock(base.boxes.get(id))]));
-  let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id, rules);
-  const W = work(b0, rules);
+  let b0 = base; for (const id of [...gb.keys()].filter((id) => !after.boxes.has(id)).sort((a, b) => gb.get(a).y - gb.get(b).y || byId(a, b))) b0 = remove(b0, id);
+  const W = work(b0);
   const tg = new Map(); for (const id of after.order) tg.set(id, gapBlock(after.boxes.get(id)));   // after, in GAP's coordinates: rows are targets
   const padOf = (id) => (isArea(after.boxes.get(id)) ? 1 : 0);
   const canonTarget = (id) => { const b = after.boxes.get(id); return (b.yc ?? b.y) - padOf(id); };
@@ -696,8 +684,8 @@ function relinkWork(T, rules) {
 
 /** Rule 1 alone, every block keeping its columns: the steps of `moves` in order, then FOLLOW; alone it is the lab model's `move`, and what
  *  step 1 tests rule 1 by. @param {Map<string,Moved>|Object<string,Moved>} moves @returns {Layout} */
-export function adjust(layout, moves, rules) {
-  const W = work(layout, rules), added = { own: new Map(), room: new Map() };
+export function adjust(layout, moves) {
+  const W = work(layout), added = { own: new Map(), room: new Map() };
   for (const [ids, d] of stepsOf(moves)) {
     const cs = new Set(); for (const id of ids) if (W.B.has(id)) for (const c of cols(W.B.get(id))) cs.add(c);
     for (const c of [...cs].sort((a, b) => a - b)) moveIn(W, c, ids, d, null, added);
@@ -707,8 +695,8 @@ export function adjust(layout, moves, rules) {
 }
 
 /** GAP.6 A block taken away (deleted, or carried away in phase 1b): rule 2 in every column it covered, then FOLLOW. @returns {Layout} */
-export function remove(layout, id, rules) {
-  const W = work(layout, rules), x = W.B.get(id); if (!x) throw new Error('gap: no block ' + id);
+export function remove(layout, id) {
+  const W = work(layout), x = W.B.get(id); if (!x) throw new Error('gap: no block ' + id);
   const ys = rowsIn(W, 'canonical');
   for (const c of cols(x)) leave(W, x, c, 'delete', ys);
   W.B.delete(id);
@@ -717,8 +705,8 @@ export function remove(layout, id, rules) {
 }
 
 /** Rule 5 alone: targets, id → displayed row of the box (a frame row for an area). @returns {Layout} */
-export function fit(layout, targets, rules) {
-  const W = work(layout, rules), t = new Map();
+export function fit(layout, targets) {
+  const W = work(layout), t = new Map();
   for (const [id, y] of targets instanceof Map ? targets : Object.entries(targets)) t.set(id, y - (isArea(layout.boxes.get(id)) ? 1 : 0));
   fitWork(W, t);
   return toLayout(W, layout);
@@ -735,12 +723,12 @@ export function shift(layout, k) {
 
 /** Whether a block is a head block: the first of the chain in every column of its extent (LAYOUT-RULES §1.3). */
 export function isHead(layout, id) {
-  const W = work(layout, null), x = W.B.get(id);
+  const W = work(layout), x = W.B.get(id);
   return cols(x).every((c) => { const q = seq(W, c); return q.length > 0 && q[0].id === id; });
 }
 
 /** The ids of a column's chain, top to bottom, anchors and standing blocks. */
-export function columnChain(layout, c) { return seq(work(layout, null), c).map((el) => el.id); }
+export function columnChain(layout, c) { return seq(work(layout), c).map((el) => el.id); }
 
 /** A stack as the lab model prints it: «u | runs [stand:lend] runs |», '_' for unowned rows, '·' for an empty seg. */
 export function showStack(st) {
@@ -757,7 +745,7 @@ export function stackAt(layout, l, c) {
  *  every owner covers its column, no lend longer than its block's canonical height) and INV-2 (the rows are FOLLOW's). @returns {string[]} */
 export function check(layout) {
   const errs = [];
-  let W; try { W = work(layout, null); } catch (e) { return ['unreadable: ' + e.message]; }
+  let W; try { W = work(layout); } catch (e) { return ['unreadable: ' + e.message]; }
   // the stacks' shape first, so that a stale or broken stack is reported, never thrown: every stack's anchor and u in its column, its parts
   // alternating seg and stand, every stand a block of the layout in that column, every stack reached from the top of its column
   const stackCols = new Set();

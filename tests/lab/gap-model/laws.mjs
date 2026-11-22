@@ -75,7 +75,7 @@ export function replay(m, history) {
 // near and far in one RELINK
 export const merge = (near, far) => (!far ? near : { after: { ...near.after, ...far.after }, steps: [...near.steps, ...far.steps], leave: [...near.leave, ...far.leave], enter: [...near.enter, ...far.enter], pass: [...near.pass, ...far.pass],
   carried: near.carried ?? far.carried, ...(near.canonical || far.canonical ? { canonical: true } : {}), ...(near.swap || far.swap ? { swap: near.swap || far.swap } : {}),
-  ...(near.start || far.start ? { start: { ...(near.start || {}), ...(far.start || {}) } } : {}), ...(near.fallback || far.fallback ? { fallback: near.fallback || far.fallback } : {}) });
+  ...(near.start || far.start ? { start: { ...(near.start || {}), ...(far.start || {}) } } : {}) });
 
 // one case: the blocks (frames), their temporary heights, the near and the far transition; returns a failure or null
 export function runCase(c, make = createModel) {
@@ -247,7 +247,7 @@ export function runLaws(N, { seed0 = 1, deep = 3, areas = 0.2, make = createMode
   let tried = 0, failure = null;
   for (let seed = seed0; tried < N && seed < seed0 + N * (kinds ? 200 : 40); seed++) {
     const r = rng(seed);
-    const opts = { gap51: r() > 0.2, gap52: r() > 0.2, gap53: r() > 0.2, gap8: r() > 0.2, gap9: r() > 0.2 };
+    const opts = {};
     const A = sheet(r, 5, { off: 0, pre: 'a', areas }), Z = sheet(r, 4, { off: 20, pre: 'z', areas });
     const blocks = [...A, ...Z].map(({ e, ...b }) => b), temps = blocks.filter(() => r() < 0.25).map((b) => [b.id, 1 + Math.floor(r() * 3)]);
     // a third of the blocks inserted after the others are opened, so that some stand in another block's gap, with lends
@@ -274,7 +274,6 @@ export function runLaws(N, { seed0 = 1, deep = 3, areas = 0.2, make = createMode
     tried++; inc(next.kind); const near = next.near, far = next.far, base = frames(m);
     if (history.length) inc('after a history'); if (history.some((h) => h.T)) inc('after a move in the history');
     if (Object.values(base).some((b) => b.area)) inc('with areas');
-    if (near.fallback) inc('fallback ' + near.fallback);
     if (near.pass.length) inc('with passes'); if (near.swap && near.pass.some(([id]) => id === near.swap[1])) inc('a swap neighbour passing'); if (near.swap && near.steps.some(([ids]) => ids.includes(near.swap[0]) && ids.includes(near.swap[1]))) inc('a swap after a push'); if (temps.length || history.some((h) => h.show)) inc('under temporary heights'); if (standing) inc('with standing blocks'); if (near.swap && near.swap.some((id) => base[id].e)) inc('a swap of a block with a temporary height');
     const c = { seed, opts, blocks, ins, temps, history, near, far }, f = runCase(c, make) || (twin && runTwin(c, make, twin));
     if (f) { inc('failed: ' + f.law); if (!failure) failure = { GEN_VERSION, seed, failure: f, case: shrink(c, f.law, (t) => runCase(t, make) || (twin && runTwin(t, make, twin))) }; }

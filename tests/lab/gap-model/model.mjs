@@ -30,12 +30,9 @@
 
 const len = (seg) => seg.length;
 
-export function createModel(opts = {}) {
-  // the switches, on by default: GAP.5.1 (rule 1's owners), GAP.5.2 (leave gives back), GAP.5.3 (stand), GAP.8 (G6), GAP.9 (G8);
-  // GAP.2, the owners of rows, is core (the owner, 2026-11-05)
-  const O = { gap8: true, gap9: true, gap51: true, gap52: true, gap53: true, ...opts };
-  if (!O.gap51) O.gap8 = false;   // GAP.8 needs GAP.5.1
-  if (!O.gap52) O.gap9 = false;   // GAP.9 needs GAP.5.2: with nothing given back there is nothing to keep
+export function createModel() {
+  // no switches: GAP.2, the owners of rows, is core (the owner, 2026-11-05), and so are GAP.5.1 (rule 1's owners), GAP.5.2 (leave gives
+  // back), GAP.5.3 (stand), GAP.8 (G6) and GAP.9 (G8) (the owner, 2026-11-21, docs/LAYOUT-SEAMS-PLAN.md §5)
   const padOf = (b) => (b.area ? 1 : 0);
   const inside = (b) => { const p = padOf(b); return { ...b, y: b.y - p, h: b.h + 2 * p, c0: b.c0 - p, c1: b.c1 + p }; };   // frame → extent
   const frameRow = (b, y) => y + padOf(b);
@@ -159,11 +156,6 @@ export function createModel(opts = {}) {
       after = after.slice(len(after) - Math.min(len(after), keep));
     }
     if (resident) { S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before] }); st.u = x.id; st.parts = [after, ...st.parts.slice(i + 1)]; return; }
-    if (!O.gap53) {   // GAP.5.3 off: it cuts the stack, an anchor over the rows above it, the rows under it its own, no lend (lesson 17)
-      S.set(key(x.id, c), { u: st.u, parts: [...st.parts.slice(0, i), before.map((o) => (o === x.id ? heirOf(st) : o))] });
-      st.u = x.id; st.parts = [after.map(() => x.id), ...st.parts.slice(i + 1)];
-      return;
-    }
     st.parts.splice(i, 1, before, entry, after);
   }
   // a standing block put at offset off from the start of the rows `rows`: the rows before it, its entry, the rows after it
@@ -174,7 +166,7 @@ export function createModel(opts = {}) {
   }
 
   // ---- x's rows in column c, wherever they lie (G2): those above it (the room it was put with) go; those under it go too, or,
-  // narrowed off with GAP.9 on (G8), become rows of the stack they lie in, that stack's u's (unowned under the top); in the stack
+  // narrowed or pressed off (GAP.9, G8), become rows of the stack they lie in, that stack's u's (unowned under the top); in the stack
   // whose u x is, the u that stack is about to get, x's own
   function release(x, c, keep, heir, all = false) {   // all: a pass, which keeps its rows above it too
     let past = false;
@@ -199,23 +191,20 @@ export function createModel(opts = {}) {
     // every other departure of the RELINK); so the blocks under its place go down in neither measure (where the two slacks differ they may
     // rise in one, and rule 5 brings a block the steps moved to its target). The carried block of a swap keeps there its temporary rows too (`shown`), as the screen has
     // them, so that the blocks under its place do not move on the screen either until it comes back (O-21)
-    const pass = why === 'pass', g52 = pass || O.gap52, tmpRows = pass ? Array(shown).fill(heirOf(f.st)) : [];
-    const keep = pass || ((why === 'narrow' || why === 'press') && O.gap9);   // G8: narrowing or pressing aside is not deleting (GAP.9)
+    const pass = why === 'pass', tmpRows = pass ? Array(shown).fill(heirOf(f.st)) : [];
+    const keep = pass || why === 'narrow' || why === 'press';   // G8: narrowing or pressing aside is not deleting (GAP.9)
     const yc = pass ? ycPass || rowsIn('canonical') : null;
     release(x, c, keep, heirOf(f.st), pass);
-    if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8); with GAP.5.2 off it goes with it
+    if (f.i >= 0) {   // standing: its lend comes back between the segs round it, whatever made it leave (S8, GAP.5.2)
       const { st, i } = f;
       if (pass) {
         const sl = Math.max(0, Math.min(yc.get(x.id) - spans(st, 'canonical', yc)[i - 1][1], x.y - spans(st)[i - 1][1]));
         st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...Array(x.h + sl).fill(heirOf(st)), ...tmpRows, ...st.parts[i + 1]]);
-      } else st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...(g52 ? st.parts[i].lend : []), ...st.parts[i + 1]]);
+      } else st.parts.splice(i - 1, 3, [...st.parts[i - 1], ...st.parts[i].lend, ...st.parts[i + 1]]);
       return;
     }
     const mine = f.st; S.delete(key(x.id, c));
     const L = lowerOf(x.id, c);
-    // GAP.5.2 off: the stack of the block that went loses its rows, the blocks standing in it stand on with no lends, whether it joins
-    // the stack under it or, under the last anchor, its lowest standing block takes its place
-    const gone = (p, j) => (g52 ? p : j % 2 === 0 ? [] : { id: p.id, lend: [] });
     if (L) {          // join: the stack above x and the stack under it become one
       const up = mine.parts.slice(), last = up.pop();
       // narrowed off: what its body stood on and its slack there (the rows by which its stack did not hold it) stay, measured
@@ -224,11 +213,11 @@ export function createModel(opts = {}) {
       const slack = !keep ? 0 : pass ? Math.max(0, Math.min(yc.get(x.id) - spans(mine, 'canonical', yc)[mine.parts.length - 1][1], x.y - spans(mine)[mine.parts.length - 1][1]))
         : ys.get(x.id) - spans(mine, 'canonical', ys)[mine.parts.length - 1][1];
       const body = keep ? [...Array(x.h + slack).fill(heirOf(mine)), ...tmpRows] : [];
-      L.u = mine.u; L.parts = [...up.map(gone), [...gone(last, 0), ...body, ...L.parts[0]], ...L.parts.slice(1)];
+      L.u = mine.u; L.parts = [...up, [...last, ...body, ...L.parts[0]], ...L.parts.slice(1)];
     } else if (mine.parts.length > 1) {   // the last anchor: the lowest block standing in its stack becomes the stack's anchor, the
       // others stand on in it; its lend and the rows under it go (GAP.3), and the room above it that was its own becomes the gap's
       const k = mine.parts.length - 2, s = mine.parts[k], to = heirOf(mine), f = (seg) => seg.map((o) => (o === s.id ? to : o));
-      S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (j % 2 === 0 ? f(p) : { id: p.id, lend: f(p.lend) })).map(gone) });
+      S.set(key(s.id, c), { u: mine.u, parts: mine.parts.slice(0, k).map((p, j) => (j % 2 === 0 ? f(p) : { id: p.id, lend: f(p.lend) })) });
     }
   }
 
@@ -250,7 +239,7 @@ export function createModel(opts = {}) {
   // the run's top, by the rest as room of the run's top, its own rows. Moving up, the slack goes first, then rows from the
   // bottom of the gap above; under the run come first the slack used, as the run's top's own rows, then the rows it left, with
   // their owners (G5). In a column where the run's top is the first block, the free room it leaves and the slack it used become
-  // its own (G6, GAP.8; with GAP.8 off they stay free room); with nothing under the run they go (G5).
+  // its own (G6, GAP.8); with nothing under the run they go (G5).
   // A swap's neighbour (§5.1b) moves by the carried block's height on the screen, its temporary rows included; that displacement is
   // structural and writes none of them (O-21): `tmp`, the carried block's temporary rows. Going up, in a column the carried block comes into
   // over it, what the gap above the neighbour gains (the step where it holds it, or the rows its stack keeps where it stands in one stack
@@ -300,10 +289,8 @@ export function createModel(opts = {}) {
         const k = -d, used = Math.min(k, slack), n = Math.min(len(ust.parts[ui]), k - used);
         const left = ust.parts[ui].slice(len(ust.parts[ui]) - n); ust.parts[ui] = ust.parts[ui].slice(0, len(ust.parts[ui]) - n);
         if (lst) {
-          // the owners of what comes under the run: its top's own, the rows it left with theirs (G5, S7, G6/GAP.8); with GAP.5.1 off,
-          // rows of the stack they come into, its u's, free room staying free; the lengths are the same either way
-          const into = heirOf(lst), mine = !O.gap51 ? (head ? '' : into) : head && !O.gap8 ? '' : r;
-          const owner = (o) => (!O.gap51 ? (o === '' ? '' : into) : o === '' && head ? mine : o);
+          // the owners of what comes under the run: its top's own, the rows it left with theirs (G5, S7, G6/GAP.8, GAP.5.1)
+          const mine = r, owner = (o) => (o === '' && head ? mine : o);
           let cut = sw && sw.under.has(c) ? sw.tmp : 0;
           const own = used - Math.min(used, cut); cut -= used - own;
           // the slack this RELINK's earlier steps put under the run stays first, before the rows this step leaves
