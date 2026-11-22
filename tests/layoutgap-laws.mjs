@@ -25,9 +25,9 @@ const named = (make, side) => {
 named(createModel, 'model');
 named(createEngineModel, 'engine');
 for (const c of FIXED) {   // the state of each, the operation, and the model's result, on both
-  const m = createModel(c.opts).load(stateOf(c)); m[c.op[0]](...c.op.slice(1));
+  const m = createModel().load(stateOf(c)); m[c.op[0]](...c.op.slice(1));
   ok(`model, fixed: ${c.name}${m.snapshot() === c.expect ? '' : ': got ' + m.snapshot()}`, m.snapshot() === c.expect);
-  const e = createEngineModel(c.opts).loadModel(stateOf(c)); e[c.op[0]](...c.op.slice(1));
+  const e = createEngineModel().loadModel(stateOf(c)); e[c.op[0]](...c.op.slice(1));
   ok(`engine, fixed: ${c.name}${e.snapshot() === c.expect ? '' : ': got ' + e.snapshot()}`, e.snapshot() === c.expect);
 }
 // the engine checks the facts of a transition, not a path (RELINK cuts the moves itself, G15): its reasons are declare.mjs's but those of

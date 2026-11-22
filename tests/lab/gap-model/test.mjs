@@ -431,7 +431,7 @@ function r3(aRows) {   // A→L aRows (non-binding), B→L 6 (binding after B gr
   eq([w.rows(), w.rows('canonical'), w.snapshot() === v.snapshot()], [{ B: 2, X: 0 }, { B: 2, X: 0 }, true], 'r11.3: X widened over B\'s columns while it gets one row tall: accepted, as the shrink then the widening');
   clean(w, 'r11.3: invariants');
 }
-// ---- GAP.8 is per column (G6: «the first block of a column»); with it off, the free room and the slack a first block uses stay free
+// ---- GAP.8 is per column (G6: «the first block of a column»): the free room a first block leaves, and the slack it used, become its own rows
 {
   const m = createModel().open([blk('P', 2, 2, 0, 3), blk('H', 1, 2, 5), blk('L', 1, 2, 8)]).carry('H', -2);
   eq([m.stack('L', 1), m.stack('L', 2)], ['H | H4 |', 'H | P2+H2 |'], 'GAP.8: H is the first block of column 1 only: the free room it left there is its own; in column 2 P\'s rows came under it');

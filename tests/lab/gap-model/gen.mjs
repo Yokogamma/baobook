@@ -11,7 +11,7 @@
 // Blocks come and go in frame coordinates ({c0, c1, y, h, e, yc, area}: an area by its frame, y its displayed row, yc its canonical one);
 // inside, every block is its extent (LAYOUT-RULES §1.1: an area's frame with one free cell on every side), as GAP counts it, and the
 // columns a declaration names are GAP's, the extent's.
-export const GEN_VERSION = 12;
+export const GEN_VERSION = 13;   // 13: the carries under a switched-off rule's fallback no longer drawn (P-UP and DRAG.B2.keep are core)
 import { checkDeclaration } from './declare.mjs';
 
 export function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
