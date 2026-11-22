@@ -41,7 +41,6 @@ export function explain(base, after) {
   return { left, entered, reordered };
 }
 
-const FALLBACKS = ['P-UP', 'DRAG.B2.keep'];
 
 /** The errors of a transition: [] when its declaration explains its geometry and every reason is one its action may give.
  *  @param {Transition} T @returns {string[]} */
@@ -115,11 +114,9 @@ export function checkTransition(T) {
     if (h === 'back' && !(canonical && id === carried)) errs.push(`${k}: only an undo's carry back comes back by its canonical row`);
     if (h === 'self' && (created || id === carried)) errs.push(`${k}: a created or carried block does not come in by itself`);
     if (!['put', 'self', 'back'].includes(h)) errs.push(`${k}: no such way to come in, ${h}`); }
-  // a carry inside its columns keeps every neighbour on its side (DRAG.B2): only a swap changes an order, or a fallback of a switched-off
-  // rule that puts a neighbour on the carried block's other side, declared as `fallback`, where the carried block passes it
-  if (T.fallback != null && !FALLBACKS.includes(T.fallback)) errs.push(`no such fallback, ${T.fallback}`);
+  // a carry inside its columns keeps every neighbour on its side (DRAG.B2): only a swap changes an order
   for (const k of PS) { const id = idOf(k);
-    if (!(swap.includes(id) || (T.fallback != null && id === carried))) errs.push(`${k}: only a block of a swap, or the carried block under a fallback, changes its order`);
+    if (!swap.includes(id)) errs.push(`${k}: only a block of a swap changes its order`);
     if (id === undone) errs.push(`${k}: an undo's carry back keeps no place in any chain and passes nothing`); }
   // the lab's form names the moved blocks by steps: whole rows, each a move, of blocks of base
   for (const [ids, d] of steps) { if (!Number.isInteger(d) || d === 0) errs.push(`a step of ${d} rows`); for (const id of ids) if (!B.has(id)) errs.push(`step of ${id}, not in base`); }

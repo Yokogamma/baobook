@@ -35,10 +35,10 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  */
 
 /** The switches (R1, LAYOUT-RULES §1.6) and the settings: the engine's input besides the layout, the change and the memory.
- * @typedef {'SIZE.1'|'SIZE.2'|'SIZE.8'|'GAP.5.1'|'GAP.5.2'|'GAP.5.3'|'GAP.8'|'GAP.9'|'P-ASIDE'|'P-UP'|'P-REST'|'P-SINK'|'THROUGH'
- *          |'DRAG.A2'|'DRAG.A3.narrow'|'DRAG.A4'|'DRAG.A5'|'DRAG.B1'|'DRAG.B2.keep'|'DRAG.B3'|'DRAG.B5'|'DRAG.C4'|'RESIZE.1'|'RESIZE.2'|'RESIZE.3'
- *          |'AREA.3'|'AREA.6'|'AREA.7'|'AREA.7b'|'EDIT.3'|'EDIT.4'|'VIEW.1.fit'|'VIEW.1b'|'VIEW.2'|'VIEW.6'} RuleId
- *   // 35 ids, one per 0.1 row of LAYOUT-RULES §1.6 (GAP.2 is core, the owner, 2026-11-05); 0.2's (SIZE.7, P-SQUEEZE, AREA.4, AREA.8) join with their rules
+ * @typedef {'SIZE.1'|'SIZE.2'|'SIZE.8'|'P-ASIDE'|'P-REST'|'P-SINK'|'THROUGH'
+ *          |'DRAG.A2'|'DRAG.A4'|'DRAG.A5'|'DRAG.C4'|'RESIZE.1'
+ *          |'AREA.7b'|'EDIT.3'|'EDIT.4'|'VIEW.1.fit'|'VIEW.1b'|'VIEW.2'|'VIEW.6'} RuleId
+ *   // 19 ids, one per switchable 0.1 row of LAYOUT-RULES §1.6 (GAP.2 is core, the owner, 2026-11-05; sixteen more since 2026-11-21, docs/LAYOUT-SEAMS-PLAN.md §5); 0.2's (SIZE.7, P-SQUEEZE, AREA.4, AREA.8) join with their rules
  * @typedef {{id:RuleId, needs:RuleId[], fallback:string, relies:RuleId[]}} RuleDecl   // fallback: the name §1.6 gives what runs in its place, for the tests;
  *   // relies: the rules its fallback branch uses (P-ASIDE's: P-SINK for a handle), which tests/layoutrules.mjs checks no closure turns off with it;
  *   // the list's words are in uk.json and en.json (step 5)
@@ -62,14 +62,13 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
  *   // rule 1 groups the blocks it moved that are next to one another in a column's chain into runs and changes only the gap above each run and the gap under it
  * @typedef {{base:Layout, after:Layout, moved?:string[], steps?:Array<[string[], number]>, start?:Record<string, number>, carried?:?string, canonical?:boolean,
  *            leave?:Array<[string, number, 'away'|'narrow'|'press']>, enter?:Array<[string, number, 'put'|'self'|'back']>,
- *            pass?:Array<[string, number]>, swap?:[string, string], fallback?:'P-UP'|'DRAG.B2.keep'}} Transition
+ *            pass?:Array<[string, number]>, swap?:[string, string]}} Transition
  *   // what SETTLE declares it did between two RELINKs (LAYOUT-RULES §4, GAP's inputs): base and after, both displayed (the rows of after are
  *   // targets; an undo's carried block also has its canonical target, its yc); moved: the blocks SETTLE moved, facts and no path: RELINK
  *   // takes each from the row its stacks give it with after's heights to its target, cuts the moves itself and holds every one (G15);
  *   // steps and start: the lab's form, the moves as explicit steps from start rows, whose blocks RELINK reads as `moved`; carried, with canonical for an undo's carry back or a deleted block made again (LAYOUT-ENGINE-PLAN §6.4);
  *   // leave and enter: [id, column, why or how] for every column a block leaves or comes into, in GAP's columns (an area's extent); swap: the
- *   // carried block and its neighbour; pass: [id, column] for a block of a swap passing another in a column it keeps; fallback: the
- *   // switched-off rule that put a neighbour on the carried block's other side
+ *   // carried block and its neighbour; pass: [id, column] for a block of a swap passing another in a column it keeps
  * @typedef {{ok:true, layout:Layout, refs?:Map<string,number>}|{ok:false, why:'failed', errors:string[]}} Relinked   // RELINK's answer: the layout with its stacks
  *   // (refs: the reference, a canonical box row, of every block that came into a column by itself, for the dev look and the tests), or
  *   // the refusal of a transition that does not match its geometry, an internal error of SETTLE (LAYOUT-RULES §5.5)

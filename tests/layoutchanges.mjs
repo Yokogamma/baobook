@@ -4,7 +4,7 @@
 // - the carry's judge: DRAG.B2 above or below (a block that stood in the carried block's columns in `start` keeps its side unless the
 //   block is away; any other by its middle against frow, strictly below being below), DRAG.B3 met from the side (across smaller than along,
 //   or equal and the last move sideways; vertical before any move; pressed to the side its centre lies on, left when they coincide; sticky
-//   while it shares a row with the target), the neighbour letting the block through judged like any other; DRAG.B2.keep and DRAG.B3 in
+//   while it shares a row with the target), the neighbour letting the block through judged like any other; DRAG.B2 and DRAG.B3 in
 //   both states;
 // - the wall's judge: an area's side handle inside the area (the right wall presses left what passes the last column, the left wall
 //   presses right a handle left of column 0) and the width handle's moving edge (what the widened card now overlaps, pressed away from it).
@@ -49,8 +49,6 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
   const memOnly = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 } }, mem({ away: true }), ctx);
   ok('2d away, every side by the middle: B (rows 4–5, middle 5) is above at frow 5', away.side.get('B') === 'above' && away.side.get('A') === 'above', obj(away.side));
   ok('2d2 the judge reads the change\'s own «away» (its maker set it from the memory), not the memory: the side is kept', memOnly.side.get('B') === 'below', obj(memOnly.side));
-  const off = judgeCarry(L, start, { id: 'X', at: { col: 0, y: 5, frow: 5 } }, mem(), ctxOf({}, resolve({ 'DRAG.B2.keep': false })));
-  ok('2e DRAG.B2.keep off: sides by frow and the middle only, so B is above', off.side.get('B') === 'above', obj(off.side));
 }
 
 /* ── 3. DRAG.B3 met from the side ── */
@@ -81,8 +79,6 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
   ok('3g sticky: A met from the side before stays so while it shares a row with the target, though the overlaps now judge it above or below', sticky.met.get('A') === 'right' && sticky.sides.get('A') === 'right', obj(sticky.met));
   const gone = judgeCarry(at1c(start, 'X', { col: 0, y: 8 }), start, { id: 'X', at: { col: 0, y: 8, frow: 8 } }, mem({ sides: new Map([['A', 'right']]) }), ctx);
   ok('3h and its record is dropped once it shares no row with the target', !gone.sides.has('A'), obj(gone.sides));
-  const off = judgeCarry(L4, tall, { id: 'X', at: { col: 4, y: 0, frow: 0 } }, mem(), ctxOf({}, resolve({ 'DRAG.B3': false })));
-  ok('3i DRAG.B3 off: nothing met from the side, every block hit judged above or below', off.met.size === 0 && off.side.has('A'), [obj(off.met), obj(off.side)]);
   ok('3j sideways: more across the columns than along the rows; vertical before any move',
     sideways({ col: 0, y: 0 }, { col: 2, y: 1 }) && !sideways({ col: 0, y: 0 }, { col: 1, y: 1 }) && !sideways(null, { col: 5, y: 0 }));
 }
@@ -131,8 +127,6 @@ const at1c = (start, id, at) => place({ L: start, order: start.order }, id, at).
   const S = sheet(9, [set('B2', 3, 8, 4), set('B3', 1, 9, 5, 3), set('B4', 1, 12, 3, 3)]);
   const j = judgeCarry(at1c(S, 'B4', { col: 2, y: 8 }), S, { id: 'B4', at: { col: 2, y: 8, frow: 8 }, away: false }, mem(), ctx);
   ok('6 B2 over B3, which keeps the side above, is above too, not below by its middle', j.side.get('B3') === 'above' && j.side.get('B2') === 'above', obj(j.side));
-  const off = judgeCarry(at1c(S, 'B4', { col: 2, y: 8 }), S, { id: 'B4', at: { col: 2, y: 8, frow: 8 }, away: false }, mem(), ctxOf({}, resolve({ 'DRAG.B2.keep': false })));
-  ok('6a with DRAG.B2.keep off every side is the middle\'s: B2 (8.5) and B3 (10.5) both below frow 8', off.side.get('B2') === 'below' && off.side.get('B3') === 'below', obj(off.side));
   // the mirror: X carried down from rows 0–1 to row 6 at column 2; C stood under it and keeps the side below; E, at row 5 under C, never
   // stood in X's columns, so its middle (5.5, not below frow 6) would judge it above, and P-UP would lift it past C. E stood under a block
   // that keeps the side below: it is below too
