@@ -15,6 +15,7 @@
 import { settleTree } from '../public/layout/tree.js';
 import { emptyMemory } from '../public/layout/settle.js';
 import { open } from '../public/layout/layout.js';
+import { validate } from '../public/layout/validate.js';
 import { check } from '../public/layout/gap.js';
 import { readingOrder, extent, range, hits, SHEETW } from '../public/layout/geometry.js';
 import { resolve } from '../public/layout/rules.js';
@@ -37,27 +38,8 @@ const rows = (L) => Object.fromEntries([...L.boxes].map(([id, b]) => [id, b.y]))
 const places = (L) => Object.fromEntries([...L.boxes].map(([id, b]) => [id, [b.col, b.y, b.w, b.h]]));
 const frameRows = (area, inner, ctx) => ctx.kinds.area.container.height(area, inner, ctx.measure);
 const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent(b).r1 + 1); return m; };
-/** Every container sound (INV-1 to INV-5), every area's frame round its children, every block in one container only. */
-function sound(Tr, ctx) {
-  const errs = [], seen = new Map();
-  const one = (L, name) => {
-    errs.push(...check(L).map((e) => name + ': ' + e));
-    const ro = readingOrder(L.boxes.values()); if (!L.order.every((id, i) => id === ro[i])) errs.push(name + ': not in reading order');
-    for (const b of L.boxes.values()) {
-      const r = range(b, L.cols); if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) errs.push(`${name}: ${b.id} outside its container`);
-      if (seen.has(b.id)) errs.push(`${b.id} in ${seen.get(b.id)} and ${name}`); seen.set(b.id, name);
-    }
-  };
-  one(Tr, 'sheet');
-  for (const [id, C] of Tr.areas) {
-    const a = Tr.boxes.get(id); if (!a) { errs.push('an area\'s children with no area ' + id); continue; }
-    one(C, id);
-    if (C.cols !== a.w - 1) errs.push(`${id}: its children in ${C.cols} columns, its card ${a.w - 1}`);
-    if (a.h !== frameRows(a, bottomOf(C), ctx)) errs.push(`${id}: frame ${a.h}, its children need ${frameRows(a, bottomOf(C), ctx)}`);
-  }
-  for (const b of Tr.boxes.values()) if (b.kind === 'area' && !Tr.areas.has(b.id)) errs.push('an area with no children\'s container: ' + b.id);
-  return errs;
-}
+/** Every container sound, every area's frame round its children, every block in one container: the engine's check of a tree. */
+const sound = (Tr, ctx) => validate(Tr, ctx);
 
 /* ── 1. a text in an area grows and shrinks ── */
 {
