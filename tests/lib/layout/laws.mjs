@@ -17,8 +17,11 @@
 //     delete, end the temporary heights and then delete. Every result valid.
 //   - L14, reported and not failed: the answer's canonical places read again and opened give the same places (stronger than today's
 //     convergence over several openings, so a difference is judged case by case).
-// A violation is kept with its seed, the commands so far and the change; the run stops at `max` of them. What a probe compares with a
-// second path (the lab model, a reference SETTLE) is the references' part of §4.3, not here.
+//   - the references (S2b): L1, every transition SETTLE hands RELINK, in a command or in a sampled probe, answered alike by the lab
+//     model (modelref.mjs); L3, every area's frame of every tree judged valid against the formula written apart (tests/lab/frame-ref.mjs);
+//     L13 after a history, sampled: the tree with its stacks and the gesture's memory carried 40 rows lower and 80, the same answer.
+// A violation is kept with its seed, the commands so far and the change; the run stops at `max` of them. L2, the reference SETTLE, has
+// a domain of fresh sheets and runs on its own (tests/layoutref.mjs).
 
 import { validate, validateContainer } from '../../../public/layout/validate.js';
 import { settleTree } from '../../../public/layout/tree.js';
@@ -30,6 +33,8 @@ import { canonicalCtx } from '../../../public/layout/size.js';
 import { DEFAULT, SETTINGS } from '../../../public/layout/rules.js';
 import { stubMeasure } from '../measure.mjs';
 import { sequences, str } from './seq.mjs';
+import { compare } from './modelref.mjs';
+import { framesAgainstRef } from '../../lab/frame-ref.mjs';
 
 export const G = { readingOrder, sharesCol, extent, SHEETW };
 const placeOf = (b) => [b.col, b.y, b.w, b.h];
@@ -39,6 +44,27 @@ const placesOf = (T) => Object.fromEntries(containers(T).flatMap(([box, L]) => [
 function reversed(T) {
   const rev = (L) => ({ ...L, boxes: new Map([...L.boxes].reverse()) });
   return { ...rev(T), areas: new Map([...T.areas].reverse().map(([id, C]) => [id, { ...rev(C), areas: new Map() }])) };
+}
+/** A tree `k` rows lower on the sheet: every block of the sheet, its canonical row and the unowned rows over each stack that starts at
+ *  the top; the children of an area stand where they stood in it. */
+export function lower(T, k) {
+  if (!k) return T;
+  const top = (seg) => (seg[0] && seg[0].o === null ? [{ o: null, n: seg[0].n + k }, ...seg.slice(1)] : [{ o: null, n: k }, ...seg]);
+  const boxes = new Map([...T.boxes].map(([id, b]) => [id, { ...b, y: b.y + k, ...(b.yc != null ? { yc: b.yc + k } : {}),
+    ...(b.above ? { above: b.above.map((t) => (t.stack.u !== null ? t : { ...t, stack: { ...t.stack, parts: [top(t.stack.parts[0]), ...t.stack.parts.slice(1)] } })) } : {}) }]));
+  return { ...T, boxes };
+}
+/** A change aimed `k` rows lower when it aims at the sheet. */
+function aimed(change, k) {
+  const onSheet = ((change.box ?? null) == null || change.type === 'leave') && change.type !== 'enter';
+  return change.at && onSheet ? { ...change, at: { ...change.at, y: change.at.y + k, ...(change.at.frow != null ? { frow: change.at.frow + k } : {}) } } : change;
+}
+/** A gesture's memory `k` rows lower, for a gesture on the sheet: the rows it keeps (LAYOUT-RULES §5.1b). */
+function lowerMemory(memory, change, k) {
+  if (!memory || !k || (change.box ?? null) != null) return memory;
+  const t = (x) => (x ? { ...x, y: x.y + k, ...(x.frow != null ? { frow: x.frow + k } : {}) } : x);
+  const th = memory.through && { ...memory.through, row: memory.through.row + k, at: t(memory.through.at), last: t(memory.through.last), ...(memory.through.line != null ? { line: memory.through.line + k } : {}) };
+  return { ...memory, through: th, lastTarget: t(memory.lastTarget) };
 }
 /** A note read back from a canonical tree: its places and set sizes, no widths, heights or stacks. */
 function reread(T) {
@@ -65,8 +91,26 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
   let cur = null, ctx = null, opened = null, lateFirst = null, canonFirst = null;
   const ctxOf = (map) => ({ rules, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) });
   const bad = (law, detail, extra = {}) => { violations.push({ law, note: cur.k, seed: cur.seed, ...extra, detail, hist: cur.hist.slice() }); };
-  const settleSafe = (root, change, memory, c = ctx) => { try { return engine(root, change, memory, c); } catch (e) { return { threw: String(e && e.message) }; } };
-  const valid = (law, T, c, extra) => { const e = validate(T, c); if (e.length) bad(law, e.slice(0, 3), extra); return !e.length; };
+  // L1: every transition SETTLE hands RELINK, in a command or in a probe, answered by the lab model too (modelref.mjs). An engine given
+  // in the engine's place by a test of the laws takes the hooks or leaves them
+  let l1 = null, l1on = true;   // l1on: off for the runs that are another law's (L13's lowered trees) and for the probes not sampled
+  const hooks = { relink(T, answer) {
+    if (!l1on) return;
+    inc('L1: transitions RELINK was handed');
+    let d; try { d = compare(T, answer); } catch (e) { d = { what: 'the comparison threw', error: String(e && e.message) }; }
+    if (d && !l1) l1 = d;
+  } };
+  const settleSafe = (root, change, memory, c = ctx) => { try { return engine(root, change, memory, c, hooks); } catch (e) { return { threw: String(e && e.message) }; } };
+  /** A violation of L1 since the last call, said with the command it came in. */
+  const modelSays = (extra) => { if (!l1) return false; const d = l1; l1 = null; bad('L1: the lab model gives RELINK\'s answer', { what: d.what, model: String(d.model ?? '').slice(0, 600), engine: String(d.engine ?? d.error ?? '').slice(0, 600) }, extra); return true; };
+  // every tree judged valid is judged by L3 too: each area's frame against the formula written apart (tests/lab/frame-ref.mjs)
+  const valid = (law, T, c, extra) => {
+    const e = validate(T, c); if (e.length) { bad(law, e.slice(0, 3), extra); return false; }
+    let f; try { f = framesAgainstRef(T, c.measure); } catch (err) { f = ['the formula threw: ' + err.message]; }
+    inc('L3: frames against the formula', T.areas.size);
+    if (f.length) bad('L3: an area\'s frame is the formula\'s', f.slice(0, 3), { ...extra, of: law });
+    return !f.length;
+  };
 
   /** The probes of consequences on an accepted tree; nothing of them is kept. */
   function probe(T, extra) {
@@ -124,7 +168,8 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
     memory: () => emptyMemory(),
     note(n) {
       cur = n; ctx = ctxOf(n.map);
-      let o; try { o = open(n.stored, ctx); } catch (e) { bad('open must not throw', String(e && e.message)); return null; }
+      let o; try { o = open(n.stored, ctx, new Map(), hooks); } catch (e) { bad('open must not throw', String(e && e.message)); return null; }
+      if (modelSays({ kind: 'open' })) return null;
       if (!o.ok) { inc('notes not opened'); return null; }
       valid('valid: the note as opened, canonical', o.layout, ctx);
       valid('valid: the note as opened, shown', o.shown, ctx);
@@ -135,6 +180,7 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       const negative = kind.startsWith('not: '), extra = { kind, change };
       const before = str(root), memBefore = str(memory);
       const r = settleSafe(root, change, memory);
+      if (modelSays(extra)) return { stop: true };
       if (str(root) !== before || str(memory) !== memBefore) { bad('L6: the inputs unchanged', r.ok ? 'after an acceptance' : 'after ' + (r.why || 'a throw'), extra); return { stop: true }; }
       if (r.threw) { bad('an answer, never a throw', r.threw, extra); return { stop: true }; }
       if (!r.ok) {
@@ -223,6 +269,18 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
           if (str(a) !== str(b)) { bad('L13: the same change far from the top gives the same places, 40 rows lower or 80', { at40: a, at80: b }, extra); return { stop: true }; }
         }
       }
+      // L13 after a history: the tree the command was given, stacks and all, and the gesture's memory carried 40 rows lower and 80,
+      // the command aimed as much lower: the two answers are each other's translation, the tree with its stacks, the memory, and
+      // `start`, which the next move of the gesture is given
+      if (root !== opened && !change.canonical && rnd() < 0.35) {
+        l1on = false;
+        const a = settleSafe(lower(root, 40), aimed(change, 40), lowerMemory(memory, change, 40)), b = settleSafe(lower(root, 80), aimed(change, 80), lowerMemory(memory, change, 80));
+        l1on = true;
+        inc('L13: after a history');
+        const far = (x, k) => (x.threw || !x.ok ? { ok: false, why: x.why || 'threw' } : { ok: true, layout: str(lower(x.layout, 80 - k)), start: str(lower(x.start, 80 - k)), memory: str(lowerMemory(x.memory, change, 80 - k)) });
+        const fa = far(a, 40), fb = far(b, 80);
+        if (str(fa) !== str(fb)) { bad('L13: after a history, the same change 40 rows lower or 80 gives the same answer', fa.ok && fb.ok ? { layouts: fa.layout === fb.layout, starts: fa.start === fb.start, memories: fa.memory === fb.memory, at40: placesOf(a.layout), at80: placesOf(b.layout) } : { at40: fa.ok || fa, at80: fb.ok || fb }, extra); return { stop: true }; }
+      }
       // what the quotas count (§4.5): a transition under a temporary height, one that swapped, one that changed a width
       // of the commands that changed the tree, the denominator of every share
       if (str(r.layout) !== str(root)) {
@@ -231,7 +289,10 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         if (change.type === 'carry' && r.start !== root && str(r.start) !== str(root)) inc('moved with a swap');
         { const was = placesOf(root), is = placesOf(r.layout); if (Object.keys(was).some((id) => is[id] && is[id][3] !== was[id][3])) inc('moved with a width changed'); }
       }
+      l1on = rnd() < 0.2;   // the model answers the probes of one command in five
       probe(r.layout, extra);
+      l1on = true;
+      if (modelSays({ ...extra, in: 'a probe' })) return { stop: true };
       if (violations.length >= max) return { stop: true };
       // L14, reported: what the engine wrote opens to the same places
       if (rnd() < 0.3) {
