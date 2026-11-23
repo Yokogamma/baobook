@@ -7,6 +7,7 @@
 
 import { on } from './rules.js';
 import { extent, isArea, hits, sharesCol, readingOrder, range, MAXCELL } from './geometry.js';
+import { bottomOf, frameOf } from './frame.js';
 import { isElastic, rowsAt, restCells, canonicalCtx } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
@@ -24,13 +25,18 @@ export function emptyMemory() { return { away: false, sides: new Map(), through:
 // ---- small helpers over layouts: a box put back with the reading order rebuilt (INV-5), a box taken out of `boxes` only
 function put(L, box) { const boxes = new Map(L.boxes); boxes.set(box.id, box); const order = readingOrder(boxes.values()); return { ...L, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order }; }
 const pad = (b) => (isArea(b) ? 1 : 0);
-const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent(b).r1 + 1); return m; };
-/** A box at a card width of `w − 1` cells, its height and temporary rows measured there (SIZE.6, through the passport); an area keeps the
- *  height its children give it (§5.6, settleTree's). */
+/** A box at a card width of `w − 1` cells, its height and temporary rows measured there (SIZE.6, through the passport); an area keeps its
+ *  rows here: its frame is its children's, read by `framed` where the change is of the area itself (§5.6). */
 function measured(box, w, ctx) {
   if (isArea(box)) return { ...box, w };
   const r = rowsAt({ ...box, w }, w - 1, ctx);
   return { ...box, w, h: r.shown, t: r.shown - r.rows };
+}
+/** The changed block when it is an area: its frame round its children, read from the layout SETTLE was given (`areas`; frame.js). An
+ *  area with no children's container there, a block of one container by itself as the tests of SETTLE have it, keeps its rows. */
+function framed(box, L, ctx) {
+  const C = isArea(box) ? L.areas?.get(box.id) : null;
+  return C ? { ...box, ...frameOf(box, C, ctx) } : box;
 }
 /** The first two blocks that hit, in reading order, or null. */
 function firstHit(L) {
@@ -306,8 +312,8 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     // a set width wider than its container is shown at the container's full width, its `cw` as stored (LAYOUT-ENGINE-PLAN §3.5, step 1)
     let w = b.cw != null ? Math.min(b.cw + 1, L.cols - pad(b)) : b.w;
     if (isElastic(b, ctx)) w = restCells(L, b, ctx) + 1;   // its content changed: its rest width on the rows it stands on (SIZE.1)
-    // an area's frame rows are its children's, which settleTree gives it (`rows`, `t`; §5.6): the passport cannot measure them here
-    const nb = isArea(b) && change.rows != null ? { ...b, w, h: change.rows, t: change.t ?? 0 } : measured(b, w, ctx);
+    // an area's frame rows are its children's, read from the layout's `areas` (frame.js; §5.6): the passport cannot measure them
+    const nb = framed(measured(b, w, ctx), L, ctx);
     L = follow(resize(put(L, { ...nb, h: b0.h, t: b0.t ?? 0 }), change.id, nb.h, nb.t ?? 0));
   }
 
@@ -329,8 +335,9 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
       const col = change.col ?? box.col, w = Math.max(2, Math.min(change.cw + 1, L.cols - col - pad(box)));
       box = measured({ ...box, col, cw: w - 1 }, w, ctx);
     }
-    // a created area, or an area's side handle in its container, at the frame rows settleTree gives it (§5.6)
-    if (isArea(box) && change.rows != null) box = { ...box, h: change.rows, t: change.t ?? 0 };
+    // a created area, or an area's side handle in its container: its frame round the children the layout holds (§5.6); a carried
+    // area keeps its rows
+    if (change.type !== 'carry') box = framed(box, L, ctx);
     L = put(L, box);
   }
   const ws = working(L, g, ctx, insert); ws.base = base;

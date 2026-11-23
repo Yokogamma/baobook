@@ -7,12 +7,9 @@
 
 import { extent, isArea, readingOrder, range, inRange, MAXCELL } from './geometry.js';
 import { check } from './gap.js';
+import { bottomOf, canonicalBottomOf } from './frame.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Ctx} Ctx */
-
-/** The rows a container's blocks take from its top, as shown and canonically (an area's frame holds them, AREA.2). */
-const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent(b).r1 + 1); return m; };
-const canonicalBottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent({ ...b, y: b.yc ?? b.y, h: b.h - (b.t || 0) }).r1 + 1); return m; };
 
 /** The runs of a gap: an array of `{o, n}`, each a whole number of rows from 1, owned by a block or by none, two neighbours never by
  *  the same owner (shapes.js `Run`). gap.js adds lengths up and never asks what one is. */
