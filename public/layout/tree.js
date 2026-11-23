@@ -129,7 +129,7 @@ function createArea(T, change, ctx, hooks) {
   const floor = ctx.kinds.area.minCells({ id: change.id, kind: 'area' }, ctx.measure), cw = Math.max(floor, change.set?.cw ?? floor);
   const box = { id: change.id, kind: 'area', cw, w: cw + 1, ...(change.set?.ch != null ? { ch: change.set.ch } : {}) };
   const make = { ...change, set: { ...change.set, cw }, at: { ...change.at, w: cw + 1 }, ...frameOf(box, null, ctx) };
-  const out = one(withArea(T, change.id, emptyFor(T, cw)), make, emptyMemory(), ctx).tree;
+  const out = one(withArea(T, change.id, emptyFor(T, cw)), make, emptyMemory(), ctx, hooks).tree;
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [null, change.id] };
 }
 

@@ -261,11 +261,11 @@ function bounds(L) {
 }
 
 /** Phases 9 and 10 alone, for open()'s step 4 once GAP.1 has built the stacks (LAYOUT-ENGINE-PLAN §3.5): rest widths, the hits they leave,
- *  RELINK, and the bounds; nothing else of the pipeline runs. @param {Layout} layout @param {Ctx} ctx
+ *  RELINK, and the bounds; nothing else of the pipeline runs. `hooks`, settle's. @param {Layout} layout @param {Ctx} ctx @param {object} [hooks]
  *  @returns {{ok:true, layout:Layout, ran:string[]}|{ok:false, why:'refused'|'failed', errors:string[]}} */
-export function rest(layout, ctx) {
+export function rest(layout, ctx, hooks = {}) {
   try {
-    const ran = [], L = phase9(layout, layout, ctx, [], {}, new Map(), ran);
+    const ran = [], L = phase9(layout, layout, ctx, [], hooks, new Map(), ran);
     ran.push('10'); bounds(L);
     return { ok: true, layout: L, ran };
   } catch (e) {

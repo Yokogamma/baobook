@@ -47,7 +47,7 @@ function reversed(T) {
 }
 /** A tree `k` rows lower on the sheet: every block of the sheet, its canonical row and the unowned rows over each stack that starts at
  *  the top; the children of an area stand where they stood in it. */
-function lower(T, k) {
+export function lower(T, k) {
   if (!k) return T;
   const top = (seg) => (seg[0] && seg[0].o === null ? [{ o: null, n: seg[0].n + k }, ...seg.slice(1)] : [{ o: null, n: k }, ...seg]);
   const boxes = new Map([...T.boxes].map(([id, b]) => [id, { ...b, y: b.y + k, ...(b.yc != null ? { yc: b.yc + k } : {}),
@@ -168,7 +168,8 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
     memory: () => emptyMemory(),
     note(n) {
       cur = n; ctx = ctxOf(n.map);
-      let o; try { o = open(n.stored, ctx); } catch (e) { bad('open must not throw', String(e && e.message)); return null; }
+      let o; try { o = open(n.stored, ctx, new Map(), hooks); } catch (e) { bad('open must not throw', String(e && e.message)); return null; }
+      if (modelSays({ kind: 'open' })) return null;
       if (!o.ok) { inc('notes not opened'); return null; }
       valid('valid: the note as opened, canonical', o.layout, ctx);
       valid('valid: the note as opened, shown', o.shown, ctx);
@@ -269,15 +270,16 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         }
       }
       // L13 after a history: the tree the command was given, stacks and all, and the gesture's memory carried 40 rows lower and 80,
-      // the command aimed as much lower: the two answers are each other's translation, the tree with its stacks and the memory
+      // the command aimed as much lower: the two answers are each other's translation, the tree with its stacks, the memory, and
+      // `start`, which the next move of the gesture is given
       if (root !== opened && !change.canonical && rnd() < 0.35) {
         l1on = false;
         const a = settleSafe(lower(root, 40), aimed(change, 40), lowerMemory(memory, change, 40)), b = settleSafe(lower(root, 80), aimed(change, 80), lowerMemory(memory, change, 80));
         l1on = true;
         inc('L13: after a history');
-        const far = (x, k) => (x.threw || !x.ok ? { ok: false, why: x.why || 'threw' } : { ok: true, layout: str(lower(x.layout, 80 - k)), memory: str(lowerMemory(x.memory, change, 80 - k)) });
+        const far = (x, k) => (x.threw || !x.ok ? { ok: false, why: x.why || 'threw' } : { ok: true, layout: str(lower(x.layout, 80 - k)), start: str(lower(x.start, 80 - k)), memory: str(lowerMemory(x.memory, change, 80 - k)) });
         const fa = far(a, 40), fb = far(b, 80);
-        if (str(fa) !== str(fb)) { bad('L13: after a history, the same change 40 rows lower or 80 gives the same answer', fa.ok && fb.ok ? { layouts: fa.layout === fb.layout, memories: fa.memory === fb.memory, at40: placesOf(a.layout), at80: placesOf(b.layout) } : { at40: fa.ok || fa, at80: fb.ok || fb }, extra); return { stop: true }; }
+        if (str(fa) !== str(fb)) { bad('L13: after a history, the same change 40 rows lower or 80 gives the same answer', fa.ok && fb.ok ? { layouts: fa.layout === fb.layout, starts: fa.start === fb.start, memories: fa.memory === fb.memory, at40: placesOf(a.layout), at80: placesOf(b.layout) } : { at40: fa.ok || fa, at80: fb.ok || fb }, extra); return { stop: true }; }
       }
       // what the quotas count (§4.5): a transition under a temporary height, one that swapped, one that changed a width
       // of the commands that changed the tree, the denominator of every share

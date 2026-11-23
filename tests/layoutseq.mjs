@@ -10,7 +10,9 @@
 //
 //   node tests/layoutseq.mjs [seed] [notes]
 
-import { runLaws } from './lib/layout/laws.mjs';
+import { runLaws, lower as lowered } from './lib/layout/laws.mjs';
+import { compare, writtenOf } from './lib/layout/modelref.mjs';
+import { open } from '../public/layout/layout.js';
 import { KINDS_NOT } from './lib/layout/seq.mjs';
 import { settleTree } from '../public/layout/tree.js';
 import { sharesCol, sharesRow, readingOrder } from '../public/layout/geometry.js';
@@ -98,6 +100,33 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   ok(`and the case tells the two measures apart: the canonical rest gives A ${hA(byUndo)} row, the displayed measure ${hA(byScreen)}`, hA(byUndo) === unshow(undone, ctx).boxes.get('A').h && hA(byScreen) !== hA(byUndo), [hA(byUndo), hA(byScreen)]);
 }
 
+// ---- L1's reach and its teeth, by name (the independent review of 0675ac7). Every path that relinks hands the hook its transition:
+// an area drawn and one created, and `rest` alone, which opening a note ends with. And the comparison reads RELINK's answer as it is
+// written: a block's displayed row or its canonical row changed in the answer, its stacks kept, is another layout
+{
+  const lay = (cols, boxes) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: readingOrder(boxes), areas: new Map() });
+  const map = { A: { text: 'x'.repeat(50) }, W: { text: 'x' }, F: { text: 'x' }, D: { kind: 'area' }, E: { kind: 'area' } }, ctx = { rules: DEFAULT, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) };
+  const stored = lay(44, [{ id: 'A', kind: 'text', col: 2, y: 0 }, { id: 'W', kind: 'text', col: 30, y: 0, cw: 1, ch: 9 }, { id: 'F', kind: 'text', col: 36, y: 30, cw: 3 }]);
+  const seen = [], hooks = { relink: (T, a) => seen.push([T, a]) }, from = (f) => { const n = seen.length; const r = f(); return [r, seen.slice(n)]; };
+  const [o] = from(() => open(stored, ctx, new Map(), hooks));
+  const [d, atDraw] = from(() => settleTree(o.shown, { type: 'drawArea', box: null, id: 'D', at: { col: 0, y: 12, cols: 12, rows: 3 } }, emptyMemory(), ctx, hooks));
+  ok(`an area drawn: handed (${atDraw.length}), and the model answers alike`, d.ok && atDraw.length >= 1 && atDraw.every(([T, a]) => compare(T, a) === null), [d.ok, atDraw.length]);
+  const [c, atCreate] = from(() => settleTree(d.layout, { type: 'create', box: null, id: 'E', kind: 'area', at: { col: 14, y: 20, frow: 20, w: 13 }, away: true }, emptyMemory(), ctx, hooks));
+  ok(`an area created: handed (${atCreate.length}), and the model answers alike`, c.ok && atCreate.length >= 1 && atCreate.every(([T, a]) => compare(T, a) === null), [c.ok, atCreate.length]);
+  // `rest` alone (phases 9 and 10, which opening a note ends with): a text whose content got shorter since the layout was made rests
+  // narrower, and that RELINK is handed. Opening passes its hooks to it; a note read at its rest widths relinks nothing there
+  const shorter = { ...ctx, measure: stubMeasure({ ...map, A: { text: 'x'.repeat(6) } }) };
+  const [rs, atRest] = from(() => rest(o.layout, canonicalCtx(shorter), hooks));
+  ok(`rest alone, a text resting narrower: handed (${atRest.length}), and the model answers alike`, rs.ok && rs.layout.boxes.get('A').w < o.layout.boxes.get('A').w && atRest.length >= 1 && atRest.every(([T, a]) => compare(T, a) === null), [rs.ok, atRest.length]);
+  // an answer changed after RELINK gave it: a block's displayed row, then its canonical row, the stacks as they were
+  const [T, a] = [...atCreate, ...atDraw].find(([, x]) => x.ok), id = a.layout.order[a.layout.order.length - 1], b = a.layout.boxes.get(id);
+  const with_ = (patch) => ({ ...a, layout: { ...a.layout, boxes: new Map([...a.layout.boxes].map(([k, x]) => [k, k === id ? { ...x, ...patch } : x])) } });
+  const dy = compare(T, with_({ y: b.y + 7 })), dc = compare(T, with_({ yc: (b.yc ?? b.y) + 3 }));
+  ok('an answer whose block stands at another displayed row than its stacks give: another layout, not put right before it is compared', !!dy && dy.what === 'another layout', dy && dy.what);
+  ok('and one whose canonical row alone is changed: another layout', !!dc && dc.what === 'another layout', dc && dc.what);
+  ok('(the answer as RELINK gave it: the same)', compare(T, a) === null && writtenOf(a.layout) === writtenOf(with_({}).layout));
+}
+
 // ---- the laws can fail: an engine that breaks one is caught by that law
 {
   const broken = (tamper, o = {}) => runLaws({ seed: 3, notes: 60, max: 1, probes: 0, ...o, engine: (root, change, memory, ctx) => tamper(settleTree(root, change, memory, ctx), root, change, memory) });
@@ -167,6 +196,10 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   // L13 after a history: a gesture's memory that keeps a row from the top of the sheet whatever the gesture's place
   const m13 = first((r2, root, change) => (r2.ok && change.type === 'carry' && change.box == null && r2.memory && r2.memory.lastTarget ? { ...r2, memory: { ...r2.memory, lastTarget: { ...r2.memory.lastTarget, frow: 3 } } } : r2));
   ok('a memory that keeps a row counted from the top of the sheet: caught by L13 after a history', !!m13 && /^L13: after a history/.test(m13.law), show(m13));
+  // the same engine as the L13 control above, but only `start` a row lower once the sheet stands 75 rows down, a sound tree still: the
+  // next move of the gesture is given it, so a start that depends on the rows from the top is a difference
+  const s13 = first((r2, root) => (r2.ok && r2.start && root.boxes.size && [...root.boxes.values()].every((x) => x.y >= 75) ? { ...r2, start: lowered(r2.start, 1) } : r2));
+  ok('a start a row lower when the sheet stands far from the top: caught by L13 after a history', !!s13 && /^L13: after a history/.test(s13.law) && s13.detail.starts === false, show(s13));
   // and the quotas: a hold that is accepted and changes nothing is no hold; a handle that is always refused is no probe
   const failing = (run, re) => quotas(run).filter(([, holds]) => !holds).map(([what]) => what).filter((w) => re.test(w));
   const empty = broken((r2, root, change, memory) => (r2.ok && change.through === 'hold' ? { ok: true, layout: root, start: root, memory } : r2), { seed, notes, max: 1e9 });
