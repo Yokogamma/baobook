@@ -7,7 +7,8 @@
 // as the device of the store's `device` record; a runner that read the cloud before another insured an attempt does not insure a second one
 // over it; two runners of one attempt leave one commit; a late delivery by a runner with an old memory never moves the cursor back; a tab
 // that spent yesterday's budget leads again today after reload(); checkOwner() sees a change of owner made by another tab; an engine whose store went to another owner takes none of that owner's queue
-// into its memory and sends none of its attempts through its own cloud (5s). Section 6 (§4.6):
+// into its memory and sends none of its attempts through its own cloud (5s); a step that waits on the network across this engine's own change
+// of owner drops the previous owner's answer, writing nothing of it into the new owner's store or memory (5s8). Section 6 (§4.6):
 // a listener the server ends with an error is started again by the step after a growing pause, from the cursor (one that keeps ending right after
 // its snapshot keeps the pause growing); a refused one is not; an error of a listener already replaced, or reported inside listen(), leaks nothing.
 import { loadCore } from './lib/core.mjs';
@@ -332,6 +333,52 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const trB=db.get('sync','try:n:a1'); hold=null; gate.res(); const r=await st, more=await A.sync.step();
   ok('5s7 a queue read that waited for the store across a stop and another tab\'s change of owner (the new owner\'s attempt stands: '+!!trB+'): the step ends '+r.did+', nothing of u2 in u1\'s cloud ('+cloudA.docs.notes.size+' notes), no attempt taken ('+A.sync.tries().length+'), the status «reload»; the next step is '+more.did,
     !!trB && r.did==='idle' && r.next===Infinity && !cloudA.docs.notes.size && !A.sync.tries().length && A.status.includes('reload') && more.did==='idle' && (db.get('sync','try:n:a1')||{}).op===trB.op); }
+
+/* ── 5s8. a step that waits on the network across this engine's own change of owner (docs/OWNER-ERA-PLAN.md §3.4 item 4): the answer of the
+   previous owner's cloud comes after setOwner committed and its adopting load ended, so the memory and the store both name the new owner.
+   The step remembers the owner it read before the request and drops the answer: nothing of it is written into the new owner's store
+   (a page of notes, the versions catch-up's `done`, the cursors, a refetch) and nothing of it reaches the memory (a refused read's «denied») ── */
+{ const u2={env:'test', uid:'u2', email:'v@test'};
+  // a fresh engine of u1 whose listeners deliver nothing (the catch-up pages are the only way in); `hold` gates the next call of `op` on the proxy
+  async function held(op, o={}){ const cloud=new TestCloud({start:1_700_000_000_000}); if(o.seed) o.seed(cloud); const A=device(cloud,'A'), X=A.sync._S; A.online=false;
+    await A.sync.setOwner(owner); await A.sync.start(); if(o.ready){ await A.sync.idle(300); await o.ready(cloud, A); } const gate=defer(), orig=A.proxy[op]; let calls=0, armed=!o.when;
+    A.proxy[op]=async(...a)=>{ if(!armed && o.when(a)) armed=true; if(!armed) return orig(...a); armed=false; calls++; const r=o.fail? null : await orig(...a); await gate.promise; if(o.fail) throw Object.assign(new Error('refused'),{code:o.fail}); return r; };
+    let st=null; for(let i=0;i<50 && !calls;i++){ st=A.sync.step(); await tick(1); if(!calls) await st; }
+    return {cloud, A, X, db:A.db, gate, st, calls:()=>calls}; }
+  // 1. the versions catch-up: an empty page of u1's versions, answered after the change to u2
+  { const {A, X, db, gate, st, calls}=await held('page', {when:a=>a[0]==='versions'}); const inFlight=calls()===1 && X.catchup.versions && X.catchup.versions.active;
+    await A.sync.setOwner(u2); const memory=A.sync.owner.uid; gate.res(); const r=await st; const cur=db.get('sync','cursor:versions');
+    ok('5s8 an empty versions page of u1 held across this engine\'s setOwner (held: '+!!inFlight+', the memory then: '+memory+'): the step ends '+r.did+', u2\'s store has no cursor:versions ('+JSON.stringify(cur||null)+'), the memory no `done`, no «reload»',
+      !!inFlight && memory==='u2' && !(cur && cur.done) && !(X.cursor.versions && X.cursor.versions.done) && !A.status.includes('reload') && r.did!=='error');
+    await A.sync.idle(300);
+    ok('5s8a the next steps catch up u2 by themselves: its own versions catch-up ends with `done` in the store', !!(db.get('sync','cursor:versions')||{}).done && A.sync.owner.uid==='u2' && !A.status.includes('reload')); }
+  // 2. the notes catch-up: a page with a note of u1, answered after the change to u2 (records kept)
+  { const {A, X, db, gate, st, calls}=await held('page', {when:a=>a[0]==='notes', seed:c=>c.write('notes',{id:'p1', title:'', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE note of u1'}], created:c.now(), updated:c.now()},{dev:'phone'})});
+    await A.sync.setOwner(u2); const memory=A.sync.owner.uid; gate.res(); const r=await st;
+    ok('5s8b a notes page of u1 held across this engine\'s setOwner (held: '+(calls()===1)+', the memory then: '+memory+'): the step ends '+r.did+', u1\'s note is not in u2\'s store ('+!!db.get('notes','p1')+'), no seen or cursor:notes there, the catch-up of u2 not marked done, no «reload»',
+      calls()===1 && memory==='u2' && !db.get('notes','p1') && !db.get('sync','seen:n:p1') && !db.get('sync','cursor:notes') && !X.catchupDone.notes && !X.everCaughtUp && !A.status.includes('reload') && r.did!=='error'); }
+  // 3. a refetch of u1's note (a mark as a failed apply leaves one), answered after the change to u2
+  { const {A, X, db, gate, st, calls}=await held('get', {when:a=>a[0]==='notes' && a[1]==='r1', ready:async(c,A)=>{ c.write('notes',{id:'r1', title:'', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE refetch of u1'}], created:c.now(), updated:c.now()},{dev:'phone'}); await A.db.tx(['sync'],'readwrite', async t=>{ t.put('sync',{k:'refetch:n:r1', at:c.now()}); }); A.sync.nudge(); }});
+    await A.sync.setOwner(u2); const memory=A.sync.owner.uid; gate.res(); const r=await st;
+    ok('5s8c a refetch of u1\'s note held across this engine\'s setOwner (held: '+(calls()===1)+', the memory then: '+memory+'): the step ends '+r.did+', the note is not in u2\'s store ('+!!db.get('notes','r1')+'), no seen there, no «reload»',
+      calls()===1 && memory==='u2' && !db.get('notes','r1') && !db.get('sync','seen:n:r1') && !A.status.includes('reload') && r.did!=='error'); }
+  // 4. a send: the read of the cloud before the attempt (§4.5 step 2) finds a later revision by another device of u1, answered after the change to u2
+  { const {A, db, gate, st, calls}=await held('get', {when:a=>a[0]==='notes' && a[1]==='s1', ready:async(c,A)=>{ await edit(A,'s1',(C,t)=>({title:'', blocks:[{id:'b',row:1,fx:0,text:'mine'}], created:t, updated:t})); await A.sync.idle(300);
+      const b=body(c.doc('notes','s1')); b.blocks=[{id:'b2',row:2,fx:0,text:'PRIVATE phone text of u1'}, ...b.blocks]; c.write('notes',{id:'s1', ...b},{dev:'phone'}); await edit(A,'s1',(C,t)=>({...C, title:'edited', updated:t})); }});
+    await A.sync.setOwner(u2); const memory=A.sync.owner.uid; gate.res(); const r=await st; const n=db.get('notes','s1');
+    ok('5s8d a send\'s read of u1\'s cloud held across this engine\'s setOwner (held: '+(calls()>=1)+', the memory then: '+memory+'): the step ends '+r.did+', nothing of u1\'s later revision merged into u2\'s store ('+JSON.stringify(n && n.blocks.map(b=>b.text))+'), no attempt, no «reload»',
+      calls()>=1 && memory==='u2' && !!n && !JSON.stringify(n).includes('PRIVATE') && !db.get('sync','try:n:s1') && !db.get('sync','seen:n:s1') && !A.status.includes('reload') && r.did!=='error'); }
+  // 5. the same page answered inside the window of the change: setOwner's transaction is running or committed, its adopting load not yet done
+  //    (the memory still names u1, the store u2): the write meets this engine's own new owner and is dropped without a false «reload»
+  { const {A, X, db, gate, st, calls}=await held('page', {when:a=>a[0]==='notes', seed:c=>c.write('notes',{id:'p2', title:'', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE note of u1'}], created:c.now(), updated:c.now()},{dev:'phone'})});
+    const bind=A.sync.setOwner(u2); let spins=0; while(X.loaded && spins<100000){ spins++; await Promise.resolve(); } const inWindow=!X.loaded; gate.res(); const r=await st; await bind;
+    ok('5s8e a notes page of u1 answered inside this engine\'s setOwner (held: '+(calls()===1)+', in its window: '+inWindow+'): the step ends '+r.did+', the note is not in u2\'s store ('+!!db.get('notes','p2')+'), no cursor:notes, no «reload» ('+A.status.filter(c=>c==='reload').length+'); the engine names '+A.sync.owner.uid,
+      calls()===1 && inWindow && !db.get('notes','p2') && !db.get('sync','cursor:notes') && !A.status.includes('reload') && r.did!=='error' && A.sync.owner.uid==='u2' && await A.sync.checkOwner()===true); }
+  // 6. a page refused with permission-denied after the change: the refusal was u1's, u2's engine is not «denied»
+  { const {A, X, gate, st, calls}=await held('page', {when:a=>a[0]==='notes', fail:'permission-denied'});
+    await A.sync.setOwner(u2); gate.res(); const r=await st;
+    ok('5s8f a notes page of u1 refused after this engine\'s change to u2 (held: '+(calls()===1)+'): u2\'s engine is not «denied» ('+X.denied+'), the status says no «denied», the step ends '+r.did,
+      calls()===1 && !X.denied && !A.status.includes('denied') && r.did!=='error'); } }
 
 /* ── 6. a listener the server ends (§4.6): the step starts it again after a growing pause, from the cursor, so what was written meanwhile
    arrives and the status comes back; a refused one is not restarted; an error of a listener already replaced changes nothing ── */
