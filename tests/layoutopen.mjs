@@ -16,6 +16,7 @@
 //   10   a property over random notes, under the default rules or random switches: open is valid and comes to rest when opened again from its own places, show and unshow invert, diff of the result against itself is empty.
 // Seeded: node tests/layoutopen.mjs [seed] [N]
 import { open, show, unshow, diff } from '../public/layout/layout.js';
+import { validate } from '../public/layout/validate.js';
 import { settle, emptyMemory } from '../public/layout/settle.js';
 import { check, columnChain, stackAt, showStack } from '../public/layout/gap.js';
 import { readingOrder, extent, range, hits, rowFromY, fxFromCol, MAXCELL, SHEETW } from '../public/layout/geometry.js';
@@ -34,8 +35,9 @@ const ctxFor = (n, len = {}, temp = {}, rules) => {
   const map = {};
   const all = [...n.boxes.values(), ...[...n.areas.values()].flatMap((L) => [...L.boxes.values()])];
   for (const b of all) map[b.id] = b.kind === 'area' ? { kind: 'area', temp: temp[b.id] } : { text: len[b.id] != null ? chars(len[b.id]) : 'x', temp: temp[b.id] };
-  return ctxOf(map, rules);
+  return (LAST = ctxOf(map, rules));
 };
+let LAST = null;
 const places = (L) => Object.fromEntries([...L.boxes].map(([id, b]) => [id, [b.col, b.y, b.w, b.h]]));
 const rows = (L) => Object.fromEntries([...L.boxes].map(([id, b]) => [id, b.y]));
 /** The fields the bridge would keep for a note read from these places (§3.5): sheet rows stored with the sheet's offset. */
@@ -51,14 +53,9 @@ function reread(L) {
   const strip = (b) => { const o = { id: b.id, kind: b.kind, col: b.col, y: b.y }; for (const f of ['cw', 'ch', 'open', 'collapsed']) if (b[f] != null) o[f] = b[f]; return o; };
   return { ...lay(L.cols, [...L.boxes.values()].map(strip)), areas: new Map([...L.areas].map(([id, A]) => [id, lay(A.cols, [...A.boxes.values()].map(strip))])) };
 }
-function sound(L) {
-  const errs = check(L);
-  const ro = readingOrder(L.boxes.values());
-  if (!L.order.every((id, i) => id === ro[i])) errs.push('not in reading order');
-  for (const b of L.boxes.values()) { const r = range(b, L.cols); if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) errs.push(b.id + ' outside its container'); }
-  for (const A of L.areas.values()) errs.push(...sound(A).map((e) => 'in an area: ' + e));
-  return errs;
-}
+/** The engine's check of a tree (validate.js), with the measuring answers of the note last given a Ctx: an area's frame is judged by its
+ *  header, which every Ctx made for one note measures alike. */
+const sound = (L) => validate(L, LAST);
 
 /* ── 1. a valid note keeps every place it was read at ── */
 {
