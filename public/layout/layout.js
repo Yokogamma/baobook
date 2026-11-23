@@ -104,10 +104,10 @@ function separated(boxes) {
 /** One container's steps 0–4 (§3.5): sizes, clamp, separate at the places as read, with no stacks and no FOLLOW; GAP.1's stacks from the
  *  separated places; phases 9 and 10 of SETTLE at rest (`rest`), FOLLOW and RELINK included. `inner`: the rows each area's children
  *  take, its children opened first. @returns {{ok:true, layout:Layout}|{ok:false, errors:string[]}} */
-function openOne(L, cols, inner, ctx) {
+function openOne(L, cols, inner, ctx, hooks) {
   try {
     const placed = separated(clamped(sized(L.boxes, cols, inner, ctx), cols, inner, ctx));
-    const r = rest(fromPlaces(layoutOf({ cols, measure: 'canonical' }, placed)), ctx);
+    const r = rest(fromPlaces(layoutOf({ cols, measure: 'canonical' }, placed)), ctx, hooks);
     return r.ok ? { ok: true, layout: r.layout } : { ok: false, errors: r.errors };
   } catch (e) {
     return { ok: false, errors: [e.message] };
@@ -154,8 +154,9 @@ function safeTree(stored, cols, c) {
  *  happen, or a value lies out of the engine's range, or the shown layout would pass MAXCELL, `{ok: false, why: 'failed', layout}`: the
  *  safe result, the whole note as read. A collapsed area's children are opened as any area's, kept for when it opens (proposed).
  *  @param {Layout} stored @param {Ctx} ctx @param {Map<string, number>} [temp] the temporary rows per block id, for `shown`
+ *  @param {object} [hooks] settle.js's, given to the rest of every container
  *  @returns {{ok:true, layout:Layout, shown:Layout}|{ok:false, why:'failed', layout:Layout, errors:string[]}} */
-export function open(stored, ctx, temp = new Map()) {
+export function open(stored, ctx, temp = new Map(), hooks = {}) {
   const c = canonicalCtx(ctx), cols = stored.cols;
   const fail = (errors) => ({ ok: false, why: 'failed', layout: safeTree(stored, cols, c), errors });
   const bad = [stored, ...(stored.areas ? stored.areas.values() : [])].map(outOfRange).find(Boolean);
@@ -163,11 +164,11 @@ export function open(stored, ctx, temp = new Map()) {
   const areas = new Map(), inner = new Map();
   for (const b of stored.boxes.values()) {
     if (!isArea(b)) continue;
-    const r = openOne(stored.areas?.get(b.id) || { boxes: new Map() }, shownCols(b, cols), new Map(), c);
+    const r = openOne(stored.areas?.get(b.id) || { boxes: new Map() }, shownCols(b, cols), new Map(), c, hooks);
     if (!r.ok) return fail(r.errors);
     areas.set(b.id, r.layout); inner.set(b.id, bottomOf(r.layout));
   }
-  const sheet = openOne(stored, cols, inner, c);
+  const sheet = openOne(stored, cols, inner, c, hooks);
   if (!sheet.ok) return fail(sheet.errors);
   const layout = { ...sheet.layout, areas }, shown = show(layout, temp, ctx), past = pastMaxcell(shown);
   if (past) return fail([`open: ${past} would be shown past MAXCELL`]);

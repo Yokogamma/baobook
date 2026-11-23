@@ -10,7 +10,9 @@
 //
 //   node tests/layoutseq.mjs [seed] [notes]
 
-import { runLaws } from './lib/layout/laws.mjs';
+import { runLaws, lower as lowered } from './lib/layout/laws.mjs';
+import { compare, writtenOf } from './lib/layout/modelref.mjs';
+import { open } from '../public/layout/layout.js';
 import { KINDS_NOT } from './lib/layout/seq.mjs';
 import { settleTree } from '../public/layout/tree.js';
 import { sharesCol, sharesRow, readingOrder } from '../public/layout/geometry.js';
@@ -31,7 +33,8 @@ const c = r.counts;
 
 ok(`${r.stat.notes} notes, ${r.stat.commands} commands (${r.stat.accepted} accepted, ${r.stat.moved} of them changing the tree, ${r.stat.refused} refused, ${r.stat.failed} failed, each of those a command nothing may do): every law holds, every probe gives a valid tree`, r.violations.length === 0, show(r.violations[0]));
 console.log('  probes: ' + Object.entries(c).filter(([k]) => k.startsWith('probe')).map(([k, v]) => `${k.slice(7)} ${v}`).join(', '));
-console.log(`  laws run: L4 ${c['L4: again'] || 0} again and ${c['L4: another order'] || 0} in another order, L5 ${c.L5 || 0}, L7 ${c['L7: blocks out of reach'] || 0} blocks out of reach in ${c['L7: commands with a block out of reach'] || 0} commands, L9 ${c.L9 || 0}, L13 ${c.L13 || 0}`);
+console.log(`  laws run: L4 ${c['L4: again'] || 0} again and ${c['L4: another order'] || 0} in another order, L5 ${c.L5 || 0}, L7 ${c['L7: blocks out of reach'] || 0} blocks out of reach in ${c['L7: commands with a block out of reach'] || 0} commands, L9 ${c.L9 || 0}, L13 ${c.L13 || 0} on the note as opened and ${c['L13: after a history'] || 0} after a history`);
+console.log(`  references: L1, the lab model on ${c['L1: transitions RELINK was handed'] || 0} transitions RELINK was handed, in the commands and in the probes of one command in five; L3, ${c['L3: frames against the formula'] || 0} frames against the formula written apart`);
 
 /** The quotas of one run: [what, whether it holds, what was counted]. Every share is of the commands that changed the tree, and counts
  *  only those. */
@@ -43,6 +46,7 @@ function quotas(r) {
   const undone = +(all('carry, undone') + all('create, undone')).toFixed(1), typed = by('size before an undo'), back = by('undo carry');
   const temp = pc(c['moved under a temporary height']), held = pc(by('carry+hold') + by('carry+shift')), swaps = c['moved with a swap'] || 0, width = pc(c['moved with a width changed']);
   const far = pc(c['L7: commands with a block out of reach']), blocks = c['L7: blocks out of reach'] || 0;
+  const scale = Math.min(1, r.stat.notes / 260);
   const neg = KINDS_NOT.map((k) => [k, (r.by[k]?.refused || 0) + (r.by[k]?.failed || 0)]), attempts = neg.reduce((n, [, v]) => n + v, 0);
   const handle = (r.by.areaSide?.accepted || 0) + (r.by.areaSide?.refused || 0), narrowed = c['probe: narrow an area, accepted'] || 0, tried = c['probe: narrow an area'] || 0;
   return [
@@ -54,6 +58,8 @@ function quotas(r) {
     [`a real swap at least three times (${swaps})`, swaps >= 3, swaps],
     [`a width changed at least 5 % (${width})`, width >= 5, width],
     [`L7 over something: a block out of the change's reach in at least 20 % of them (${far}), a thousand such blocks at least (${blocks})`, far >= 20 && blocks >= 1000 * Math.min(1, r.stat.notes / 260), [far, blocks]],
+    [`the references over something: the lab model on a thousand transitions at least (${c['L1: transitions RELINK was handed'] || 0}), the frame's formula on a thousand frames (${c['L3: frames against the formula'] || 0}), L13 after a history three hundred times (${c['L13: after a history'] || 0})`,
+      (c['L1: transitions RELINK was handed'] || 0) >= 1000 * scale && (c['L3: frames against the formula'] || 0) >= 1000 * scale && (c['L13: after a history'] || 0) >= 300 * scale, null],
     [`what no command may do, ${attempts} attempts, ten at least, each kind drawn and none accepted (${neg.map(([k, v]) => `${k.slice(5)} ${v}`).join(', ')})`, attempts >= 10 * Math.min(1, r.stat.notes / 260) && neg.every(([k, v]) => v >= 1 && !r.by[k].accepted), neg],
     [`an area's handle refused at least once and accepted at least half the times (${r.by.areaSide?.refused || 0} refused of ${handle})`, (r.by.areaSide?.refused || 0) >= 1 && (r.by.areaSide?.accepted || 0) >= handle / 2, r.by.areaSide],
     [`the probe that narrows an area accepted at least half the times (${narrowed} of ${tried}): a refusal is an answer, not every answer`, tried > 0 && narrowed >= tried / 2, [narrowed, tried]],
@@ -94,6 +100,33 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   ok(`and the case tells the two measures apart: the canonical rest gives A ${hA(byUndo)} row, the displayed measure ${hA(byScreen)}`, hA(byUndo) === unshow(undone, ctx).boxes.get('A').h && hA(byScreen) !== hA(byUndo), [hA(byUndo), hA(byScreen)]);
 }
 
+// ---- L1's reach and its teeth, by name (the independent review of 0675ac7). Every path that relinks hands the hook its transition:
+// an area drawn and one created, and `rest` alone, which opening a note ends with. And the comparison reads RELINK's answer as it is
+// written: a block's displayed row or its canonical row changed in the answer, its stacks kept, is another layout
+{
+  const lay = (cols, boxes) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: readingOrder(boxes), areas: new Map() });
+  const map = { A: { text: 'x'.repeat(50) }, W: { text: 'x' }, F: { text: 'x' }, D: { kind: 'area' }, E: { kind: 'area' } }, ctx = { rules: DEFAULT, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) };
+  const stored = lay(44, [{ id: 'A', kind: 'text', col: 2, y: 0 }, { id: 'W', kind: 'text', col: 30, y: 0, cw: 1, ch: 9 }, { id: 'F', kind: 'text', col: 36, y: 30, cw: 3 }]);
+  const seen = [], hooks = { relink: (T, a) => seen.push([T, a]) }, from = (f) => { const n = seen.length; const r = f(); return [r, seen.slice(n)]; };
+  const [o] = from(() => open(stored, ctx, new Map(), hooks));
+  const [d, atDraw] = from(() => settleTree(o.shown, { type: 'drawArea', box: null, id: 'D', at: { col: 0, y: 12, cols: 12, rows: 3 } }, emptyMemory(), ctx, hooks));
+  ok(`an area drawn: handed (${atDraw.length}), and the model answers alike`, d.ok && atDraw.length >= 1 && atDraw.every(([T, a]) => compare(T, a) === null), [d.ok, atDraw.length]);
+  const [c, atCreate] = from(() => settleTree(d.layout, { type: 'create', box: null, id: 'E', kind: 'area', at: { col: 14, y: 20, frow: 20, w: 13 }, away: true }, emptyMemory(), ctx, hooks));
+  ok(`an area created: handed (${atCreate.length}), and the model answers alike`, c.ok && atCreate.length >= 1 && atCreate.every(([T, a]) => compare(T, a) === null), [c.ok, atCreate.length]);
+  // `rest` alone (phases 9 and 10, which opening a note ends with): a text whose content got shorter since the layout was made rests
+  // narrower, and that RELINK is handed. Opening passes its hooks to it; a note read at its rest widths relinks nothing there
+  const shorter = { ...ctx, measure: stubMeasure({ ...map, A: { text: 'x'.repeat(6) } }) };
+  const [rs, atRest] = from(() => rest(o.layout, canonicalCtx(shorter), hooks));
+  ok(`rest alone, a text resting narrower: handed (${atRest.length}), and the model answers alike`, rs.ok && rs.layout.boxes.get('A').w < o.layout.boxes.get('A').w && atRest.length >= 1 && atRest.every(([T, a]) => compare(T, a) === null), [rs.ok, atRest.length]);
+  // an answer changed after RELINK gave it: a block's displayed row, then its canonical row, the stacks as they were
+  const [T, a] = [...atCreate, ...atDraw].find(([, x]) => x.ok), id = a.layout.order[a.layout.order.length - 1], b = a.layout.boxes.get(id);
+  const with_ = (patch) => ({ ...a, layout: { ...a.layout, boxes: new Map([...a.layout.boxes].map(([k, x]) => [k, k === id ? { ...x, ...patch } : x])) } });
+  const dy = compare(T, with_({ y: b.y + 7 })), dc = compare(T, with_({ yc: (b.yc ?? b.y) + 3 }));
+  ok('an answer whose block stands at another displayed row than its stacks give: another layout, not put right before it is compared', !!dy && dy.what === 'another layout', dy && dy.what);
+  ok('and one whose canonical row alone is changed: another layout', !!dc && dc.what === 'another layout', dc && dc.what);
+  ok('(the answer as RELINK gave it: the same)', compare(T, a) === null && writtenOf(a.layout) === writtenOf(with_({}).layout));
+}
+
 // ---- the laws can fail: an engine that breaks one is caught by that law
 {
   const broken = (tamper, o = {}) => runLaws({ seed: 3, notes: 60, max: 1, probes: 0, ...o, engine: (root, change, memory, ctx) => tamper(settleTree(root, change, memory, ctx), root, change, memory) });
@@ -105,7 +138,7 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   ok('an input changed by the command: caught by L6', !!b && /^L6/.test(b.law), show(b));
   let n = 0;
   const d = first((r2) => (r2.ok && n++ % 2 ? { ...r2, memory: { ...r2.memory, dir: r2.memory.dir === 'down' ? 'up' : 'down' } } : r2));
-  ok('an answer that differs when asked again: caught by L4', !!d && /^L4/.test(d.law), show(d));
+  ok('an answer that differs when asked again: caught by L4, or by L13 after a history, which asks twice too', !!d && /^L4|^L13: after a history/.test(d.law), show(d));
   const e = first((r2) => (r2.ok ? r2 : { ok: true, layout: null }));
   ok('a command nothing may do, accepted: caught', !!e && /not accepted|never a throw|valid/.test(e.law), show(e));
 
@@ -154,6 +187,19 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   const i = first((r2, root) => (r2.ok && root.boxes.size && [...root.boxes.values()].every((x) => x.y >= 75) ? { ok: false, why: 'refused', errors: [] } : r2));
   ok('an answer that depends on the rows from the top: caught by L13', !!i && /^L13/.test(i.law), show(i));
 
+  // the references (S2b). L1: the model is given each transition with the blocks SETTLE moved left out, as a SETTLE that forgot to name
+  // them would declare it: it refuses or answers another layout
+  const l = runLaws({ seed: 3, notes: 60, max: 1, probes: 0, engine: (root, change, memory, ctx, hooks) => settleTree(root, change, memory, ctx, { relink: (T, a) => hooks.relink({ ...T, moved: [] }, a) }) }).violations[0];
+  ok('a transition declared with no moved block: the lab model does not give RELINK\'s answer, caught by L1', !!l && /^L1/.test(l.law), show(l));
+  const l2 = runLaws({ seed: 3, notes: 60, max: 1, probes: 0, engine: (root, change, memory, ctx, hooks) => settleTree(root, change, memory, ctx, { relink: (T, a) => hooks.relink({ ...T, leave: [] }, a) }) }).violations[0];
+  ok('and one that names no column left: caught by L1', !!l2 && /^L1/.test(l2.law), show(l2));
+  // L13 after a history: a gesture's memory that keeps a row from the top of the sheet whatever the gesture's place
+  const m13 = first((r2, root, change) => (r2.ok && change.type === 'carry' && change.box == null && r2.memory && r2.memory.lastTarget ? { ...r2, memory: { ...r2.memory, lastTarget: { ...r2.memory.lastTarget, frow: 3 } } } : r2));
+  ok('a memory that keeps a row counted from the top of the sheet: caught by L13 after a history', !!m13 && /^L13: after a history/.test(m13.law), show(m13));
+  // the same engine as the L13 control above, but only `start` a row lower once the sheet stands 75 rows down, a sound tree still: the
+  // next move of the gesture is given it, so a start that depends on the rows from the top is a difference
+  const s13 = first((r2, root) => (r2.ok && r2.start && root.boxes.size && [...root.boxes.values()].every((x) => x.y >= 75) ? { ...r2, start: lowered(r2.start, 1) } : r2));
+  ok('a start a row lower when the sheet stands far from the top: caught by L13 after a history', !!s13 && /^L13: after a history/.test(s13.law) && s13.detail.starts === false, show(s13));
   // and the quotas: a hold that is accepted and changes nothing is no hold; a handle that is always refused is no probe
   const failing = (run, re) => quotas(run).filter(([, holds]) => !holds).map(([what]) => what).filter((w) => re.test(w));
   const empty = broken((r2, root, change, memory) => (r2.ok && change.through === 'hold' ? { ok: true, layout: root, start: root, memory } : r2), { seed, notes, max: 1e9 });
