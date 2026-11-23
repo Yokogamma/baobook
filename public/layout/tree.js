@@ -5,7 +5,8 @@
 // only those reach SETTLE. A refusal or a failure anywhere is the result of the whole, and nothing of it is kept.
 
 import { settle, emptyMemory } from './settle.js';
-import { extent, isArea, childToSheet } from './geometry.js';
+import { isArea, childToSheet } from './geometry.js';
+import { frameOf } from './frame.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Change} Change @typedef {import('./shapes.js').Ctx} Ctx
  *  @typedef {import('./shapes.js').Memory} Memory */
@@ -19,18 +20,6 @@ function put(T, box, L) {
   if (box == null) return { ...L, areas: T.areas };
   const areas = new Map(T.areas); areas.set(box, { ...L, areas: new Map() });
   return { ...T, areas };
-}
-/** The rows a container's blocks take from its top, in the layout's measure and canonically (an area's frame holds them, AREA.2). */
-const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent(b).r1 + 1); return m; };
-const canonicalBottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent({ ...b, y: b.yc ?? b.y, h: b.h - (b.t || 0) }).r1 + 1); return m; };
-/** An area's frame rows for children that take `inner` rows, by its passport (header, children, a larger `ch`; collapsed, the header). */
-const frameRows = (area, inner, ctx) => ctx.kinds[area.kind].container.height(area, inner, ctx.measure);
-/** An area's frame round its children, the one place it is computed (AREA.2): by its passport from the area's own fields as they are
- *  or will be (its width, which its header is measured at, `ch`, `collapsed`) and the rows its children take; the rows shown, and their
- *  temporary part, the growth its children's temporary rows make. Every change of an area, or of its children, takes its frame here. */
-function frameOf(area, children, ctx) {
-  const rows = frameRows(area, children ? bottomOf(children) : 0, ctx);
-  return { rows, t: rows - frameRows(area, children ? canonicalBottomOf(children) : 0, ctx) };
 }
 /** The rows an area's frame at `area`'s width leaves its children without growing past `rows` (§5.4: an area's own handle never makes
  *  it taller): its header measured at that width taken off; a collapsed area's children take nothing of it. Negative: the header alone
@@ -53,20 +42,20 @@ function one(T, change, memory, ctx, hooks) {
   if (!r.ok) throw new Stop(r);
   return { tree: put(T, change.box ?? null, r.layout), r };
 }
-/** The area `id`'s frame made to hold its children again: a size change of the area in the sheet, its frame rows from them (§5.6), so
+/** The area `id`'s frame made to hold its children again: a plain size change of the area in the sheet, which reads them (§5.6), so
  *  the blocks under an area that shrank come back by the path of those under one that grew (INV-7 b). Nothing when the frame is the same.
  *  @returns {{tree, ran:boolean}} */
 function grow(T, id, ctx, hooks) {
   const area = T.boxes.get(id), C = T.areas.get(id);
   if (!area || !C) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + id] });
   const f = frameOf(area, C, ctx);
-  if (f.rows === area.h && f.t === (area.t || 0)) return { tree: T, ran: false };
-  return { tree: one(T, { type: 'size', box: null, id, rows: f.rows, t: f.t }, emptyMemory(), ctx, hooks).tree, ran: true };
+  if (f.h === area.h && f.t === (area.t || 0)) return { tree: T, ran: false };
+  return { tree: one(T, { type: 'size', box: null, id }, emptyMemory(), ctx, hooks).tree, ran: true };
 }
 const ranOf = (list) => [...new Set(list)];
 
 /** A change in one container, and the frames of the areas it ran in after it. A change of an area itself on the sheet takes its frame
- *  from frameOf with the fields it sets (a collapse, `ch`), a creation of an area makes its empty container and a deletion takes its
+ *  in the same SETTLE, which reads its children from the tree (frame.js), a creation of an area makes its empty container and a deletion takes its
  *  container away with it; an area's width and its walls go only by `areaSide`, which changes both together. */
 function simple(T, change, memory, ctx, hooks) {
   const box = change.box ?? null, area = box == null && change.id != null ? T.boxes.get(change.id) : null;
@@ -74,11 +63,6 @@ function simple(T, change, memory, ctx, hooks) {
   if (change.type === 'wall' && box != null) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: a wall in an area is areaSide\'s part'] });
   if (area && isArea(area)) {
     if (change.type === 'width' || (change.type === 'size' && change.set && 'cw' in change.set)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: an area\'s width changes by areaSide'] });
-    if (change.type === 'size') {
-      const next = { ...area };
-      for (const f of ['ch', 'collapsed', 'open']) if (change.set && f in change.set) { if (change.set[f] == null) delete next[f]; else next[f] = change.set[f]; }
-      change = { ...change, ...frameOf(next, T.areas.get(change.id), ctx) };
-    }
   }
   const { tree, r } = one(T, change, memory, ctx, hooks);
   let out = change.type === 'remove' && area && isArea(area) ? withoutArea(tree, change.id) : tree;
@@ -100,7 +84,6 @@ function move(T, change, ctx, hooks) {
   if (from != null) { const g = grow(out, from, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   const set = {}; for (const f of ['cw', 'ch']) if (b[f] != null) set[f] = b[f]; if (b.open) set.open = true;
   const make = { type: 'create', box: to, id: change.id, kind: b.kind, at: { frow: change.at.y, w: b.w, ...change.at }, away: true, set };
-  if (isArea(b)) Object.assign(make, frameOf(b, T.areas.get(b.id), ctx));
   out = one(out, make, emptyMemory(), ctx, hooks).tree;
   if (to != null) { const g = grow(out, to, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: ranOf(ran) };
@@ -128,7 +111,7 @@ function createArea(T, change, ctx, hooks) {
   if (T.boxes.has(change.id) || T.areas.has(change.id)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: ' + change.id + ' is already there'] });
   const floor = ctx.kinds.area.minCells({ id: change.id, kind: 'area' }, ctx.measure), cw = Math.max(floor, change.set?.cw ?? floor);
   const box = { id: change.id, kind: 'area', cw, w: cw + 1, ...(change.set?.ch != null ? { ch: change.set.ch } : {}) };
-  const make = { ...change, set: { ...change.set, cw }, at: { ...change.at, w: cw + 1 }, ...frameOf(box, null, ctx) };
+  const make = { ...change, set: { ...change.set, cw }, at: { ...change.at, w: cw + 1 } };
   const out = one(withArea(T, change.id, emptyFor(T, cw)), make, emptyMemory(), ctx, hooks).tree;
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [null, change.id] };
 }
@@ -174,7 +157,7 @@ function areaSide(T, change, ctx, hooks) {
   const wall = { type: 'wall', box: change.id, side: change.side, cols: w - 1, room };
   if (change.side === 'left' && col !== area.col) wall.shift = area.col - col;
   let out = one(T, wall, emptyMemory(), ctx, hooks).tree;
-  const width = { type: 'width', box: null, id: change.id, cw: w - 1, side: change.side, ...frameOf(next, out.areas.get(change.id), ctx) };
+  const width = { type: 'width', box: null, id: change.id, cw: w - 1, side: change.side };
   if (change.side === 'left') width.col = col;
   out = one(out, width, emptyMemory(), ctx, hooks).tree;
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [change.id, null] };

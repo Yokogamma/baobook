@@ -8,6 +8,7 @@ import { PLACE_FIELDS } from './shapes.js';
 import { extent, isArea, hits, readingOrder, range, inRange, rowFromY, fxFromCol, MAXCELL } from './geometry.js';
 import { on } from './rules.js';
 import { isElastic, rowsAt, restCells, capCells, canonicalCtx } from './size.js';
+import { bottomOf, frameRows } from './frame.js';
 import { fromPlaces, follow, resize } from './gap.js';
 import { rest } from './settle.js';
 
@@ -19,11 +20,6 @@ const layoutOf = (from, boxes, extra = {}) => {
   const order = readingOrder(boxes.values());
   return { cols: from.cols, measure: from.measure, ...extra, boxes: new Map(order.map((id) => [id, boxes.get(id)])), order, areas: extra.areas ?? from.areas ?? new Map() };
 };
-/** The rows a container's blocks take, from its top: what an area's frame holds under its header (AREA.2). */
-const bottomOf = (L) => { let m = 0; for (const b of L.boxes.values()) m = Math.max(m, extent(b).r1 + 1); return m; };
-/** An area's frame rows for children that take `inner` rows, by its passport (AREA.2: header, children, or a larger `ch`; collapsed, the
- *  header alone). */
-const frameRows = (area, inner, ctx) => ctx.kinds[area.kind].container.height(area, inner, ctx.measure);
 
 // ====================================================================== open()
 /** Step 0, sizes: every block's width and rows at its place as read, in the canonical measure (`ctx` already canonical). A set width is its
