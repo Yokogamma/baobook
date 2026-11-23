@@ -14,12 +14,12 @@ const S=loadCore(); let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((
 const U=n=>({env:'test', uid:n, email:n+'@test'});
 const eraNow=db=>OM.eraOf(db.get('sync','epoch')||null);   // what a new screen reads with its records
 // a store whose next readonly transactions are planned: pass, hold until released (then run, or fail), fail, fail with a frozen error
-const planned=db=>{ const plan=[]; let release=null; const real=db.tx.bind(db), W={plan, opened:0, release:()=>release && release()};   // opened: transactions asked for so far, counted in the call itself
+const planned=db=>{ const plan=[], held=[]; const real=db.tx.bind(db), W={plan, opened:0, release:()=>{ for(const r of held.splice(0)) r(); }}; let release=null; const hold=r=>{ held.push(r); release=r; };   // release: every held read goes on, in the order it was asked for   // opened: transactions asked for so far, counted in the call itself
   W.tx=(st,mode,fn)=>{ W.opened++; const a=mode==='readonly' && plan.length? plan.shift() : 'pass';
     if(a==='fail') return Promise.reject(Object.assign(new Error('load failed'),{name:'UnknownError'}));
     if(a==='freeze') return Promise.reject(Object.freeze(Object.assign(new Error('load failed'),{name:'UnknownError', code:'frozen-x'})));
-    if(a==='hold') return new Promise(r=>{ release=r; }).then(()=>real(st,mode,fn));
-    if(a==='holdfail') return new Promise(r=>{ release=r; }).then(()=>{ throw Object.assign(new Error('load failed'),{name:'UnknownError'}); });
+    if(a==='hold') return new Promise(hold).then(()=>real(st,mode,fn));
+    if(a==='holdfail') return new Promise(hold).then(()=>{ throw Object.assign(new Error('load failed'),{name:'UnknownError'}); });
     return real(st,mode,fn); }; return W; };
 // an engine over `db` for a screen of `era`; o.store: the wrapper its transactions go through; o.uid: the user the cloud adapter names
 function dev(cloud, name, db, era, o={}){ const d={name, db, logs:[], status:[], changes:[], calls:0};
@@ -342,5 +342,14 @@ for(const who of ['another engine','this engine','a fresh engine of the old scre
 { const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'B19',db,'0',{store:W}); await A.sync.setOwner(U('a')); await dev(cloud,'B19',db,'0').sync.setOwner(U('b'));
   W.plan.push('freeze'); const r=await A.sync.setOwner({...U('b'), email:'renamed@test'}).then(()=>'ok', cErr);
   ok('B19 the owner record was written ('+db.get('sync','owner').email+') and the refreshing load failed with a frozen error: it still says committed ('+r+')', r==='committed:frozen-x' && db.get('sync','owner').email==='renamed@test'); }
+// B20 (the review of #157's merge with this branch): a step that began reading the queue before this engine's own change of owner registered, and
+// read the store after its commit. A change that kept the records: the step ends idle, quietly, and asks to be run again shortly (the timer of the
+// page must not be lost). An erase: «reload», and no time asked for
+for(const erase of [false, true]){ const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'B20',db,'0',{store:W}); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); A.status.length=0; const calls=A.calls;
+  W.plan.push('hold'); const st=A.sync.step(); await tick();   // the queue's read is held
+  W.plan.push('hold'); const bind=A.sync.setOwner(U('b'), erase? {erase:true} : {}).then(()=>'ok', cErr); await tick();   // the change committed; its adopting load is held too
+  const memory=A.sync.owner.uid, store=db.get('sync','owner').uid; W.release(); const r=await st, b=await bind;
+  ok('B20 '+(erase? 'an erase' : 'a change that kept the records')+' of this engine under a step\'s read of the queue (the memory named '+memory+', the store '+store+'; bind '+b+'): the step is '+r.did+', next in '+(r.next===Infinity? '∞' : r.next-cloud.now()+' ms')+', statuses '+JSON.stringify([...new Set(A.status)])+', no cloud call ('+(A.calls-calls)+')',
+    memory==='a' && store==='b' && b==='ok' && r.did==='idle' && A.calls===calls && (erase? r.next===Infinity && A.status.includes('reload') && !A.status.includes('stale') : r.next===cloud.now()+50 && !A.status.includes('reload') && !A.status.includes('stale')) && A.sync.owner.uid==='b'); }
 
 console.log(fails? '\n'+fails+' failed' : '\nall passed'); process.exit(fails? 1 : 0);
