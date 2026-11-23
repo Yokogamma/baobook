@@ -240,10 +240,16 @@ function makeSync(deps){
     if(!ERA_ON) setStatus('reload');
     else if(OM.judgeView(ERA, {epoch:S.epoch, owner:S.owner}, {epoch:ep||null, owner:ow||null})==='era') setStatus('reload');
     else if(!(o.own && [...PENDING].some(g=>sameOwner(g, ep? ep.id : null, ow)))) setStatus('stale');
+    if(ERA_ON && !(o.own && [...PENDING].some(g=>sameOwner(g, ep? ep.id : null, ow)))) stopListeners();   // an engine told to be replaced or reloaded listens to no cloud meanwhile
     throw fail('epoch'); }
   // the work queued for after a commit: cache updates (after) and events for the page (after.ev). With an era, the cache updates apply only when the
   // memory is of the epoch and owner the transaction read (§3.3 item 4); otherwise the memory is marked not loaded (a flag, never a wait: §3.3 item 8)
   // and the next load reads the store. The events always go: the write happened
+  // the generation of the engine's cloud work (only with an era): it moves whenever the owner in the store or the cloud adapter changes, inside the
+  // transaction that changes the owner, so before the adopting load. A step keeps the generation it began under: its transactions, the answers of its
+  // cloud calls, the deliveries it queued and its listeners are all of that generation, and none is applied under another (§3.4 item 2). The memory
+  // alone cannot tell: after the engine's own change it is the new owner's, while a page fetched from the previous owner's cloud is still being applied
+  const gen=()=>S.gen||0, bump=()=>{ S.gen=gen()+1; }, staleStep=()=>ERA_ON && S.stepGen!=null && S.stepGen!==gen();
   const mkAfter=()=>{ const list=[], a=f=>{ list.push({f}); }; a.ev=f=>{ list.push({f, ev:true}); }; a.list=list; return a; };
   const memIs=st=>OM.memoryCurrent({epoch:S.epoch, owner:S.owner}, st);
   // what a transaction of the era mode read of the store's owner state: {epoch, owner} (the records), by its transaction object
@@ -251,7 +257,8 @@ function makeSync(deps){
   // the owner a decision inside a transaction takes (§3.3 item 2): the one that transaction read; without an era, the engine's memory, as before
   const ownerIn=t=>{ const st=TXO.get(t); return st? st.owner : S.owner; };
   // one transaction of the engine's own (a step) with the epoch check against the memory; `after` queues work for after the commit
-  async function tx(stores, fn){ const after=mkAfter(); let st=null; const t0=await db.tx(stores,'readwrite', async t=>{ st=await check(t); return fn(t, after); });
+  // o.free: a transaction of the engine that belongs to no step (the start's own), so no generation is asked of it
+  async function tx(stores, fn, o){ const after=mkAfter(); let st=null; const t0=await db.tx(stores,'readwrite', async t=>{ st=await check(t); if(!(o && o.free) && staleStep()) throw fail('epoch'); return fn(t, after); });
     const cur=!ERA_ON || memIs(st); for(const x of after.list){ if(cur || x.ev) await x.f(); } if(!cur) S.loaded=false; return t0; }
   // one transaction of the user's (§3.3; only with an era): the era of the store against the era of the screen, the owner read here, the device record
   // too (no load ran before it). `op` names the operation: the device name is of no era (§3.3 item 1). Nothing here depends on the engine's memory
@@ -324,14 +331,16 @@ function makeSync(deps){
   async function loadV(t){ S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear();
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); S.vjobs.set(id, j); if(!j.tomb && !(await t.get('sync',K.meta('v',id)))) S.vjudge=true; }
     for(const r of await t.range('sync','try:v:','try:v:\uffff')) S.vtries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:v:','refetch:v:\uffff')) S.vrefetch.add(r.k.slice(10)); }
-  // with an era every delivery waiting in the inbox names the epoch and the adapter it came under: the step applies none of another owner's or another
-  // cloud's (a listener of the previous owner that outlived the change, §3.4 item 2)
-  const inboxed=m=>{ if(ERA_ON){ m.ep=S.epoch; m.cloud=S.cloud; } return m; };
+  // with an era every delivery waiting in the inbox names the generation it came under: the step applies none of another owner's or another adapter's.
+  // A version that waits for its note (S.waiting, meta.wait) is of the epoch its meta is of: every adapter an epoch may use is its owner's (cloudOk)
+  const inboxed=m=>{ if(ERA_ON) m.gen=gen(); return m; };
   function addWaiting(doc){ const list=S.waiting.get(doc.note)||[]; const i=list.findIndex(d=>d.id===doc.id); if(i<0) list.push(doc); else if((doc.rev||0)>=(list[i].rev||0)) list[i]=doc; S.waiting.set(doc.note,list); }   // a later state of the same version replaces the earlier one
   // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work
   // with an era the queue is read only for the epoch and owner of the memory (§3.4 item 1): another owner's jobs and attempts never enter a memory no load moved
   async function reloadQueue(){ S.queueAt=now(); await db.tx(['sync'],'readonly', async t=>{ if(ERA_ON) await check(t); S.jobs.clear(); S.tries.clear(); S.refetch.clear();
-      for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); await loadV(t); }); }
+      for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); await loadV(t);
+      // with an era the marks that block a queued job are read with the queue: another tab's write may have lifted one (a note typed in again) while this engine led
+      if(ERA_ON){ for(const id of S.jobs.keys()){ const m=await t.get('sync',K.meta('n',id)); if(m && m.err) S.err.set(id,m.err); else S.err.delete(id); } for(const id of S.vjobs.keys()){ const m=await t.get('sync',K.meta('v',id)); if(m && m.err) S.verr.set(id,m.err); else S.verr.delete(id); } } }); }
   // the memory that describes the owner's data and this engine's run; the device's own state (the quota, the pause) is reset only by reload()
   function resetMemory(o={}){ S.jobs.clear(); S.tries.clear(); S.refetch.clear(); S.err.clear(); S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear(); S.verr.clear(); S.vblocked.clear(); S.vrejected.clear(); S.vlastDelivered.clear(); S.vjudge=false; S.sends.clear(); S.waiting.clear(); S.lastDelivered.clear(); S.rejected.clear(); S.inbox.length=0;
     S.cursor={notes:null, versions:null}; S.scan={notes:null, versions:null}; S.catchup={notes:null, versions:null}; S.catchupDone={notes:false, versions:false}; S.snapshot={notes:false, versions:false}; S.relisten={notes:null, versions:null};
@@ -339,7 +348,7 @@ function makeSync(deps){
     if(o.owner){ S.everCaughtUp=false; S.denied=false; S.reauth=false; S.unauth=0; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}; } S.loaded=false; }
   // a tab that becomes the leader (§4.10) starts from the store: the previous leader moved the cursor, resolved attempts and spent the budget while this
   // tab's memory stood still. The pause is reset too, since load() only ever sets it (a budget spent yesterday must not pause a leader of today)
-  async function reload(){ const guard=S.everLoaded? known() : null;   // a tab that waited for the lock must not adopt an owner it never knew
+  async function reload(){ if(ERA_ON){ stopListeners(); bump(); } const guard=S.everLoaded? known() : null;   // a tab that waited for the lock must not adopt an owner it never knew
     resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.reauth=false; S.unauth=0; S.readOk=false; S.unverified=false; S.lastPurge=0; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load({guard}); }
   const blocked=()=>S.denied || S.reauth;   // nothing talks to the cloud until the access or the sign-in is sorted out (reload() or a new owner clears both)
   // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way.
@@ -427,7 +436,6 @@ function makeSync(deps){
       if(r==null) return {ok:true, same:true, note:C, lrev:meta.lrev};
       const note=r.note||r, copies=r.copies||[]; if(C && sameDoc(note,C) && !copies.length) return {ok:true, same:true, note:C, lrev:meta.lrev};
       const body={...noteBody(note)}; if(!r.keepUpdated){ body.updated=tt; t.put('sync',{k:'clock', last:tt}); }
-      if(ERA_ON && meta.err==='loop' && S.typed.get(id)>now()-pace.loopWindow) delete meta.err;   // typed() lifts this mark by the memory's word; a memory of another epoch does not know of it, so the save of what was typed lifts it by the store's
       const res=await putNote(t, id, body, meta, {copies, t:tt}, after); await ensureJob(t, id, body, meta, after);
       return {ok:true, lrev:res.lrev, note:res.note}; }); }
     catch(e){ return {ok:false, code:codeOf(e), error:e}; } }
@@ -529,8 +537,9 @@ function makeSync(deps){
   // every cloud call: `read` marks the reads, whose refusal means no access (§4.11 step 2: the rules refuse by uid, so a refused read is the
   // account, not the document); a refused write is judged in runTry. The first read since connecting that fails on the network, before any
   // read succeeded, is «could not check» (unverified); `reauthAfter` unauthenticated answers in a row mean the sign-in must be repeated
-  // with an era, an answer that comes back after the owner or the adapter changed is of another cloud: it is dropped as a lost call, and says nothing of this owner's access
-  async function net(fn, o={}){ if(!S.online) return {error:{code:'unavailable', message:'offline'}}; const ep0=S.epoch, cloud0=S.cloud, moved=()=>ERA_ON && (S.epoch!==ep0 || S.cloud!==cloud0);
+  // with an era, an answer or a refusal that comes back after the generation moved is of another cloud: it is dropped as a lost call, and says nothing of
+  // this owner's access (a «permission-denied» of the previous owner's adapter while the new owner is being loaded must not deny the new one)
+  async function net(fn, o={}){ if(!S.online) return {error:{code:'unavailable', message:'offline'}}; const g0=gen(), moved=()=>ERA_ON && gen()!==g0;
     try{ const value=await fn(); if(moved()) return {error:{code:'unavailable', message:'owner changed'}}; S.unauth=0; if(o.read){ S.readOk=true; if(S.unverified){ S.unverified=false; log({t:'verified'}); } } return {value}; }
     catch(e){ const error=errOf(e); if(moved()) return {error:{code:'unavailable', message:'owner changed'}};
       if(error.code==='unauthenticated'){ S.unauth++; if(S.unauth>=pace.reauthAfter && !S.reauth){ S.reauth=true; log({t:'reauth'}); setStatus('reauth'); } }
@@ -710,7 +719,7 @@ function makeSync(deps){
     for(const v of await t.range('versions','','\uffff')){ if(!v.name || v.reason==='copy') continue; const m=await t.get('sync',K.meta('v',v.id)); if(m && (m.base || m.local || m.gone || m.lrev)) continue;
       if(await t.get('sync',K.tr('v',v.id))) continue; await queueV(t, v, after); n++; } }
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const jm=await t.get('sync',K.meta('v',j.k.slice(6))); if(!j.tomb && !jm){ const v=await t.get('versions',j.k.slice(6)); if(v && v.name && v.reason!=='copy'){ await queueV(t, v, after); n++; continue; } } const id=j.k.slice(6); if(j.tomb || await t.get('versions',id) || await t.get('sync',K.tr('v',id))) continue; const m=await getMeta(t,'v',id); if(m.base || m.held) continue; dropVJob(t,id,after); n++; }
-    if(n) log({t:'vmigrate', n}); }); }
+    if(n) log({t:'vmigrate', n}); }, {free:o.free}); }
   // a named version whose note goes from this device (§4.9 «Receiving»): one with an attempt out is held until the attempt resolves; the
   // device that purges the note tombstones the versions that are or may be in the cloud; a device that only receives the note's tombstone
   // drops what would create or rename and keeps the owner's own tombstone jobs
@@ -866,8 +875,10 @@ function makeSync(deps){
       const docs=res.value||[]; countRead(Math.max(1, docs.length)); let last=null;
       if(col==='notes' && docs.length){ const r=await applyNotesPage(docs); if(r==='epoch') return true; if(r==='nospace'){ c.retryAt=now()+3600000; return true; } const d=docs[docs.length-1]; last={srv:d.srv, id:d.id}; }
       else for(const d of docs){ const r=await applyIncoming(col, d, 'delivery'); if(r==='epoch') return true; if(r==='nospace'){ c.retryAt=now()+3600000; return true; } last={srv:d.srv, id:d.id}; }   // epoch: the owner changed under this page (§4.4 step 1); nothing of it is kept, not even the cursor
+      if(staleStep()) return true;   // the owner or the adapter changed under this page: nothing more of it, not the cursor, not «caught up»
       if(last){ c.after=last; try{ await tx(['sync'], async(t,after)=>bumpCursor(t,col,last,after)); }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // with the owner check: a page of the old owner must not leave its cursor to the new one
       if(docs.length<200 && col==='versions'){ try{ await tx(['sync'], async t=>{ const st=await t.get('sync',K.cursor('versions')); if(!st || !st.done) t.put('sync',{...(st||{}), k:K.cursor('versions'), done:true}); }); S.cursor.versions={...(S.cursor.versions||{}), done:true}; }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // the first catch-up of versions has ended, also with no document at all
+      if(staleStep()) return true;
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; versionsNow(); if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
   // a listener that ends with an error is not restarted by the SDK: unless refused, the step starts it again after a growing pause (`relisten`), from the
@@ -875,7 +886,7 @@ function makeSync(deps){
   // right after its snapshot does not restart every retryMin; a callback of a listener already replaced or stopped changes nothing
   function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
     const tries=S.relisten[col]? S.relisten[col].tries : 0; S.relisten[col]=null; S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000), me={}, since=now();
-    S.listenId={...S.listenId, [col]:me}; const mine=()=>S.listenId && S.listenId[col]===me;
+    S.listenId={...S.listenId, [col]:me}; const g0=gen(), mine=()=>S.listenId && S.listenId[col]===me && (!ERA_ON || gen()===g0);
     const off=S.cloud.listen(col, from, (docs, info)=>{ if(!mine()) return; if(info && info.snapshot){ S.snapshot[col]=true; S.readOk=true; if(col==='notes') versionsNow(); } if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push(inboxed({col, doc:d, source:'delivery'})); emit(deps.wake); },
       err=>{ if(!mine()) return; const code=errOf(err).code; log({t:'listen-error', col, code}); S.snapshot[col]=false; S.listen[col]=null; S.listenId={...S.listenId, [col]:null};
         if(code==='permission-denied'){ if(!S.denied){ S.denied=true; log({t:'denied', kind:'listen'}); setStatus('denied'); } return; }
@@ -893,9 +904,9 @@ function makeSync(deps){
     for(const col of ['notes','versions']){ const T=S.totals[col]; if(!S.catchupDone[col] || !S.snapshot[col]) continue; if(S.catchup[col] && S.catchup[col].active) continue; if(S.scan[col] && S.scan[col].active) continue;   // the full pass settles the question itself; a check meanwhile would only spend the budget
       if(T.mismatchAt && nowT-T.mismatchAt<pace.totalsRecheck) continue; if(T.lastMatch && nowT-T.lastMatch<pace.totalsAfterMatch) continue;
       if(T.pending || !T.last || nowT-T.last>=pace.totalsEvery) return col; } return null; }
-  async function runTotals(col){ const T=S.totals[col], c=COL[col]; S.netBusy=true; try{ const res=await net(()=>S.cloud.totals(col), {read:true, kind:'totals'}); T.last=now(); T.pending=false;
+  async function runTotals(col){ const T=S.totals[col], c=COL[col]; S.netBusy=true; try{ const res=await net(()=>S.cloud.totals(col), {read:true, kind:'totals'}); if(staleStep()) return; T.last=now(); T.pending=false;
       if(res.error){ log({t:'totals-unknown', col, code:res.error.code}); return; } const {count, sum}=res.value; countRead(2*Math.max(1, Math.ceil(count/1000)));
-      const mine=await seenTotals(c); const same=mine.count===count && mine.sum===sum; log({t:'totals', col, cloud:{count, sum}, seen:{count:mine.count, sum:mine.sum}, same});
+      const mine=await seenTotals(c); if(staleStep()) return; const same=mine.count===count && mine.sum===sum; log({t:'totals', col, cloud:{count, sum}, seen:{count:mine.count, sum:mine.sum}, same});
       if(same){ T.lastMatch=now(); T.mismatchAt=0; T.strikes=0; return; }
       T.strikes++; T.mismatchAt=now();
       if(T.strikes===1){ startCatchup(col); return; }
@@ -905,9 +916,9 @@ function makeSync(deps){
   async function saveScan(col){ const sc=S.scan[col]; await tx(['sync'], async t=>{ if(sc) t.put('sync',sc); else t.del('sync',K.scan(col)); }); }   // under the owner check, like every write of the owner's data
   function scanReady(nowT){ for(const col of ['notes','versions']){ const sc=S.scan[col]; if(!sc || !sc.active) continue; const day=dayKey(nowT); if(sc.day!==day){ sc.day=day; sc.allow=Math.floor(Math.max(0, budgets().reads-quotaNow().reads)/2); } if(sc.allow>=1 && S.online && !S.paused && !S.netBusy && !blocked()) return col; } return null; }
   async function scanPage(col){ const sc=S.scan[col]; S.netBusy=true; try{ const n=Math.min(200, sc.allow); const res=await net(()=>S.cloud.scan(col, {afterId:sc.after}, n), {read:true, kind:'scan'}); if(res.error){ sc.retryAt=now()+backoffMs(1); return; }
-      const docs=res.value||[]; countRead(Math.max(1,docs.length)); sc.allow-=Math.max(1,docs.length); for(const d of docs){ if(await applyIncoming(col, d, 'server')==='epoch') return; sc.ids.push(d.id); sc.found++; sc.after=d.id; } S.scanFound=sc.found; setStatus('scan',sc.found);
+      const docs=res.value||[]; countRead(Math.max(1,docs.length)); sc.allow-=Math.max(1,docs.length); for(const d of docs){ if(await applyIncoming(col, d, 'server')==='epoch') return; sc.ids.push(d.id); sc.found++; sc.after=d.id; } if(staleStep()) return; S.scanFound=sc.found; setStatus('scan',sc.found);
       if(docs.length<n){ await scanComplete(col); return; } await saveScan(col); } finally{ S.netBusy=false; } }
-  async function scanComplete(col){ const sc=S.scan[col], c=COL[col], mine=await seenTotals(c), got=new Set(sc.ids), vanished=mine.ids.filter(id=>!got.has(id)); log({t:'scan-done', col, found:sc.found, vanished:vanished.length});
+  async function scanComplete(col){ const sc=S.scan[col], c=COL[col], mine=await seenTotals(c), got=new Set(sc.ids), vanished=mine.ids.filter(id=>!got.has(id)); if(staleStep()) return; log({t:'scan-done', col, found:sc.found, vanished:vanished.length});
     if(vanished.length) await tx(['notes','sync','versions'], async(t,after)=>{ for(const id of vanished){ t.del('sync',K.seen(c,id)); log({t:'vanished', col, id}); if(c==='n'){ const meta=await getMeta(t,'n',id); meta.base=null; meta.baseLrev=0; putMeta(t,meta,after); const rec=await t.get('notes',id); if(rec){ const job=await t.get('sync',K.out('n',id)); if(!job) setJob(t,id,{k:K.out('n',id), tries:0, next:0},after); } } else { const meta=await getMeta(t,'v',id), job=await t.get('sync',K.out('v',id)), rec=await t.get('versions',id); meta.base=null; meta.baseLrev=0;   // a vanished version: created again when it is alive here, a tombstone job just goes
         if(job && job.tomb){ dropVJob(t,id,after); meta.gone=true; } else if(rec && rec.name && !meta.local && !job) setVJob(t,id,vjob(id),after); putMeta(t,meta,after); } } });
     S.scan[col]={...sc, active:false, ids:[], doneDay:dayKey(now())}; await saveScan(col); S.totals[col].pending=true; }
@@ -956,7 +967,7 @@ function makeSync(deps){
     if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000){ try{ await reloadQueue(); }catch(e){ if(ERA_ON && e && e.code==='epoch') return {did:'idle', next:Infinity, status:S.lastStatus}; throw e; } }   // with an era: the store is another owner's now; the refusal told the page, the step does nothing
     if(S.vjudge) await vmigrate({jobs:true});   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
     try{
-      if(ERA_ON && S.inbox.some(m=>m.ep!==S.epoch || m.cloud!==S.cloud)){ const n=S.inbox.length; S.inbox=S.inbox.filter(m=>m.ep===S.epoch && m.cloud===S.cloud); log({t:'inbox-dropped', n:n-S.inbox.length}); }
+      if(ERA_ON && S.inbox.some(m=>m.gen!==gen())){ const n=S.inbox.length; S.inbox=S.inbox.filter(m=>m.gen===gen()); log({t:'inbox-dropped', n:n-S.inbox.length}); }
       if(S.inbox.length){ const isNote=m=>m.col==='notes' && m.source==='delivery';
         if(isNote(S.inbox[0])){ const run=[]; while(run.length<PAGE_TX && S.inbox.length && isNote(S.inbox[0])) run.push(S.inbox.shift().doc); await applyNotesPage(run); return {did:'inbox', next:nowT}; }   // a run of delivered notes goes as one transaction
         const m=S.inbox.shift(); await applyIncoming(m.col, m.doc, m.source); return {did:'inbox', next:nowT}; }
@@ -973,9 +984,9 @@ function makeSync(deps){
       return {did:'idle', next:nextWake(nowT), status:status()}; }
     finally{ await flushQuota(); } }
   // an error outside a send or an attempt (a page, the totals, a scan, the inbox) pauses the engine for a growing while instead of failing the step
-  function step(){ if(S.stepping) return S.stepping; S.stepping=(async()=>{ try{ const r=await stepOnce(); if(r.did!=='idle') S.stepErrors=0; return r; }
+  function step(){ if(S.stepping) return S.stepping; S.stepping=(async()=>{ try{ if(ERA_ON) S.stepGen=gen(); const r=await stepOnce(); if(r.did!=='idle') S.stepErrors=0; return r; }
       catch(e){ S.stepErrors=(S.stepErrors||0)+1; S.errorUntil=now()+backoffMs(S.stepErrors); log({t:'step-error', kind:'step', code:e && e.code, error:String(e && e.message || e), next:S.errorUntil}); return {did:'error', next:S.errorUntil, status:status()}; }
-      finally{ S.stepping=null; } })(); return S.stepping; }
+      finally{ S.stepping=null; S.stepGen=null; } })(); return S.stepping; }
   async function idle(limit=200){ let r; for(let i=0;i<limit;i++){ r=await step(); if(r.did==='idle') break; } return r; }
 
   /* ── the automatic purge by the device clock (§4.8): candidates are notes in the trash whose server date `tsrv` is known and over the term
@@ -989,7 +1000,9 @@ function makeSync(deps){
   /* ── owner, start, stop (the hook of PR 1; sign-in comes with PR 3) ── */
   // o.erase: the device's data go with the previous owner and the new one starts empty («Прибрати й увійти», §4.11), one transaction;
   // o.expectEpoch: the epoch the caller decided over (a dialog); another one in the store means another tab changed the owner first → `epoch`
-  async function setOwner(owner, o={}){ if(!S.loaded) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
+  // with an era nothing is loaded first: the transaction reads the epoch and the owner itself, so a memory another engine's change left behind (and a
+  // write marked not loaded) does not refuse the change before its own checks
+  async function setOwner(owner, o={}){ if(lazy()) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
   // With an era (§3.1, §3.6, §3.7): the `epoch` record carries the era (kept by a change that keeps the records, new with an erase); «the same owner
   // again» is decided over the store, not over a memory another tab's change left behind; a note that stays keeps its `lrev` above every number a
   // screen remembers (previous + 1, ahead of no base; an empty note, which gets no job, previous + 1 with nothing ahead, so a document of its id still
@@ -999,7 +1012,7 @@ function makeSync(deps){
     await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ const ep=o.expectEpoch!==undefined || ERA_ON? ((await t.get('sync','epoch'))||null) : null;
       if(o.expectEpoch!==undefined){ if(ERA_ON? !OM.expected(o.expectEpoch, ep) : (ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
       same=same0; mine.refresh=null; if(ERA_ON){ const ow=(await t.get('sync','owner'))||null; same=!o.erase && !!owner && !!ow && ow.uid===owner.uid && ow.env===owner.env;   // by the store alone: the memory may be of an owner another engine replaced
-        if(same && !memIs({epoch:ep, owner:ow})) mine.refresh={epoch:ep? ep.id : null, uid:ow.uid, env:ow.env}; }
+        if(same && !memIs({epoch:ep, owner:ow})){ mine.refresh={epoch:ep? ep.id : null, uid:ow.uid, env:ow.env}; if(mine.exp) PENDING.delete(mine.exp); mine.exp=mine.refresh; ownAdd(mine.exp); bump(); } }   // registered as this engine's own, so a step or a check beside the refreshing load is not told «stale»
       if(same){ t.put('sync',{k:'owner', ...owner}); return; }
       const eid='e'+now().toString(36)+random().toString(36).slice(2,8), epoch=ERA_ON? OM.nextEpoch(ep, {id:eid, erase}) : {k:'epoch', id:eid}; t.put('sync',epoch);
       if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; ownAdd(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
@@ -1011,19 +1024,25 @@ function makeSync(deps){
             t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); t.put('sync',{...defMeta('n',n.id), ...(ERA_ON? OM.keptLrev(kept.get(n.id)) : {lrev:1})}); }
           const noop=()=>{}; noop.ev=noop; for(const v of await t.range('versions','','￿')){ if(v.name && v.reason!=='copy') await queueV(t, v, noop, {force:true}); } } }   // the queued note is a local change ahead of no base (lrev 1 over baseLrev 0): a document of the same id in the new owner's cloud is merged with it (merge0) and the job stays, instead of replacing it
       else t.del('sync','owner');
-      S.loaded=false; });
-    if(same && mine.refresh){ stopListeners(); resetMemory({owner:true}); await load({adopt:mine.refresh}); if(S.started) connectCloud(); return; }   // the store already has this owner and the memory another: the memory is read anew; the epoch, the queue and the registry of deletions stay
+      S.loaded=false; if(ERA_ON) bump(); });
+    // an error of an adopting load says the change itself is in the store; a frozen error cannot take the hint, a copy carries it
+    const adopting=async(exp, erased)=>{ try{ await load({adopt:exp}); }catch(e){ let err=e; try{ e.committed=true; e.erase=erased; }catch(_){ err=Object.assign(new Error(e && e.message || String(e)), {name:e && e.name, code:e && e.code, committed:true, erase:erased, cause:e}); } throw err; } };
+    if(same && mine.refresh){ stopListeners(); resetMemory({owner:true}); await adopting(mine.refresh, false); if(S.started) connectCloud(); return; }   // the store already has this owner and the memory another: the memory is read anew; the epoch, the queue and the registry of deletions stay
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
     if(ERA_ON) stopListeners();   // the listeners are of the previous owner's cloud: none outlives the change, whatever adapter comes next
     resetMemory({owner:true});
     if(!ERA_ON) await load({adopt:mine.exp});
-    else { try{ await load({adopt:mine.exp}); }catch(e){ let err=e; try{ e.committed=true; e.erase=erase; }catch(_){ err=Object.assign(new Error(e && e.message || String(e)), {name:e && e.name, code:e && e.code, committed:true, erase, cause:e}); } throw err; } }   // a frozen error cannot take the hint: a copy carries it
+    else await adopting(mine.exp, erase);
     if(S.started) connectCloud(); }
   // «Створити копію нотатки» (§4.18): the note the rules refuse for its receipts stays here as it is; its job goes, so the copy syncs in its place
   async function unqueue(id){ if(lazy()) await load(); return wtx(['sync'], 'unqueue', async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err!=='receipts') return {ok:false, code:'receipts'}; delete meta.err; putMeta(t,meta,after); dropJob(t,id,after); dropRefetch(t,id,after); return {ok:true}; }); }
   // §3.4 item 2: with an era, a cloud adapter that names another user than the owner is not used: no step, no listener, no send
-  const cloudOk=()=>!!S.cloud && !!S.owner && (!ERA_ON || OM.cloudIsOwners(S.owner, S.cloud));
-  function connectCloud(){ if(!cloudOk()) return; S.readOk=false; S.unverified=false; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); listenVersions(); }
+  // An adapter that names no user is bound to the epoch it is first connected under and is not used under another: after a change of owner the page
+  // hands a new adapter. swapCloud is the one way an adapter is replaced (setCloud, start): the listeners of the one that goes end, the generation moves
+  const BOUND=new WeakMap();
+  const cloudOk=()=>!!S.cloud && !!S.owner && (!ERA_ON || (OM.cloudIsOwners(S.owner, S.cloud) && (S.cloud.uid!=null || !BOUND.has(S.cloud) || BOUND.get(S.cloud)===S.epoch)));
+  const swapCloud=c=>{ if(ERA_ON && c!==S.cloud){ stopListeners(); bump(); } S.cloud=c; };
+  function connectCloud(){ if(!cloudOk()) return; if(ERA_ON && S.cloud.uid==null && !BOUND.has(S.cloud)) BOUND.set(S.cloud, S.epoch); S.readOk=false; S.unverified=false; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); listenVersions(); }
   // the first load of versions waits for the notes: the versions listener's first snapshot is every version of the account with its bodies, and it
   // would share the inbox with the notes; it starts after the notes' snapshot (below), and at once when the versions catch-up already ended once
   function listenVersions(){ if(S.cursor.versions && S.cursor.versions.done) startListener('versions'); else S.versionsLater=true; }
@@ -1032,13 +1051,13 @@ function makeSync(deps){
   function versionsNow(){ if(S.versionsLater && S.started && !S.paused){ S.versionsLater=false; startListener('versions'); } }
   // every start has a run id; stop() and a later start move it on, so a start that was waiting on its transaction when either came connects nothing
   // and changes nothing of the run that superseded it (a tab that lost the lead during its start and got it back before that start finished)
-  async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; const run=S.runId=(S.runId||0)+1; S.started=true;
-    if(cloudOk()){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:deps.format||3}); }); }catch(_){} try{ await recheckQuarantine(); }catch(_){} try{ await vmigrate(); }catch(e){ log({t:'vmigrate-error', error:String(e)}); } if(!S.started || S.runId!==run) return; connectCloud(); } }
+  async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) swapCloud(o.cloud); const run=S.runId=(S.runId||0)+1; S.started=true;
+    if(cloudOk()){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:deps.format||3}); }); }catch(_){} try{ await recheckQuarantine(); }catch(_){} try{ await vmigrate({free:true}); }catch(e){ log({t:'vmigrate-error', error:String(e)}); } if(!S.started || S.runId!==run) return; connectCloud(); } }
   // a note quarantined for its shape is checked again under the current normalizer (an update may accept what an older one refused, §4.15): one that passes
   // is marked and read from the cloud again; the read goes through rule 1 against the kept seen record (an equal document is fresh, a recreated one is
   // recognized), and the quarantine with its copy leaves only in the transaction that applies the document. One that still fails stays as it is
   async function recheckQuarantine(){ return tx(['sync'], async(t,after)=>{ for(const q of await t.range('sync','quarantine:n:','quarantine:n:\uffff')){ if(q.reason!=='shape' || !q.raw || q.recheck) continue; const id=q.k.slice(13);
-      if(normNote(q.raw, deps).bad) continue; t.put('sync',{...q, recheck:true}); setRefetch(t,id,after); log({t:'recheck', id}); } }); }
+      if(normNote(q.raw, deps).bad) continue; t.put('sync',{...q, recheck:true}); setRefetch(t,id,after); log({t:'recheck', id}); } }, {free:true}); }
   function stop(){ S.started=false; S.runId=(S.runId||0)+1; stopListeners(); }   // the snapshot flags go with the listeners: a step still in flight must not skip a server read on a dead listener
   function online(on){ const was=S.online; S.online=!!on; if(!on) S.ranAt.clear(); if(on && !was) reconnect(); }   // an attempt sent again after a reconnect counts its 30 s anew
   function reconnect(){ if(!S.started || !cloudOk()) return; if(S.paused){ stopListeners(); S.listenPaused=true; emit(deps.wake); return; }   // the day's budget is spent: nothing is read until the next day, whatever the connection does
@@ -1139,8 +1158,8 @@ function makeSync(deps){
   async function lrevOf(ids){ if(lazy()) await load(); return rtx(['sync'], async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
   return {_own:()=>({open:OWN.open, len:OWN.length, loads:LOADS.size}), start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, deviceName, usedToday:()=>{ const q=quotaNow(); return {reads:q.reads, writes:q.writes}; }, usedStored,  limits:()=>({...budgets()}), countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
-    typed:id=>{ S.typed.set(id,now()); if(S.err.get(id)==='loop'){ wtx(['sync'], 'typed', async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
-    left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ if(ERA_ON && c!==S.cloud) stopListeners(); S.cloud=c; if(S.started) connectCloud(); },   // with an era the listeners of the adapter that goes never outlive it, whether or not the new one may be used
+    typed:id=>{ S.typed.set(id,now()); if(ERA_ON || S.err.get(id)==='loop'){ wtx(['sync'], 'typed', async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
+    left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ swapCloud(c); if(S.started) connectCloud(); },
     get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, get era(){ return ERA_ON? ERA : undefined; }, hasOwner:()=>!!S.owner, isOnline:()=>S.online, busyMs, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
 }
 
