@@ -29,12 +29,12 @@ import { emptyMemory, rest } from '../../../public/layout/settle.js';
 import { open, show, unshow } from '../../../public/layout/layout.js';
 import { readingOrder, sharesCol, sharesRow, extent, isArea, SHEETW } from '../../../public/layout/geometry.js';
 import { KINDS } from '../../../public/layout/kinds.js';
-import { canonicalCtx } from '../../../public/layout/size.js';
 import { DEFAULT, SETTINGS } from '../../../public/layout/rules.js';
 import { stubMeasure } from '../measure.mjs';
 import { sequences, str } from './seq.mjs';
 import { compare } from './modelref.mjs';
 import { framesAgainstRef } from '../../lab/frame-ref.mjs';
+import { restAgainstRef } from '../../lab/rest-ref.mjs';
 
 export const G = { readingOrder, sharesCol, extent, SHEETW };
 const placeOf = (b) => [b.col, b.y, b.w, b.h];
@@ -88,7 +88,7 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
   const inc = (k, n = 1) => { counts[k] = (counts[k] || 0) + n; };
   let p = (seed * 2654435761) >>> 0;   // the laws' own draws, apart from the generator's stream
   const rnd = () => (p = (p * 1664525 + 1013904223) >>> 0) / 2 ** 32, sample = (xs, n) => { const a = xs.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
-  let cur = null, ctx = null, opened = null, lateFirst = null, canonFirst = null;
+  let cur = null, ctx = null, opened = null;
   const ctxOf = (map) => ({ rules, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) });
   const bad = (law, detail, extra = {}) => { violations.push({ law, note: cur.k, seed: cur.seed, ...extra, detail, hist: cur.hist.slice() }); };
   // L1: every transition SETTLE hands RELINK, in a command or in a probe, answered by the lab model too (modelref.mjs). An engine given
@@ -105,6 +105,9 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
   /** A violation of L1 since the last call, said with the command it came in. */
   const modelSays = (extra) => { if (!l1) return false; const d = l1; l1 = null; bad('L1: the lab model gives RELINK\'s answer', { what: d.what, model: String(d.model ?? '').slice(0, 600), engine: String(d.engine ?? d.error ?? '').slice(0, 600) }, extra); return true; };
   // every tree judged valid is judged by L3 too: each area's frame against the formula written apart (tests/lab/frame-ref.mjs)
+  /** G24: the elastic blocks of a container at their rest widths on the rows shown, by the formula written apart
+   *  (tests/lab/rest-ref.mjs). @returns {string[]} */
+  const offRest = (L, c = ctx) => (rules['SIZE.1'] === false ? [] : restAgainstRef({ ...L, areas: new Map() }, c.measure, SETTINGS));
   const valid = (law, T, c, extra) => {
     const e = validate(T, c); if (e.length) { bad(law, e.slice(0, 3), extra); return false; }
     let f; try { f = framesAgainstRef(T, c.measure); } catch (err) { f = ['the formula threw: ' + err.message]; }
@@ -270,26 +273,29 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
           const same = (x, y) => str(placeOf(x)) === str(placeOf(y)) && str([x.cw ?? null, x.ch ?? null]) === str([y.cw ?? null, y.ch ?? null]);
           const off = out.filter((id) => !same(B.boxes.get(id), Af.boxes.get(id)));
           if (!off.length) continue;
-          // One thing may move a block out of reach: phase 9 rests every elastic block of the container at every change, so a text
-          // whose rest width SIZE.8's passes had not reached after the command before comes to it now (found here: seed 3, note 15,
-          // a deletion far away widens a text set elastic by the command before; for the owner: whether a container at rest must be
-          // at its rest widths before the next action). That is told by what it is, not by the difference: phases 9 and 10 alone
-          // (`rest`, the engine's own and not the one under test) on the container as the command found it must give each block out of
-          // reach the very place it has now, its set sizes as they were. Anything else is the violation.
-          // An undo's SETTLE runs on the canonical layout (G23), so there the same is asked of the canonical trees: a text with
-          // temporary rows rests by its canonical rows, which may have no neighbour beside them (found here: seed 4, note 21); measured
-          // as the undo measures, with no temporary row (size.js `canonicalCtx`)
-          const was = (id) => placeOf(B.boxes.get(id)), is = (id) => placeOf(Af.boxes.get(id)), pick = (T) => (name == null ? T : T.areas.get(name));
-          let R, got;
-          if (change.canonical) { let cb, ca; try { cb = pick(unshow(root, ctx)); ca = pick(unshow(r.layout, ctx)); } catch { cb = null; } R = cb && ca ? rest(cb, canonicalCtx(ctx)) : { ok: false }; got = (id) => ca.boxes.get(id); }
-          else { R = rest(B, ctx); got = (id) => Af.boxes.get(id); }
-          const sizes = (x) => str([x.cw ?? null, x.ch ?? null]);
-          const wrong = off.find((id) => !R.ok || !R.layout.boxes.has(id) || !same(R.layout.boxes.get(id), got(id)) || sizes(B.boxes.get(id)) !== sizes(Af.boxes.get(id)));
-          if (wrong) { bad('L7: a block out of the change\'s reach stands where it stood', { container: name, block: wrong, was: was(wrong), is: is(wrong), rest: R.ok ? R.layout.boxes.has(wrong) && placeOf(R.layout.boxes.get(wrong)) : R }, extra); return { stop: true }; }
-          if (change.canonical) { inc('L7: a text out of reach rested by its canonical rows, under an undo', off.length); canonFirst = canonFirst || { note: cur.k, seed: cur.seed, kind, change, block: off[0], was: was(off[0]), is: is(off[0]) }; continue; }
-          inc('L7: a text out of reach rested late', off.length);
-          lateFirst = lateFirst || { note: cur.k, seed: cur.seed, kind, change, block: off[0], was: was(off[0]), is: is(off[0]) };
+          // Nothing moves a block out of reach in a container that stood at its rest widths, an undo's change among them (G24, G25).
+          // One that did not (a temporary height started or ended with no action in it since) comes to rest with this action, and
+          // there a block out of reach may change only as that rest alone changes it: phases 9 and 10 (`rest`, the engine's own and
+          // not the one under test) on the container as the command found it give it the very place it has now, its set sizes as
+          // they were
+          const fail = (wrong, more) => { bad('L7: a block out of the change\'s reach stands where it stood', { container: name, block: wrong, was: placeOf(B.boxes.get(wrong)), is: placeOf(Af.boxes.get(wrong)), ...more }, extra); return { stop: true }; };
+          if (!offRest(B).length) return fail(off[0], {});
+          const R = rest(B, ctx), sizes = (x) => str([x.cw ?? null, x.ch ?? null]);
+          const wrong = off.find((id) => !R.ok || !R.layout.boxes.has(id) || !same(R.layout.boxes.get(id), Af.boxes.get(id)) || sizes(B.boxes.get(id)) !== sizes(Af.boxes.get(id)));
+          if (wrong) return fail(wrong, { rest: R.ok ? R.layout.boxes.has(wrong) && placeOf(R.layout.boxes.get(wrong)) : R });
+          inc('L7: a text out of reach brought to rest after a temporary height changed', off.length);
         }
+      }
+      // G24: when an action ends, every elastic block of every container it ran in stands at its rest width, and so does every
+      // container that stood at rest when the action was given; by the formula written apart. A container is off its rest widths
+      // only where a temporary height started or ended with no action since (`show`, which changes no canonical row, L9; a note
+      // opened with temporary heights among them): the first action that runs in it brings it to rest
+      for (const [name, L] of containers(r.layout)) {
+        const B = name == null ? root : root.areas.get(name), ranIn = (r.ran || []).includes(name), was = B ? offRest(B) : [];
+        if (!ranIn && was.length) { inc('G24: containers left off their rest widths (a temporary height changed, no action in them yet)'); continue; }
+        inc('G24: containers'); if (was.length) inc('G24: containers brought to rest by the first action in them');
+        const e = offRest(L);
+        if (e.length) { bad('G24: after an action every elastic block stands at its rest width', e.slice(0, 3), { ...extra, container: name, ran: r.ran }); return { stop: true }; }
       }
       // L13: translation, the first command on the note as opened
       if (root === opened && !change.canonical) {
@@ -343,7 +349,7 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
     },
   };
   // `drive`, a sequence written by hand in the generator's place, for a named case: it calls the executor as seq.mjs does
-  if (drive) { drive(X); return { violations, counts, lateFirst, canonFirst }; }
+  if (drive) { drive(X); return { violations, counts }; }
   const { stat, by, types } = sequences(G, X, { seed, notes, steps });
-  return { stat, by, types, violations, counts, reopened, lateFirst, canonFirst };
+  return { stat, by, types, violations, counts, reopened };
 }

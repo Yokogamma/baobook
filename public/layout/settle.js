@@ -104,8 +104,9 @@ function columnsOf(base, after, moved, how, by) {
  *  letting-through wrapper around it (phases 3 and 11) for a carry with THROUGH on. `moves` is the union of the steps every RELINK of this SETTLE was handed, for
  *  the dev look; `grew`, for a change inside an area (`change.box`), the change of the bottom its content reaches, in rows (settleTree's,
  *  §5.6); `ran`, the phases that ran, for the tests. @param {Layout} start @param {Change} change @param {?Memory} memory @param {Ctx} ctx
- *  @param {{trace?:(phase:string, layout:Layout, info?:{swap:string[]}) => void, relink?:(T:Transition, answer:Relinked) => void}} [hooks]
- *  `trace`, the working layout after each phase of every run (phase 3: the swapped layout, with its pair); `relink`, every transition
+ *  @param {{trace?:(phase:string, layout:Layout, info?:{swap?:string[], again?:boolean}) => void, relink?:(T:Transition, answer:Relinked) => void}} [hooks]
+ *  `trace`, the working layout after each phase of every run (phase 3: the swapped layout, with its pair; phase 9 with `again`: a rest
+ *  after the first that changed something, G24); `relink`, every transition
  *  handed to RELINK with its answer, refused ones too; for the dev look and the tests @returns {Result} */
 export function settle(start, change, memory, ctx, hooks = {}) {
   try { return (change.canonical ? inverse : wrapper)(start, change, memory || emptyMemory(), ctx, hooks); }
@@ -145,6 +146,9 @@ function inverse(start, change, memory, ctx, hooks) {
     if (t > 0) L = resize(L, b.id, b.h + t, t);
   }
   L = follow(L);
+  // the rest widths, on the rows that are shown, as every action ends (G24): a block the undo does not reach stood at its rest width
+  // there and stands at it still, so it keeps its width (G25)
+  L = atRest(L, ctx, hooks, r.moves, r.ran);
   bounds(L);
   const grew = change.box != null ? bottomOf(L) - bottomOf(start) : 0;
   if (kindOf(change).contain.bottom === 'refuse' && grew > 0) throw new Refused('the handle would make the area taller');
@@ -220,15 +224,16 @@ function wrapper(start, change, memory, ctx, hooks) {
   }
 }
 
-/** Phase 9, rest: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width; (b) the hits left, by P-REST or
+/** Phase 9, rest, one run of it: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width (none with `widths`
+ *  off, an undo's canonical pass); (b) the hits left, by P-REST or
  *  P-SEP, within RESTSTEPS; (c) RELINK against `b9` with the moves of (b) only, the columns phase 9's widths changed, and `extra` (the
  *  causes of a kind that relinks only here: phase 1a's size, the working state's reshapes). @returns {Layout} */
-function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
+function phase9(L8, b9, ctx, extra, hooks, moves, ran, widths = true) {
   const rules = ctx.rules;
   let La = L8;
   const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
   const passes = on(rules, 'SIZE.8') ? ctx.settings.RESTPASSES : 1;
-  if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
+  if (widths && on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
     const before = La;
     for (const id of La.order) {
       const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
@@ -262,6 +267,21 @@ function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
   return r.layout;
 }
 
+/** Phase 9 until it changes nothing (the owner's G24, 2026-11-23): when an action ends every elastic block stands at its rest width, so
+ *  that no later action that does not reach it changes it. Each run after the first is a rest of its own, as the next action's phase 9
+ *  would have been: against the layout the run before left, with its own RELINK. A container that does not come to rest within
+ *  RESTSTEPS runs is a cycle, and SETTLE fails (§5.5). @returns {Layout} */
+function atRest(L, ctx, hooks, moves, ran) {
+  for (let k = 0, n = stepsGuard(L); ; k++) {
+    const next = phase9(L, L, ctx, [], hooks, moves, []);
+    if (next === L) return L;
+    if (k > n) throw new Failed('settle: the rest widths do not come to rest');
+    if (!ran.includes('9')) ran.push('9');
+    L = next;
+    if (hooks.trace) hooks.trace('9', L, { again: true });   // a rest after the first that changed something
+  }
+}
+
 /** Phase 10's bounds: a block past MAXCELL refuses, and INV-4 across the columns, every card (an area with its free columns) inside the
  *  container; a wall that leaves a block it could not press or sink inside stops (§5.4); no other kind leaves one outside, phase 1c having
  *  clamped the moved block. */
@@ -278,7 +298,7 @@ function bounds(L) {
  *  @returns {{ok:true, layout:Layout, ran:string[]}|{ok:false, why:'refused'|'failed', errors:string[]}} */
 export function rest(layout, ctx, hooks = {}) {
   try {
-    const ran = [], L = phase9(layout, layout, ctx, [], hooks, new Map(), ran);
+    const ran = [], moves = new Map(), L = atRest(phase9(layout, layout, ctx, [], hooks, moves, ran), ctx, hooks, moves, ran);
     ran.push('10'); bounds(L);
     return { ok: true, layout: L, ran };
   } catch (e) {
@@ -433,7 +453,11 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
 
   // ---- 9. rest, against the layout after phase 8, or for a kind that relinks only here against base, phase 1a's size among the causes
   const b9 = deferred ? base : L8;
-  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran);
+  // an undo's pass, on canonical rows (G23), gives no block a rest width: a text that shows temporary rows may have no neighbour beside
+  // its canonical rows and would widen there, reached by the undo or not (the owner's G25, 2026-11-23). The hits are settled and relinked
+  // here as ever; the rest widths are `inverse`'s, on the rows that are shown
+  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran, !change.canonical);
+  if (!change.canonical) final = atRest(final, ctx, hooks, moves, ran);
 
   // ---- 10. contain: nothing moves here; a block past MAXCELL refuses the change, an area's own handle refuses to make it taller, any other
   // change inside an area reports how far its content's bottom moved (settleTree grows or shrinks the area, §5.6)
