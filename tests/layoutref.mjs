@@ -73,7 +73,7 @@ for (let k = 0; k < N * 20 && Object.values(parts).some((p) => p.tried < N); k++
   P.compared++;
   const got = rowsOf(r.layout, skip);
   if (JSON.stringify(got) !== JSON.stringify(want)) wide.push({ part, k, cols, bs: bs.map((b) => [b.id, b.col, b.y, b.w, b.h]), X: X.id, to: ask, want, got });
-  else if (bs.some((b) => b.id !== X.id && b.id in got && got[b.id] !== b.y)) P.moved++;   // another block: not the one the change is of
+  else if (bs.some((b) => !(part === 'away' && b.id === X.id) && b.id in got && got[b.id] !== b.y)) P.moved++;   // another block: not the carried one
 }
 const least = Math.floor(N / 4);
 const wideOk = wide.length === 0 && Object.values(parts).every((p) => p.tried >= N && p.compared >= least && p.moved >= 30);
