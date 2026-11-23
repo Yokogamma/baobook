@@ -185,6 +185,22 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       if (modelSays(extra)) return { stop: true };
       if (str(root) !== before || str(memory) !== memBefore) { bad('L6: the inputs unchanged', r.ok ? 'after an acceptance' : 'after ' + (r.why || 'a throw'), extra); return { stop: true }; }
       if (r.threw) { bad('an answer, never a throw', r.threw, extra); return { stop: true }; }
+      // the rows of a block's own are rows as any the measure shows: the same command on a twin of the tree, where a text's own rows
+      // are the measure's temporary rows and it has none of its own, gets the same answer: accepted or refused alike, and when
+      // accepted every block at the same place with the same rows. Asked before a refusal is returned, so that an engine that
+      // refuses only for rows of a block's own is told. An area keeps its own rows on both sides: no measure gives a frame rows.
+      if (!r.threw && containers(root).some(([, L]) => [...L.boxes.values()].some((b) => b.tx > 0 && !isArea(b)))) {
+        const moved = new Map(), plain = (L) => ({ ...L, boxes: new Map([...L.boxes].map(([id, b]) => { if (!b.tx || isArea(b)) return [id, b]; moved.set(id, b.tx); const { tx, ...p } = b; return [id, p]; })) });
+        const twin = { ...plain(root), areas: new Map([...root.areas].map(([id, C]) => [id, { ...plain(C), areas: new Map() }])) };
+        const map2 = Object.fromEntries(Object.entries(cur.map).map(([id, m]) => [id, moved.has(id) ? { ...m, temp: (m.temp || 0) + moved.get(id) } : m]));
+        l1on = false; const tw = settleSafe(twin, change, memory, ctxOf(map2)); l1on = true;
+        inc('tx: as the measure\'s rows');
+        const rowsOf = (T) => Object.fromEntries(containers(T).flatMap(([name, L]) => [...L.boxes.values()].map((b) => [b.id, [name, b.col, b.y, b.yc ?? b.y, b.w, b.h, b.t || 0]])));
+        const answerOf = (x) => (x.threw ? { threw: true } : x.ok ? { ok: true, rows: rowsOf(x.layout) } : { ok: false, why: x.why });
+        const mine = answerOf(r), its = answerOf(tw);
+        if (!r.ok || !tw.ok) inc('tx: as the measure\'s rows, not accepted');
+        if (str(mine) !== str(its)) { bad('tx: a block\'s own rows are rows as the measure\'s', mine.ok && its.ok ? { own: mine.rows, measure: its.rows } : { own: mine.ok || mine, measure: its.ok || its }, extra); return { stop: true }; }
+      }
       if (!r.ok) {
         if (r.why === 'failed' && !negative) { bad('a lawful command is never failed', r.errors, extra); return { stop: true }; }
         return r;
@@ -222,20 +238,6 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         if (lost) { bad('tx: a block keeps its own temporary rows', { block: lost[0], was: lost[1], is: is.get(lost[0]) }, extra); return { stop: true }; }
         const off = containers(r.layout).flatMap(([, L]) => [...L.boxes.values()]).find((b) => !isArea(b) && cur.map[b.id] && (b.t || 0) !== (cur.map[b.id].temp || 0) + (b.tx || 0));
         if (off) { bad('tx: a block shows the measure\'s temporary rows and its own', { block: off.id, t: off.t || 0, measure: cur.map[off.id].temp || 0, own: off.tx || 0 }, extra); return { stop: true }; }
-      }
-      // the rows of a block's own are rows as any the measure shows: the same command on a twin of the tree, where they are the
-      // measure's temporary rows and no block has any of its own, puts every block at the same place with the same rows. (An undo
-      // shows again what the block had; a block it measures anew is the one case the two are told apart, so it is left out.)
-      if (!change.canonical && containers(root).some(([, L]) => [...L.boxes.values()].some((b) => b.tx > 0))) {
-        const moved = new Map(), plain = (L) => ({ ...L, boxes: new Map([...L.boxes].map(([id, b]) => { if (!b.tx) return [id, b]; moved.set(id, b.tx); const { tx, ...p } = b; return [id, p]; })) });
-        const twin = { ...plain(root), areas: new Map([...root.areas].map(([id, C]) => [id, plain(C)])) };
-        const map2 = Object.fromEntries(Object.entries(cur.map).map(([id, m]) => [id, moved.has(id) && m.kind !== 'area' ? { ...m, temp: (m.temp || 0) + moved.get(id) } : m]));
-        if (![...moved.keys()].some((id) => root.areas.has(id) || (cur.map[id] && cur.map[id].kind === 'area'))) {   // an area's own rows have no measure to move into
-          l1on = false; const tw = settleSafe(twin, change, memory, ctxOf(map2)); l1on = true;
-          inc('tx: as the measure\'s rows');
-          const rowsOf = (T) => Object.fromEntries(containers(T).flatMap(([name, L]) => [...L.boxes.values()].map((b) => [b.id, [name, b.col, b.y, b.yc ?? b.y, b.w, b.h, b.t || 0]])));
-          if (tw.threw || !tw.ok || str(rowsOf(tw.layout)) !== str(rowsOf(r.layout))) { bad('tx: a block\'s own rows are rows as the measure\'s', tw.ok ? { own: rowsOf(r.layout), measure: rowsOf(tw.layout) } : tw, extra); return { stop: true }; }
-        }
       }
       // L4: the same input again; the same tree kept in another order
       if (rnd() < 0.3) {

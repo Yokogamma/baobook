@@ -221,6 +221,10 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
     return { ...r2, layout: { ...r2.layout, boxes } };
   }, { notes: 400 });
   ok('a text that loses the rows of its own when it is typed into: caught', !!tx1 && /^tx: /.test(tx1.law), show(tx1));
+  // an engine that refuses a command only because a text has rows of its own (the independent review of 07e13e3): the twin, where the
+  // same rows are the measure's, is accepted, and the law asks before the refusal is returned
+  const tx2 = first((r2, root) => (r2.ok && [root, ...root.areas.values()].some((L) => [...L.boxes.values()].some((x) => x.tx > 0 && x.kind !== 'area')) ? { ok: false, why: 'refused', errors: [] } : r2), { notes: 400 });
+  ok('a command refused only where a text has rows of its own: caught, the twin accepted', !!tx2 && /^tx: a block's own rows are rows as the measure's/.test(tx2.law) && tx2.detail.measure === true, show(tx2));
   // and the quotas: a hold that is accepted and changes nothing is no hold; a handle that is always refused is no probe
   const failing = (run, re) => quotas(run).filter(([, holds]) => !holds).map(([what]) => what).filter((w) => re.test(w));
   const empty = broken((r2, root, change, memory) => (r2.ok && change.through === 'hold' ? { ok: true, layout: root, start: root, memory } : r2), { seed, notes, max: 1e9 });
