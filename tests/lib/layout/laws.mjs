@@ -199,7 +199,9 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         // a swap, told by what it is (LAYOUT-RULES §5.1b): the sheet of `start` the one the move was given, and in the area the
         // carried block and the neighbour the gesture holds on the other side of each other than they were
         const sideOf = (C, n) => { const g = C.boxes.get(change.id), o = C.boxes.get(n); return g && o && g.id !== o.id ? Math.sign(g.y - o.y) : 0; };
-        const held = [memory.through?.id, r.memory?.through?.id].filter((n) => n != null);
+        // the neighbour: the one the gesture holds, before or after; or, when the swap released it at once (the target past it), any
+        // block of the area the carried block now stands on the other side of
+        const named = [memory.through?.id, r.memory?.through?.id].filter((n) => n != null), held = named.length ? named : inArea ? [...root.areas.get(box).boxes.keys()] : [];
         const swapped = inArea && str(r.start.areas.get(box)) !== str(root.areas.get(box)) && str([...r.start.boxes]) === str([...root.boxes])
           && held.some((n) => sideOf(root.areas.get(box), n) * sideOf(r.start.areas.get(box), n) < 0);
         // a later move of the same gesture is given that `start` and answers with it again: the same error, word for word, is its own
@@ -208,6 +210,17 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         const other = e.filter((x) => !frame(x));
         if (other.length) { bad('valid: the answer\'s start', other.slice(0, 3), extra); return { stop: true }; }
         if (e.length) inc('start: an area\'s frame not round its children (after a swap inside it)');
+      }
+      // the temporary rows of a block's own (`tx`, the rows `show` was given for it): a block the command does not make anew keeps
+      // them, wherever the command takes it; and a block that is no area shows what the measure gives it and those rows, no other
+      {
+        const own = (T) => new Map(containers(T).flatMap(([, L]) => [...L.boxes.values()].map((b) => [b.id, b.tx || 0])));
+        const was = own(root), is = own(r.layout), made = change.type === 'create' || change.type === 'drawArea' ? change.id : null;
+        inc('tx: blocks with rows of their own', [...was.values()].filter((x) => x > 0).length);
+        const lost = [...was].find(([id, x]) => is.has(id) && id !== made && is.get(id) !== x);
+        if (lost) { bad('tx: a block keeps its own temporary rows', { block: lost[0], was: lost[1], is: is.get(lost[0]) }, extra); return { stop: true }; }
+        const off = containers(r.layout).flatMap(([, L]) => [...L.boxes.values()]).find((b) => !isArea(b) && cur.map[b.id] && (b.t || 0) !== (cur.map[b.id].temp || 0) + (b.tx || 0));
+        if (off) { bad('tx: a block shows the measure\'s temporary rows and its own', { block: off.id, t: off.t || 0, measure: cur.map[off.id].temp || 0, own: off.tx || 0 }, extra); return { stop: true }; }
       }
       // L4: the same input again; the same tree kept in another order
       if (rnd() < 0.3) {

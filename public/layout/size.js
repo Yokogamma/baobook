@@ -24,6 +24,11 @@ export function isElastic(box, ctx) { return kindOf(box, ctx).width === 'text' &
 /** Its rows at a card width, canonical and displayed (SIZE.6, through the passport). @returns {{rows:number, shown:number}} */
 export function rowsAt(box, cells, ctx) { return kindOf(box, ctx).rows(box, cells, ctx.measure); }
 
+/** The height of a block that is no area, at a card width: the rows it shows there, and of them the temporary ones, the measure's and
+ *  its own (`tx`, the rows `show` was given for it; LAYOUT-SEAMS-PLAN §6.1). The one place such a block's `h` and `t` come from, so
+ *  that no path that measures it again loses its own temporary rows. @returns {{h:number, t:number}} */
+export function heightAt(box, cells, ctx) { const r = rowsAt(box, cells, ctx), x = box.tx || 0; return { h: r.shown + x, t: r.shown - r.rows + x }; }
+
 /** The widest it gets by itself: an elastic block's natural width up to TEXTW, never below its kind's floor; a set width's `cw`; an area's
  *  `cw`, at least its floor (SIZE.1, SIZE.3). */
 export function capCells(box, ctx) {

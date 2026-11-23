@@ -60,6 +60,7 @@ function quotas(r) {
     [`L7 over something: a block out of the change's reach in at least 20 % of them (${far}), a thousand such blocks at least (${blocks})`, far >= 20 && blocks >= 1000 * Math.min(1, r.stat.notes / 260), [far, blocks]],
     [`the references over something: the lab model on a thousand transitions at least (${c['L1: transitions RELINK was handed'] || 0}), the frame's formula on a thousand frames (${c['L3: frames against the formula'] || 0}), L13 after a history three hundred times (${c['L13: after a history'] || 0})`,
       (c['L1: transitions RELINK was handed'] || 0) >= 1000 * scale && (c['L3: frames against the formula'] || 0) >= 1000 * scale && (c['L13: after a history'] || 0) >= 300 * scale, null],
+    [`a block's own temporary rows over something: two hundred blocks with rows of their own before a command (${c['tx: blocks with rows of their own'] || 0})`, (c['tx: blocks with rows of their own'] || 0) >= 200 * scale, null],
     [`what no command may do, ${attempts} attempts, ten at least, each kind drawn and none accepted (${neg.map(([k, v]) => `${k.slice(5)} ${v}`).join(', ')})`, attempts >= 10 * Math.min(1, r.stat.notes / 260) && neg.every(([k, v]) => v >= 1 && !r.by[k].accepted), neg],
     [`an area's handle refused at least once and accepted at least half the times (${r.by.areaSide?.refused || 0} refused of ${handle})`, (r.by.areaSide?.refused || 0) >= 1 && (r.by.areaSide?.accepted || 0) >= handle / 2, r.by.areaSide],
     [`the probe that narrows an area accepted at least half the times (${narrowed} of ${tried}): a refusal is an answer, not every answer`, tried > 0 && narrowed >= tried / 2, [narrowed, tried]],
@@ -200,6 +201,14 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   // next move of the gesture is given it, so a start that depends on the rows from the top is a difference
   const s13 = first((r2, root) => (r2.ok && r2.start && root.boxes.size && [...root.boxes.values()].every((x) => x.y >= 75) ? { ...r2, start: lowered(r2.start, 1) } : r2));
   ok('a start a row lower when the sheet stands far from the top: caught by L13 after a history', !!s13 && /^L13: after a history/.test(s13.law) && s13.detail.starts === false, show(s13));
+  // a block's own temporary rows (S3b): an engine that measures a typed text again and forgets them
+  const tx1 = first((r2, root, change) => {
+    if (!r2.ok || change.type !== 'size' || !r2.layout.boxes.has(change.id)) return r2;
+    const x = r2.layout.boxes.get(change.id); if (!x.tx) return r2;
+    const { tx, ...plain } = x, boxes = new Map(r2.layout.boxes); boxes.set(x.id, plain);
+    return { ...r2, layout: { ...r2.layout, boxes } };
+  }, { notes: 400 });
+  ok('a text that loses the rows of its own when it is typed into: caught', !!tx1 && /^tx: /.test(tx1.law), show(tx1));
   // and the quotas: a hold that is accepted and changes nothing is no hold; a handle that is always refused is no probe
   const failing = (run, re) => quotas(run).filter(([, holds]) => !holds).map(([what]) => what).filter((w) => re.test(w));
   const empty = broken((r2, root, change, memory) => (r2.ok && change.through === 'hold' ? { ok: true, layout: root, start: root, memory } : r2), { seed, notes, max: 1e9 });

@@ -101,6 +101,8 @@ export function run(A, B, { seed = 1, notes = 300, steps = 6, rulesOf = (E) => E
       return { layout: sa };
     },
   };
-  const { stat, by } = sequences(A, X, { seed, notes, steps });
+  // no temporary rows of a block's own: the engine keeps them in `tx` since seams S3b, the pinned copy does not, and the paths that
+  // lost them there are the differences that part of the plan names (§6.1); the named cases and the laws hold them
+  const { stat, by } = sequences(A, X, { seed, notes, steps, own: false });
   return { stat: { ...stat, removals }, by, diffs };
 }
