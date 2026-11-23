@@ -290,9 +290,10 @@ function makeSync(deps){
   // Only the queue of this memory's epoch and owner is taken: after another tab's change of owner the store holds the new owner's jobs and attempts,
   // and an attempt read into this memory would go through this engine's cloud, the previous owner's (the refusal of the local transaction after
   // the cloud call undoes nothing there). Such a store is refused as in every step's transaction: the status «reload» and `epoch`, the maps left
-  // as they were. The owner this engine's own setOwner is writing is not another tab's: nothing is read and nothing reported, its load follows
-  async function reloadQueue(){ S.queueAt=now(); const own=allowance([...PENDING]); try{ await db.tx(['sync'],'readonly', async t=>{
-      const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!sameOwner(known(),eid,ow)){ if(own.ok(eid,ow)) return; setStatus('reload'); throw fail('epoch'); }
+  // as they were. The owner this engine's own setOwner is writing is not another tab's: nothing is read and nothing reported, its load follows;
+  // the answer is then `own`, and the step that asked ends there (stepOnce)
+  async function reloadQueue(){ S.queueAt=now(); const own=allowance([...PENDING]); try{ return await db.tx(['sync'],'readonly', async t=>{
+      const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!sameOwner(known(),eid,ow)){ if(own.ok(eid,ow)) return 'own'; setStatus('reload'); throw fail('epoch'); }
       S.jobs.clear(); S.tries.clear(); S.refetch.clear();
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); await loadV(t); }); }finally{ own.end(); } }
   // an attempt carries the epoch it was insured in: one of another epoch is not this owner's and never goes through this engine's cloud. The checked
@@ -912,13 +913,17 @@ function makeSync(deps){
     if(!S.paused && net) for(const col of ['notes','versions']){ const c=S.catchup[col]; if(c && c.active) next=Math.min(next, Math.max(c.retryAt||0, nowT+50)); const T=S.totals[col]; if(S.catchupDone[col] && S.snapshot[col] && !S.tries.size){ next=Math.min(next, T.mismatchAt? T.mismatchAt+pace.totalsRecheck : T.lastMatch? Math.max(T.lastMatch+pace.totalsAfterMatch, T.last+pace.totalsEvery) : nowT+1000); } }   // paused: pages, refetches and totals are not allowed, so they set no time; the inbox (already paid) still does
     if(!S.paused && S.online && !blocked()) for(const col of ['notes','versions']){ const r=S.relisten[col]; if(r) next=Math.min(next, Math.max(nowT+50, Math.min(r.at, nowT+pace.retryMax))); }   // a device clock set back does not stretch the pause
     if(S.inbox.length || ((S.refetch.size || S.vrefetch.size) && !S.paused && net)) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); if(S.paused) next=Math.min(next, nextDay(nowT)); return next; }   // paused: the step runs again when the budget counts anew
-  async function stepOnce(){ if(!S.loaded) await load(); const nowT=now(); quotaNow();
+  // a step does not run across this engine's own change of owner: between that transaction's commit and the load that adopts it the memory (the
+  // inbox with the previous cloud's deliveries included) is still the previous owner's, and a step's transaction would meet the new owner and
+  // report «reload», which locks the very tab that binds. The step ends idle and asks to be run again shortly; setOwner's load brings the queue
+  const ownChange=()=>({did:'idle', next:now()+50, status:S.lastStatus});
+  async function stepOnce(){ if(PENDING.size) return ownChange(); if(!S.loaded) await load(); const nowT=now(); quotaNow();
     if(!S.started || !S.cloud || !S.owner){ return {did:'idle', next:Infinity, status:status()}; }
     if(S.listenPaused && !S.paused){ S.listenPaused=false; reconnect(); }   // the day turned: the budget is back, so are the listeners
     if((S.errorUntil||0)>nowT) return {did:'idle', next:S.errorUntil, status:status()};
     // no space (§4.6): receiving stops for an hour, deliveries meanwhile are dropped (the totals check finds them later); then the listener and catch-up start over
     if(S.nospace){ if(nowT<(S.nospaceAt||0)+3600000){ S.inbox.length=0; return {did:'idle', next:S.nospaceAt+3600000, status:status()}; } S.nospace=false; S.sweptOnce=false; log({t:'nospace-over'}); reconnect(); }
-    if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000){ try{ await reloadQueue(); }catch(e){ if(e && e.code==='epoch') return {did:'idle', next:Infinity, status:status()}; throw e; } }   // the store is another owner's now: the refusal told the page («reload»), the step does nothing, with no error pause
+    if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000){ try{ if(await reloadQueue()==='own') return ownChange(); }catch(e){ if(e && e.code==='epoch') return {did:'idle', next:Infinity, status:status()}; throw e; } }   // the store is another owner's now: the refusal told the page («reload»), the step does nothing, with no error pause
     if(S.vjudge) await vmigrate({jobs:true});   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
     try{
       if(S.inbox.length){ const isNote=m=>m.col==='notes' && m.source==='delivery';

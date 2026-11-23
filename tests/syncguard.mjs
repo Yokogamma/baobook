@@ -303,10 +303,24 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   X.tries.set('f1',{k:'try:n:f1', op:'oforeign', expect:0, result:{title:'', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE text of another epoch'}], created:1, updated:1}, sentLrev:1, epoch:'e-other'});
   X.vtries.set('fv',{k:'try:v:fv', op:'oforeignv', expect:0, result:{note:'f1', name:'PRIVATE', created:1}, epoch:'e-other'}); await idle(A);
   ok('5s5 an attempt of another epoch in the memory is dropped from it, not sent (notes in the cloud: '+cloud.docs.notes.size+', versions: '+cloud.docs.versions.size+'; logged: '+A.logs.filter(e=>e.t==='try-foreign').length+')', !cloud.docs.notes.size && !cloud.docs.versions.size && !X.tries.size && !X.vtries.size && A.logs.filter(e=>e.t==='try-foreign').length===2);
-  // a step inside this engine's own change of owner: the queue's read meets the owner being written and reports no «reload»
+  // a step inside this engine's own change of owner, with a delivery of the previous owner's cloud still in the inbox: the step ends before the
+  // inbox and asks to be run again; nothing is applied, no «reload» locks the tab that binds
+  A.online=false; cloud.write('notes',{id:'in1', title:'', blocks:[{id:'b',row:1,fx:0,text:'of the previous cloud'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});   // the proxy drops the listener's own delivery; the test hands it over
+  X.inbox.push({col:'notes', source:'delivery', doc:{...cloud.doc('notes','in1'), id:'in1'}});
   A.status.length=0; const bind=A.sync.setOwner({env:'test', uid:'u2', email:'v@test'}); let spins=0; while(X.loaded && spins<100000){ spins++; await Promise.resolve(); }
-  const inWindow=!X.loaded; X.loaded=true; X.queueAt=0; const st=await A.sync.step(); X.loaded=false; await bind; await idle(A);   // loaded forced: the step skips its lazy load and reads the queue with the memory of u1
-  ok('5s6 a step whose queue read lands inside this engine\'s own setOwner (in its window: '+inWindow+'): '+st.did+', no «reload» ('+A.status.filter(c=>c==='reload').length+'), the engine names '+A.sync.owner.uid+' and checkOwner says the same', inWindow && st.did!=='error' && !A.status.includes('reload') && A.sync.owner.uid==='u2' && await A.sync.checkOwner()===true); }
+  const inWindow=!X.loaded, st=await A.sync.step(), early=!!A.db.get('notes','in1'); await bind; await idle(A);
+  ok('5s6 a step inside this engine\'s own setOwner (in its window: '+inWindow+') with a delivery waiting: '+st.did+', run again in '+(st.next-cloud.now())+' ms, the delivery not applied ('+early+'), no «reload» ('+A.status.filter(c=>c==='reload').length+'); after the change the engine names '+A.sync.owner.uid+' and checkOwner says the same',
+    inWindow && st.did==='idle' && st.next-cloud.now()===50 && !early && !A.status.includes('reload') && A.sync.owner.uid==='u2' && await A.sync.checkOwner()===true); }
+/* ── 5s7. the queue's read that waited for the store (a connection being reopened) while the engine was stopped and another tab bound a new owner:
+   it lands on the new owner's store. Nothing of that queue is taken or sent, the step ends idle and the status «reload» goes out ── */
+{ const cloudA=new TestCloud({start:1_700_000_000_000}), cloudB=new TestCloud({start:1_700_000_000_000}), db=new MemStore(); let hold=null;
+  const dbA={tx:(stores,mode,fn)=>hold? hold.then(()=>db.tx(stores,mode,fn)) : db.tx(stores,mode,fn), get:(s,k)=>db.get(s,k), all:s=>db.all(s)};   // A's transactions wait while `hold` stands, as SDB.tx does behind idb.open()
+  const A=await mk(cloudA,'A',{db:dbA}); await idle(A); const gate=defer(); hold=gate.promise; const st=A.sync.step(); await tick(); A.sync.stop();   // the step is past its gates and waits for the store; the tab gives the lead away
+  const B=device(cloudB,'B',{db}); await B.sync.setOwner({env:'test', uid:'u2', email:'v@test'}); await B.sync.start();
+  await edit(B,'a1',(C,t)=>({title:'private', blocks:[{id:'b',row:1,fx:0,text:'PRIVATE text of u2'}], created:t, updated:t})); cloudB.fault('fail',{dev:'B', op:'txn', n:1000}); await idle(B);
+  const trB=db.get('sync','try:n:a1'); hold=null; gate.res(); const r=await st, more=await A.sync.step();
+  ok('5s7 a queue read that waited for the store across a stop and another tab\'s change of owner (the new owner\'s attempt stands: '+!!trB+'): the step ends '+r.did+', nothing of u2 in u1\'s cloud ('+cloudA.docs.notes.size+' notes), no attempt taken ('+A.sync.tries().length+'), the status «reload»; the next step is '+more.did,
+    !!trB && r.did==='idle' && r.next===Infinity && !cloudA.docs.notes.size && !A.sync.tries().length && A.status.includes('reload') && more.did==='idle' && (db.get('sync','try:n:a1')||{}).op===trB.op); }
 
 /* ── 6. a listener the server ends (§4.6): the step starts it again after a growing pause, from the cursor, so what was written meanwhile
    arrives and the status comes back; a refused one is not restarted; an error of a listener already replaced changes nothing ── */
