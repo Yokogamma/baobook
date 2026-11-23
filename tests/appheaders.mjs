@@ -49,13 +49,18 @@ const errs=[], noise=[]; pg.on('pageerror',e=>errs.push('PAGEERROR '+e.message))
 pg.on('console',m=>{ if(/Permissions-Policy|Unrecognized feature|Content.Security.Policy|X-Frame-Options|frame-ancestors/i.test(m.text())) noise.push(m.type()+': '+m.text()); });
 await ctx.addInitScript(()=>{ window.__csp=[]; document.addEventListener('securitypolicyviolation', e=>window.__csp.push(e.violatedDirective+' '+e.blockedURI)); });
 
-// a normal start under the headers: the page as the network gives it, a note typed, nothing violated and nothing reported about the policies
+// a normal start under the headers: the page as the network gives it, a note typed, nothing violated and nothing reported about the policies.
+// The text goes in once the caret is in the new block. On a slow first start (CI) the first click right after data-ready can create no
+// block, with or without the headers (current main does the same at 8x CPU throttling), so the click is repeated until the caret is there
 { const r=await pg.goto(site.url); await pg.waitForSelector('html[data-ready]',{state:'attached',timeout:10000});
-  await pg.mouse.click(500,300); await pg.keyboard.type('нотатка під заголовками'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
+  const caret=()=>pg.waitForFunction(()=>!!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#sheet .blk')),null,{timeout:2000}).then(()=>true,()=>false);
+  let clicks=0, inBlock=false; while(!inBlock && clicks<5){ await pg.mouse.click(500,300); clicks++; inBlock=await caret(); }
+  await pg.keyboard.type('нотатка під заголовками'); await pg.keyboard.press('Escape');
+  const typed=await pg.waitForFunction(()=>[...document.querySelectorAll('.blk .txt')].filter(n=>n.textContent.includes('нотатка під заголовками')).length===1,null,{timeout:5000}).then(()=>true,()=>false);
   const camera=await pg.evaluate(()=>{ const p=document.permissionsPolicy||document.featurePolicy; return p? p.allowsFeature('camera') : null; });
-  const v=await pg.evaluate(()=>window.__csp);
-  ok('4 the app starts under the headers: the page carries them, the note is typed, no securitypolicyviolation ('+v.length+'), nothing in the console about the policies ('+noise.length+'), the camera is off ('+camera+')',
-    secure(k=>r.headers()[k]??null) && await pg.locator('.blk .txt').filter({hasText:'нотатка під заголовками'}).count()===1 && !v.length && !noise.length && camera===false); }
+  const v=await pg.evaluate(()=>window.__csp), page=secure(k=>r.headers()[k]??null);
+  ok('4 the app starts under the headers: the page carries them ('+page+'), the note is typed ('+typed+', caret after '+clicks+' click'+(clicks>1?'s':'')+'), no securitypolicyviolation ('+v.length+'), nothing in the console about the policies ('+noise.length+'), the camera is off ('+camera+')',
+    page && typed && !v.length && !noise.length && camera===false); }
 
 // the service worker answers the page from then on (network first): its response keeps the headers
 { await pg.evaluate(()=>navigator.serviceWorker.ready); await pg.reload(); await pg.waitForSelector('html[data-ready]',{state:'attached',timeout:10000});
