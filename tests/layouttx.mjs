@@ -66,6 +66,19 @@ const go = (tree, change, ctx) => settleTree(tree, change, emptyMemory(), ctx);
   ok('1n shown again with none given: it has none', (again.boxes.get('A').tx || 0) === 0 && again.boxes.get('A').t === 0 && JSON.stringify(unshow(again, ctx).boxes.get('A')) === JSON.stringify(unshow(tree, ctx).boxes.get('A')));
 }
 
+/* ── 1'. its own rows are rows it stands on: the rest width counts them (the independent review of df6a635). A, 50 letters, set to 4
+   cells, shows a row of its own; B stands beside the rows A would take wider. Made elastic, A rests no wider than B lets it on every
+   row it shows, and B stays; the same note with that row given by the measure rests alike ── */
+{
+  const boxes = [S('A', 0, 0, 4), S('B', 12, 1, 3)], map = { A: { text: chars(50) }, B: { text: 'x' } };
+  const own = shown(boxes, {}, map, { A: 1 }), byMeasure = shown(boxes, {}, { ...map, A: { text: chars(50), temp: 1 } }, {});
+  const free = { type: 'size', box: null, id: 'A', set: { cw: null } };
+  const r = go(own.tree, free, own.ctx), m = go(byMeasure.tree, free, byMeasure.ctx);
+  const A = r.ok && r.layout.boxes.get('A'), B = r.ok && r.layout.boxes.get('B'), Am = m.ok && m.layout.boxes.get('A');
+  ok(`1' made elastic beside B: A rests at ${A && A.w - 1} cells, B stays at row ${B && B.y}`, !!A && A.w - 1 === 11 && B.y === 1 && (B.yc ?? B.y) === 1 && A.tx === 1 && !validate(r.layout, own.ctx).length, r.ok ? [A, B] : r);
+  ok('1\'a as the same row given by the measure does', !!Am && Am.w === A.w && Am.h === A.h && m.layout.boxes.get('B').y === 1, m.ok ? Am : m);
+}
+
 /* ── 2. an area ── */
 {
   const map = { R: { kind: 'area' }, c: { text: 'x' }, d: { text: 'x' }, B: { text: 'x' } };

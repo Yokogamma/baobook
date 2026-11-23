@@ -83,7 +83,7 @@ function reach(before, after, seeds) {
 }
 
 /** Run the sequences with the laws; `engine`, settleTree unless a test of the laws themselves gives one that breaks a law. @returns {{stat, by, violations:object[], counts:object, reopened:{same:number, other:number}}} */
-export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEFAULT, probes = 4, engine = settleTree, drive = null } = {}) {
+export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEFAULT, probes = 4, engine = settleTree, drive = null, model = true } = {}) {
   const violations = [], counts = {}, reopened = { same: 0, other: 0, first: null };
   const inc = (k, n = 1) => { counts[k] = (counts[k] || 0) + n; };
   let p = (seed * 2654435761) >>> 0;   // the laws' own draws, apart from the generator's stream
@@ -94,8 +94,9 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
   // L1: every transition SETTLE hands RELINK, in a command or in a probe, answered by the lab model too (modelref.mjs). An engine given
   // in the engine's place by a test of the laws takes the hooks or leaves them
   let l1 = null, l1on = true;   // l1on: off for the runs that are another law's (L13's lowered trees) and for the probes not sampled
-  const hooks = { relink(T, answer) {
-    if (!l1on) return;
+  let swaps = [];   // the swaps the engine made in a command, as phase 3 reports them (`trace`): [carried, neighbour]
+  const hooks = { trace(phase, L, info) { if (info && info.swap) swaps.push(info.swap); }, relink(T, answer) {
+    if (!l1on || !model) return;
     inc('L1: transitions RELINK was handed');
     let d; try { d = compare(T, answer); } catch (e) { d = { what: 'the comparison threw', error: String(e && e.message) }; }
     if (d && !l1) l1 = d;
@@ -179,7 +180,8 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
     settle(kind, change, root, memory) {
       const negative = kind.startsWith('not: '), extra = { kind, change };
       const before = str(root), memBefore = str(memory);
-      const r = settleSafe(root, change, memory);
+      swaps = [];
+      const r = settleSafe(root, change, memory), swapsOf = swaps.slice();
       if (modelSays(extra)) return { stop: true };
       if (str(root) !== before || str(memory) !== memBefore) { bad('L6: the inputs unchanged', r.ok ? 'after an acceptance' : 'after ' + (r.why || 'a throw'), extra); return { stop: true }; }
       if (r.threw) { bad('an answer, never a throw', r.threw, extra); return { stop: true }; }
@@ -196,14 +198,13 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       {
         const e = validate(r.start, ctx), box = change.box ?? null, isFrame = (x) => x.startsWith(`${box}: a canonical frame of `) || x.startsWith(`${box}: a frame of `);
         const inArea = change.type === 'carry' && box != null && r.start.areas.has(box) && root.areas.has(box);
-        // a swap, told by what it is (LAYOUT-RULES §5.1b): the sheet of `start` the one the move was given, and in the area the
-        // carried block and the neighbour the gesture holds on the other side of each other than they were
+        // a swap, told by what it is (LAYOUT-RULES §5.1b): phase 3 reported one of the carried block in this command (`trace`, which
+        // an engine has to be given to say it; a swap that releases its neighbour at once leaves no name in the memory), the sheet of
+        // `start` is the one the move was given, and in the area the carried block and that neighbour stand on the other side of
+        // each other than they did
         const sideOf = (C, n) => { const g = C.boxes.get(change.id), o = C.boxes.get(n); return g && o && g.id !== o.id ? Math.sign(g.y - o.y) : 0; };
-        // the neighbour: the one the gesture holds, before or after; or, when the swap released it at once (the target past it), any
-        // block of the area the carried block now stands on the other side of
-        const named = [memory.through?.id, r.memory?.through?.id].filter((n) => n != null), held = named.length ? named : inArea ? [...root.areas.get(box).boxes.keys()] : [];
         const swapped = inArea && str(r.start.areas.get(box)) !== str(root.areas.get(box)) && str([...r.start.boxes]) === str([...root.boxes])
-          && held.some((n) => sideOf(root.areas.get(box), n) * sideOf(r.start.areas.get(box), n) < 0);
+          && swapsOf.some(([g, n]) => g === change.id && sideOf(root.areas.get(box), n) * sideOf(r.start.areas.get(box), n) < 0);
         // a later move of the same gesture is given that `start` and answers with it again: the same error, word for word, is its own
         const given = inArea && !swapped ? validate(root, ctx).filter(isFrame) : [];
         const frame = (x) => inArea && isFrame(x) && (swapped || given.includes(x));
@@ -221,6 +222,20 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
         if (lost) { bad('tx: a block keeps its own temporary rows', { block: lost[0], was: lost[1], is: is.get(lost[0]) }, extra); return { stop: true }; }
         const off = containers(r.layout).flatMap(([, L]) => [...L.boxes.values()]).find((b) => !isArea(b) && cur.map[b.id] && (b.t || 0) !== (cur.map[b.id].temp || 0) + (b.tx || 0));
         if (off) { bad('tx: a block shows the measure\'s temporary rows and its own', { block: off.id, t: off.t || 0, measure: cur.map[off.id].temp || 0, own: off.tx || 0 }, extra); return { stop: true }; }
+      }
+      // the rows of a block's own are rows as any the measure shows: the same command on a twin of the tree, where they are the
+      // measure's temporary rows and no block has any of its own, puts every block at the same place with the same rows. (An undo
+      // shows again what the block had; a block it measures anew is the one case the two are told apart, so it is left out.)
+      if (!change.canonical && containers(root).some(([, L]) => [...L.boxes.values()].some((b) => b.tx > 0))) {
+        const moved = new Map(), plain = (L) => ({ ...L, boxes: new Map([...L.boxes].map(([id, b]) => { if (!b.tx) return [id, b]; moved.set(id, b.tx); const { tx, ...p } = b; return [id, p]; })) });
+        const twin = { ...plain(root), areas: new Map([...root.areas].map(([id, C]) => [id, plain(C)])) };
+        const map2 = Object.fromEntries(Object.entries(cur.map).map(([id, m]) => [id, moved.has(id) && m.kind !== 'area' ? { ...m, temp: (m.temp || 0) + moved.get(id) } : m]));
+        if (![...moved.keys()].some((id) => root.areas.has(id) || (cur.map[id] && cur.map[id].kind === 'area'))) {   // an area's own rows have no measure to move into
+          l1on = false; const tw = settleSafe(twin, change, memory, ctxOf(map2)); l1on = true;
+          inc('tx: as the measure\'s rows');
+          const rowsOf = (T) => Object.fromEntries(containers(T).flatMap(([name, L]) => [...L.boxes.values()].map((b) => [b.id, [name, b.col, b.y, b.yc ?? b.y, b.w, b.h, b.t || 0]])));
+          if (tw.threw || !tw.ok || str(rowsOf(tw.layout)) !== str(rowsOf(r.layout))) { bad('tx: a block\'s own rows are rows as the measure\'s', tw.ok ? { own: rowsOf(r.layout), measure: rowsOf(tw.layout) } : tw, extra); return { stop: true }; }
+        }
       }
       // L4: the same input again; the same tree kept in another order
       if (rnd() < 0.3) {

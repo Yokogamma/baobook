@@ -47,9 +47,10 @@ export function minCells(box, ctx) {
 }
 
 /** The room to its right at a width: up to the container's right edge, and up to the handle cell of the nearest block to its right on the
- *  rows it takes at that width (an area's handle cell is its free column), in card cells (SIZE.1). @param {Layout} layout */
+ *  rows it shows at that width, its own temporary rows among them (an area's handle cell is its free column), in card cells (SIZE.1).
+ *  @param {Layout} layout */
 export function roomAt(layout, box, cells, ctx) {
-  const h = rowsAt(box, cells, ctx).shown, r0 = box.y, r1 = box.y + h - 1;
+  const h = heightAt(box, cells, ctx).h, r0 = box.y, r1 = box.y + h - 1;   // every row it shows there, its own temporary rows too
   let edge = layout.cols;
   for (const id of layout.order) {
     const o = layout.boxes.get(id); if (o.id === box.id || o.col <= box.col) continue;
