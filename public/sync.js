@@ -915,8 +915,9 @@ function makeSync(deps){
     if(S.inbox.length || ((S.refetch.size || S.vrefetch.size) && !S.paused && net)) next=Math.min(next, nowT+10); if(S.nospace) next=Math.min(next, (S.nospaceAt||nowT)+3600000); if(S.paused) next=Math.min(next, nextDay(nowT)); return next; }   // paused: the step runs again when the budget counts anew
   // a step does not run across this engine's own change of owner: between that transaction's commit and the load that adopts it the memory (the
   // inbox with the previous cloud's deliveries included) is still the previous owner's, and a step's transaction would meet the new owner and
-  // report «reload», which locks the very tab that binds. The step ends idle and asks to be run again shortly; setOwner's load brings the queue
-  const ownChange=()=>({did:'idle', next:now()+50, status:S.lastStatus});
+  // report «reload», which locks the very tab that binds. The step ends idle and asks to be run again shortly; setOwner's load brings the queue.
+  // A stopped engine asks for nothing: its step would be idle anyway, and the page must not wake it twenty times a second while a change waits for the store
+  const ownChange=()=>({did:'idle', next:S.started? now()+50 : Infinity, status:S.lastStatus});
   async function stepOnce(){ if(PENDING.size) return ownChange(); if(!S.loaded) await load(); const nowT=now(); quotaNow();
     if(!S.started || !S.cloud || !S.owner){ return {did:'idle', next:Infinity, status:status()}; }
     if(S.listenPaused && !S.paused){ S.listenPaused=false; reconnect(); }   // the day turned: the budget is back, so are the listeners

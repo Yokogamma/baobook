@@ -311,6 +311,17 @@ const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
   const inWindow=!X.loaded, st=await A.sync.step(), early=!!A.db.get('notes','in1'); await bind; await idle(A);
   ok('5s6 a step inside this engine\'s own setOwner (in its window: '+inWindow+') with a delivery waiting: '+st.did+', run again in '+(st.next-cloud.now())+' ms, the delivery not applied ('+early+'), no «reload» ('+A.status.filter(c=>c==='reload').length+'); after the change the engine names '+A.sync.owner.uid+' and checkOwner says the same',
     inWindow && st.did==='idle' && st.next-cloud.now()===50 && !early && !A.status.includes('reload') && A.sync.owner.uid==='u2' && await A.sync.checkOwner()===true); }
+/* ── 5s6b. the same from the other side: the step asked for the queue before this engine's own setOwner was registered, and its read lands after
+   that transaction committed, while the memory still names the previous owner. The read answers `own`: the step ends idle and is run again in
+   50 ms, nothing goes to the cloud, no «reload»; a stopped engine in the same place asks for no retry ── */
+{ for(const stopped of [false,true]){ const cloud=new TestCloud({start:1_700_000_000_000}), db=new MemStore(); let hold=null;
+    const dbA={tx:(stores,mode,fn)=>hold? hold.then(()=>db.tx(stores,mode,fn)) : db.tx(stores,mode,fn), get:(s,k)=>db.get(s,k), all:s=>db.all(s)};
+    const A=await mk(cloud,'A',{db:dbA}), X=A.sync._S; await idle(A); A.status.length=0; const gate=defer(); hold=gate.promise; X.queueAt=0;
+    const st=A.sync.step(); await tick(); hold=null;   // the step waits for the store inside reloadQueue(); nothing of a change of owner is registered yet
+    if(stopped) A.sync.stop(); const bind=A.sync.setOwner({env:'test', uid:'u2', email:'v@test'}); let spins=0; while(X.loaded && spins<100000){ spins++; await Promise.resolve(); }
+    const inWindow=!X.loaded, memory=A.sync.owner && A.sync.owner.uid; gate.res(); const r=await st; await bind; if(!stopped) await idle(A);
+    ok('5s6b'+(stopped? '2 (the engine stopped meanwhile)' : '')+' a queue read asked before this engine\'s own setOwner and answered after its commit (in its window: '+inWindow+', the memory then: '+memory+'): the step ends '+r.did+', '+(r.next===Infinity? 'no retry asked' : 'run again in '+(r.next-cloud.now())+' ms')+', no «reload» ('+A.status.filter(c=>c==='reload').length+'); the engine names '+A.sync.owner.uid,
+      inWindow && memory==='u1' && r.did==='idle' && (stopped? r.next===Infinity : r.next-cloud.now()===50) && !A.status.includes('reload') && A.sync.owner.uid==='u2' && await A.sync.checkOwner()===true); } }
 /* ── 5s7. the queue's read that waited for the store (a connection being reopened) while the engine was stopped and another tab bound a new owner:
    it lands on the new owner's store. Nothing of that queue is taken or sent, the step ends idle and the status «reload» goes out ── */
 { const cloudA=new TestCloud({start:1_700_000_000_000}), cloudB=new TestCloud({start:1_700_000_000_000}), db=new MemStore(); let hold=null;
