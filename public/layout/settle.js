@@ -98,8 +98,9 @@ function columnsOf(base, after, moved, how, by) {
  *  letting-through wrapper around it (phases 3 and 11) for a carry with THROUGH on. `moves` is the union of the steps every RELINK of this SETTLE was handed, for
  *  the dev look; `grew`, for a change inside an area (`change.box`), the change of the bottom its content reaches, in rows (settleTree's,
  *  §5.6); `ran`, the phases that ran, for the tests. @param {Layout} start @param {Change} change @param {?Memory} memory @param {Ctx} ctx
- *  @param {{trace?:(phase:string, layout:Layout, info?:{swap:string[]}) => void}} [hooks] the working layout after each phase of every
- *  run (phase 3: the swapped layout, with its pair), for the dev look and the tests @returns {Result} */
+ *  @param {{trace?:(phase:string, layout:Layout, info?:{swap:string[]}) => void, relink?:(T:Transition, answer:Relinked) => void}} [hooks]
+ *  `trace`, the working layout after each phase of every run (phase 3: the swapped layout, with its pair); `relink`, every transition
+ *  handed to RELINK with its answer, refused ones too; for the dev look and the tests @returns {Result} */
 export function settle(start, change, memory, ctx, hooks = {}) {
   try { return (change.canonical ? inverse : wrapper)(start, change, memory || emptyMemory(), ctx, hooks); }
   catch (e) {
@@ -188,6 +189,7 @@ function wrapper(start, change, memory, ctx, hooks) {
         /** @type {Transition} */
         const T = { base: r.layout, after: ws.L, ...transitionFacts(ws, r.layout, { swap: [g, th.id] }), carried: g, leave: cl.leave, enter: cl.enter, pass };
         const rl = relink(T);
+        if (hooks.relink) hooks.relink(T, rl);
         if (!rl.ok) throw new Failed('settle: RELINK refused the swap: ' + (rl.errors || []).join('; '));
         // the blocks met from the side are cleared at a swap (§6.D): the run again judges them anew
         s = rl.layout; mem = { ...r.memory, lastTarget: last, sides: new Map(), through: flipped(s, g, th, last, lineOf(r.layout, g, th)) };
@@ -241,6 +243,7 @@ function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
   const cl = columnsOf(b9, w9.L, null, 'self', by);
   const T = { base: b9, after: w9.L, ...transitionFacts(w9, b9), carried: null, leave: cl.leave, enter: cl.enter, pass: [] };
   const r = relink(T);
+  if (hooks.relink) hooks.relink(T, r);
   if (!r.ok) throw new Failed('settle: RELINK refused phase 9 (c): ' + (r.errors || []).join('; '));
   for (const [id, l] of w9.steps) moves.set(id, [...(moves.get(id) || []), ...l]);
   return r.layout;
@@ -258,11 +261,11 @@ function bounds(L) {
 }
 
 /** Phases 9 and 10 alone, for open()'s step 4 once GAP.1 has built the stacks (LAYOUT-ENGINE-PLAN §3.5): rest widths, the hits they leave,
- *  RELINK, and the bounds; nothing else of the pipeline runs. @param {Layout} layout @param {Ctx} ctx
+ *  RELINK, and the bounds; nothing else of the pipeline runs. `hooks`, settle's. @param {Layout} layout @param {Ctx} ctx @param {object} [hooks]
  *  @returns {{ok:true, layout:Layout, ran:string[]}|{ok:false, why:'refused'|'failed', errors:string[]}} */
-export function rest(layout, ctx) {
+export function rest(layout, ctx, hooks = {}) {
   try {
-    const ran = [], L = phase9(layout, layout, ctx, [], {}, new Map(), ran);
+    const ran = [], L = phase9(layout, layout, ctx, [], hooks, new Map(), ran);
     ran.push('10'); bounds(L);
     return { ok: true, layout: L, ran };
   } catch (e) {
@@ -403,6 +406,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     const T = { base, after: ws.L, ...transitionFacts(ws, base, { canonical: !!change.canonical }), carried: kind.moved === 'target' ? g : null, leave: cl.leave, enter: cl.enter, pass: [] };
     if (change.canonical) T.canonical = true;
     const r = relink(T);
+    if (hooks.relink) hooks.relink(T, r);
     if (!r.ok) throw new Failed('settle: RELINK refused phase 8: ' + (r.errors || []).join('; '));
     L8 = r.layout;
     if (hooks.trace) hooks.trace('8', L8);
