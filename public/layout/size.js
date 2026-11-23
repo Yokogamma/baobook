@@ -24,6 +24,11 @@ export function isElastic(box, ctx) { return kindOf(box, ctx).width === 'text' &
 /** Its rows at a card width, canonical and displayed (SIZE.6, through the passport). @returns {{rows:number, shown:number}} */
 export function rowsAt(box, cells, ctx) { return kindOf(box, ctx).rows(box, cells, ctx.measure); }
 
+/** The height of a block that is no area, at a card width: the rows it shows there, and of them the temporary ones, the measure's and
+ *  its own (`tx`, the rows `show` was given for it; LAYOUT-SEAMS-PLAN §6.1). The one place such a block's `h` and `t` come from, so
+ *  that no path that measures it again loses its own temporary rows. @returns {{h:number, t:number}} */
+export function heightAt(box, cells, ctx) { const r = rowsAt(box, cells, ctx), x = box.tx || 0; return { h: r.shown + x, t: r.shown - r.rows + x }; }
+
 /** The widest it gets by itself: an elastic block's natural width up to TEXTW, never below its kind's floor; a set width's `cw`; an area's
  *  `cw`, at least its floor (SIZE.1, SIZE.3). */
 export function capCells(box, ctx) {
@@ -42,9 +47,10 @@ export function minCells(box, ctx) {
 }
 
 /** The room to its right at a width: up to the container's right edge, and up to the handle cell of the nearest block to its right on the
- *  rows it takes at that width (an area's handle cell is its free column), in card cells (SIZE.1). @param {Layout} layout */
+ *  rows it shows at that width, its own temporary rows among them (an area's handle cell is its free column), in card cells (SIZE.1).
+ *  @param {Layout} layout */
 export function roomAt(layout, box, cells, ctx) {
-  const h = rowsAt(box, cells, ctx).shown, r0 = box.y, r1 = box.y + h - 1;
+  const h = heightAt(box, cells, ctx).h, r0 = box.y, r1 = box.y + h - 1;   // every row it shows there, its own temporary rows too
   let edge = layout.cols;
   for (const id of layout.order) {
     const o = layout.boxes.get(id); if (o.id === box.id || o.col <= box.col) continue;

@@ -14,10 +14,10 @@ export const canonicalBottomOf = (L) => { let m = 0; for (const b of L.boxes.val
 /** An area's frame rows for children that take `inner` rows, by its passport (header, children, a larger `ch`; collapsed, the header). */
 export const frameRows = (area, inner, ctx) => ctx.kinds[area.kind].container.height(area, inner, ctx.measure);
 /** An area's frame round its children: by its passport from the area's own fields as they are or will be (its width, which its
- *  header is measured at, `ch`, `collapsed`) and the rows its children take; `h`, the rows shown, and `t`, their temporary part, the
- *  growth its children's temporary rows make. `children`: its container, or null for none yet.
+ *  header is measured at, `ch`, `collapsed`) and the rows its children take; `h`, the rows shown, and `t`, their temporary part: the
+ *  growth its children's temporary rows make, and the area's own temporary rows (`tx`, the rows `show` was given for it). `children`: its container, or null for none yet.
  *  @param {Box} area @param {?Layout} children @param {Ctx} ctx @returns {{h:number, t:number}} */
 export function frameOf(area, children, ctx) {
-  const h = frameRows(area, children ? bottomOf(children) : 0, ctx);
-  return { h, t: h - frameRows(area, children ? canonicalBottomOf(children) : 0, ctx) };
+  const h = frameRows(area, children ? bottomOf(children) : 0, ctx), x = area.tx || 0;
+  return { h: h + x, t: h - frameRows(area, children ? canonicalBottomOf(children) : 0, ctx) + x };
 }

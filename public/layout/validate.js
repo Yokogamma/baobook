@@ -54,7 +54,7 @@ function shape(L, name, ctx) {
     if (!b || typeof b !== 'object' || b.id !== id) { say(`the box kept as ${id} is ${b && typeof b === 'object' ? b.id : b}`); continue; }
     if (typeof b.kind !== 'string' || !Object.hasOwn(ctx.kinds, b.kind)) { say(`${id}: no kind ${b.kind}`); continue; }
     for (const f of ['col', 'y', 'w', 'h']) if (!inRange(b[f])) say(`${id}.${f} = ${b[f]}`);
-    for (const f of ['cw', 'ch', 't', 'yc']) if (b[f] != null && !inRange(b[f])) say(`${id}.${f} = ${b[f]}`);
+    for (const f of ['cw', 'ch', 't', 'tx', 'yc']) if (b[f] != null && !inRange(b[f])) say(`${id}.${f} = ${b[f]}`);
     stacks(b, say);
   }
   if (L.order.length !== L.boxes.size || new Set(L.order).size !== L.order.length || L.order.some((id) => !L.boxes.has(id))) say('its order does not list its boxes');
@@ -75,7 +75,8 @@ function container(L, name, ctx) {
     const t = b.t || 0;
     if (b.w < 2) say(`${b.id}: a card of ${b.w - 1} cells`);
     if (b.h < 1 || t > b.h - 1) say(`${b.id}: ${b.h} rows, ${t} of them temporary`);
-    if (L.measure === 'canonical' && (t !== 0 || (b.yc ?? b.y) !== b.y)) say(`${b.id}: temporary rows in the canonical layout`);
+    if (L.measure === 'canonical' && (t !== 0 || (b.tx || 0) !== 0 || (b.yc ?? b.y) !== b.y)) say(`${b.id}: temporary rows in the canonical layout`);
+    if ((b.tx || 0) > t) say(`${b.id}: ${b.tx} temporary rows of its own, ${t} in all`);
     if ((b.yc ?? b.y) > b.y) say(`${b.id}: its canonical row ${b.yc} below its displayed row ${b.y}`);
     const r = range(b, L.cols);
     if (b.col < r.colMin || b.col > r.colMax || b.y < r.yMin) say(`${b.id} outside its container`);
@@ -92,9 +93,8 @@ function container(L, name, ctx) {
  *    out in other columns than its area has;
  *  - a child container in the measure of the sheet;
  *  - every area's frame round its children by its passport (`container.height`: its header at its width, its children's rows, `ch`,
- *    `collapsed`): canonically an equality; as shown, at least the frame its shown children give. The rows above that are the area's own
- *    temporary rows (`show`'s `temp`), which no field of the tree keeps apart yet: the frame inside the solve gives them their own field
- *    (`tx`, LAYOUT-SEAMS-PLAN §6.1), and this check becomes an equality with it.
+ *    `collapsed`): canonically the frame its children's canonical rows give; as shown, the frame their shown rows give and the area's
+ *    own temporary rows (`tx`), an equality too.
  *  @param {Layout} tree @param {Ctx} ctx @returns {string[]} */
 export function validate(tree, ctx) {
   const sheet = container(tree, 'sheet', ctx), errs = sheet.errs;
@@ -117,9 +117,9 @@ export function validate(tree, ctx) {
     if (C.measure !== tree.measure) errs.push(`${id}: its children ${C.measure}, the sheet ${tree.measure}`);
     if (mine.errs.length || !ctx.kinds[a.kind].container) continue;   // a frame is judged round sound children
     const rows = (inner) => ctx.kinds[a.kind].container.height(a, inner, ctx.measure), t = a.t || 0;
-    const canonical = rows(canonicalBottomOf(C)), shown = rows(bottomOf(C));
+    const canonical = rows(canonicalBottomOf(C)), shown = rows(bottomOf(C)) + (a.tx || 0);
     if (a.h - t !== canonical) errs.push(`${id}: a canonical frame of ${a.h - t} rows, its children need ${canonical}`);
-    if (a.h < shown) errs.push(`${id}: a frame of ${a.h} rows shown, its children need ${shown}`);
+    if (a.h !== shown) errs.push(`${id}: a frame of ${a.h} rows shown, its children and its own temporary rows give ${shown}`);
   }
   for (const b of tree.boxes.values()) if (isArea(b) && !areas.has(b.id)) errs.push(`an area with no container: ${b.id}`);
   return errs;

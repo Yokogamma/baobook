@@ -8,7 +8,7 @@
 import { on } from './rules.js';
 import { extent, isArea, hits, sharesCol, readingOrder, range, MAXCELL } from './geometry.js';
 import { bottomOf, frameOf } from './frame.js';
-import { isElastic, rowsAt, restCells, canonicalCtx } from './size.js';
+import { isElastic, rowsAt, restCells, canonicalCtx, heightAt } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
 import { kindOf, judgeCarry, judgeWall } from './changes.js';
@@ -29,11 +29,11 @@ const pad = (b) => (isArea(b) ? 1 : 0);
  *  rows here: its frame is its children's, read by `framed` where the change is of the area itself (§5.6). */
 function measured(box, w, ctx) {
   if (isArea(box)) return { ...box, w };
-  const r = rowsAt({ ...box, w }, w - 1, ctx);
-  return { ...box, w, h: r.shown, t: r.shown - r.rows };
+  return { ...box, w, ...heightAt({ ...box, w }, w - 1, ctx) };
 }
 /** The changed block when it is an area: its frame round its children, read from the layout SETTLE was given (`areas`; frame.js). An
- *  area with no children's container there, a block of one container by itself as the tests of SETTLE have it, keeps its rows. */
+ *  area with no children's container there, a block of one container by itself as the tests of SETTLE have it, keeps its rows. Its
+ *  own temporary rows are in the frame (`tx`), so a carried area is framed as any other. */
 function framed(box, L, ctx) {
   const C = isArea(box) ? L.areas?.get(box.id) : null;
   return C ? { ...box, ...frameOf(box, C, ctx) } : box;
@@ -125,19 +125,26 @@ export function settle(start, change, memory, ctx, hooks = {}) {
  *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
  *  from it. @returns {Result} */
 function inverse(start, change, memory, ctx, hooks) {
-  let folded = start;
-  for (const b of start.boxes.values()) if (b.t > 0) folded = resize(folded, b.id, b.h - b.t, 0);
-  if (folded !== start) folded = follow(folded);
+  const fold = (L) => {
+    let F = L;
+    for (const b of L.boxes.values()) if (b.t > 0 || b.tx) { const { tx, ...plain } = b; F = resize(put(F, plain), b.id, b.h - (b.t || 0), 0); }
+    return F === L ? L : follow(F);
+  };
+  // the areas' children too, so that an area the pass frames again is framed round their canonical rows (frame.js)
+  let folded = fold(start);
+  if (start.areas?.size) folded = { ...folded, areas: new Map([...start.areas].map(([id, C]) => [id, fold(C)])) };
   const r = wrapper(folded, change, memory, canonicalCtx(ctx), hooks);
-  let L = r.layout;
+  let L = start.areas?.size ? { ...r.layout, areas: start.areas } : r.layout;   // the children as they are shown, which the pass never changes
   for (const b of r.layout.boxes.values()) {
     const s = start.boxes.get(b.id);
-    let t = 0;
+    const x = (s && s.tx) || 0;   // its own temporary rows, kept aside through the canonical pass and shown again
+    let t = x;
     if (s && s.w === b.w && s.h - (s.t || 0) === b.h) t = s.t || 0;
-    else if (!isArea(b)) { const q = rowsAt(b, b.w - 1, ctx); t = q.shown - q.rows; }
+    else if (!isArea(b)) { const q = rowsAt(b, b.w - 1, ctx); t = q.shown - q.rows + x; }
+    if (x > 0) L = put(L, { ...L.boxes.get(b.id), tx: x });
     if (t > 0) L = resize(L, b.id, b.h + t, t);
   }
-  if (L !== r.layout) L = follow(L);
+  L = follow(L);
   bounds(L);
   const grew = change.box != null ? bottomOf(L) - bottomOf(start) : 0;
   if (kindOf(change).contain.bottom === 'refuse' && grew > 0) throw new Refused('the handle would make the area taller');
@@ -328,6 +335,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
       if (change.set?.cw != null) { box.cw = change.set.cw; box.w = change.set.cw + 1; }
       if (change.set?.ch != null) box.ch = change.set.ch;
       if (change.set?.open) box.open = true;
+      if (change.tx > 0) box.tx = change.tx;   // a block taken from one container into another keeps its own temporary rows (tree.js)
     } else box = (start.boxes.get(g)) && { ...start.boxes.get(g) };
     if (!box) throw new Failed('settle: no block ' + g);
     if (kind.moved === 'target') box = atTarget(box, { ...change.at, w: change.type === 'create' ? box.w : change.at.w }, L.cols, ctx, change.type === 'create');
@@ -337,7 +345,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     }
     // a created area, or an area's side handle in its container: its frame round the children the layout holds (§5.6); a carried
     // area keeps its rows
-    if (change.type !== 'carry') box = framed(box, L, ctx);
+    box = framed(box, L, ctx);
     L = put(L, box);
   }
   const ws = working(L, g, ctx, insert); ws.base = base;

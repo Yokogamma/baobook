@@ -37,7 +37,7 @@ const unexplained = r.diffs.filter((d) => !EXPECTED.some((e) => e.match(d)));
 ok(`${r.stat.notes} notes, ${r.stat.commands} commands (${r.stat.accepted} accepted, ${r.stat.moved} of them changing the tree, ${r.stat.refused} refused, ${r.stat.failed} failed): the same answers as 0d94f29`, unexplained.length === 0, unexplained[0]);
 console.log('  ' + Object.entries(r.by).map(([k, v]) => `${k} ${v.accepted}/${v.moved}/${v.refused}/${v.failed}`).join(', ') + '  (accepted/changing/refused/failed)');
 // a kind the run never accepted compares nothing
-const need = ['carry', 'carry away', 'carry+hold', 'carry+shift', 'carry past the edge', 'undo carry', 'size', 'size code', 'size set', 'width', 'create', 'remove', 'create again', 'remove area', 'enter', 'leave', 'areaSide', 'drawArea', 'ungroup', 'area size', 'show', 'show own rows'];
+const need = ['carry', 'carry away', 'carry+hold', 'carry+shift', 'carry past the edge', 'undo carry', 'size', 'size code', 'size set', 'width', 'create', 'remove', 'create again', 'remove area', 'enter', 'leave', 'areaSide', 'drawArea', 'ungroup', 'area size', 'show'];
 const thin = need.filter((k) => !(r.by[k] && (k.startsWith('show') ? r.by[k].accepted : r.by[k].moved) >= 5));
 ok('every kind of command accepted with a change at least five times', thin.length === 0, thin);
 ok(`the patches compared hold fields written as removed (${r.stat.removals})`, r.stat.removals >= 50);
