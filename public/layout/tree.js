@@ -25,8 +25,8 @@ function put(T, box, L) {
  *  it taller): its header measured at that width taken off; a collapsed area's children take nothing of it. Negative: the header alone
  *  is too tall. */
 function roomOf(area, rows, ctx) {
-  const H = ctx.kinds[area.kind].container.headerRows(area, ctx.measure);
-  return area.collapsed ? (H <= rows ? Infinity : -1) : rows - H;
+  const H = ctx.kinds[area.kind].container.headerRows(area, ctx.measure), x = area.tx || 0;
+  return area.collapsed ? (H + x <= rows ? Infinity : -1) : rows - x - H;
 }
 /** An area's children's container made with the area, and taken away with it: the one place the tree's `areas` change, so that every
  *  area has its container and no container outlives its area. */
@@ -83,7 +83,7 @@ function move(T, change, ctx, hooks) {
   let out = one(T, { type: 'remove', box: from, id: change.id }, emptyMemory(), ctx, hooks).tree;
   if (from != null) { const g = grow(out, from, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   const set = {}; for (const f of ['cw', 'ch']) if (b[f] != null) set[f] = b[f]; if (b.open) set.open = true;
-  const make = { type: 'create', box: to, id: change.id, kind: b.kind, at: { frow: change.at.y, w: b.w, ...change.at }, away: true, set };
+  const make = { type: 'create', box: to, id: change.id, kind: b.kind, at: { frow: change.at.y, w: b.w, ...change.at }, away: true, set, ...(b.tx ? { tx: b.tx } : {}) };
   out = one(out, make, emptyMemory(), ctx, hooks).tree;
   if (to != null) { const g = grow(out, to, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: ranOf(ran) };
@@ -99,7 +99,7 @@ function ungroup(T, change, ctx, hooks) {
   for (const id of C.order) {
     const c = C.boxes.get(id), cell = childToSheet(area, H, c);   // on the screen, as the tree is: a creation is put at its displayed cell
     const set = {}; for (const f of ['cw', 'ch']) if (c[f] != null) set[f] = c[f]; if (c.open) set.open = true;
-    out = one(out, { type: 'create', box: null, id, kind: c.kind, at: { col: cell.col, y: cell.y, frow: cell.y, w: c.w }, away: true, set }, emptyMemory(), ctx, hooks).tree;
+    out = one(out, { type: 'create', box: null, id, kind: c.kind, at: { col: cell.col, y: cell.y, frow: cell.y, w: c.w }, away: true, set, ...(c.tx ? { tx: c.tx } : {}) }, emptyMemory(), ctx, hooks).tree;
   }
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [null] };
 }
@@ -160,6 +160,7 @@ function areaSide(T, change, ctx, hooks) {
   const width = { type: 'width', box: null, id: change.id, cw: w - 1, side: change.side };
   if (change.side === 'left') width.col = col;
   out = one(out, width, emptyMemory(), ctx, hooks).tree;
+  if (out.boxes.get(change.id).h > area.h) throw new Stop({ ok: false, why: 'refused' });   // its own handle never makes it taller (§5.4)
   return { ok: true, layout: out, start: out, memory: emptyMemory(), pressed: null, ran: [change.id, null] };
 }
 

@@ -60,6 +60,8 @@ function quotas(r) {
     [`L7 over something: a block out of the change's reach in at least 20 % of them (${far}), a thousand such blocks at least (${blocks})`, far >= 20 && blocks >= 1000 * Math.min(1, r.stat.notes / 260), [far, blocks]],
     [`the references over something: the lab model on a thousand transitions at least (${c['L1: transitions RELINK was handed'] || 0}), the frame's formula on a thousand frames (${c['L3: frames against the formula'] || 0}), L13 after a history three hundred times (${c['L13: after a history'] || 0})`,
       (c['L1: transitions RELINK was handed'] || 0) >= 1000 * scale && (c['L3: frames against the formula'] || 0) >= 1000 * scale && (c['L13: after a history'] || 0) >= 300 * scale, null],
+    [`own rows as the measure's rows: asked two hundred times (${c['tx: as the measure\'s rows'] || 0})`, (c['tx: as the measure\'s rows'] || 0) >= 200 * scale, null],
+    [`a block's own temporary rows over something: two hundred blocks with rows of their own before a command (${c['tx: blocks with rows of their own'] || 0})`, (c['tx: blocks with rows of their own'] || 0) >= 200 * scale, null],
     [`what no command may do, ${attempts} attempts, ten at least, each kind drawn and none accepted (${neg.map(([k, v]) => `${k.slice(5)} ${v}`).join(', ')})`, attempts >= 10 * Math.min(1, r.stat.notes / 260) && neg.every(([k, v]) => v >= 1 && !r.by[k].accepted), neg],
     [`an area's handle refused at least once and accepted at least half the times (${r.by.areaSide?.refused || 0} refused of ${handle})`, (r.by.areaSide?.refused || 0) >= 1 && (r.by.areaSide?.accepted || 0) >= handle / 2, r.by.areaSide],
     [`the probe that narrows an area accepted at least half the times (${narrowed} of ${tried}): a refusal is an answer, not every answer`, tried > 0 && narrowed >= tried / 2, [narrowed, tried]],
@@ -129,7 +131,8 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
 
 // ---- the laws can fail: an engine that breaks one is caught by that law
 {
-  const broken = (tamper, o = {}) => runLaws({ seed: 3, notes: 60, max: 1, probes: 0, ...o, engine: (root, change, memory, ctx) => tamper(settleTree(root, change, memory, ctx), root, change, memory) });
+  // the engine under test is given the hooks, so that it says its swaps as the real one does; the lab model is not asked here
+  const broken = (tamper, o = {}) => runLaws({ seed: 3, notes: 60, max: 1, probes: 0, model: false, ...o, engine: (root, change, memory, ctx, hooks) => tamper(settleTree(root, change, memory, ctx, hooks), root, change, memory) });
   const first = (tamper, o) => broken(tamper, o).violations[0];
   const lower = (r2) => { if (!r2.ok) return r2; const id = r2.layout.order[0], boxes = new Map(r2.layout.boxes); boxes.set(id, { ...boxes.get(id), y: boxes.get(id).y + 1 }); return { ...r2, layout: { ...r2.layout, boxes } }; };
   const a = first(lower);
@@ -163,7 +166,17 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
     return { ...r2, start: { ...r2.start, areas } };
   }, { notes: 200 });
   ok('the children of a start a row lower in their area after a carry with no swap: caught as an invalid start, by the frame alone', !!j && /^valid: the answer's start/.test(j.law) && j.detail.every((x) => /frame of/.test(x)), show(j));
-  // a block a cell narrower, its stacks cut to the columns it keeps, so that the tree stays one `validate` accepts
+  // the children of `start` replaced by the result's after a carry in an area that swapped nothing (the independent review of
+  // df6a635: two blocks in columns apart, one carried lower, no hold): the sheet is the move's, the frame not round those children,
+  // and no swap was made to explain it
+  const k = first((r2, root, change) => {
+    if (!r2.ok || change.type !== 'carry' || change.box == null || change.through || !r2.start.areas.has(change.box) || !r2.layout.areas.has(change.box)) return r2;
+    if (JSON.stringify([...r2.start.areas.get(change.box).boxes]) !== JSON.stringify([...root.areas.get(change.box).boxes])) return r2;
+    const areas = new Map(r2.start.areas); areas.set(change.box, r2.layout.areas.get(change.box));
+    return { ...r2, start: { ...r2.start, areas } };
+  }, { notes: 200 });
+  ok('the result\'s children given as a start\'s after a carry in an area with no swap: caught as an invalid start', !!k && /^valid: the answer's start/.test(k.law) && k.detail.every((x) => /frame of/.test(x)), show(k));
+    // a block a cell narrower, its stacks cut to the columns it keeps, so that the tree stays one `validate` accepts
   const narrower = (x) => ({ ...x, w: x.w - 1, ...(x.above ? { above: x.above.filter((t) => t.c0 <= x.col + x.w - 2).map((t) => ({ ...t, c1: Math.min(t.c1, x.col + x.w - 2) })) } : {}) });
   // a deletion that narrows a text nothing links to the deleted block, and sets its width: the tree stays valid (its height and its
   // stacks are as they were), so only L7 can tell, and its exception for a late rest must not take it
@@ -200,6 +213,18 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
   // next move of the gesture is given it, so a start that depends on the rows from the top is a difference
   const s13 = first((r2, root) => (r2.ok && r2.start && root.boxes.size && [...root.boxes.values()].every((x) => x.y >= 75) ? { ...r2, start: lowered(r2.start, 1) } : r2));
   ok('a start a row lower when the sheet stands far from the top: caught by L13 after a history', !!s13 && /^L13: after a history/.test(s13.law) && s13.detail.starts === false, show(s13));
+  // a block's own temporary rows (S3b): an engine that measures a typed text again and forgets them
+  const tx1 = first((r2, root, change) => {
+    if (!r2.ok || change.type !== 'size' || !r2.layout.boxes.has(change.id)) return r2;
+    const x = r2.layout.boxes.get(change.id); if (!x.tx) return r2;
+    const { tx, ...plain } = x, boxes = new Map(r2.layout.boxes); boxes.set(x.id, plain);
+    return { ...r2, layout: { ...r2.layout, boxes } };
+  }, { notes: 400 });
+  ok('a text that loses the rows of its own when it is typed into: caught', !!tx1 && /^tx: /.test(tx1.law), show(tx1));
+  // an engine that refuses a command only because a text has rows of its own (the independent review of 07e13e3): the twin, where the
+  // same rows are the measure's, is accepted, and the law asks before the refusal is returned
+  const tx2 = first((r2, root) => (r2.ok && [root, ...root.areas.values()].some((L) => [...L.boxes.values()].some((x) => x.tx > 0 && x.kind !== 'area')) ? { ok: false, why: 'refused', errors: [] } : r2), { notes: 400 });
+  ok('a command refused only where a text has rows of its own: caught, the twin accepted', !!tx2 && /^tx: a block's own rows are rows as the measure's/.test(tx2.law) && tx2.detail.measure === true, show(tx2));
   // and the quotas: a hold that is accepted and changes nothing is no hold; a handle that is always refused is no probe
   const failing = (run, re) => quotas(run).filter(([, holds]) => !holds).map(([what]) => what).filter((w) => re.test(w));
   const empty = broken((r2, root, change, memory) => (r2.ok && change.through === 'hold' ? { ok: true, layout: root, start: root, memory } : r2), { seed, notes, max: 1e9 });

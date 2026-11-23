@@ -31,9 +31,10 @@ export const KINDS_NOT = ['not: an area into an area', 'not: a wall given direct
  *  - `settle(kind, change, root, memory, {box, hist})` → `{ok: true, layout, start, memory}`, `{ok: false, why}` or `{stop: true}`;
  *  - `show(kind, tree, temp)` → `{layout}` (the tree's canonical layout shown again with `temp`) or `{stop: true}`;
  *  - `memory()`, an empty gesture memory; `done()`, true to end the run.
+ *  `own: false` draws no temporary rows of a block's own (the rows `show` is given), for an engine that does not keep them (`tx`).
  *  @returns {{stat:object, by:object, types:object}} the counts; `by` per kind: accepted, moved (accepted with a tree that changed),
  *  refused, failed; `types` per Change type, an undo's apart: the moved ones on the sheet and in an area */
-export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
+export function sequences(G, X, { seed = 1, notes = 300, steps = 6, own: ownRows = true } = {}) {
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32, int = (a, b) => a + Math.floor(rnd() * (b - a + 1)), pick = (xs) => xs[int(0, xs.length - 1)];
   const stat = { notes: 0, commands: 0, accepted: 0, moved: 0, refused: 0, failed: 0 }, by = {}, types = {};
   const tallyOf = (k) => by[k] || (by[k] = { accepted: 0, moved: 0, refused: 0, failed: 0 });
@@ -64,6 +65,11 @@ export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
     let Tr = X.note({ k, seed: seed0, stored, map, hist });
     if (!Tr) continue;
     stat.notes++;
+    if (rnd() < 0.3) {   // rows of their own for a block or two from the start, an area among them, so that changes of every kind meet them
+      const all = [...Tr.boxes.keys(), ...[...Tr.areas.values()].flatMap((C) => [...C.boxes.keys()])], temp = new Map();
+      for (let i = 0, n = int(1, 2); i < n && all.length; i++) temp.set(pick(all), int(1, 2));
+      if (ownRows && temp.size) { hist.push(['temp', [...temp.keys()], 'own']); const sh = X.show('show own rows', Tr, temp); if (sh.stop) break; Tr = sh.layout; tallyOf('show own rows').accepted++; }
+    }
 
     /** One command through the executor, counted. */
     const both = (kind, change, root, memory) => {
@@ -176,7 +182,7 @@ export function sequences(G, X, { seed = 1, notes = 300, steps = 6 } = {}) {
       } else {   // a temporary height starts or ends: nothing is settled, the same stacks are shown again
         const el = [...leaves, ...aids.flatMap((a) => [...Tr.areas.get(a).boxes.keys()])]; if (!el.length) continue;
         // by the measure (an unfolded block), or by the rows `show` is given for a block, an area included (P18's row; an area's own row)
-        const own = rnd() < 0.5, id = own ? pick([...el, ...aids]) : pick(el), temp = new Map();
+        const drawn = rnd() < 0.5, own = ownRows && drawn, id = own ? pick([...el, ...aids]) : pick(el), temp = new Map();
         if (own) temp.set(id, int(1, 2)); else map[id] = { ...map[id], temp: map[id].temp ? 0 : int(1, 3) };
         hist.push(['temp', id, own ? 'own' : map[id].temp]);
         const name = own ? 'show own rows' : 'show', sh = X.show(name, Tr, temp);

@@ -12,7 +12,7 @@
 // area's extent starts a row above it.
 
 import { extent, isArea, hits, sharesCol, reaches, readingOrder, range } from './geometry.js';
-import { minCells, rowsAt, capCells, isElastic } from './size.js';
+import { minCells, capCells, isElastic, heightAt } from './size.js';
 import { push, resize, cut } from './gap.js';
 
 /** @typedef {import('./shapes.js').Box} Box @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Ctx} Ctx
@@ -130,8 +130,8 @@ export function reshape(ws, id, col, w) {
   const before = ws.L, nb = { ...b, col, w };
   let after = put(before, nb);
   if (w !== b.w) {   // only a new width is measured: a block moved aside keeps its height, an area's included
-    const r = rowsAt(nb, w - 1, ws.ctx);
-    if (r.shown !== b.h || r.shown - r.rows !== (b.t || 0)) after = resize(after, id, r.shown, r.shown - r.rows);
+    const r = heightAt(nb, w - 1, ws.ctx);
+    if (r.h !== b.h || r.t !== (b.t || 0)) after = resize(after, id, r.h, r.t);
   }
   after = push(before, relayout(after, new Map(after.boxes)), skipOf(ws), ws.base);
   followed(ws, before, after); ws.L = after;

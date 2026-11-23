@@ -181,14 +181,15 @@ export function show(canonical, temp = new Map(), ctx) {
   for (const [id, A] of canonical.areas || []) areas.set(id, show(A, temp, ctx));
   let L = canonical;
   for (const b of canonical.boxes.values()) {
-    const hc = b.h - (b.t || 0);
-    let t = temp.get(b.id) || 0;
+    const hc = b.h - (b.t || 0), x = temp.get(b.id) || 0;   // x: its own temporary rows, kept in `tx` beside what the measure gives
+    let t = x;
     if (isArea(b)) {
       const A = canonical.areas?.get(b.id);
       if (A) t += frameRows(b, bottomOf(areas.get(b.id)), ctx) - frameRows(b, bottomOf(unshow(A, ctx)), ctx);
     } else {
       const q = rowsAt(b, b.w - 1, ctx); t += q.shown - q.rows;
     }
+    if (x > 0) { const boxes = new Map(L.boxes); boxes.set(b.id, { ...L.boxes.get(b.id), tx: x }); L = { ...L, boxes }; }
     if (t !== (b.t || 0)) L = resize(L, b.id, hc + t, t);
   }
   return { ...follow(L), measure: 'displayed', areas };
@@ -200,7 +201,10 @@ export function unshow(displayed, ctx) {
   const areas = new Map();
   for (const [id, A] of displayed.areas || []) areas.set(id, unshow(A, ctx));
   let L = displayed;
-  for (const b of displayed.boxes.values()) if (b.t > 0) L = resize(L, b.id, b.h - b.t, 0);
+  for (const b of displayed.boxes.values()) if (b.t > 0 || b.tx) {
+    const { tx, ...plain } = b, boxes = new Map(L.boxes); boxes.set(b.id, plain);
+    L = resize({ ...L, boxes }, b.id, b.h - (b.t || 0), 0);
+  }
   return { ...(L === displayed ? displayed : follow(L)), measure: 'canonical', areas };
 }
 

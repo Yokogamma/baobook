@@ -9,12 +9,14 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
 /** The stored state of one container and its derived rows. The bridge builds the Boxes from index.html's blocks with `w` and `h`
  *  unset and no stacks; `open()` sizes them and builds the stacks (LAYOUT-RULES GAP.1).
  * @typedef {{id:string, kind:string, col:number, y:number, w?:number, h?:number, t?:number, yc?:number, cw?:number, ch?:number, open?:boolean, collapsed?:boolean,
- *            above?:Stretch[]}} Box
+ *            tx?:number, above?:Stretch[]}} Box
  *   // col: the handle cell; the card is col+1 … col+w−1, so w counts the handle cell and a set width cw is w − 1 (LAYOUT-RULES §1.1);
  *   // h: the rows the block takes in its layout's measure; t: the rows of h that are temporary (LAYOUT-RULES §2.1), 0 in a canonical
  *   // layout, so its canonical height is h − t; an area's t also holds the growth of its shown height that its children's temporary rows
  *   // make; t is set wherever h is (gap.js `resize`, from Measure's two answers); yc: its canonical row (equal to y in a canonical layout),
  *   // refreshed by every FOLLOW; RELINK reads them (LAYOUT-RULES GAP)
+ *   // tx: its own temporary rows, those `show` was given for it (P18's row, an area's own): part of t, kept apart so that every path
+ *   // that measures the block again gives them back; in a displayed layout only, never stored (LAYOUT-SEAMS-PLAN §6.1)
  *   // above: this block's stacks, by stretches of equal columns of its extent (in the columns where it stands in another block's stack, none)
  * @typedef {{c0:number, c1:number, stack:Stack}} Stretch   // the columns c0…c1, inclusive, where the block anchors with the same stack
  * @typedef {{u:?string, parts:(Run[]|Stand)[]}} Stack   // LAYOUT-RULES §1.3: u the anchor above (null: the top);
@@ -82,7 +84,7 @@ export const PLACE_FIELDS = Object.freeze(['parent', 'row', 'fx', 'col', 'cw', '
 
 /** One typedef per kind; `box` is the container the change is in (null, the sheet).
  * @typedef {{type:'carry', box:?string, id:string, at:Target, away:boolean, through?:'hold'|'shift', canonical?:boolean}} CarryChange
- * @typedef {{type:'create', box:?string, id:string, kind:string, at:Target, away:true, set?:{cw?:number, ch?:number, open?:boolean}, canonical?:boolean}} CreateChange
+ * @typedef {{type:'create', box:?string, id:string, kind:string, at:Target, away:true, set?:{cw?:number, ch?:number, open?:boolean}, tx?:number, canonical?:boolean}} CreateChange
  * @typedef {{type:'width', box:?string, id:string, cw:number, side?:'left'|'right', col?:number}} WidthChange
  * @typedef {{type:'wall', box:string, side:'left'|'right', cols:number, shift?:number, room?:number}} WallChange
  * @typedef {{type:'areaSide', box:?string, id:string, side:'left'|'right', col:number, cols:number}} AreaSideChange
