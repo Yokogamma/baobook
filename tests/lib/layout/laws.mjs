@@ -108,6 +108,17 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
   /** G24: the elastic blocks of a container at their rest widths on the rows shown, by the formula written apart
    *  (tests/lab/rest-ref.mjs). @returns {string[]} */
   const offRest = (L, c = ctx) => (rules['SIZE.1'] === false ? [] : restAgainstRef({ ...L, areas: new Map() }, c.measure, SETTINGS));
+  /** An area's side handle that asks for the rectangle the area has, once clamped (AREA.3, LAYOUT-RULES §5.6): the left edge between
+   *  column 0 and the area's floor from its right edge, the right edge between the floor and the area's free column inside the
+   *  sheet; where the floor does not fit, the area keeps its width. Written from the rule, with the area's floor of 12 cells. */
+  const idleSide = (change, root) => {
+    if (change.type !== 'areaSide' || (change.box ?? null) != null) return false;
+    const a = root.boxes.get(change.id); if (!a) return false;
+    const floor = 12 + 1, right = a.col + a.w;
+    if (change.side === 'left') return floor > right || Math.max(0, Math.min(change.col, right - floor)) === a.col;
+    const most = root.cols - a.col - 1;
+    return floor > most || Math.max(floor, Math.min(change.cols, most)) === a.w;
+  };
   const valid = (law, T, c, extra) => {
     const e = validate(T, c); if (e.length) { bad(law, e.slice(0, 3), extra); return false; }
     let f; try { f = framesAgainstRef(T, c.measure); } catch (err) { f = ['the formula threw: ' + err.message]; }
@@ -291,9 +302,11 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       // since: `show`, which changes no canonical row, L9; a note opened with temporary heights among them) and that the command
       // has nothing to do with. That is told by the tree and the change, never by what the engine says of itself (`ran`; the
       // independent review of 3b3cbb2): the container comes back as it was given, value for value, and the change does not name it
-      // (its `box`, its `to`, the area of an `areaSide`), unless the command changed nothing at all
+      // (its `box`, its `to`, the area of an `areaSide`). A container the change names is let off only by what the command is
+      // given, never by a tree that came back the same (the review of 23d5959): the one command that may do nothing, an area's
+      // side handle whose rectangle, once clamped, is the one the area has (`idleSide`, the clamp of AREA.3 written again here)
       {
-        const whole = str(r.layout) === str(root);
+        const whole = idleSide(change, root);
         const named = (name) => name === (change.box ?? null) || ('to' in change && name === (change.to ?? null)) || (change.type === 'areaSide' && name === change.id);
         for (const [name, L] of containers(r.layout)) {
           const B = name == null ? root : root.areas.get(name), was = B ? offRest(B) : [];

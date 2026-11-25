@@ -124,6 +124,18 @@ console.log(`  G24: ${c['G24: containers'] || 0} containers at their rest widths
   const lazy = run((root, change) => ({ ok: true, layout: { ...remove(root, change.id), measure: root.measure, areas: root.areas }, start: root, memory: emptyMemory(), pressed: null, ran: [] }));
   ok('an engine that deletes F through GAP alone and reports that it ran nowhere, A left as it was: caught by G24, and by nothing before it',
     lazy.n.violations.length === 1 && /^G24/.test(lazy.n.violations[0].law) && /A is 7 cells wide/.test(String(lazy.n.violations[0].detail)), lazy.n.violations.map((v) => [v.law, v.detail]));
+  // a command the change names its container in may not do nothing because its tree came back the same (the independent review of
+  // 23d5959): F's text is typed over at the same size and F measured again. The engine brings A to rest with it; one that runs the
+  // engine, hooks and all, and answers with the tree it was given leaves A at 7 cells, and only G24 can tell
+  const typed = (engine) => { let w = null; const n = runLaws({ max: 5, probes: 0, engine, drive: (X) => {
+    const m = { ...map, F: { text: 'xx' } }, hist = [], T = X.note({ k: 0, seed: 0, stored, map: m, hist }), c = { type: 'size', box: null, id: 'F' };
+    hist.push(['size', c]); const a = X.settle('size', c, T, emptyMemory()); w = a.ok ? [T.boxes.get('A').w, a.layout.boxes.get('A').w] : null;
+  } }); return { n, w }; };
+  const real = typed(settleTree), idle = typed((root, change, memory, ctx, hooks) => { const r2 = settleTree(root, change, memory, ctx, hooks); return r2.ok ? { ...r2, layout: root } : r2; });
+  ok(`F typed over at the same size and measured again: the engine brings A to rest (${real.w && real.w[0] - 1} cells, then ${real.w && real.w[1] - 1}), no violation`,
+    real.n.violations.length === 0 && real.w && real.w[1] > real.w[0], [real.n.violations.map((v) => v.law), real.w]);
+  ok('and an engine that answers with the tree it was given: caught by G24, the sheet being the container the change names',
+    idle.n.violations.length === 1 && /^G24/.test(idle.n.violations[0].law), idle.n.violations.map((v) => [v.law, v.detail]));
 }
 
 // ---- L1's reach and its teeth, by name (the independent review of 0675ac7). Every path that relinks hands the hook its transition:
