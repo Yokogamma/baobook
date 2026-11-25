@@ -1,24 +1,27 @@
 // Node: the user's actions of the narrow slice (public/layout/ops.js; LAYOUT-ENGINE-PLAN §3.4, §6.4; LAYOUT-SEAMS-PLAN §8).
 //   1  a carry: every move a preview, the drop its commit; what is written is the difference from the stored fields, and every command
 //      is in the journal and replays;
-//   2  home and outside write nothing; a refused move keeps the last preview;
+//   2  home and outside show the note as the carry started and store nothing (DRAG.C1, C3); a refused move keeps the last preview;
 //   3  the exact undo: the tree before, as it was, and the stored fields before; two in a row;
 //   4  typing: the text is the page's to save whatever SETTLE answers; a refusal and a failure write no place; typing between an action
 //      and its undo drops the engine's entries;
 //   5  a creation and a deletion with their undo;
 //   6  entering and leaving an area, by the pointer and by a command; an action that is refused changes nothing;
 //   7  a signature that changed makes the undo stale;
+//   9  the stored fields as read: a place another container only shows is not written by an action elsewhere (§3.4);
+//  10  an area deleted with its children, and its undo;
 //   8  histories of random actions: after each the tree is valid and the stored fields are the canonical layout's; the journal replays.
 //
 //   node tests/layoutops.mjs [seed] [notes]
 
-import { docOf, written, carry, moved, dropped, create, remove, enter, leave, typed, touched, undo } from '../public/layout/ops.js';
+import { docOf, written, carry, moved, dropped, preview, create, remove, enter, leave, typed, touched, undo } from '../public/layout/ops.js';
 import { createJournal, entriesOf, replay } from '../public/layout/journal.js';
 import { open, unshow, diff } from '../public/layout/layout.js';
 import { validate } from '../public/layout/validate.js';
 import { KINDS } from '../public/layout/kinds.js';
 import { DEFAULT, SETTINGS } from '../public/layout/rules.js';
 import { encode } from '../public/layout/journal.js';
+import { fxFromCol, rowFromY } from '../public/layout/geometry.js';
 import { stubMeasure } from './lib/measure.mjs';
 import { draw, noteOf } from './lab/undo-snapshot/histories.mjs';
 
@@ -34,7 +37,8 @@ function opened(note, map) {
   return { doc: docOf(o.shown, written(new Map(), diff(new Map(), o.layout))), env: { ctx, journal }, journal };
 }
 /** The stored fields are those of the canonical layout: nothing is left to write. */
-const inStep = (doc, env) => diff(doc.stored, unshow(doc.tree, env.ctx)).size === 0;
+const idsOf = (tree) => [...tree.order, ...[...tree.areas.values()].flatMap((A) => A.order)].sort().join();
+const inStep = (doc, env) => diff(doc.stored, unshow(doc.tree, env.ctx)).size === 0 && [...doc.stored.keys()].sort().join() === idsOf(doc.tree);   // and no field of a block that is not there
 const replays = (journal) => { let bad = 0; for (const e of entriesOf(journal.export())) if (replay(e, KINDS).same !== true) bad++; return bad; };
 const centre = (tree, box, id, ctx) => {
   const b = (box == null ? tree : tree.areas.get(box)).boxes.get(id);
@@ -68,11 +72,13 @@ const fixture = () => {
   ok('2 carried away and back to its cell: home, the preview is the note as the carry started, and the drop writes nothing and makes no entry', was && h.state === 'home' && h.last === null && h.start === doc.tree && dh.ok && dh.doc === doc && dh.patch.size === 0 && dh.entry === null);
   let o = carry(doc, { id: 'A', point: p }, env);
   o = moved(o, { x: p.x + 9, y: p.y + 4 }, env); const kept = o.last, n = journal.entries().length;
-  o = moved(o, { x: -3, y: p.y }, env);
-  ok('2a the pointer outside the sheet: nothing is asked of the engine, the last preview stays, and a drop commits it', o.state === 'outside' && o.last === kept && journal.entries().length === n && dropped(o, env).doc.tree === kept);
+  const out = moved(o, { x: -0.1, y: p.y }, env), dout = dropped(out, env);
+  ok('2a the pointer outside the sheet after an accepted move: nothing is asked of the engine, the preview is the note as the carry started, and letting go there stores nothing and makes no entry (DRAG.C1, C3)', kept && preview(o) === kept && out.state === 'outside' && out.last === null && preview(out) === doc.tree && journal.entries().length === n && dout.ok && dout.doc === doc && dout.patch.size === 0 && dout.entry === null);
+  const back = moved(out, { x: p.x + 9, y: p.y + 4 }, env);
+  ok('2a\' carried back in: the carry goes on from its start, and gives the layout it gave there before', back.state === 'move' && str(back.last) === str(kept) && dropped(back, env).ok === true && dropped(back, env).entry !== null);
   const stub = { ctx: env.ctx, journal: { run: () => ({ ok: false, why: 'refused' }) } };
   const r = moved(o, { x: p.x + 12, y: p.y + 6 }, stub);
-  ok('2b a move that is refused: the last accepted preview stays, and the gesture goes on', r.state === 'refused' && r.last === kept && !r.failed && dropped(r, env).ok === true);
+  ok('2b a move that is refused: the last accepted preview stays, and the gesture goes on', r.state === 'refused' && r.last === kept && preview(r) === kept && !r.failed && dropped(r, env).ok === true);
   const f = moved(o, { x: p.x + 12, y: p.y + 6 }, { ctx: env.ctx, journal: { run: () => ({ ok: false, why: 'failed', errors: ['x'] }) } });
   const df = dropped(moved(f, { x: p.x + 14, y: p.y + 6 }, env), env);
   ok('2c a move that fails: the rest of the gesture asks nothing, and its drop writes nothing', f.failed && df.ok === false && df.why === 'failed' && df.doc === doc);
@@ -168,6 +174,45 @@ const fixture = () => {
   map.A = { text: 'x'.repeat(31) };
   const u = undo(r.doc, envS);
   ok('7a the deleted block\'s content changed meanwhile (no block of the note did, the identity is the entry\'s): the undo is stale', r.doc.identity === r.entry.after && u.ok === false && u.why === 'stale' && u.doc.undo.length === 0);
+}
+
+{ // 9: the stored fields as read, with a repair open() only shows
+  const map = { A: { text: 'x' }, B: { text: 'x' }, R: { kind: 'area' }, c: { text: 'x' }, d: { text: 'x' } };
+  const ctx = { rules: DEFAULT, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) }, env = { ctx, journal: createJournal() };
+  const note = noteOf(60, [{ id: 'A', kind: 'text', col: 2, y: 3, cw: 5 }, { id: 'B', kind: 'text', col: 2, y: 9, cw: 5 }, { id: 'R', kind: 'area', col: 24, y: 4, cw: 14 }], { R: [{ id: 'c', kind: 'text', col: 0, y: 0, cw: 4 }, { id: 'd', kind: 'text', col: 0, y: 0, cw: 4 }] });
+  // as the bridge reads them: two children of R stored on the same row
+  const read = new Map([...note.boxes.values()].map((b) => [b.id, { fx: fxFromCol(b.col), col: b.col, row: rowFromY(b.y), cw: b.cw }]));
+  for (const [a, A] of note.areas) for (const b of A.boxes.values()) read.set(b.id, { parent: a, col: b.col, row: b.y, cw: b.cw });
+  const o = open(note, ctx), doc = docOf(o.shown, read), R0 = doc.tree.areas.get('R'), pending = diff(doc.stored, unshow(doc.tree, ctx));
+  const low = ['c', 'd'].find((id) => R0.boxes.get(id).y > 0);
+  ok(`9 two children of an area stored on one row: opening shows ${low} a row lower and writes nothing; that place is the only difference from the stored fields`, o.ok && !!low && pending.size === 1 && pending.get(low).row === R0.boxes.get(low).y, [...pending]);
+  map.A = { text: 'x'.repeat(200) };
+  const t = typed(doc, { id: 'A' }, env);
+  ok('9a typing on the sheet: the area is the same object, its child\'s shown place is not written, and it is still to write', t.ok && t.doc.tree.areas.get('R') === R0 && t.patch.has('B') && !t.patch.has(low) && t.doc.stored.get(low).row === 0 && diff(t.doc.stored, unshow(t.doc.tree, ctx)).has(low), [...t.patch]);
+  let g = carry(t.doc, { id: 'B', point: centre(t.doc.tree, null, 'B', ctx) }, env);
+  g = moved(g, { x: 50, y: 40 }, env);
+  const d = dropped(g, env);
+  ok('9b a carry on the sheet likewise', d.ok && d.patch.has('B') && !d.patch.has(low) && d.doc.stored.get(low).row === 0, [...d.patch]);
+  const other = low === 'c' ? 'd' : 'c';
+  map[other] = { text: 'x'.repeat(40) };
+  const t2 = typed(d.doc, { box: 'R', id: other }, env);
+  ok('9c the first action in the area writes it: the child\'s row with the rest, and nothing is left to write', t2.ok && t2.patch.has(low) && t2.patch.get(low).row === t2.doc.tree.areas.get('R').boxes.get(low).y && inStep(t2.doc, env), [...t2.patch]);
+  // into the area by the pointer: both containers are the carry's
+  let g2 = carry(doc, { id: 'B', point: centre(doc.tree, null, 'B', ctx) }, env);
+  const R = doc.tree.boxes.get('R');
+  g2 = moved(g2, { x: R.col + 8, y: R.y + 1.2 }, env);
+  const d2 = dropped(g2, env);
+  ok('9d a block carried into the area: the area is one of the containers of the carry, so its pending place is written with the block', d2.ok && g2.ran.includes('R') && g2.ran.includes(null) && d2.patch.get('B').parent === 'R' && d2.patch.has(low) && inStep(d2.doc, env), { ran: g2.ran, patch: [...d2.patch] });
+}
+
+{ // 10: an area deleted with its children
+  const { doc, env } = fixture(), R = doc.tree.boxes.get('R');
+  const r = remove(doc, { id: 'R' }, env);
+  ok('10 an area with a child deleted: both are named as removed, both are gone from the tree and from the stored fields, and the entry keeps the fields of both', r.ok && r.removed.join() === 'R,c' && !r.doc.tree.boxes.has('R') && !r.doc.tree.areas.has('R') && !r.doc.stored.has('R') && !r.doc.stored.has('c') && str(r.entry.fields.get('c')) === str(doc.stored.get('c')) && str(r.entry.fields.get('R')) === str(doc.stored.get('R')) && inStep(r.doc, env) && !!R);
+  const u = undo(r.doc, env);
+  ok('10a its undo: both named to bring back, each with every stored field it had, the child with its parent', u.ok && u.doc.tree === doc.tree && u.restored.join() === 'R,c' && u.patch.get('c').parent === 'R' && u.patch.get('c').col === doc.stored.get('c').col && 'fx' in u.patch.get('R') && flat(u.doc.stored) === flat(doc.stored) && flat(written(r.doc.stored, u.patch, u.removed)) === flat(doc.stored) && inStep(u.doc, env), [...u.patch]);
+  const rc = remove(doc, { box: 'R', id: 'c' }, env);
+  ok('10b a child deleted alone: it only', rc.ok && rc.removed.join() === 'c' && rc.doc.stored.has('R') && inStep(rc.doc, env));
 }
 
 { // 8

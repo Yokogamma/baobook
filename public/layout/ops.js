@@ -46,9 +46,24 @@ export function written(stored, patch, removed = []) {
   return out;
 }
 
-/** The commit of a layout an action ended with: the stored fields that differ, written, a fresh identity and, with `undo`, the entry. */
-function commit(doc, layout, env, removed, undo) {
-  const patch = diff(doc.stored, unshow(layout, env.ctx)), clock = doc.clock + 1;
+/** Of `diff`, the blocks of the containers an action ran in (§3.4): a block is written when the container it stands in after the action
+ *  was settled by it. A place another container only shows (a repair of open(), a re-measure) waits for an action there. */
+function ranIn(patch, layout, ran) {
+  const at = new Set(ran.map((c) => c ?? null)), out = new Map();
+  for (const [id, p] of patch) {
+    let box = null;
+    if (!layout.boxes.has(id)) for (const [a, A] of layout.areas || []) if (A.boxes.has(id)) { box = a; break; }
+    if (at.has(box)) out.set(id, p);
+  }
+  return out;
+}
+/** The blocks a deletion takes: the block, and an area's children with it. */
+function taken(tree, box, id) { return box == null && tree.areas?.has(id) ? [id, ...tree.areas.get(id).order] : [id]; }
+
+/** The commit of a layout an action ended with: the stored fields that differ in the containers it ran in (`ran`), written, a fresh
+ *  identity and, with `undo`, the entry. */
+function commit(doc, layout, env, removed, undo, ran) {
+  const patch = ranIn(diff(doc.stored, unshow(layout, env.ctx)), layout, ran), clock = doc.clock + 1;
   let entry = null;
   if (undo) {
     const fields = new Map(), signs = new Map();
@@ -64,15 +79,15 @@ function commit(doc, layout, env, removed, undo) {
 function act(doc, change, env, removed = []) {
   const r = run(env, doc.tree, change, emptyMemory());
   if (!r.ok) return { ok: false, why: r.why, doc };
-  return commit(doc, r.layout, env, removed, true);
+  return commit(doc, r.layout, env, removed, true, r.ran || [change.box ?? null]);
 }
 
 /** A new block (EDIT.4), away from the start. `at`: its cell and width in the container's cells; `set`: the sizes it is made with. */
 export function create(doc, { box = null, id, kind, at, set }, env) {
   return act(doc, { type: 'create', box, id, kind, at: { frow: at.y, ...at }, away: true, ...(set ? { set } : {}) }, env);
 }
-/** A block deleted. Its content is the page's to keep for the undo; the entry keeps its stored fields. */
-export function remove(doc, { box = null, id }, env) { return act(doc, { type: 'remove', box, id }, env, [id]); }
+/** A block deleted, an area with its children. Their content is the page's to keep for the undo; the entry keeps their stored fields. */
+export function remove(doc, { box = null, id }, env) { return act(doc, { type: 'remove', box, id }, env, taken(doc.tree, box, id)); }
 /** «В область»: a block of the sheet into an area, at a cell of the area. */
 export function enter(doc, { id, to, at }, env) { return act(doc, { type: 'enter', box: null, id, to, at }, env); }
 /** «З області»: a child of an area out to the sheet, at a cell of the sheet. */
@@ -84,7 +99,7 @@ export function leave(doc, { box, id, at }, env) { return act(doc, { type: 'leav
 export function typed(doc, { box = null, id }, env) {
   const r = run(env, doc.tree, { type: 'size', box, id }, emptyMemory());
   if (!r.ok) return { ok: false, why: r.why, doc: touched(doc), content: true, safe: r.why === 'failed' };
-  return { ...commit(doc, r.layout, env, [], false), content: true, safe: false };
+  return { ...commit(doc, r.layout, env, [], false, r.ran || [box]), content: true, safe: false };
 }
 
 /** A change of what the layout is made from that is no action (a fold, a relabelled chip, the rules, a font): a fresh identity. */
@@ -94,37 +109,43 @@ export function touched(doc) { return { ...doc, identity: doc.clock + 1, clock: 
 /** @typedef {{doc:Doc, drag:import('./drag.js').Drag, cur:?string, start:Layout, memory:object, last:?Layout, pressed:?string,
  *             state:'home'|'outside'|'move'|'refused'|'failed', failed:boolean}} Gesture
  *    // start, memory: what the next move is given (the tree of the carry's start or its last swap, with the crossings made); last:
- *    // the layout of the last accepted move, the preview and what a drop commits; null at home */
+ *    // the layout of the last accepted move, the preview and what a drop commits; null at home and outside; ran: the containers the
+ *    // carry settled since it was last at home, those of its crossings among them, for the write */
 
 /** A block picked up. @returns {?Gesture} */
 export function carry(doc, { box = null, id, point }, env) {
   const drag = pick(doc.tree, box, id, point, env.ctx);
-  return drag && { doc, drag, cur: box, start: doc.tree, memory: emptyMemory(), last: null, pressed: null, state: 'home', failed: false };
+  return drag && { doc, drag, cur: box, start: doc.tree, memory: emptyMemory(), last: null, pressed: null, ran: [], state: 'home', failed: false };
 }
 
-/** The pointer moved: the preview of the carry there. At home the carry is as it started (INV-7 a); outside nothing changes; a move
- *  that is refused keeps the last accepted preview; a failure stays for the rest of the gesture, whose drop writes nothing. */
+/** The layout a carry shows (DRAG.C1): SETTLE's result for the current target; at home and outside, the note as the carry started. */
+export const preview = (g) => g.last || g.doc.tree;
+
+/** The pointer moved: the preview of the carry there. At home and outside the carry is as it started, before any swap and any crossing
+ *  (INV-7 a, DRAG.C1), and a drop there stores nothing (DRAG.C3); a move that is refused keeps the last accepted preview; a failure
+ *  stays for the rest of the gesture, whose drop writes nothing. */
 export function moved(g, point, env) {
   if (g.failed) return g;
   for (let i = 0; i < 3; i++) {
     const n = next(g.drag, g.cur, g.start, point, env.ctx.settings);
-    if (n.state === 'outside') return { ...g, state: 'outside' };
-    if (n.state === 'home') return { ...g, drag: { ...g.drag, away: false }, cur: g.drag.home.box, start: g.doc.tree, memory: emptyMemory(), last: null, pressed: null, state: 'home' };
+    if (n.state !== 'move') return { ...g, drag: { ...g.drag, away: false }, cur: g.drag.home.box, start: g.doc.tree, memory: emptyMemory(), last: null, pressed: null, ran: [], state: n.state };
     const crossing = n.change.type !== 'carry';
     const r = run(env, g.start, n.change, crossing ? emptyMemory() : g.memory);
     if (!r.ok) return { ...g, state: r.why, failed: r.why === 'failed' };
     // a crossing made: the block is a new block of the container it came into, and the carry goes on from the tree it left
-    if (crossing) { g = { ...g, drag: n.drag, cur: n.to, start: r.layout, memory: emptyMemory(), last: r.layout, pressed: null, state: 'move' }; continue; }
-    return { ...g, drag: n.drag, start: r.start, memory: r.memory, last: r.layout, pressed: r.pressed ?? null, state: 'move' };
+    const ran = [...new Set([...g.ran, ...(r.ran || [n.change.box ?? null])])];
+    if (crossing) { g = { ...g, drag: n.drag, cur: n.to, start: r.layout, memory: emptyMemory(), last: r.layout, pressed: null, ran, state: 'move' }; continue; }
+    return { ...g, drag: n.drag, start: r.start, memory: r.memory, last: r.layout, pressed: r.pressed ?? null, ran, state: 'move' };
   }
   return g;
 }
 
-/** The drop: the last accepted preview committed, with one undo entry; nothing at home; after a failure nothing is written. @returns {Done} */
+/** The drop: the last accepted preview committed, with one undo entry; nothing at home or outside the sheet (DRAG.C3); after a failure
+ *  nothing is written. @returns {Done} */
 export function dropped(g, env) {
   if (g.failed) return { ok: false, why: 'failed', doc: g.doc };
   if (!g.last) return { ok: true, doc: g.doc, patch: new Map(), removed: [], entry: null };
-  return commit(g.doc, g.last, env, [], true);
+  return commit(g.doc, g.last, env, [], true, g.ran);
 }
 
 // ---- undo
