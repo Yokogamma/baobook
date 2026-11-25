@@ -237,6 +237,29 @@ Required cases: a signature that returns to its old value; several undos in a ro
 
 (C), the counterfactual, needs a journal of the edits between and their RELINK borders, and the heights measured then may not be enough (without the action a block might have had another width). Not recommended.
 
+### 7.1 What the experiment found (S4, built)
+
+`tests/lab/undo-snapshot/` (`paths.mjs`, the four paths; `histories.mjs`, the histories and the comparison) and `tests/layoutundolab.mjs`, which keeps it running. Nothing of `public/` changes. A history is a note, up to three actions for a memory of gaps, the action to undo, typing after it (a fifth of it typed over and back; blocks only the entry holds among it), and in a fifth of them a second action with its own typing, undone first. 3 000 drawn from seed 1, 2 807 played (the action refused in the rest); 2 335 with something between the action and its undo, 472 with nothing. (C) is run here as a yardstick only, «the action never happened»: the lab has the journal of edits the app's entry does not keep.
+
+| | (A) `inverse` | (B) | (B′) |
+|---|---|---|---|
+| an undo at all | 1 992 of 2 335: no undo of a composite action, and none where an earlier undo of the pair is none | 2 335 | 2 335 |
+| refused / failed / a success `validate` rejects | 0 / 0 / 0; one failure in 545 undos of a second action (below) | 0 / 0 / 0 | 0 / 0 / 10 |
+| nothing between: the tree before the action, row for row | 324 of 423 | 472 of 472 | 472 of 472 |
+| against the yardstick (C): the same / other rows / the same rows and other probes | 52.4 % / 37.0 % / 10.6 % | 91.5 % / 4.8 % / 3.7 % | 89.1 % / 7.2 % / 3.7 % |
+
+- **(A) against (B)**, where both are an undo (1 992): the same 50.4 %, other rows 38.1 %, the same rows and other probes 11.5 %. The smallest case is G21's: a block deleted, its content changed while only the entry held it, the deletion undone. (B) and the yardstick put the block under it a row lower, by the gap it had; (A) leaves that block where it stands. (A) is no exact undo with nothing between either: 99 of 423 give other rows than the tree before the action, which is why the exact path (the snapshot put back) is a path of its own in the engine plan.
+- **(A) failed once**, in the undo of a second carry after typing (seed 101098: RELINK refuses phase 8, «a canonical place overlaps»). (B) answers that history. It is a defect of `inverse` as built, found here and not repaired here: whether `inverse` stays is Q7.
+- **(B) depends on the order of its queue** in 1.6 % of the histories (38 of 2 335: 16 with other rows, 22 with the same rows and other probes), so the order has to be the stated one, as §7 has it, and is part of the contract.
+- **(B′) against (B)**: the same 95.9 %, other rows 3.2 %, the same rows and other probes 0.9 %. Ten of its results are trees `validate` rejects («lend over height»): a height applied by `resize` with no RELINK leaves a lend longer than the block, which only a RELINK cuts (G7), and `rest()` relinks only when it changes something. As stated, (B′) is not a candidate.
+- **(B) is not the yardstick**, as §7 says: 8.5 % differ, and 3.7 % only by the probes.
+- **The required cases** are all drawn: a signature that returns to its old value (830), a block only the entry holds changed (202), two undos in a row (545), a composite action followed by a change of content (292); the probes after the restore are the third column of every comparison.
+- **The code that would go with (B)**: `inverse` in `settle.js`, `canonical` in `Change` and in `Transition`, `back` in GAP, G21's branch of `transitionFacts`, and with them G21, G23 and G25 lose their subject. **What (B) needs** that is not built: the entry (the tree before, the signatures), the queue, and the bridge's freshness check; in the lab they are thirty lines over `settleTree`.
+
+The numbers are of one generator and one seed; other seeds were not run for the table. The lab's histories type into blocks and do not change set sizes or widths between the action and its undo.
+
+**Proposed for Q7** (the owner's choice): (B), with the queue's order as stated; (B′) dropped; (A) removed with what belongs to it once (B) is built in step 3.
+
 ## 8. The narrow slice on `.dev` (S5, Q5)
 
 Behind the switch, off by default: open a real note; carry and drop on the sheet and in an area; enter and leave; typing; create and delete; the exact undo only, every other case dropping the engine's history until Q7. Handles, drawing an area, ungrouping and the hold are off. One note is never served by both layouts. The stored format does not change; A refused or failed layout writes none of its places and sizes; content is another matter. What the user typed is saved by the ordinary path whatever SETTLE answers, and after a failure the note's geometry goes to the safe mode, as `LAYOUT-ENGINE-PLAN.md` §4.2 has it. The bridge's tests give typing a refusal and a failure: the text is saved, no place of the failed result is written.
