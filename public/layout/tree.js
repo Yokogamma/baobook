@@ -68,17 +68,28 @@ function simple(T, change, memory, ctx, hooks) {
   let out = change.type === 'remove' && area && isArea(area) ? withoutArea(tree, change.id) : tree;
   const ran = [box];
   if (box != null) { const g = grow(out, box, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
-  return { ok: true, layout: out, start: put(T, box, r.start), memory: r.memory, pressed: r.pressed, moves: r.moves, ran: ranOf(ran) };
+  // `start`, the tree the next move of the gesture is given: the tree of the gesture's start with this container's start in it. A swap
+  // inside an area makes that the swapped children (G20), and then the area's frame is settled round them, as after any change of an
+  // area's content, so that `start` is one tree (LAYOUT-SEAMS-PLAN §6.2), a tree `validate` accepts
+  let start = put(T, box, r.start);
+  if (box != null && r.start !== container(T, box)) start = grow(start, box, ctx, hooks).tree;
+  return { ok: true, layout: out, start, memory: r.memory, pressed: r.pressed, moves: r.moves, ran: ranOf(ran) };
 }
 
 /** A block into or out of an area (AREA.7, «В область…», «З області»): taken away from the container it leaves (GAP.6), and put into the
  *  one it enters as a new block, away from the start (DRAG.B1), at `at`; each area's frame following after its own part. An area never
  *  goes into an area (no nesting). */
 function move(T, change, ctx, hooks) {
-  const from = change.box ?? null, to = change.to ?? null, b = container(T, from)?.boxes.get(change.id);
-  if (!b) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no block ' + change.id] });
+  const from = change.box ?? null, to = change.to ?? null, bad = (why) => { throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: ' + why] }); };
+  // the input contract (LAYOUT-SEAMS-PLAN §6.3): `enter` takes a block of the sheet into an area that is there, `leave` a child of an
+  // area that is there out to the sheet; anything else is no command, and fails. An area asked into an area is a command that is
+  // refused (no nesting, AREA.7)
+  if (change.type === 'enter' && (from != null || to == null || !T.areas.has(to) || !isArea(T.boxes.get(to) || {}))) bad('enter takes a block of the sheet into an area that is there');
+  if (change.type === 'leave' && (from == null || to != null || !T.areas.has(from) || !isArea(T.boxes.get(from) || {}))) bad('leave takes a child of an area that is there out to the sheet');
+  if (!change.at || !Number.isInteger(change.at.col) || !Number.isInteger(change.at.y)) bad(change.type + ' needs the cell it is put at');
+  const b = container(T, from).boxes.get(change.id);
+  if (!b) bad('no block ' + change.id);
   if (to != null && isArea(b)) throw new Stop({ ok: false, why: 'refused' });
-  if (to != null && !T.areas.has(to)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: no area ' + to] });
   const ran = [from, to];
   let out = one(T, { type: 'remove', box: from, id: change.id }, emptyMemory(), ctx, hooks).tree;
   if (from != null) { const g = grow(out, from, ctx, hooks); out = g.tree; if (g.ran) ran.push(null); }
@@ -172,6 +183,8 @@ function areaSide(T, change, ctx, hooks) {
  *  @param {Layout} root @param {Change} change @param {?Memory} memory @param {Ctx} ctx @param {object} [hooks] */
 export function settleTree(root, change, memory, ctx, hooks = {}) {
   try {
+    // a tree is whole before anything runs: every area of the sheet has its children's container (LAYOUT-SEAMS-PLAN §6.3)
+    for (const b of root.boxes.values()) if (isArea(b) && !root.areas?.has(b.id)) throw new Stop({ ok: false, why: 'failed', errors: ['settleTree: the area ' + b.id + ' has no children\'s container'] });
     switch (change.type) {
       case 'enter': case 'leave': return move(root, change, ctx, hooks);
       case 'ungroup': return ungroup(root, change, ctx, hooks);
