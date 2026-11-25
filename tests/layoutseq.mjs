@@ -17,6 +17,7 @@ import { KINDS_NOT } from './lib/layout/seq.mjs';
 import { settleTree } from '../public/layout/tree.js';
 import { sharesCol, sharesRow, readingOrder } from '../public/layout/geometry.js';
 import { emptyMemory, rest } from '../public/layout/settle.js';
+import { remove } from '../public/layout/gap.js';
 import { unshow } from '../public/layout/layout.js';
 import { canonicalCtx } from '../public/layout/size.js';
 import { KINDS } from '../public/layout/kinds.js';
@@ -72,15 +73,14 @@ for (const [what, holds, got] of Q) ok(what, holds, got);
 
 // ---- reported, not failed
 console.log(`  L14, reported: of ${r.reopened.same + r.reopened.other} answers read again and opened, ${r.reopened.same} open to the same places, ${r.reopened.other} to others` + (r.reopened.first ? ' (the first: ' + JSON.stringify(r.reopened.first).slice(0, 300) + ')' : ''));
-console.log(`  L7, reported: ${c['L7: a text out of reach rested late'] || 0} texts out of a change's reach came to their rest width with it` + (r.lateFirst ? ' (the first: ' + JSON.stringify(r.lateFirst).slice(0, 400) + ')' : ''));
-console.log(`  L7, reported: ${c['L7: a text out of reach rested by its canonical rows, under an undo'] || 0} texts out of an undo's reach rested by their canonical rows` + (r.canonFirst ? ' (the first: ' + JSON.stringify(r.canonFirst).slice(0, 400) + ')' : ''));
 console.log(`  a gesture's start whose area's frame is not round its children, after a swap inside the area: ${c['start: an area\'s frame not round its children (after a swap inside it)'] || 0}`);
 
-// ---- a named case (the independent review of a4e9bf4): an undo that rests a far text with temporary rows. A, 50 letters, shows two
-// temporary rows; W stands beside its shown rows only. A is made elastic and rests against W; F, far away, is deleted and made again
-// by an undo, whose SETTLE runs on the canonical layout: A rests by its canonical row, where W is not beside it, and widens. L7's
-// confirmation must measure as the undo does, with no temporary row: by the displayed measure the same rest gives A another height,
-// and the right engine would be told wrong
+console.log(`  G24: ${c['G24: containers'] || 0} containers at their rest widths after an action; of them ${c['G24: containers brought to rest by the first action in them'] || 0} brought to rest by the first action in them after a temporary height changed, with ${c['L7: a text out of reach brought to rest after a temporary height changed'] || 0} texts out of that action's reach; ${c['G24: containers left off their rest widths (a temporary height changed, no action in them yet)'] || 0} times a container no action ran in stayed off them`);
+
+// ---- a named case (the independent review of a4e9bf4; the owner's G25): an undo and a far text with temporary rows. A, 50 letters,
+// shows two temporary rows; W stands beside its shown rows only. A is made elastic and rests against W; F, far away, is deleted and
+// made again by an undo, whose SETTLE runs on the canonical layout (G23), where W is not beside A: a rest by those rows would widen
+// A. An undo gives a rest width by canonical rows to the block it brings back alone; the widths are rested on the rows shown, where A stands at rest already
 {
   const lay = (cols, boxes) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: readingOrder(boxes), areas: new Map() });
   const map = { A: { text: 'x'.repeat(50), temp: 2 }, W: { text: 'x' }, F: { text: 'x' } };
@@ -95,11 +95,47 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
     step('create again', { type: 'create', box: null, id: 'F', kind: 'text', at: { col: f.col, y: f.y, frow: f.y, w: f.w }, away: true, set: { cw: f.cw }, canonical: true });
   } });
   const [, removed, undone] = seen, wA = (T) => T && T.boxes.get('A').w;
-  ok(`an undo far away widens a text that rests by its canonical row (A ${wA(removed) - 1} cells, then ${wA(undone) - 1}): no violation, A and the block it now pushes counted as an undo's rest`,
-    n.violations.length === 0 && wA(undone) > wA(removed) && n.counts['L7: a text out of reach rested by its canonical rows, under an undo'] === 2, [n.violations[0], n.counts]);
+  ok(`an undo far away leaves the width of a text it does not reach (G25: A ${wA(removed) - 1} cells, then ${wA(undone) - 1}): no violation`,
+    n.violations.length === 0 && wA(undone) === wA(removed), [n.violations[0], n.counts]);
   const ctx = { rules: DEFAULT, settings: SETTINGS, kinds: KINDS, measure: stubMeasure(map) }, cb = removed && unshow(removed, ctx);
-  const byUndo = cb && rest(cb, canonicalCtx(ctx)), byScreen = cb && rest(cb, ctx), hA = (R) => R && R.ok && R.layout.boxes.get('A').h;
-  ok(`and the case tells the two measures apart: the canonical rest gives A ${hA(byUndo)} row, the displayed measure ${hA(byScreen)}`, hA(byUndo) === unshow(undone, ctx).boxes.get('A').h && hA(byScreen) !== hA(byUndo), [hA(byUndo), hA(byScreen)]);
+  const byCanon = cb && rest(cb, canonicalCtx(ctx)), wOf = (R) => R && R.ok && R.layout.boxes.get('A').w;
+  ok(`and the case is one where the canonical rows would give another width: a rest by them widens A to ${wOf(byCanon) - 1} cells`, wOf(byCanon) > wA(removed), [wOf(byCanon), wA(removed)]);
+}
+
+// ---- a named case: the one thing L7 still lets through (Q10). A note opened with a temporary height is off its rest widths on the
+// rows shown: A rests against W beside its canonical row, P above it shows two temporary rows, A stands lower and W is beside it no
+// more. The first action in the sheet, a deletion far away, brings A to rest: counted, no violation. The same change on the same note
+// from an engine that also moves W, which no rest moves, is a violation
+{
+  const lay = (cols, boxes) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: readingOrder(boxes), areas: new Map() });
+  const map = { P: { text: 'x', temp: 2 }, A: { text: 'x'.repeat(60) }, W: { text: 'x' }, F: { text: 'x' } };
+  const stored = lay(44, [{ id: 'P', kind: 'text', col: 2, y: 0, cw: 4 }, { id: 'A', kind: 'text', col: 2, y: 1 }, { id: 'W', kind: 'text', col: 10, y: 1, cw: 2 }, { id: 'F', kind: 'text', col: 36, y: 30, cw: 3 }]);
+  const run = (engine) => { let w = null; const n = runLaws({ max: 5, probes: 0, engine, drive: (X) => {
+    const hist = [], T = X.note({ k: 0, seed: 0, stored, map, hist }), c = { type: 'remove', box: null, id: 'F' };
+    hist.push(['remove', c]); const a = X.settle('remove', c, T, emptyMemory()); w = a.ok ? [T.boxes.get('A').w, a.layout.boxes.get('A').w] : null;
+  } }); return { n, w }; };
+  const right = run(settleTree), key = 'L7: a text out of reach brought to rest after a temporary height changed';
+  ok(`a note opened with a temporary height, off its rest widths: the first action, far away, brings A to rest (${right.w && right.w[0] - 1} cells, then ${right.w && right.w[1] - 1}), counted and no violation`,
+    right.n.violations.length === 0 && right.w && right.w[1] > right.w[0] && right.n.counts[key] === 1, [right.n.violations[0], right.n.counts, right.w]);
+  const wrong = run((root, change, memory, ctx, hooks) => { const r2 = settleTree(root, change, memory, ctx, hooks); if (!r2.ok) return r2; const boxes = new Map(r2.layout.boxes), W = boxes.get('W'); boxes.set('W', { ...W, y: W.y + 1, yc: (W.yc ?? W.y) + 1 }); return { ...r2, layout: { ...r2.layout, boxes } }; });
+  ok('and an engine that moves W with it, which that rest does not move: a violation', wrong.n.violations.length > 0, wrong.n.violations.map((v) => v.law));
+  // an engine that takes F away through GAP alone, leaves the rest of the sheet as it was and says it ran nowhere (the independent
+  // review of 3b3cbb2): a valid tree with A still off its rest width. The law must not take the engine's word for where it ran
+  const lazy = run((root, change) => ({ ok: true, layout: { ...remove(root, change.id), measure: root.measure, areas: root.areas }, start: root, memory: emptyMemory(), pressed: null, ran: [] }));
+  ok('an engine that deletes F through GAP alone and reports that it ran nowhere, A left as it was: caught by G24, and by nothing before it',
+    lazy.n.violations.length === 1 && /^G24/.test(lazy.n.violations[0].law) && /A is 7 cells wide/.test(String(lazy.n.violations[0].detail)), lazy.n.violations.map((v) => [v.law, v.detail]));
+  // a command the change names its container in may not do nothing because its tree came back the same (the independent review of
+  // 23d5959): F's text is typed over at the same size and F measured again. The engine brings A to rest with it; one that runs the
+  // engine, hooks and all, and answers with the tree it was given leaves A at 7 cells, and only G24 can tell
+  const typed = (engine) => { let w = null; const n = runLaws({ max: 5, probes: 0, engine, drive: (X) => {
+    const m = { ...map, F: { text: 'xx' } }, hist = [], T = X.note({ k: 0, seed: 0, stored, map: m, hist }), c = { type: 'size', box: null, id: 'F' };
+    hist.push(['size', c]); const a = X.settle('size', c, T, emptyMemory()); w = a.ok ? [T.boxes.get('A').w, a.layout.boxes.get('A').w] : null;
+  } }); return { n, w }; };
+  const real = typed(settleTree), idle = typed((root, change, memory, ctx, hooks) => { const r2 = settleTree(root, change, memory, ctx, hooks); return r2.ok ? { ...r2, layout: root } : r2; });
+  ok(`F typed over at the same size and measured again: the engine brings A to rest (${real.w && real.w[0] - 1} cells, then ${real.w && real.w[1] - 1}), no violation`,
+    real.n.violations.length === 0 && real.w && real.w[1] > real.w[0], [real.n.violations.map((v) => v.law), real.w]);
+  ok('and an engine that answers with the tree it was given: caught by G24, the sheet being the container the change names',
+    idle.n.violations.length === 1 && /^G24/.test(idle.n.violations[0].law), idle.n.violations.map((v) => [v.law, v.detail]));
 }
 
 // ---- L1's reach and its teeth, by name (the independent review of 0675ac7). Every path that relinks hands the hook its transition:
@@ -179,7 +215,7 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
     // a block a cell narrower, its stacks cut to the columns it keeps, so that the tree stays one `validate` accepts
   const narrower = (x) => ({ ...x, w: x.w - 1, ...(x.above ? { above: x.above.filter((t) => t.c0 <= x.col + x.w - 2).map((t) => ({ ...t, c1: Math.min(t.c1, x.col + x.w - 2) })) } : {}) });
   // a deletion that narrows a text nothing links to the deleted block, and sets its width: the tree stays valid (its height and its
-  // stacks are as they were), so only L7 can tell, and its exception for a late rest must not take it
+  // stacks are as they were), so only L7 can tell
   const far = (root, id) => {   // a text of the sheet no chain of shared columns and rows links to block `id`, alone in its columns
     const bs = [...root.boxes.values()], seen = new Set([id]), queue = [root.boxes.get(id)];
     while (queue.length) { const p = queue.pop(); for (const q of bs) if (!seen.has(q.id) && (sharesCol(p, q) || sharesRow(p, q))) { seen.add(q.id); queue.push(q); } }
@@ -193,9 +229,14 @@ console.log(`  a gesture's start whose area's frame is not round its children, a
     return { ...r2, layout: { ...r2.layout, boxes } };
   };
   const h = first(narrowing(true), { notes: 800 });
-  ok('a text out of a deletion\'s reach narrowed and given a set width: caught by L7, no late rest', !!h && /^L7/.test(h.law), show(h));
+  ok('a text out of a deletion\'s reach narrowed and given a set width: caught by L7', !!h && /^L7/.test(h.law), show(h));
   const h2 = first(narrowing(false), { notes: 800 });
   ok('and narrowed with its width left elastic: caught by L7 too', !!h2 && /^L7/.test(h2.law), show(h2));
+  // G24: an engine that rests its texts by another setting leaves valid trees whose texts are off the rest width the rules give
+  const withSetting = (k, v) => runLaws({ seed: 3, notes: 200, max: 1, probes: 0, model: false, engine: (root, change, memory, ctx, hooks) => settleTree(root, change, memory, { ...ctx, settings: { ...ctx.settings, [k]: v } }, hooks) }).violations[0];
+  const gw = withSetting('TEXTW', 20), gm = withSetting('MINC', 4);
+  ok('an engine whose texts rest no wider than 20 cells: caught by G24', !!gw && /^G24/.test(gw.law), show(gw));
+  ok('an engine that presses a text to 4 cells: caught by G24', !!gm && /^G24/.test(gm.law), show(gm));
   // an engine that answers by where the sheet's blocks stand from the top: it refuses once every block is 75 rows down
   const i = first((r2, root) => (r2.ok && root.boxes.size && [...root.boxes.values()].every((x) => x.y >= 75) ? { ok: false, why: 'refused', errors: [] } : r2));
   ok('an answer that depends on the rows from the top: caught by L13', !!i && /^L13/.test(i.law), show(i));
