@@ -8,7 +8,7 @@
 import { on } from './rules.js';
 import { extent, isArea, hits, sharesCol, readingOrder, range, MAXCELL } from './geometry.js';
 import { bottomOf, frameOf } from './frame.js';
-import { isElastic, rowsAt, restCells, canonicalCtx } from './size.js';
+import { isElastic, rowsAt, restCells, canonicalCtx, heightAt } from './size.js';
 import { relink, remove, resize, follow, shift } from './gap.js';
 import { explain } from './transition.js';
 import { kindOf, judgeCarry, judgeWall } from './changes.js';
@@ -29,11 +29,11 @@ const pad = (b) => (isArea(b) ? 1 : 0);
  *  rows here: its frame is its children's, read by `framed` where the change is of the area itself (§5.6). */
 function measured(box, w, ctx) {
   if (isArea(box)) return { ...box, w };
-  const r = rowsAt({ ...box, w }, w - 1, ctx);
-  return { ...box, w, h: r.shown, t: r.shown - r.rows };
+  return { ...box, w, ...heightAt({ ...box, w }, w - 1, ctx) };
 }
 /** The changed block when it is an area: its frame round its children, read from the layout SETTLE was given (`areas`; frame.js). An
- *  area with no children's container there, a block of one container by itself as the tests of SETTLE have it, keeps its rows. */
+ *  area with no children's container there, a block of one container by itself as the tests of SETTLE have it, keeps its rows. Its
+ *  own temporary rows are in the frame (`tx`), so a carried area is framed as any other. */
 function framed(box, L, ctx) {
   const C = isArea(box) ? L.areas?.get(box.id) : null;
   return C ? { ...box, ...frameOf(box, C, ctx) } : box;
@@ -104,8 +104,9 @@ function columnsOf(base, after, moved, how, by) {
  *  letting-through wrapper around it (phases 3 and 11) for a carry with THROUGH on. `moves` is the union of the steps every RELINK of this SETTLE was handed, for
  *  the dev look; `grew`, for a change inside an area (`change.box`), the change of the bottom its content reaches, in rows (settleTree's,
  *  §5.6); `ran`, the phases that ran, for the tests. @param {Layout} start @param {Change} change @param {?Memory} memory @param {Ctx} ctx
- *  @param {{trace?:(phase:string, layout:Layout, info?:{swap:string[]}) => void, relink?:(T:Transition, answer:Relinked) => void}} [hooks]
- *  `trace`, the working layout after each phase of every run (phase 3: the swapped layout, with its pair); `relink`, every transition
+ *  @param {{trace?:(phase:string, layout:Layout, info?:{swap?:string[], again?:boolean}) => void, relink?:(T:Transition, answer:Relinked) => void}} [hooks]
+ *  `trace`, the working layout after each phase of every run (phase 3: the swapped layout, with its pair; phase 9 with `again`: a rest
+ *  after the first that changed something, G24); `relink`, every transition
  *  handed to RELINK with its answer, refused ones too; for the dev look and the tests @returns {Result} */
 export function settle(start, change, memory, ctx, hooks = {}) {
   try { return (change.canonical ? inverse : wrapper)(start, change, memory || emptyMemory(), ctx, hooks); }
@@ -116,28 +117,39 @@ export function settle(start, change, memory, ctx, hooks = {}) {
   }
 }
 
-/** An undo's change on the inverse path (LAYOUT-ENGINE-PLAN §6.4): its cell is canonical, so SETTLE runs on the canonical layout, every
- *  temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, and FOLLOW shows the temporary heights again on
- *  its result. So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
+/** An undo's change on the inverse path (LAYOUT-ENGINE-PLAN §6.4), in three stages: its cell is canonical, so SETTLE runs on the
+ *  canonical layout, every temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, with a rest width for
+ *  the block it brings back alone (G25); FOLLOW shows the temporary heights again on its result; and then the rest widths are settled
+ *  on the rows that are shown, a stage of its own with its own RELINK, which writes gaps as the rest after any action does (G24). So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
  *  there wherever a temporary height shows it, RELINK gets the canonical rows, and no temporary push is written into a block, the moved
  *  block's or another's (the two measures, LAYOUT-RULES §1.2; the independent review of c5efdda; the owner's G23, O-31 (а), 2026-11-13). A block
  *  shows again the temporary rows it had when its width and canonical rows are those of start; one the run measured anew (a block at
  *  another width: the moved block's rest width, a text pressed or rested) shows what the measure gives there. Phase 10's bounds are checked again on what is shown, and `grew` counts
  *  from it. @returns {Result} */
 function inverse(start, change, memory, ctx, hooks) {
-  let folded = start;
-  for (const b of start.boxes.values()) if (b.t > 0) folded = resize(folded, b.id, b.h - b.t, 0);
-  if (folded !== start) folded = follow(folded);
+  const fold = (L) => {
+    let F = L;
+    for (const b of L.boxes.values()) if (b.t > 0 || b.tx) { const { tx, ...plain } = b; F = resize(put(F, plain), b.id, b.h - (b.t || 0), 0); }
+    return F === L ? L : follow(F);
+  };
+  // the areas' children too, so that an area the pass frames again is framed round their canonical rows (frame.js)
+  let folded = fold(start);
+  if (start.areas?.size) folded = { ...folded, areas: new Map([...start.areas].map(([id, C]) => [id, fold(C)])) };
   const r = wrapper(folded, change, memory, canonicalCtx(ctx), hooks);
-  let L = r.layout;
+  let L = start.areas?.size ? { ...r.layout, areas: start.areas } : r.layout;   // the children as they are shown, which the pass never changes
   for (const b of r.layout.boxes.values()) {
     const s = start.boxes.get(b.id);
-    let t = 0;
+    const x = (s && s.tx) || 0;   // its own temporary rows, kept aside through the canonical pass and shown again
+    let t = x;
     if (s && s.w === b.w && s.h - (s.t || 0) === b.h) t = s.t || 0;
-    else if (!isArea(b)) { const q = rowsAt(b, b.w - 1, ctx); t = q.shown - q.rows; }
+    else if (!isArea(b)) { const q = rowsAt(b, b.w - 1, ctx); t = q.shown - q.rows + x; }
+    if (x > 0) L = put(L, { ...L.boxes.get(b.id), tx: x });
     if (t > 0) L = resize(L, b.id, b.h + t, t);
   }
-  if (L !== r.layout) L = follow(L);
+  L = follow(L);
+  // the rest widths, on the rows that are shown, as every action ends (G24): a block the undo does not reach stood at its rest width
+  // there and stands at it still, so it keeps its width (G25)
+  L = atRest(L, ctx, hooks, r.moves, r.ran);
   bounds(L);
   const grew = change.box != null ? bottomOf(L) - bottomOf(start) : 0;
   if (kindOf(change).contain.bottom === 'refuse' && grew > 0) throw new Refused('the handle would make the area taller');
@@ -213,10 +225,11 @@ function wrapper(start, change, memory, ctx, hooks) {
   }
 }
 
-/** Phase 9, rest: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width; (b) the hits left, by P-REST or
+/** Phase 9, rest, one run of it: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width (with `only`, an
+ *  undo's canonical pass, of those blocks alone); (b) the hits left, by P-REST or
  *  P-SEP, within RESTSTEPS; (c) RELINK against `b9` with the moves of (b) only, the columns phase 9's widths changed, and `extra` (the
  *  causes of a kind that relinks only here: phase 1a's size, the working state's reshapes). @returns {Layout} */
-function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
+function phase9(L8, b9, ctx, extra, hooks, moves, ran, only = null) {
   const rules = ctx.rules;
   let La = L8;
   const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
@@ -224,7 +237,7 @@ function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
   if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
     const before = La;
     for (const id of La.order) {
-      const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
+      const b = La.boxes.get(id); if (!b || !isElastic(b, ctx) || (only && !only.has(id))) continue;
       const w = restCells(La, b, ctx) + 1; if (w === b.w) continue;
       rested.add(id);
       const nb = measured(b, w, ctx);
@@ -255,6 +268,22 @@ function phase9(L8, b9, ctx, extra, hooks, moves, ran) {
   return r.layout;
 }
 
+/** Phase 9 until it changes nothing (the owner's G24, 2026-11-23): when an action ends every elastic block stands at its rest width, so
+ *  that no later action that does not reach it changes it. Each run after the first is a rest of its own, as the next action's phase 9
+ *  would have been: against the layout the run before left, with its own RELINK, so the memory of gaps is that of those rests one
+ *  after another. RESTSTEPS runs is a protective bound: past it SETTLE fails (§5.5), whether or not the runs were a cycle.
+ *  @returns {Layout} */
+function atRest(L, ctx, hooks, moves, ran) {
+  for (let k = 0, n = stepsGuard(L); ; k++) {
+    const next = phase9(L, L, ctx, [], hooks, moves, []);
+    if (next === L) return L;
+    if (k > n) throw new Failed('settle: the rest widths do not come to rest');
+    if (!ran.includes('9')) ran.push('9');
+    L = next;
+    if (hooks.trace) hooks.trace('9', L, { again: true });   // a rest after the first that changed something
+  }
+}
+
 /** Phase 10's bounds: a block past MAXCELL refuses, and INV-4 across the columns, every card (an area with its free columns) inside the
  *  container; a wall that leaves a block it could not press or sink inside stops (§5.4); no other kind leaves one outside, phase 1c having
  *  clamped the moved block. */
@@ -271,7 +300,7 @@ function bounds(L) {
  *  @returns {{ok:true, layout:Layout, ran:string[]}|{ok:false, why:'refused'|'failed', errors:string[]}} */
 export function rest(layout, ctx, hooks = {}) {
   try {
-    const ran = [], L = phase9(layout, layout, ctx, [], hooks, new Map(), ran);
+    const ran = [], moves = new Map(), L = atRest(phase9(layout, layout, ctx, [], hooks, moves, ran), ctx, hooks, moves, ran);
     ran.push('10'); bounds(L);
     return { ok: true, layout: L, ran };
   } catch (e) {
@@ -328,6 +357,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
       if (change.set?.cw != null) { box.cw = change.set.cw; box.w = change.set.cw + 1; }
       if (change.set?.ch != null) box.ch = change.set.ch;
       if (change.set?.open) box.open = true;
+      if (change.tx > 0) box.tx = change.tx;   // a block taken from one container into another keeps its own temporary rows (tree.js)
     } else box = (start.boxes.get(g)) && { ...start.boxes.get(g) };
     if (!box) throw new Failed('settle: no block ' + g);
     if (kind.moved === 'target') box = atTarget(box, { ...change.at, w: change.type === 'create' ? box.w : change.at.w }, L.cols, ctx, change.type === 'create');
@@ -337,7 +367,7 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     }
     // a created area, or an area's side handle in its container: its frame round the children the layout holds (§5.6); a carried
     // area keeps its rows
-    if (change.type !== 'carry') box = framed(box, L, ctx);
+    box = framed(box, L, ctx);
     L = put(L, box);
   }
   const ws = working(L, g, ctx, insert); ws.base = base;
@@ -425,7 +455,11 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
 
   // ---- 9. rest, against the layout after phase 8, or for a kind that relinks only here against base, phase 1a's size among the causes
   const b9 = deferred ? base : L8;
-  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran);
+  // an undo's pass, on canonical rows (G23), gives a rest width to the block it brings back and to no other: a text that shows
+  // temporary rows may have no neighbour beside its canonical rows and would widen there, reached by the undo or not (the owner's
+  // G25, 2026-11-23). The hits are settled and relinked here as ever; the other rest widths are `inverse`'s, on the rows that are shown
+  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran, change.canonical ? new Set(g != null ? [g] : []) : null);
+  if (!change.canonical) final = atRest(final, ctx, hooks, moves, ran);
 
   // ---- 10. contain: nothing moves here; a block past MAXCELL refuses the change, an area's own handle refuses to make it taller, any other
   // change inside an area reports how far its content's bottom moved (settleTree grows or shrinks the area, §5.6)
