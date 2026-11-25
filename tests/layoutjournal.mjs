@@ -252,6 +252,38 @@ const seed = +process.argv[2] || 1, N = +process.argv[3] || 150;
   const mk = () => ({ text: new Kind(KINDS.text), code: new Kind(KINDS.code), area: KINDS.area });
   const k1 = mk(), k2 = mk(), a2 = settleTree(T, change, emptyMemory(), { ...ctx, kinds: k1 }), J2 = createJournal(), b2 = J2.run(T, change, emptyMemory(), { ...ctx, kinds: k2 });
   ok(`10a passports that are instances of a class, with methods of the class, a private field and a getter (${k1.text.calls} calls of the text's rows): the same through the journal`, a2.ok && k1.text.calls > 0 && k1.text.calls === k2.text.calls && str(k1.text.log) === str(k2.text.log) && str(a2) === str(b2) && replay(entriesOf(J2.export())[0], mk()).same === true, { alone: k1.text.calls, kept: k2.text.calls, r: b2.errors });
+  // passports whose every property is a getter over a private field, and one getter the engine never reads that would throw
+  class Sealed {
+    #base; #reads = 0;
+    constructor(base) { this.#base = base; }
+    get width() { this.#reads++; return this.#base.width; }
+    get hides() { return this.#base.hides; }
+    get container() { return this.#base.container; }
+    get minCells() { return this.#base.minCells; }
+    get rows() { return this.#base.rows; }
+    get reads() { return this.#reads; }
+    get unused() { throw new Error('settle: swordfish'); }
+  }
+  const sk = () => ({ text: new Sealed(KINDS.text), code: new Sealed(KINDS.code), area: new Sealed(KINDS.area) });
+  const s1 = sk(), s2 = sk(), a3 = settleTree(T, change, emptyMemory(), { ...ctx, kinds: s1 }), J3 = createJournal();
+  let b3 = null, t3 = null; try { b3 = J3.run(T, change, emptyMemory(), { ...ctx, kinds: s2 }); } catch (err) { t3 = err; }
+  ok(`10c passports of getters over private fields (${s1.text.reads} reads of the text's width), with a getter the engine never reads that would throw: the same reads and the same answer through the journal, and no word of that getter in the export`, a3.ok && !t3 && s1.text.reads > 0 && s1.text.reads === s2.text.reads && str(a3) === str(b3) && J3.entries()[0].unfit === undefined && !J3.export().includes('swordfish') && replay(entriesOf(J3.export())[0], sk()).same === true, { alone: s1.text.reads, kept: s2.text.reads, t3: t3 && t3.message, r: b3 && b3.errors });
+  // a getter the engine does read, that throws in the engine's voice
+  const gk = { ...KINDS, text: { get width() { throw new Error('settle: swordfish'); }, hides: true, container: null, minCells: KINDS.text.minCells, rows: KINDS.text.rows } };
+  const J4 = createJournal(); let t4 = null, b4 = null; try { b4 = J4.run(T, change, emptyMemory(), { ...ctx, kinds: gk }); } catch (err) { t4 = err; }
+  const x4 = J4.export();
+  ok('10d a getter the engine reads, throwing «settle: …»: the entry says a passport threw, keeps no word and is not replayed', J4.entries().length === 1 && !x4.includes('swordfish') && x4.includes('journal: a passport threw') && str(replay(entriesOf(x4)[0], KINDS).unfit) === '["kinds"]' && (t4 ? t4.message.includes('swordfish') : b4.ok === false), x4.slice(-200));
+  // a Measure that answers once and then throws
+  {
+    const m = ctx.measure, size = { type: 'size', box: null, id: 'A' };
+    let fine = 0, asked = 0;
+    settleTree(T, size, emptyMemory(), { ...ctx, measure: { rows: (id, c) => { if (id === 'A') fine++; return m.rows(id, c); }, natural: (id) => m.natural(id) } });
+    const J5 = createJournal();
+    let r5 = null, t5 = null;
+    try { r5 = J5.run(T, size, emptyMemory(), { ...ctx, measure: { rows: (id, c) => { if (id === 'A' && ++asked === 2) throw new Error('no layout for «swordfish»'); return m.rows(id, c); }, natural: (id) => m.natural(id) } }); } catch (err) { t5 = err; }
+    const x5 = J5.export(), e5 = entriesOf(x5)[0], p5 = replay(e5, KINDS);
+    ok(`10e a Measure that answers A's rows once and throws the second time (alone, ${fine} such questions): the first answer is kept, the entry is not fit to replay, and the replay gives no verdict`, fine >= 2 && asked === 2 && Object.keys(e5.answers.rows.A || {}).length === 1 && !x5.includes('swordfish') && x5.includes('journal: the Measure threw') && str(e5.unfit) === '["measure"]' && str(p5.unfit) === '["measure"]' && p5.same === undefined && (t5 ? true : r5.ok === false), { fine, asked, unfit: e5.unfit, p5: Object.keys(p5) });
+  }
   // an answer with a value its shape has no place for
   const e = entriesOf(J.export())[0];
   const mutant = (...a) => { const r = settleTree(...a), L = { ...r.layout, boxes: new Map(r.layout.boxes) }; L.boxes.set('A', { ...L.boxes.get('A'), tx: 'bad' }); return { ...r, layout: L }; };

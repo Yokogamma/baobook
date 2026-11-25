@@ -109,24 +109,34 @@ function resultOf(result, threw, lost) {
   if (result && Array.isArray(result.errors)) r.errors = safeErrors(result.errors, threw, lost.size === 0);
   return encode(r);
 }
-/** The caller's functions, watched, with nothing of theirs changed: an object that inherits from `o`, so its state, its arrays and
- *  whatever else it holds are read from `o` itself, and whose functions (its own and its classes') call the original with `o` as
- *  the receiver and tell `mark` when they throw. A plain object inside (a passport, its `container`) is watched the same way; an
- *  array, a Map or any other value is the original. */
+/** The one boundary between the engine and what the caller gave it to call (hooks, passports): a proxy that does nothing until the
+ *  engine reads a property, and then reads it from `o` itself, with `o` as the receiver, so a getter, a private field and a method
+ *  of a class see the object they were written for. A function read is called with `o` as its receiver; a plain object read (a
+ *  passport, its `container`) is watched the same way; an array, a Map or any other value is the original. Whatever throws on the
+ *  way, a getter or a call, tells `mark` and is thrown on. Nothing is read that the engine does not read. */
 function watched(o, mark, seen = new WeakMap()) {
   if (!o || typeof o !== 'object' || Array.isArray(o) || o instanceof Map || o instanceof Set) return o;
   if (seen.has(o)) return seen.get(o);
-  const w = Object.create(o);
+  const calls = new Map();   // one wrapper for a function, so that reading it twice gives the same value
+  const guard = (f) => { try { return f(); } catch (e) { mark(); throw e; } };
+  const w = new Proxy({}, {
+    get(_, k) {
+      const v = guard(() => Reflect.get(o, k, o));
+      if (typeof v === 'function') {
+        if (!calls.has(v)) calls.set(v, function (...a) { return guard(() => v.apply(this === w ? o : this, a)); });
+        return calls.get(v);
+      }
+      return watched(v, mark, seen);
+    },
+    set: (_, k, v) => guard(() => Reflect.set(o, k, v, o)),
+    has: (_, k) => guard(() => Reflect.has(o, k)),
+    deleteProperty: (_, k) => Reflect.deleteProperty(o, k),
+    ownKeys: () => Reflect.ownKeys(o),
+    // told as configurable, the proxy's own target having no such property; the value is read through `get` when it is wanted
+    getOwnPropertyDescriptor(_, k) { const d = Reflect.getOwnPropertyDescriptor(o, k); return d && { enumerable: d.enumerable, configurable: true, writable: true, value: undefined }; },
+    getPrototypeOf: () => Reflect.getPrototypeOf(o),
+  });
   seen.set(o, w);
-  const names = new Set();
-  for (let p = o; p && p !== Object.prototype; p = Object.getPrototypeOf(p)) for (const k of Object.getOwnPropertyNames(p)) if (k !== 'constructor') names.add(k);
-  for (const k of names) {
-    const d = Object.getOwnPropertyDescriptor(o, k);
-    if (d && !('value' in d)) continue;   // an accessor is read from `o` through the inheritance
-    const v = o[k];
-    if (typeof v === 'function') Object.defineProperty(w, k, { enumerable: !!d?.enumerable, value(...a) { try { return v.apply(this === w ? o : this, a); } catch (e) { mark(); throw e; } } });
-    else if (v && typeof v === 'object') { const c = watched(v, mark, seen); if (c !== v) Object.defineProperty(w, k, { enumerable: !!d?.enumerable, value: c }); }
-  }
   return w;
 }
 
@@ -182,8 +192,9 @@ export function createJournal({ limit = 200, versions = {} } = {}) {
       try { result = settle(root, change, memory, { ...ctx, kinds: watched(ctx.kinds, by('a passport')), measure: rec.measure }, watched(hooks, by('a hook'))); }
       catch (e) { thrown = e; result = { ok: false, why: 'threw', errors: [String(e && e.message)] }; }
       if (rec.bent()) lost.add('answers');
-      // a hook or a passport that threw decided the answer, and the journal has neither: nothing to play again
-      if (threw && !rec.threw()) lost.add(threw === 'a hook' ? 'hooks' : 'kinds');
+      // a Measure, a hook or a passport that threw decided the answer, and the journal has not the throw: nothing to play again (the
+      // answers a Measure gave before it threw are kept, and would let a replay pass where the command failed)
+      if (rec.threw()) lost.add('measure'); else if (threw) lost.add(threw === 'a hook' ? 'hooks' : 'kinds');
       entry.result = resultOf(result, rec.threw() ? 'the Measure' : threw, lost);
       // a loss: the entry is not what the engine was given (an id longer than the journal keeps, a value of another kind), so it is
       // kept as a trace and never replayed
