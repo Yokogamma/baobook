@@ -10,6 +10,7 @@
 // neither invents an answer nor calls the difference a defect.
 
 import { settleTree } from './tree.js';
+import { DEFAULT, SETTINGS } from './rules.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Change} Change @typedef {import('./shapes.js').Ctx} Ctx
  *  @typedef {import('./shapes.js').Measure} Measure @typedef {import('./shapes.js').Memory} Memory
@@ -35,7 +36,7 @@ export function decode(v) {
 }
 
 // ---- the projection: the engine's shapes as data, and `pick`, which keeps of a value what its shape names
-const N = 'number', B = 'boolean', ID = 'id', IDMAX = 64;   // an id is a name the app made, never longer than this; a longer string is not kept
+const N = 'number', B = 'boolean', ID = 'id', IDMAX = 64;   // an id is a name the app made, never longer than this (the journal's precondition)
 const en = (...values) => ({ values }), obj = (fields) => ({ fields }), list = (of) => ({ of }), map = (of) => ({ map: of }), either = (array, object) => ({ array, object });
 const RUN = obj({ o: ID, n: N }), TARGET = obj({ col: N, y: N, frow: N, w: N, cols: N, rows: N });
 const STRETCH = obj({ c0: N, c1: N, stack: obj({ u: ID, parts: list(either(list(RUN), obj({ id: ID, lend: list(RUN) }))) }) });
@@ -46,52 +47,94 @@ const CHANGE = obj({ type: ID, box: ID, id: ID, to: ID, kind: ID, at: TARGET, aw
   cw: N, col: N, cols: N, side: en('left', 'right'), shift: N, room: N, tx: N });
 const MEMORY = obj({ away: B, sides: map(en('left', 'right')), through: obj({ id: ID, row: N, side: en('below', 'above'), at: TARGET, last: TARGET, line: N }), areaBottoms: map(N), lastTarget: TARGET, dir: en('up', 'down') });
 const STEP = obj({ step: N, by: en('change', 'swap', 'aside', 'up', 'down', 'sink', 'sep', 'rest'), rows: N });
-const RESULT = obj({ ok: B, why: en('refused', 'failed', 'threw'), errors: list(ID), layout: LAYOUT, start: LAYOUT, memory: MEMORY, pressed: ID, moves: map(list(STEP)), grew: N, ran: list(ID) });
+const RESULT = obj({ ok: B, why: en('refused', 'failed', 'threw'), layout: LAYOUT, start: LAYOUT, memory: MEMORY, pressed: ID, moves: map(list(STEP)), grew: N, ran: list(ID) });
 /** Of a value, what its shape names: a number where a number is named, an id where an id is (ids are the engine's names of blocks,
- *  rules and phases, never content), one of the words where words are listed; a field the shape does not name is not read. null is
- *  kept; what does not fit is left out. */
-function pick(v, s) {
+ *  rules and phases, never content), one of the words where words are listed; a field the shape does not name is not read, and that
+ *  is no loss, the engine not reading it either. A value the shape names and that does not fit it (an id longer than IDMAX, a word
+ *  that is not listed) is left out and its place written to `lost`, as the names of the shape's fields alone: an entry with a loss is
+ *  not the state the engine was given, and is not replayed. */
+function pick(v, s, lost, at) {
   if (v === null) return null;
   if (v === undefined) return undefined;
-  if (s === N) return typeof v === 'number' ? v : undefined;
-  if (s === B) return typeof v === 'boolean' ? v : undefined;
-  if (s === ID) return typeof v === 'string' && v.length <= IDMAX ? v : undefined;
-  if (s.values) return s.values.includes(v) ? v : undefined;
-  if (s.of) return Array.isArray(v) ? v.map((x) => pick(x, s.of) ?? null) : undefined;
-  if (s.map) return v instanceof Map ? new Map([...v].filter(([k]) => typeof k === 'string' && k.length <= IDMAX).map(([k, x]) => [k, pick(x, s.map) ?? null])) : undefined;
-  if (s.array) return pick(v, Array.isArray(v) ? s.array : s.object);
-  if (typeof v !== 'object' || Array.isArray(v) || v instanceof Map) return undefined;
+  const no = () => { lost.add(at); return undefined; };
+  if (s === N) return typeof v === 'number' ? v : no();
+  if (s === B) return typeof v === 'boolean' ? v : no();
+  if (s === ID) return typeof v === 'string' && v.length <= IDMAX ? v : no();
+  if (s.values) return s.values.includes(v) ? v : no();
+  if (s.of) return Array.isArray(v) ? v.map((x) => pick(x, s.of, lost, at + '[]') ?? null) : no();
+  if (s.map) {
+    if (!(v instanceof Map)) return no();
+    const m = new Map();
+    for (const [k, x] of v) { if (typeof k === 'string' && k.length <= IDMAX) m.set(k, pick(x, s.map, lost, at + '{}') ?? null); else lost.add(at + '{}'); }
+    return m;
+  }
+  if (s.array) return pick(v, Array.isArray(v) ? s.array : s.object, lost, at);
+  if (typeof v !== 'object' || Array.isArray(v) || v instanceof Map) return no();
   const o = {};
-  for (const k of Object.keys(v)) if (Object.hasOwn(s.fields, k)) { const x = pick(v[k], s.fields[k]); if (x !== undefined) o[k] = x; }   // in the value's own order
+  for (const k of Object.keys(v)) if (Object.hasOwn(s.fields, k)) { const x = pick(v[k], s.fields[k], lost, at + '.' + k); if (x !== undefined) o[k] = x; }   // in the value's own order
   return o;
 }
-/** The rules and the settings: a record of the engine's own names to true, false, a number or a short word (a variant, `ORDER`). */
-function record(v) {
+/** The rules and the settings: the names the engine has (rules.js) and no other; a rule is true or false, a setting a number, `ORDER`
+ *  one of its words. A name the engine has not is not read by it and is not kept; a value of another kind is a loss. */
+function known(v, shape, lost, at) {
   const o = {};
-  if (v && typeof v === 'object') for (const k of Object.keys(v)) { const x = v[k]; if (typeof x === 'boolean' || typeof x === 'number' || (typeof x === 'string' && /^[A-Za-z0-9.\-]{1,24}$/.test(x))) o[k] = x; }
+  if (v && typeof v === 'object') for (const k of Object.keys(v)) if (Object.hasOwn(shape, k)) {
+    const x = v[k], d = shape[k];
+    if (typeof d === 'string' ? ORDERS.includes(x) : typeof x === typeof d) o[k] = x; else lost.add(at);
+  }
   return o;
 }
-/** A failure's messages in a form safe to export: the engine's own are kept (they name blocks, rows and columns); anything else, a
- *  runtime error's or one thrown through the engine by something it called, is kept as its length alone. */
+const ORDERS = ['push', 'never'];
+/** The versions: the page's build, and the versions of the engine, of the Measure and of the passports, each a number or a string of
+ *  digits, dots and hyphens. Nothing else a caller puts there is kept. */
+const VERSIONS = ['build', 'engine', 'measure', 'kinds'];
+function versionsOf(v) {
+  const o = {};
+  if (v && typeof v === 'object') for (const k of VERSIONS) if (Object.hasOwn(v, k) && ((typeof v[k] === 'number' && Number.isFinite(v[k])) || (typeof v[k] === 'string' && /^[0-9.-]{1,32}$/.test(v[k])))) o[k] = v[k];
+  return o;
+}
+/** A failure's messages in a form safe to export. The engine's own are kept (they name blocks, rows and columns) when nothing the
+ *  caller gave could have written them: every function of the caller's the engine calls (the Measure, the hooks, the passports) is
+ *  watched, and when one threw, the entry says which and keeps no word; when the entry has a loss, its ids are not the journal's to
+ *  keep, and a message is kept as its length. Anything else, a runtime error's say, is kept as its length too. Read from the result
+ *  itself, apart from the shape of ids, so a long message is not cut before it is judged. */
 const OURS = /^(settle|settleTree|gap|rules|transition|transitionFacts|primitives|changes|validate|layout|size|journal): /;
-const safeErrors = (errors) => (Array.isArray(errors) ? errors.map((m) => (typeof m === 'string' && OURS.test(m) ? m : `another error (${String(m).length} characters)`)) : undefined);
-/** A result as the journal keeps it and as a replay compares it. `threw`: the Measure threw during the call, whose words are not kept. */
-function resultOf(result, threw) {
-  const r = pick(result, RESULT) || {};
-  if (r.errors) r.errors = threw ? ['journal: the Measure threw'] : safeErrors(r.errors);
+function safeErrors(errors, threw, fit) {
+  if (threw) return [`journal: ${threw} threw`];
+  return errors.map((m) => (fit && typeof m === 'string' && OURS.test(m) ? m : `another error (${String(m).length} characters)`));
+}
+/** A result as the journal keeps it and as a replay compares it. `threw`: which function of the caller's threw during the call. */
+function resultOf(result, threw, lost) {
+  const r = pick(result, RESULT, lost, 'result') || {};
+  if (result && Array.isArray(result.errors)) r.errors = safeErrors(result.errors, threw, lost.size === 0);
   return encode(r);
 }
+/** The caller's functions, watched: a copy of `o` whose functions, nested objects' included, tell `mark` when they throw. */
+function watched(o, mark) {
+  if (typeof o === 'function') return function (...a) { try { return o.apply(this, a); } catch (e) { mark(); throw e; } };
+  if (!o || typeof o !== 'object') return o;
+  const c = {};
+  for (const k of Object.keys(o)) c[k] = watched(o[k], mark);
+  return c;
+}
 
-/** A Measure that keeps every answer it gives, in tables that have no prototype, so that a block named `toString` or `__proto__` is a
- *  key as any other. @param {Measure} measure @returns {{measure: Measure, answers: Answers, threw: () => boolean}} */
+/** A Measure that keeps every answer it gives, as the numbers the engine reads and nothing else, in tables that have no prototype, so
+ *  that a block named `toString` or `__proto__` is a key as any other. `threw()`: it threw; `bent()`: an answer was not numbers, and
+ *  is not kept. @param {Measure} measure @returns {{measure: Measure, answers: Answers, threw: () => boolean, bent: () => boolean}} */
 export function recording(measure) {
   /** @type {Answers} */
   const answers = { rows: Object.create(null), natural: Object.create(null) };
-  let threw = false;
+  let threw = false, bent = false;
   const safely = (f) => { try { return f(); } catch (e) { threw = true; throw e; } };
-  return { answers, threw: () => threw, measure: Object.freeze({
-    rows(id, cells) { const r = safely(() => measure.rows(id, cells)); (answers.rows[id] ??= Object.create(null))[cells] = { rows: r.rows, shown: r.shown, ...(r.lines != null ? { lines: r.lines } : {}) }; return r; },
-    natural(id) { const n = safely(() => measure.natural(id)); answers.natural[id] = n; return n; },
+  const num = (x) => typeof x === 'number';
+  return { answers, threw: () => threw, bent: () => bent, measure: Object.freeze({
+    rows(id, cells) {
+      const r = safely(() => measure.rows(id, cells));
+      if (r && num(r.rows) && num(r.shown) && (r.lines == null || num(r.lines)) && num(cells)) (answers.rows[id] ??= Object.create(null))[cells] = { rows: r.rows, shown: r.shown, ...(r.lines != null ? { lines: r.lines } : {}) };
+      else bent = true;
+      return r;
+    },
+    natural(id) { const n = safely(() => measure.natural(id)); if (num(n)) answers.natural[id] = n; else bent = true; return n; },
   }) };
 }
 
@@ -107,23 +150,30 @@ export function replaying(answers) {
   });
 }
 
-/** A journal of `limit` entries. `versions`: what the caller knows the engine and the passports by (the page's build, say); they go into
- *  every entry as given. @param {{limit?:number, versions?:object}} [o] */
+/** A journal of `limit` entries. `versions`: what the caller knows the engine and the passports by (`build`, `engine`, `measure`,
+ *  `kinds`: numbers or strings of digits, dots and hyphens); they go into every entry. @param {{limit?:number, versions?:object}} [o] */
 export function createJournal({ limit = 200, versions = {} } = {}) {
   /** @type {Entry[]} */
   let ring = [], n = 0;
-  const mine = JSON.stringify(versions ?? {});   // the versions as given now: what the caller does to its object later changes no entry
+  const mine = JSON.stringify(versionsOf(versions));   // the versions as given now: what the caller does to its object later changes no entry
   return {
     /** settleTree, recorded: the same arguments and the same answer. `settle`, the function run (settleTree unless a test gives another). */
     run(root, change, memory, ctx, hooks = {}, settle = settleTree) {
-      const rec = recording(ctx.measure);
+      const rec = recording(ctx.measure), lost = new Set();
+      let threw = null;
+      const by = (who) => () => { threw = threw || who; };
       // what the engine is given is written down before it runs: a function that changed its input would otherwise leave the journal
       // the changed tree, and the state the change started from would be lost
-      const entry = { n: ++n, versions: JSON.parse(mine), tree: encode(pick(root, LAYOUT)), memory: encode(pick(memory ?? null, MEMORY)), change: encode(pick(change, CHANGE)), rules: encode(record(ctx.rules)), settings: encode(record(ctx.settings)), answers: rec.answers, result: null };
+      const entry = { n: ++n, versions: JSON.parse(mine), tree: encode(pick(root, LAYOUT, lost, 'tree')), memory: encode(pick(memory ?? null, MEMORY, lost, 'memory')), change: encode(pick(change, CHANGE, lost, 'change')),
+        rules: encode(known(ctx.rules, DEFAULT, lost, 'rules')), settings: encode(known(ctx.settings, SETTINGS, lost, 'settings')), answers: rec.answers, result: null };
       let result, thrown = null;
-      try { result = settle(root, change, memory, { ...ctx, measure: rec.measure }, hooks); }
+      try { result = settle(root, change, memory, { ...ctx, kinds: watched(ctx.kinds, by('a passport')), measure: rec.measure }, watched(hooks, by('a hook'))); }
       catch (e) { thrown = e; result = { ok: false, why: 'threw', errors: [String(e && e.message)] }; }
-      entry.result = resultOf(result, rec.threw());
+      if (rec.bent()) lost.add('answers');
+      entry.result = resultOf(result, rec.threw() ? 'the Measure' : threw, lost);
+      // a loss: the entry is not what the engine was given (an id longer than the journal keeps, a value of another kind), so it is
+      // kept as a trace and never replayed
+      if (lost.size) entry.unfit = [...lost].sort();
       ring.push(entry);
       if (ring.length > limit) ring = ring.slice(ring.length - limit);
       if (thrown) throw thrown;
@@ -144,21 +194,23 @@ export function entriesOf(text) {
 }
 
 /** One entry played again with the answers it recorded. `kinds`, the passports to play it with (today's); `settle`, the function run.
- *  @returns {{same:true, result:object} | {same:false, result:object, recorded:object} | {missing: {what:string, id:string, cells?:number}}}
+ *  @returns {{same:true, result:object} | {same:false, result:object, recorded:object} | {missing: {what:string, id:string, cells?:number}} | {unfit: string[]}}
  *  `same`: the answer is the recorded one, by value. `missing`: the replay asked for a measurement the journal has not, which is no
- *  verdict on either answer (another version of the engine asks other questions). */
+ *  verdict on either answer (another version of the engine asks other questions). `unfit`: the entry says it lost something of
+ *  what the engine was given (the places, as names of the shapes' fields), so there is nothing to play: no verdict either. */
 export function replay(entry, kinds, settle = settleTree) {
+  if (Array.isArray(entry.unfit) && entry.unfit.length) return { unfit: entry.unfit.filter((x) => typeof x === 'string') };
   const ctx = { rules: decode(entry.rules), settings: decode(entry.settings), kinds, measure: replaying(entry.answers) };
-  let miss = null, threw = false;
+  let miss = null, threw = false, passport = false;
   // SETTLE turns what a measure throws into a failure, so the missing answer is caught where it is asked
   const measure = Object.freeze({
     rows(id, cells) { try { return ctx.measure.rows(id, cells); } catch (e) { threw = true; if (e instanceof Missing) miss = miss || { what: e.what, id: e.id, cells: e.cells }; throw e; } },
     natural(id) { try { return ctx.measure.natural(id); } catch (e) { threw = true; if (e instanceof Missing) miss = miss || { what: e.what, id: e.id }; throw e; } },
   });
   let result;
-  try { result = settle(decode(entry.tree), decode(entry.change), decode(entry.memory), { ...ctx, measure }); }
+  try { result = settle(decode(entry.tree), decode(entry.change), decode(entry.memory), { ...ctx, kinds: watched(kinds, () => { passport = true; }), measure }); }
   catch (e) { result = { ok: false, why: 'threw', errors: [String(e && e.message)] }; }
   if (miss) return { missing: miss };
-  const got = JSON.stringify(resultOf(result, threw)), was = JSON.stringify(entry.result);
+  const got = JSON.stringify(resultOf(result, threw ? 'the Measure' : passport ? 'a passport' : null, new Set())), was = JSON.stringify(entry.result);
   return got === was ? { same: true, result } : { same: false, result, recorded: decode(entry.result) };
 }
