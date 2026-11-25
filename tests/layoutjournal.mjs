@@ -12,6 +12,8 @@
 //   9  the second round of the review: names of settings and versions the engine has not, an answer of the Measure that is no number,
 //      a hook and a passport that throw; an entry that lost something says so and is not replayed; a long message of the engine's
 //      own is kept whole;
+//  10  hooks and passports with state, arrays and methods of a class work through the journal as alone; an answer with a value its
+//      shape has no place for is told, not compared;
 //   8  the inputs and the versions are written down before the engine runs: a function that changes its input is found by the replay.
 //
 //   node tests/layoutjournal.mjs [seed] [histories]
@@ -208,12 +210,12 @@ const seed = +process.argv[2] || 1, N = +process.argv[3] || 150;
   const J3 = createJournal(); let r3 = null, t3e = null;
   try { r3 = J3.run(T, size, emptyMemory(), ctx, { trace: () => { throw new Error('settle: ' + word); } }); } catch (err) { t3e = err; }
   const t3 = J3.export();
-  ok('9b a hook that throws «settle: …» with a word of its own: the entry says a hook threw and keeps no word of it', J3.entries().length === 1 && !t3.includes(word) && t3.includes('journal: a hook threw') && (t3e ? t3e.message.includes(word) : r3.ok === false), t3.slice(-200));
+  ok('9b a hook that throws «settle: …» with a word of its own: the entry says a hook threw, keeps no word of it, and is not replayed without the hook', J3.entries().length === 1 && !t3.includes(word) && t3.includes('journal: a hook threw') && str(replay(entriesOf(t3)[0], KINDS).unfit) === '["hooks"]' && (t3e ? t3e.message.includes(word) : r3.ok === false), t3.slice(-200));
   const J4 = createJournal(); let r4 = null, t4e = null;
   const kinds = { ...KINDS, text: { ...KINDS.text, rows: () => { throw new Error('gap: ' + word); } } };
   try { r4 = J4.run(T, size, emptyMemory(), { ...ctx, kinds }); } catch (err) { t4e = err; }
   const t4 = J4.export();
-  ok('9c a passport that throws likewise: the entry says a passport threw', !t4.includes(word) && t4.includes('journal: a passport threw') && (t4e ? t4e.message.includes(word) : r4.ok === false), t4.slice(-200));
+  ok('9c a passport that throws likewise: the entry says a passport threw, and is not replayed', !t4.includes(word) && t4.includes('journal: a passport threw') && str(replay(entriesOf(t4)[0], KINDS).unfit) === '["kinds"]' && (t4e ? t4e.message.includes(word) : r4.ok === false), t4.slice(-200));
   // an id longer than the journal keeps
   const long = 'L'.repeat(65), map5 = { [long]: { text: 'x' }, B: { text: 'x' } }, ctx5 = ctxOf(map5);
   const T5 = open(noteOf(30, [{ id: long, kind: 'text', col: 1, y: 0, cw: 3 }, { id: 'B', kind: 'text', col: 1, y: 4, cw: 3 }]), ctx5).shown;
@@ -229,6 +231,32 @@ const seed = +process.argv[2] || 1, N = +process.argv[3] || 150;
   ok(`9f a message of the engine longer than an id (${a7.errors?.[0].length} characters) is kept whole, two of them are told apart, and both entries replay`, !a7.ok && a7.errors[0].length > 64 && decode(x7.result).errors[0] === a7.errors[0] && decode(y7.result).errors[0] === b7.errors[0] && a7.errors[0] !== b7.errors[0] && x7.unfit === undefined && replay(x7, KINDS).same === true && replay(y7, KINDS).same === true, decode(x7.result).errors);
   const swapped = JSON.parse(JSON.stringify(x7)); swapped.result = y7.result;
   ok('9g one\'s recorded answer under the other\'s command: a difference', replay(swapped, KINDS).same === false);
+}
+
+// ---- 10. the caller's hooks and passports work through the journal as they work alone
+{
+  const map = { A: { text: 'x'.repeat(40) }, B: { text: 'x' }, K: { kind: 'code', text: 'a\nb' } }, ctx = ctxOf(map);
+  const T = open(noteOf(30, [{ id: 'A', kind: 'text', col: 1, y: 0 }, { id: 'B', kind: 'text', col: 20, y: 0, cw: 3 }, { id: 'K', kind: 'code', col: 1, y: 9 }]), ctx).shown;
+  const change = { type: 'carry', box: null, id: 'A', at: { col: 18, y: 0, frow: 0, w: 8 }, away: false };
+  const hook = () => ({ events: [], seen: new Map(), trace(phase) { this.events.push(phase); this.seen.set(phase, (this.seen.get(phase) || 0) + 1); } });
+  const h1 = hook(), h2 = hook(), alone = settleTree(T, change, emptyMemory(), ctx, h1), J = createJournal(), kept = J.run(T, change, emptyMemory(), ctx, h2);
+  ok(`10 a hook that keeps its events in an array of its own (${h1.events.length} of them): the same events and the same answer through the journal`, alone.ok && h1.events.length > 0 && str(h1.events) === str(h2.events) && str(h1.seen) === str(h2.seen) && str(alone) === str(kept) && J.entries()[0].unfit === undefined, { alone: h1.events.length, kept: h2.events.length, r: kept.errors });
+  // passports as instances of a class, their methods on the prototype, a private field and a getter among them
+  class Kind {
+    #calls = 0;
+    constructor(base) { this.base = base; this.width = base.width; this.hides = base.hides; this.log = []; this.container = base.container; }
+    get calls() { return this.#calls; }
+    minCells(...a) { return this.base.minCells(...a); }
+    rows(box, cells, m) { this.#calls++; this.log.push(box.id); return this.base.rows(box, cells, m); }
+  }
+  const mk = () => ({ text: new Kind(KINDS.text), code: new Kind(KINDS.code), area: KINDS.area });
+  const k1 = mk(), k2 = mk(), a2 = settleTree(T, change, emptyMemory(), { ...ctx, kinds: k1 }), J2 = createJournal(), b2 = J2.run(T, change, emptyMemory(), { ...ctx, kinds: k2 });
+  ok(`10a passports that are instances of a class, with methods of the class, a private field and a getter (${k1.text.calls} calls of the text's rows): the same through the journal`, a2.ok && k1.text.calls > 0 && k1.text.calls === k2.text.calls && str(k1.text.log) === str(k2.text.log) && str(a2) === str(b2) && replay(entriesOf(J2.export())[0], mk()).same === true, { alone: k1.text.calls, kept: k2.text.calls, r: b2.errors });
+  // an answer with a value its shape has no place for
+  const e = entriesOf(J.export())[0];
+  const mutant = (...a) => { const r = settleTree(...a), L = { ...r.layout, boxes: new Map(r.layout.boxes) }; L.boxes.set('A', { ...L.boxes.get('A'), tx: 'bad' }); return { ...r, layout: L }; };
+  const r = replay(e, KINDS, mutant);
+  ok('10b a function whose answer gives a block a word for its temporary rows: not «same», the place named', r.same === undefined && str(r.unfit) === '["result.layout.boxes{}.tx"]' && replay(e, KINDS).same === true, r.unfit || r.same);
 }
 
 process.exit(fails ? 1 : 0);

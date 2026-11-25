@@ -109,13 +109,25 @@ function resultOf(result, threw, lost) {
   if (result && Array.isArray(result.errors)) r.errors = safeErrors(result.errors, threw, lost.size === 0);
   return encode(r);
 }
-/** The caller's functions, watched: a copy of `o` whose functions, nested objects' included, tell `mark` when they throw. */
-function watched(o, mark) {
-  if (typeof o === 'function') return function (...a) { try { return o.apply(this, a); } catch (e) { mark(); throw e; } };
-  if (!o || typeof o !== 'object') return o;
-  const c = {};
-  for (const k of Object.keys(o)) c[k] = watched(o[k], mark);
-  return c;
+/** The caller's functions, watched, with nothing of theirs changed: an object that inherits from `o`, so its state, its arrays and
+ *  whatever else it holds are read from `o` itself, and whose functions (its own and its classes') call the original with `o` as
+ *  the receiver and tell `mark` when they throw. A plain object inside (a passport, its `container`) is watched the same way; an
+ *  array, a Map or any other value is the original. */
+function watched(o, mark, seen = new WeakMap()) {
+  if (!o || typeof o !== 'object' || Array.isArray(o) || o instanceof Map || o instanceof Set) return o;
+  if (seen.has(o)) return seen.get(o);
+  const w = Object.create(o);
+  seen.set(o, w);
+  const names = new Set();
+  for (let p = o; p && p !== Object.prototype; p = Object.getPrototypeOf(p)) for (const k of Object.getOwnPropertyNames(p)) if (k !== 'constructor') names.add(k);
+  for (const k of names) {
+    const d = Object.getOwnPropertyDescriptor(o, k);
+    if (d && !('value' in d)) continue;   // an accessor is read from `o` through the inheritance
+    const v = o[k];
+    if (typeof v === 'function') Object.defineProperty(w, k, { enumerable: !!d?.enumerable, value(...a) { try { return v.apply(this === w ? o : this, a); } catch (e) { mark(); throw e; } } });
+    else if (v && typeof v === 'object') { const c = watched(v, mark, seen); if (c !== v) Object.defineProperty(w, k, { enumerable: !!d?.enumerable, value: c }); }
+  }
+  return w;
 }
 
 /** A Measure that keeps every answer it gives, as the numbers the engine reads and nothing else, in tables that have no prototype, so
@@ -170,6 +182,8 @@ export function createJournal({ limit = 200, versions = {} } = {}) {
       try { result = settle(root, change, memory, { ...ctx, kinds: watched(ctx.kinds, by('a passport')), measure: rec.measure }, watched(hooks, by('a hook'))); }
       catch (e) { thrown = e; result = { ok: false, why: 'threw', errors: [String(e && e.message)] }; }
       if (rec.bent()) lost.add('answers');
+      // a hook or a passport that threw decided the answer, and the journal has neither: nothing to play again
+      if (threw && !rec.threw()) lost.add(threw === 'a hook' ? 'hooks' : 'kinds');
       entry.result = resultOf(result, rec.threw() ? 'the Measure' : threw, lost);
       // a loss: the entry is not what the engine was given (an id longer than the journal keeps, a value of another kind), so it is
       // kept as a trace and never replayed
@@ -194,10 +208,11 @@ export function entriesOf(text) {
 }
 
 /** One entry played again with the answers it recorded. `kinds`, the passports to play it with (today's); `settle`, the function run.
- *  @returns {{same:true, result:object} | {same:false, result:object, recorded:object} | {missing: {what:string, id:string, cells?:number}} | {unfit: string[]}}
+ *  @returns {{same:true, result:object} | {same:false, result:object, recorded:object} | {missing: {what:string, id:string, cells?:number}} | {unfit: string[], result?: object}}
  *  `same`: the answer is the recorded one, by value. `missing`: the replay asked for a measurement the journal has not, which is no
  *  verdict on either answer (another version of the engine asks other questions). `unfit`: the entry says it lost something of
- *  what the engine was given (the places, as names of the shapes' fields), so there is nothing to play: no verdict either. */
+ *  what the engine was given (the places, as names of the shapes' fields), so there is nothing to play: no verdict either; or the answer of this
+ *  replay has a value its shape has no place for (`result.…`), which is a defect of the function run, told as that and not compared. */
 export function replay(entry, kinds, settle = settleTree) {
   if (Array.isArray(entry.unfit) && entry.unfit.length) return { unfit: entry.unfit.filter((x) => typeof x === 'string') };
   const ctx = { rules: decode(entry.rules), settings: decode(entry.settings), kinds, measure: replaying(entry.answers) };
@@ -211,6 +226,8 @@ export function replay(entry, kinds, settle = settleTree) {
   try { result = settle(decode(entry.tree), decode(entry.change), decode(entry.memory), { ...ctx, kinds: watched(kinds, () => { passport = true; }), measure }); }
   catch (e) { result = { ok: false, why: 'threw', errors: [String(e && e.message)] }; }
   if (miss) return { missing: miss };
-  const got = JSON.stringify(resultOf(result, threw ? 'the Measure' : passport ? 'a passport' : null, new Set())), was = JSON.stringify(entry.result);
+  const lost = new Set(), got = JSON.stringify(resultOf(result, threw ? 'the Measure' : passport ? 'a passport' : null, lost)), was = JSON.stringify(entry.result);
+  // an answer with a value its shape has no place for is not compared as if the value were not there
+  if (lost.size) return { unfit: [...lost].sort(), result };
   return got === was ? { same: true, result } : { same: false, result, recorded: decode(entry.result) };
 }
