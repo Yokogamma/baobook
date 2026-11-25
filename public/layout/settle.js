@@ -117,9 +117,10 @@ export function settle(start, change, memory, ctx, hooks = {}) {
   }
 }
 
-/** An undo's change on the inverse path (LAYOUT-ENGINE-PLAN §6.4): its cell is canonical, so SETTLE runs on the canonical layout, every
- *  temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, and FOLLOW shows the temporary heights again on
- *  its result. So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
+/** An undo's change on the inverse path (LAYOUT-ENGINE-PLAN §6.4), in three stages: its cell is canonical, so SETTLE runs on the
+ *  canonical layout, every temporary height folded (`resize`, FOLLOW) and the measure giving canonical rows only, with a rest width for
+ *  the block it brings back alone (G25); FOLLOW shows the temporary heights again on its result; and then the rest widths are settled
+ *  on the rows that are shown, a stage of its own with its own RELINK, which writes gaps as the rest after any action does (G24). So the judges and the primitives see every block at its canonical rows, a block that stands at the cell canonically is met
  *  there wherever a temporary height shows it, RELINK gets the canonical rows, and no temporary push is written into a block, the moved
  *  block's or another's (the two measures, LAYOUT-RULES §1.2; the independent review of c5efdda; the owner's G23, O-31 (а), 2026-11-13). A block
  *  shows again the temporary rows it had when its width and canonical rows are those of start; one the run measured anew (a block at
@@ -224,19 +225,19 @@ function wrapper(start, change, memory, ctx, hooks) {
   }
 }
 
-/** Phase 9, rest, one run of it: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width (none with `widths`
- *  off, an undo's canonical pass); (b) the hits left, by P-REST or
+/** Phase 9, rest, one run of it: (a) RESTPASSES passes of SIZE.8 from `L8`, FOLLOW after each that changed a width (with `only`, an
+ *  undo's canonical pass, of those blocks alone); (b) the hits left, by P-REST or
  *  P-SEP, within RESTSTEPS; (c) RELINK against `b9` with the moves of (b) only, the columns phase 9's widths changed, and `extra` (the
  *  causes of a kind that relinks only here: phase 1a's size, the working state's reshapes). @returns {Layout} */
-function phase9(L8, b9, ctx, extra, hooks, moves, ran, widths = true) {
+function phase9(L8, b9, ctx, extra, hooks, moves, ran, only = null) {
   const rules = ctx.rules;
   let La = L8;
   const rested = new Set();   // the blocks phase 9 (a) gave another width, which may leave or come into columns
   const passes = on(rules, 'SIZE.8') ? ctx.settings.RESTPASSES : 1;
-  if (widths && on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
+  if (on(rules, 'SIZE.1')) for (let p = 0; p < passes; p++) {
     const before = La;
     for (const id of La.order) {
-      const b = La.boxes.get(id); if (!b || !isElastic(b, ctx)) continue;
+      const b = La.boxes.get(id); if (!b || !isElastic(b, ctx) || (only && !only.has(id))) continue;
       const w = restCells(La, b, ctx) + 1; if (w === b.w) continue;
       rested.add(id);
       const nb = measured(b, w, ctx);
@@ -269,8 +270,9 @@ function phase9(L8, b9, ctx, extra, hooks, moves, ran, widths = true) {
 
 /** Phase 9 until it changes nothing (the owner's G24, 2026-11-23): when an action ends every elastic block stands at its rest width, so
  *  that no later action that does not reach it changes it. Each run after the first is a rest of its own, as the next action's phase 9
- *  would have been: against the layout the run before left, with its own RELINK. A container that does not come to rest within
- *  RESTSTEPS runs is a cycle, and SETTLE fails (§5.5). @returns {Layout} */
+ *  would have been: against the layout the run before left, with its own RELINK, so the memory of gaps is that of those rests one
+ *  after another. RESTSTEPS runs is a protective bound: past it SETTLE fails (§5.5), whether or not the runs were a cycle.
+ *  @returns {Layout} */
 function atRest(L, ctx, hooks, moves, ran) {
   for (let k = 0, n = stepsGuard(L); ; k++) {
     const next = phase9(L, L, ctx, [], hooks, moves, []);
@@ -453,10 +455,10 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
 
   // ---- 9. rest, against the layout after phase 8, or for a kind that relinks only here against base, phase 1a's size among the causes
   const b9 = deferred ? base : L8;
-  // an undo's pass, on canonical rows (G23), gives no block a rest width: a text that shows temporary rows may have no neighbour beside
-  // its canonical rows and would widen there, reached by the undo or not (the owner's G25, 2026-11-23). The hits are settled and relinked
-  // here as ever; the rest widths are `inverse`'s, on the rows that are shown
-  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran, !change.canonical);
+  // an undo's pass, on canonical rows (G23), gives a rest width to the block it brings back and to no other: a text that shows
+  // temporary rows may have no neighbour beside its canonical rows and would widen there, reached by the undo or not (the owner's
+  // G25, 2026-11-23). The hits are settled and relinked here as ever; the other rest widths are `inverse`'s, on the rows that are shown
+  let final = phase9(L8, b9, ctx, deferred ? [...ws.reshaped, ...(change.type === 'size' ? [change.id] : [])] : [], hooks, moves, ran, change.canonical ? new Set(g != null ? [g] : []) : null);
   if (!change.canonical) final = atRest(final, ctx, hooks, moves, ran);
 
   // ---- 10. contain: nothing moves here; a block past MAXCELL refuses the change, an area's own handle refuses to make it taller, any other

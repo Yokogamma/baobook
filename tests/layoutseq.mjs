@@ -17,6 +17,7 @@ import { KINDS_NOT } from './lib/layout/seq.mjs';
 import { settleTree } from '../public/layout/tree.js';
 import { sharesCol, sharesRow, readingOrder } from '../public/layout/geometry.js';
 import { emptyMemory, rest } from '../public/layout/settle.js';
+import { remove } from '../public/layout/gap.js';
 import { unshow } from '../public/layout/layout.js';
 import { canonicalCtx } from '../public/layout/size.js';
 import { KINDS } from '../public/layout/kinds.js';
@@ -79,7 +80,7 @@ console.log(`  G24: ${c['G24: containers'] || 0} containers at their rest widths
 // ---- a named case (the independent review of a4e9bf4; the owner's G25): an undo and a far text with temporary rows. A, 50 letters,
 // shows two temporary rows; W stands beside its shown rows only. A is made elastic and rests against W; F, far away, is deleted and
 // made again by an undo, whose SETTLE runs on the canonical layout (G23), where W is not beside A: a rest by those rows would widen
-// A. An undo gives no rest width by its canonical rows; the widths are rested on the rows shown, where A stands at rest already
+// A. An undo gives a rest width by canonical rows to the block it brings back alone; the widths are rested on the rows shown, where A stands at rest already
 {
   const lay = (cols, boxes) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: readingOrder(boxes), areas: new Map() });
   const map = { A: { text: 'x'.repeat(50), temp: 2 }, W: { text: 'x' }, F: { text: 'x' } };
@@ -118,6 +119,11 @@ console.log(`  G24: ${c['G24: containers'] || 0} containers at their rest widths
     right.n.violations.length === 0 && right.w && right.w[1] > right.w[0] && right.n.counts[key] === 1, [right.n.violations[0], right.n.counts, right.w]);
   const wrong = run((root, change, memory, ctx, hooks) => { const r2 = settleTree(root, change, memory, ctx, hooks); if (!r2.ok) return r2; const boxes = new Map(r2.layout.boxes), W = boxes.get('W'); boxes.set('W', { ...W, y: W.y + 1, yc: (W.yc ?? W.y) + 1 }); return { ...r2, layout: { ...r2.layout, boxes } }; });
   ok('and an engine that moves W with it, which that rest does not move: a violation', wrong.n.violations.length > 0, wrong.n.violations.map((v) => v.law));
+  // an engine that takes F away through GAP alone, leaves the rest of the sheet as it was and says it ran nowhere (the independent
+  // review of 3b3cbb2): a valid tree with A still off its rest width. The law must not take the engine's word for where it ran
+  const lazy = run((root, change) => ({ ok: true, layout: { ...remove(root, change.id), measure: root.measure, areas: root.areas }, start: root, memory: emptyMemory(), pressed: null, ran: [] }));
+  ok('an engine that deletes F through GAP alone and reports that it ran nowhere, A left as it was: caught by G24, and by nothing before it',
+    lazy.n.violations.length === 1 && /^G24/.test(lazy.n.violations[0].law) && /A is 7 cells wide/.test(String(lazy.n.violations[0].detail)), lazy.n.violations.map((v) => [v.law, v.detail]));
 }
 
 // ---- L1's reach and its teeth, by name (the independent review of 0675ac7). Every path that relinks hands the hook its transition:

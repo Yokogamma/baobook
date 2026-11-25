@@ -286,16 +286,23 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
           inc('L7: a text out of reach brought to rest after a temporary height changed', off.length);
         }
       }
-      // G24: when an action ends, every elastic block of every container it ran in stands at its rest width, and so does every
-      // container that stood at rest when the action was given; by the formula written apart. A container is off its rest widths
-      // only where a temporary height started or ended with no action since (`show`, which changes no canonical row, L9; a note
-      // opened with temporary heights among them): the first action that runs in it brings it to rest
-      for (const [name, L] of containers(r.layout)) {
-        const B = name == null ? root : root.areas.get(name), ranIn = (r.ran || []).includes(name), was = B ? offRest(B) : [];
-        if (!ranIn && was.length) { inc('G24: containers left off their rest widths (a temporary height changed, no action in them yet)'); continue; }
-        inc('G24: containers'); if (was.length) inc('G24: containers brought to rest by the first action in them');
-        const e = offRest(L);
-        if (e.length) { bad('G24: after an action every elastic block stands at its rest width', e.slice(0, 3), { ...extra, container: name, ran: r.ran }); return { stop: true }; }
+      // G24: when an action ends, every elastic block stands at its rest width, by the formula written apart. One thing is let off: a
+      // container that was off its rest widths when the command was given (a temporary height started or ended with no action
+      // since: `show`, which changes no canonical row, L9; a note opened with temporary heights among them) and that the command
+      // has nothing to do with. That is told by the tree and the change, never by what the engine says of itself (`ran`; the
+      // independent review of 3b3cbb2): the container comes back as it was given, value for value, and the change does not name it
+      // (its `box`, its `to`, the area of an `areaSide`), unless the command changed nothing at all
+      {
+        const whole = str(r.layout) === str(root);
+        const named = (name) => name === (change.box ?? null) || ('to' in change && name === (change.to ?? null)) || (change.type === 'areaSide' && name === change.id);
+        for (const [name, L] of containers(r.layout)) {
+          const B = name == null ? root : root.areas.get(name), was = B ? offRest(B) : [];
+          const same = B && str([...L.boxes]) === str([...B.boxes]) && L.cols === B.cols;
+          if (was.length && same && (whole || !named(name))) { inc('G24: containers left off their rest widths (a temporary height changed, no action in them yet)'); continue; }
+          inc('G24: containers'); if (was.length) inc('G24: containers brought to rest by the first action in them');
+          const e = offRest(L);
+          if (e.length) { bad('G24: after an action every elastic block stands at its rest width', e.slice(0, 3), { ...extra, container: name, ran: r.ran }); return { stop: true }; }
+        }
       }
       // L13: translation, the first command on the note as opened
       if (root === opened && !change.canonical) {

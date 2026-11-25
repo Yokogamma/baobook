@@ -78,7 +78,7 @@ function play(E, note, map, commands, temp = new Map()) {
 
 // ---- 3. G25: an undo and the width of a text it does not reach. The same A, its width at rest against W on the rows shown. F is
 // deleted and made again by an undo, whose SETTLE runs on the canonical layout (G23), where W is not beside A. The pinned engine rests A
-// by those rows and widens it; this one gives no rest width by canonical rows and leaves it
+// by those rows and widens it; this one gives a rest width by canonical rows to the block the undo brings back alone, and leaves A
 {
   const map = { A: { text: 'x'.repeat(50), temp: 2 }, W: { text: 'x' }, F: { text: 'x' } };
   const note = { cols: 44, boxes: [{ id: 'A', kind: 'text', col: 2, y: 0, cw: 8 }, { id: 'W', kind: 'text', col: 14, y: 2, cw: 1, ch: 9 }, { id: 'F', kind: 'text', col: 36, y: 30, cw: 3 }] };
