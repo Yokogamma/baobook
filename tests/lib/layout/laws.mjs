@@ -221,27 +221,10 @@ export function runLaws({ seed = 1, notes = 200, steps = 6, max = 3, rules = DEF
       }
       if (negative) { bad('a command nothing may do is not accepted', r.layout ? placesOf(r.layout) : null, extra); return { stop: true }; }
       if (!valid('valid: the answer', r.layout, ctx, extra)) return { stop: true };
-      // `start`, the tree the next move of a gesture is given: a valid tree, but for one thing. After a swap inside an area its child
-      // container is the swap's and its sheet the gesture's start, so that area's frame there is not round those children (the next
-      // move settles the frame again from them; §6.2 decides one tree). Only that is let through: a carry in an area, a `start` whose
-      // children of that area are not the ones the move was given, and the error that area's frame; anything else of `start` fails
-      {
-        const e = validate(r.start, ctx), box = change.box ?? null, isFrame = (x) => x.startsWith(`${box}: a canonical frame of `) || x.startsWith(`${box}: a frame of `);
-        const inArea = change.type === 'carry' && box != null && r.start.areas.has(box) && root.areas.has(box);
-        // a swap, told by what it is (LAYOUT-RULES §5.1b): phase 3 reported one of the carried block in this command (`trace`, which
-        // an engine has to be given to say it; a swap that releases its neighbour at once leaves no name in the memory), the sheet of
-        // `start` is the one the move was given, and in the area the carried block and that neighbour stand on the other side of
-        // each other than they did
-        const sideOf = (C, n) => { const g = C.boxes.get(change.id), o = C.boxes.get(n); return g && o && g.id !== o.id ? Math.sign(g.y - o.y) : 0; };
-        const swapped = inArea && str(r.start.areas.get(box)) !== str(root.areas.get(box)) && str([...r.start.boxes]) === str([...root.boxes])
-          && swapsOf.some(([g, n]) => g === change.id && sideOf(root.areas.get(box), n) * sideOf(r.start.areas.get(box), n) < 0);
-        // a later move of the same gesture is given that `start` and answers with it again: the same error, word for word, is its own
-        const given = inArea && !swapped ? validate(root, ctx).filter(isFrame) : [];
-        const frame = (x) => inArea && isFrame(x) && (swapped || given.includes(x));
-        const other = e.filter((x) => !frame(x));
-        if (other.length) { bad('valid: the answer\'s start', other.slice(0, 3), extra); return { stop: true }; }
-        if (e.length) inc('start: an area\'s frame not round its children (after a swap inside it)');
-      }
+      // `start`, the tree the next move of a gesture is given: one tree, valid as any (LAYOUT-SEAMS-PLAN §6.2). After a swap inside
+      // an area its children are the swap's and the area's frame is settled round them; nothing of it is let through
+      if (!valid('valid: the answer\'s start', r.start, ctx, extra)) return { stop: true };
+      if (change.type === 'carry' && (change.box ?? null) != null && swapsOf.some(([g]) => g === change.id) && str(r.start.areas.get(change.box)) !== str(root.areas.get(change.box))) inc('start: after a swap inside an area');
       // the temporary rows of a block's own (`tx`, the rows `show` was given for it): a block the command does not make anew keeps
       // them, wherever the command takes it; and a block that is no area shows what the measure gives it and those rows, no other
       {

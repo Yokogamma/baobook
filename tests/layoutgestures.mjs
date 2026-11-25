@@ -235,7 +235,8 @@ for (let k = 0; k < N * 4 && stat.sheets < N; k++) {
         else { const k = int(-3, 3) || 1; c = { type: 'wall', box: d.box, side: 'left', cols: L.cols - k, shift: -k }; }
         hist.push(['wall', c.side, c.cols, c.shift ?? 0]); stat.walls++;
       } else if (r0 < 0.4) { const el = ids.filter((i) => L.boxes.get(i).cw == null); if (el.length) { const i = el[int(0, el.length - 1)]; d.map[i] = { text: chars(int(1, 40)) }; c = { type: 'size', box: d.box, id: i }; hist.push(['size', i, d.map[i].text.length]); } }
-      else if (r0 < 0.7) { const sw = ids.filter((i) => L.boxes.get(i).cw != null); if (sw.length) { const i = sw[int(0, sw.length - 1)]; c = { type: 'width', box: d.box, id: i, cw: Math.max(1, L.boxes.get(i).cw + int(-2, 4)), side: 'right' }; hist.push(['width', i, c.cw]); } }
+      // an area's rectangle comes clamped, as tree.js sideRect gives it: SETTLE fails one outside its container (LAYOUT-SEAMS-PLAN §6.3)
+      else if (r0 < 0.7) { const sw = ids.filter((i) => L.boxes.get(i).cw != null); if (sw.length) { const i = sw[int(0, sw.length - 1)]; const x = L.boxes.get(i), cw = Math.max(1, x.cw + int(-2, 4)); c = { type: 'width', box: d.box, id: i, cw: x.kind === 'area' ? Math.min(cw, L.cols - x.col - 2) : cw, side: 'right' }; hist.push(['width', i, c.cw]); } }
       else { const i = ids[int(0, ids.length - 1)]; c = { type: 'remove', box: d.box, id: i }; hist.push(['remove', i]); }
       if (!c) continue;
       stat.others++;

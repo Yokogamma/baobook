@@ -31,11 +31,15 @@ function measured(box, w, ctx) {
   if (isArea(box)) return { ...box, w };
   return { ...box, w, ...heightAt({ ...box, w }, w - 1, ctx) };
 }
-/** The changed block when it is an area: its frame round its children, read from the layout SETTLE was given (`areas`; frame.js). An
- *  area with no children's container there, a block of one container by itself as the tests of SETTLE have it, keeps its rows. Its
- *  own temporary rows are in the frame (`tx`), so a carried area is framed as any other. */
+/** The changed block when it is an area: its frame round its children, read from the layout SETTLE was given (`areas`; frame.js). In
+ *  one container by itself, a layout with no `areas` or none in them, as the tests of SETTLE in one container have it, an area is a
+ *  block that keeps its rows; in a layout that has children's containers, an area with none is a broken tree, and SETTLE fails
+ *  (settleTree refuses such a tree before anything runs). Its own temporary rows are in the frame (`tx`), so a carried area is
+ *  framed as any other. */
 function framed(box, L, ctx) {
-  const C = isArea(box) ? L.areas?.get(box.id) : null;
+  if (!isArea(box)) return box;
+  const C = L.areas?.get(box.id);
+  if (!C && L.areas?.size) throw new Failed('settle: the area ' + box.id + ' has no children\'s container');
   return C ? { ...box, ...frameOf(box, C, ctx) } : box;
 }
 /** The first two blocks that hit, in reading order, or null. */
@@ -361,7 +365,11 @@ function pipeline(start, change, memory, ctx, hooks, origin = start) {
     } else box = (start.boxes.get(g)) && { ...start.boxes.get(g) };
     if (!box) throw new Failed('settle: no block ' + g);
     if (kind.moved === 'target') box = atTarget(box, { ...change.at, w: change.type === 'create' ? box.w : change.at.w }, L.cols, ctx, change.type === 'create');
-    else {   // the width handle: the block itself at its new width (and for a left edge its new column), clamped to the container
+    else if (isArea(box)) {   // an area's side handle: its rectangle is the one clamp's (tree.js sideRect), never clamped again here
+      const col = change.col ?? box.col, w = change.cw + 1;
+      if (!Number.isInteger(col) || !Number.isInteger(w) || col < 0 || w < 2 || col + w + pad(box) > L.cols) throw new Failed('settle: an area\'s rectangle (' + col + ', ' + w + ') is not inside its container');
+      box = measured({ ...box, col, cw: w - 1 }, w, ctx);
+    } else {   // the width handle: the block itself at its new width (and for a left edge its new column), clamped to the container
       const col = change.col ?? box.col, w = Math.max(2, Math.min(change.cw + 1, L.cols - col - pad(box)));
       box = measured({ ...box, col, cw: w - 1 }, w, ctx);
     }
