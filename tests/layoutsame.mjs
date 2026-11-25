@@ -63,6 +63,18 @@ const meantBy = (rules) => ({ change, root, a, b, again }) => {
   return r.ok && str([...r.layout.boxes]) === str([...a.layout.boxes]) ? 'a later rest changed something: the copy\'s answer, rested (G24)' : null;
 };
 const UNDO = 'an undo that rests by the rows shown (G25)';
+/** A gesture's `start` after a swap inside an area (LAYOUT-SEAMS-PLAN §6.2, seams S3c): the copy keeps the sheet the move was given,
+ *  its area's frame not round the swapped children; the engine settles the frame round them. Meant only when the rest of the answer is
+ *  the same (`pair.mjs` asks this alone), the change is a carry in an area, the engine reports a swap of the carried block, both
+ *  starts hold the same children, and the engine's start is what the copy's own settleTree gives when its start's frame is settled
+ *  round those children (a plain size change of the area, the copy's path for any change of an area's content). */
+const meantStart = ({ change, a, b, swaps }) => {
+  const box = change.box ?? null;
+  if (change.type !== 'carry' || box == null || !a.ok || !b.ok || !swaps.some(([g]) => g === change.id)) return null;
+  if (str(a.start.areas.get(box)) !== str(b.start.areas.get(box))) return null;
+  const r = B.settleTree(b.start, { type: 'size', box: null, id: box }, B.emptyMemory(), B.ctx);
+  return r.ok && str(r.layout) === str(a.start) && !validate(a.start, A.ctx).length ? 'a start after a swap inside an area, its frame settled (S3c)' : null;
+};
 
 // the bounds of a meant difference, shown to hold: a patch of an undo spoilt, a memory spoilt, and a far block moved a row in a
 // command with a later rest, each on an engine otherwise right
@@ -85,12 +97,22 @@ const UNDO = 'an undo that rests by the rows shown (G25)';
   } };
   const p4 = run(low, B, { seed: 11, notes: 700, max: 1, meant: meantBy(A.DEFAULT) });
   ok('a command with a later rest that also puts the lowest block a row lower: told apart', p4.diffs.length > 0, p4.meant);
+  // a start after a swap inside an area whose sheet is spoilt besides (its lowest block a row lower): the S3c reason must not take it
+  const spoilt = { ...A, settleTree: (root, change, memory, ctx, hooks) => {
+    let swapped = false; const r = A.settleTree(root, change, memory, ctx, { ...hooks, trace: (ph, L, info) => { if (info && info.swap) swapped = true; if (hooks && hooks.trace) hooks.trace(ph, L, info); } });
+    if (!r.ok || !swapped || change.box == null) return r;
+    const last = [...r.start.boxes.values()].sort((x, y) => y.y - x.y)[0]; if (!last) return r;
+    const boxes = new Map(r.start.boxes); boxes.set(last.id, { ...last, y: last.y + 1, yc: (last.yc ?? last.y) + 1 });
+    return { ...r, start: { ...r.start, boxes } };
+  } };
+  const p5 = run(spoilt, B, { seed: 11, notes: 700, max: 1, meant: meantBy(A.DEFAULT), meantStart });
+  ok('a start after a swap inside an area with its lowest sheet block a row lower: told apart', p5.diffs.length > 0, p5.meant);
 }
 
 const seed = +process.argv[2] || 11, notes = +process.argv[3] || 700;
-const r = run(A, B, { seed, notes, meant: meantBy(A.DEFAULT) });
+const r = run(A, B, { seed, notes, meant: meantBy(A.DEFAULT), meantStart });
 ok(`${r.stat.notes} notes, ${r.stat.commands} commands (${r.stat.accepted} accepted, ${r.stat.moved} of them changing the tree, ${r.stat.refused} refused, ${r.stat.failed} failed): the same answers as 0d94f29, but ${JSON.stringify(r.meant)}`, r.diffs.length === 0, r.diffs[0]);
-const undos = (r.by['undo carry']?.accepted || 0) + (r.by['create again']?.accepted || 0), meantAll = Object.values(r.meant).reduce((x, y) => x + y, 0);
+const undos = (r.by['undo carry']?.accepted || 0) + (r.by['create again']?.accepted || 0), meantAll = Object.entries(r.meant).filter(([k]) => !/S3c/.test(k)).reduce((x, [, y]) => x + y, 0);
 ok(`the meant differences are few: ${meantAll} of ${r.stat.accepted} accepted commands (${r.meant[UNDO] || 0} of ${undos} undos)`, meantAll * 100 < r.stat.accepted && (r.meant[UNDO] || 0) * 50 < undos, r.meant);
 console.log('  ' + Object.entries(r.by).map(([k, v]) => `${k} ${v.accepted}/${v.moved}/${v.refused}/${v.failed}`).join(', ') + '  (accepted/changing/refused/failed)');
 // a kind the run never accepted compares nothing
@@ -102,8 +124,8 @@ ok(`the patches compared hold fields written as removed (${r.stat.removals})`, r
 // the same under SIZE.1 off: DRAG.A3's narrowing at an edge needed SIZE.1 as a switch and is in effect only where SIZE.1 is on as core
 {
   // no rest width is given there, so neither decision has a subject: no difference is meant, and none is let through
-  const o = run(A, B, { seed: seed + 1, notes: Math.round(notes / 2), rulesOf: (E) => E.resolve({ 'SIZE.1': false }) });
-  ok(`SIZE.1 off: ${o.stat.notes} notes, ${o.stat.commands} commands (${o.stat.accepted} accepted): the same answers as 0d94f29, none excused`, o.diffs.length === 0 && Object.keys(o.meant).length === 0, o.diffs[0]);
+  const o = run(A, B, { seed: seed + 1, notes: Math.round(notes / 2), rulesOf: (E) => E.resolve({ 'SIZE.1': false }), meantStart });
+  ok(`SIZE.1 off: ${o.stat.notes} notes, ${o.stat.commands} commands (${o.stat.accepted} accepted): the same answers as 0d94f29, none excused but the start of S3c ${JSON.stringify(o.meant)}`, o.diffs.length === 0 && Object.keys(o.meant).every((k) => /S3c/.test(k)), [o.diffs[0], o.meant]);
 }
 
 // a carry past the right edge, as a named case on both (the generator keeps most targets inside the container): an elastic text narrows

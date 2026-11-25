@@ -3,6 +3,8 @@
 //   1    a text in an area grows: the area's frame with it, the blocks under the area pushed; shrinks back: every row back (INV-7 b);
 //   2    a carry inside an area, past its bottom: the frame grows, both containers in `ran`; the area's own start kept for the next move;
 //   3    a block into an area and out again (enter, leave): taken away from one container, a new block in the other, frames following;
+//   3b   the input contract of enter and leave: a command that is neither fails; a tree with an area that has no container fails whole;
+//        an area's rectangle outside its container fails in SETTLE (sideRect is the one clamp);
 //   4    ungrouping: the area taken away, its children on the sheet at their cells;
 //   5    drawing an area: what it covers makes room; its children an empty container; never inside an area;
 //   6    an area's side handle: inwards a child pressed in by the wall, outwards a sheet block pressed aside, the left edge keeping the
@@ -13,7 +15,7 @@
 //        with it, the side handle judged by the frame (room in ch, a header growing at the new width), one width on a narrow sheet.
 // Seeded: node tests/layouttree.mjs [seed] [N]
 import { settleTree } from '../public/layout/tree.js';
-import { emptyMemory } from '../public/layout/settle.js';
+import { emptyMemory, settle } from '../public/layout/settle.js';
 import { open } from '../public/layout/layout.js';
 import { validate } from '../public/layout/validate.js';
 import { check } from '../public/layout/gap.js';
@@ -73,6 +75,41 @@ const sound = (Tr, ctx) => validate(Tr, ctx);
   const big = note(60, [A('Q', 0, 1, 40), A('P', 44, 1, 12)], { Q: [], P: [] }), cb = ctxFor(big);
   const nest = settleTree(shown(big, cb), { type: 'enter', box: null, id: 'P', to: 'Q', at: { col: 0, y: 1 } }, emptyMemory(), cb);
   ok('3 an area never goes into an area, even one with room for it: refused', !nest.ok && nest.why === 'refused', nest.ok ? places(nest.layout) : nest);
+}
+
+/* ── 3b. the input contract of enter and leave (LAYOUT-SEAMS-PLAN §6.3), and a tree that is not whole ── */
+{
+  const n = note(40, [A('R', 0, 1, 12), A('Q', 16, 1, 12), S('S', 32, 1, 3)], { R: [S('c', 0, 0, 3)], Q: [] }), ctx = ctxFor(n), T0 = shown(n, ctx);
+  const at = { col: 0, y: 1 }, run = (c, T = T0) => settleTree(T, c, emptyMemory(), ctx), before = JSON.stringify([...T0.boxes]);
+  const failed = (r) => !r.ok && r.why === 'failed';
+  const cases = [
+    ['enter with no area named', { type: 'enter', box: null, id: 'S', to: null, at }],
+    ['enter into an area that is not there', { type: 'enter', box: null, id: 'S', to: 'Z', at }],
+    ['enter into a block that is no area', { type: 'enter', box: null, id: 'S', to: 'S', at }],
+    ['enter from an area (a child straight into another area)', { type: 'enter', box: 'R', id: 'c', to: 'Q', at }],
+    ['enter of a block that is not there', { type: 'enter', box: null, id: 'nobody', to: 'R', at }],
+    ['enter with no cell', { type: 'enter', box: null, id: 'S', to: 'R' }],
+    ['leave from the sheet', { type: 'leave', box: null, id: 'S', to: null, at }],
+    ['leave into an area', { type: 'leave', box: 'R', id: 'c', to: 'Q', at }],
+    ['leave from an area that is not there', { type: 'leave', box: 'Z', id: 'c', to: null, at }],
+    ['leave of a child that is not there', { type: 'leave', box: 'R', id: 'S', to: null, at }],
+    ['leave with a cell that is no cell', { type: 'leave', box: 'R', id: 'c', to: null, at: { col: 1.5, y: 1 } }],
+  ];
+  const wrong = cases.filter(([, c]) => !failed(run(c))).map(([name]) => name);
+  ok(`3b ${cases.length} commands that are no enter and no leave: each failed, none thrown, none refused or accepted`, wrong.length === 0, wrong);
+  ok('3b and the tree they were given is as it was', JSON.stringify([...T0.boxes]) === before);
+  const fine = run({ type: 'enter', box: null, id: 'S', to: 'Q', at }), back = fine.ok && run({ type: 'leave', box: 'Q', id: 'S', to: null, at: { col: 32, y: 1 } }, fine.layout);
+  ok('3b the commands that are: S into Q and out again, accepted, sound', fine.ok && !!back && back.ok && !sound(back.layout, ctx).length && eq(places(back.layout), places(T0)), [fine.ok, back && back.ok]);
+  // a tree that is not whole: an area of the sheet with no children's container. Nothing runs on it, whatever the command
+  const areas = new Map(T0.areas); areas.delete('Q'); const torn = { ...T0, areas };
+  const onTorn = [{ type: 'size', box: null, id: 'S' }, { type: 'carry', box: null, id: 'Q', at: { col: 16, y: 5, frow: 5, w: 13 }, away: false }, { type: 'enter', box: null, id: 'S', to: 'R', at }, { type: 'remove', box: 'R', id: 'c' }];
+  const let2 = onTorn.filter((c) => !failed(run(c, torn))).map((c) => c.type);
+  ok('3b an area with no children\'s container: every command on that tree failed, a change far from the area among them', let2.length === 0, let2);
+  // an area's rectangle is clamped once, by areaSide (sideRect); SETTLE given one outside its container fails, inside it accepts
+  const R = T0.boxes.get('R'), wide = { type: 'width', box: null, id: 'R', cw: T0.cols, side: 'right' }, left = { type: 'width', box: null, id: 'R', cw: R.cw, col: -1, side: 'left' };
+  const fit = { type: 'width', box: null, id: 'R', cw: R.cw + 1, side: 'right' };
+  ok('3b an area\'s width past its container, or at column −1, given to SETTLE: failed, not clamped; one that fits: accepted',
+    failed(settle(T0, wide, emptyMemory(), ctx)) && failed(settle(T0, left, emptyMemory(), ctx)) && settle(T0, fit, emptyMemory(), ctx).ok, [settle(T0, wide, emptyMemory(), ctx).why, settle(T0, left, emptyMemory(), ctx).why, settle(T0, fit, emptyMemory(), ctx).ok]);
 }
 
 /* ── 4. ungrouping ── */

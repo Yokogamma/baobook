@@ -72,7 +72,7 @@ const soundness = (E, T) => [T, ...T.areas.values()].map((L) => E.check(L).lengt
  *  start and memory the first engine answered with, which the second answered alike. `meant` names a difference of the tree that is
  *  no fault, from the two answers (`a`, `b`, as compared), the tree given and the first engine's report of a later rest; what it
  *  excuses is bounded in `settle` below. @returns {{stat:object, by:object, diffs:object[], meant:Record<string, number>}} */
-export function run(A, B, { seed = 1, notes = 300, steps = 6, rulesOf = (E) => E.DEFAULT, max = 3, meant = () => null } = {}) {
+export function run(A, B, { seed = 1, notes = 300, steps = 6, rulesOf = (E) => E.DEFAULT, max = 3, meant = () => null, meantStart = () => null } = {}) {
   const diffs = [], meantBy = {}; let removals = 0, cur = null, storedA = null, storedB = null;
   const differ = (what, a, b, extra) => { const ca = canon(a), cb = canon(b); if (JSON.stringify(ca) === JSON.stringify(cb)) return false; diffs.push({ note: cur.k, seed: cur.seed, what, ...extra, hist: cur.hist.slice(), first: firstDiff(ca, cb) }); return true; };
   const broke = (what, a, b, extra) => { diffs.push({ note: cur.k, seed: cur.seed, what, ...extra, hist: cur.hist.slice(), broken: [a || null, b || null] }); return { stop: true }; };
@@ -88,14 +88,19 @@ export function run(A, B, { seed = 1, notes = 300, steps = 6, rulesOf = (E) => E
       return oa.threw || !oa.ok ? null : oa.shown;
     },
     settle(kind, change, root, memory) {
-      let again = 0;   // the first engine's own report of a rest after the first that changed something (G24)
-      const ra = answer(A, () => A.settleTree(root, change, memory, A.ctx, { trace: (phase, L, info) => { if (info && info.again) again++; } })), rb = answer(B, () => B.settleTree(root, change, memory, B.ctx));
+      let again = 0; const swaps = [];   // the first engine's own reports: a rest after the first that changed something (G24), a swap
+      const ra = answer(A, () => A.settleTree(root, change, memory, A.ctx, { trace: (phase, L, info) => { if (info && info.again) again++; if (info && info.swap) swaps.push(info.swap); } })), rb = answer(B, () => B.settleTree(root, change, memory, B.ctx));
       const sa = settled(A, ra, storedA), sb = settled(B, rb, storedB);
       if (sa.broken || sb.broken) return broke(kind, sa.broken, sb.broken, { change });
       // a difference that is meant (a decision made after the copy was pinned) is told by `meant` from the two answers and counted
       // under its reason; the sequence goes on from the first engine's answer, which the second is given too
-      const why = JSON.stringify(canon(sa)) !== JSON.stringify(canon(sb)) ? meant({ kind, change, root, a: sa, b: sb, again }) : null;
-      if (why) {
+      const differs = JSON.stringify(canon(sa)) !== JSON.stringify(canon(sb));
+      // a difference of `start` alone, the rest of the answer the same: `meantStart` names it or it fails
+      const noStart = (x) => ({ ...x, start: null });
+      const whyStart = differs && JSON.stringify(canon(noStart(sa))) === JSON.stringify(canon(noStart(sb))) ? meantStart({ kind, change, root, a: sa, b: sb, swaps }) : null;
+      const why = differs && !whyStart ? meant({ kind, change, root, a: sa, b: sb, again }) : null;
+      if (whyStart) meantBy[whyStart] = (meantBy[whyStart] || 0) + 1;
+      else if (why) {
         // a reason excuses a difference of the tree, never the whole answer (the independent review of 3b3cbb2): both accept, with
         // the same `start`, memory and pressed block, which neither decision touches; and what the first engine derives from its
         // tree, the canonical projection and the written fields, is what the second's own `unshow` and `diff` give for that tree

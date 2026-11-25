@@ -73,7 +73,7 @@ for (const [what, holds, got] of Q) ok(what, holds, got);
 
 // ---- reported, not failed
 console.log(`  L14, reported: of ${r.reopened.same + r.reopened.other} answers read again and opened, ${r.reopened.same} open to the same places, ${r.reopened.other} to others` + (r.reopened.first ? ' (the first: ' + JSON.stringify(r.reopened.first).slice(0, 300) + ')' : ''));
-console.log(`  a gesture's start whose area's frame is not round its children, after a swap inside the area: ${c['start: an area\'s frame not round its children (after a swap inside it)'] || 0}`);
+console.log(`  a gesture's start after a swap inside an area, its frame settled round the swapped children: ${c['start: after a swap inside an area'] || 0}`);
 
 console.log(`  G24: ${c['G24: containers'] || 0} containers at their rest widths after an action; of them ${c['G24: containers brought to rest by the first action in them'] || 0} brought to rest by the first action in them after a temporary height changed, with ${c['L7: a text out of reach brought to rest after a temporary height changed'] || 0} texts out of that action's reach; ${c['G24: containers left off their rest widths (a temporary height changed, no action in them yet)'] || 0} times a container no action ran in stayed off them`);
 
@@ -212,6 +212,14 @@ console.log(`  G24: ${c['G24: containers'] || 0} containers at their rest widths
     return { ...r2, start: { ...r2.start, areas } };
   }, { notes: 200 });
   ok('the result\'s children given as a start\'s after a carry in an area with no swap: caught as an invalid start', !!k && /^valid: the answer's start/.test(k.law) && k.detail.every((x) => /frame of/.test(x)), show(k));
+  // the engine as it was before the seams' S3c: after a swap inside an area, `start` keeps the sheet the move was given, its frame not
+  // settled round the swapped children. No exception lets it through now
+  const old = first((r2, root, change) => {
+    if (!r2.ok || change.type !== 'carry' || change.box == null || !r2.start.areas.has(change.box)) return r2;
+    if (JSON.stringify([...r2.start.areas.get(change.box).boxes]) === JSON.stringify([...root.areas.get(change.box).boxes])) return r2;   // no swap
+    return { ...r2, start: { ...root, areas: r2.start.areas } };
+  }, { seed: 7, notes: 260 });
+  ok('a start that keeps the sheet it was given after a swap inside an area, the frame not settled round the swapped children: caught as an invalid start', !!old && /^valid: the answer's start/.test(old.law), show(old));
     // a block a cell narrower, its stacks cut to the columns it keeps, so that the tree stays one `validate` accepts
   const narrower = (x) => ({ ...x, w: x.w - 1, ...(x.above ? { above: x.above.filter((t) => t.c0 <= x.col + x.w - 2).map((t) => ({ ...t, c1: Math.min(t.c1, x.col + x.w - 2) })) } : {}) });
   // a deletion that narrows a text nothing links to the deleted block, and sets its width: the tree stays valid (its height and its
