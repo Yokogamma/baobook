@@ -8,7 +8,7 @@
 //        reading order, in each its blocks in reading order, then the sheet's), with the canonical measure; then shown.
 //   (B′) the same candidate and queue; in each area, every such block measured again at its restored width and its height applied by
 //        `resize`, all before anything follows; one FOLLOW and one `rest()` of that container; the area's frame by `frameOf`; the sheet
-//        last, the same way.
+//        last, the same way. A container with no block that differs, its areas' frames as they were, is left untouched.
 //   (C)  the yardstick, «the action never happened»: the tree before the action with the later edits played again in their order. It
 //        needs the journal of those edits, which the app's entry does not keep; here the history has it.
 //
@@ -28,8 +28,8 @@ export const sigsOf = (map) => Object.fromEntries(Object.keys(map).map((id) => [
 const containers = (T) => [[null, T], ...T.areas];
 const fail = (why, errors) => ({ ok: false, why, errors: errors || [] });
 /** A path's result, checked: both measures valid, or `invalid` (a success `validate` rejects). */
-function done(canonical, ctx) {
-  let shown; try { shown = show(canonical, new Map(), ctx); } catch (e) { return fail('failed', ['show: ' + e.message]); }
+function done(canonical, ctx, own = new Map()) {
+  let shown; try { shown = show(canonical, own, ctx); } catch (e) { return fail('failed', ['show: ' + e.message]); }
   const e = [...validate(canonical, canonicalCtx(ctx)), ...validate(shown, ctx)];
   return e.length ? { ok: false, why: 'invalid', errors: e.slice(0, 3), canonical, shown } : { ok: true, canonical, shown };
 }
@@ -56,21 +56,31 @@ export function inverseOf(entry, now, ctx) {
   if (a.type === 'remove') {
     const b = B.boxes.get(a.id); if (!b || isArea(b)) return null;
     const cy = b.yc ?? b.y, set = {}; for (const f of ['cw', 'ch']) if (b[f] != null) set[f] = b[f];
+    if (b.open) set.open = true;   // a code block shown whole comes back shown whole (the independent review of 84bb4f0)
     return { type: 'create', box, id: a.id, kind: b.kind, at: { col: b.col, y: cy, frow: cy, w: b.w }, away: true, set, canonical: true };
+  }
+  // a set size and the width handle: the same change with the values the block had (this lab's reading; §6.4 names no path for them)
+  if (a.type === 'size' && a.set) {
+    const b0 = B.boxes.get(a.id); if (!b0 || !N.boxes.has(a.id)) return null;
+    return { type: 'size', box, id: a.id, set: Object.fromEntries(Object.keys(a.set).map((k) => [k, b0[k] ?? null])) };
+  }
+  if (a.type === 'width') {
+    const b0 = B.boxes.get(a.id); if (!b0 || b0.cw == null || !N.boxes.has(a.id)) return null;
+    return { type: 'width', box, id: a.id, cw: b0.cw, side: a.side, ...(a.side === 'left' ? { col: b0.col } : {}) };
   }
   return null;
 }
-export function undoA(entry, now, ctx) {
+export function undoA(entry, now, ctx, own = new Map()) {
   const c = inverseOf(entry, now, ctx);
   if (!c) return { ok: false, why: 'no undo' };
   let r; try { r = settleTree(now, c, emptyMemory(), ctx); } catch (e) { return fail('failed', ['threw: ' + e.message]); }
   if (!r.ok) return fail(r.why, r.errors);
   let canonical; try { canonical = unshow(r.layout, ctx); } catch (e) { return fail('failed', ['unshow: ' + e.message]); }
-  return done(canonical, ctx);
+  return done(canonical, ctx, own);
 }
 
 /** (B) the candidate. `order`: 'queue' as stated, or 'reversed', to see how far the result depends on the order of the queue. */
-export function undoB(entry, map, ctx, order = 'queue') {
+export function undoB(entry, map, ctx, order = 'queue', own = new Map()) {
   const cctx = canonicalCtx(ctx);
   let T; try { T = unshow(entry.before, ctx); } catch (e) { return fail('failed', ['unshow: ' + e.message]); }
   const q = queueOf(T, entry.sigs, map); if (order === 'reversed') q.reverse();
@@ -79,11 +89,11 @@ export function undoB(entry, map, ctx, order = 'queue') {
     if (!r.ok) return fail(r.why, r.errors);
     T = r.layout;
   }
-  return { ...done(T, ctx), queue: q.length };
+  return { ...done(T, ctx, own), queue: q.length };
 }
 
 /** (B′): the heights of the blocks that differ applied at their restored widths, then one FOLLOW and one rest of each container. */
-export function undoBprime(entry, map, ctx) {
+export function undoBprime(entry, map, ctx, own = new Map()) {
   const cctx = canonicalCtx(ctx);
   let T; try { T = unshow(entry.before, ctx); } catch (e) { return fail('failed', ['unshow: ' + e.message]); }
   const q = queueOf(T, entry.sigs, map);
@@ -106,40 +116,48 @@ export function undoBprime(entry, map, ctx) {
       if (f.h !== a.h) sheet = resize(sheet, id, f.h, 0);
     }
     const mine = q.filter(([b]) => b == null).map(([, c]) => c), out = sheet === T && !mine.length ? sheet : restore(sheet === T ? sheet : { ...sheet, order: sheet.order }, mine.length ? mine : [null]);
-    return { ...done({ ...out, measure: T.measure, areas }, ctx), queue: q.length };
+    return { ...done({ ...out, measure: T.measure, areas }, ctx, own), queue: q.length };
   } catch (e) { return fail(e.why || 'failed', [e.message]); }
 }
 
-/** (C) the yardstick: the tree before the action with the later edits played again. `edits`: [box, id] of each typing, in order;
- *  `texts`, the content each gave. `mapC` is a map of its own, changed as the edits are played. Null where an edit cannot be played
- *  (its block is not there without the action, or the edit is refused there). */
-export function counterfactual(entry, edits, mapC, ctxOf) {
+/** (C) the yardstick: the tree before the action with the later edits played again. `edits`, in order: `{id, content}`, a typing (or
+ *  another change of what a block is measured from), or `{own: [id, rows]}`, a block's own temporary rows. `mapC` and `ownC` are its
+ *  own, changed as the edits are played. Null where an edit is refused there. */
+export function counterfactual(entry, edits, mapC, ctxOf, ownC = new Map()) {
   let T = entry.before; const ctx = ctxOf(mapC);
+  const where = (id) => containers(T).find(([, C]) => C.boxes.has(id));
   for (const e of edits) {
+    if (e.own) { const [id, n] = e.own; if (!where(id)) continue; if (n > 0) ownC.set(id, n); else ownC.delete(id); T = show(unshow(T, ctx), ownC, ctx); continue; }
     mapC[e.id] = e.content;
-    const L = e.box == null ? T : T.areas.get(e.box);
-    if (!L || !L.boxes.has(e.id)) {
-      // not in the tree before the action: created by the action (never there), or moved by it into another container
-      const at = containers(T).find(([, C]) => C.boxes.has(e.id));
-      if (!at) continue;
-      const r = settleTree(T, { type: 'size', box: at[0], id: e.id }, emptyMemory(), ctx); if (!r.ok) return null; T = r.layout; continue;
-    }
-    const r = settleTree(T, { type: 'size', box: e.box, id: e.id }, emptyMemory(), ctx); if (!r.ok) return null; T = r.layout;
+    const at = where(e.id);
+    if (!at) continue;   // not in the tree without the action: a block the action created
+    const r = settleTree(T, { type: 'size', box: at[0], id: e.id }, emptyMemory(), ctx); if (!r.ok) return null; T = r.layout;
   }
   let canonical; try { canonical = unshow(T, ctx); } catch { return null; }
-  return done(canonical, ctx);
+  const own = new Map([...ownC].filter(([id]) => where(id)));
+  return done(canonical, ctx, own);
 }
 
 /** The places of a tree, by value: per container, every block's column, row, width and height. */
 export const placesOf = (T) => JSON.stringify(containers(T).map(([n, L]) => [n, [...L.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]).sort()]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))));
-/** What the probes of consequences give on a shown tree (§4.2): each block deleted, each elastic text given a set width two cells
- *  narrower, and the temporary heights ended; by value. Two trees with the same rows and another memory of gaps differ here. */
+/** What the probes of consequences give on a shown tree (§4.2), by value: each block deleted alone, each elastic text given a set
+ *  width narrower, the temporary heights ended; and the blocks deleted one after another, the places after each, since one deletion
+ *  alone does not show every gap a tree remembers (the independent review of 84bb4f0: two trees alike under every single probe put a
+ *  block five rows apart after two deletions). The blocks are taken in the order of their ids, so that the order a tree keeps its
+ *  blocks in is no difference. */
 export function probesOf(shown, map, ctxOf) {
   const ctx = ctxOf(map), out = [];
-  for (const [box, L] of containers(shown)) for (const b of L.boxes.values()) {
-    if (isArea(b)) continue;
+  const leaves = (T) => containers(T).flatMap(([box, L]) => [...L.boxes.values()].filter((b) => !isArea(b)).map((b) => [box, b])).sort((x, y) => (x[1].id < y[1].id ? -1 : 1));
+  for (const [box, b] of leaves(shown)) {
     const d = settleTree(shown, { type: 'remove', box, id: b.id }, emptyMemory(), ctx); out.push(['remove', b.id, d.ok ? placesOf(d.layout) : d.why]);
     if (b.kind === 'text' && b.cw == null && b.w > 4) { const n = settleTree(shown, { type: 'size', box, id: b.id, set: { cw: b.w - 3 } }, emptyMemory(), ctx); out.push(['narrow', b.id, n.ok ? placesOf(n.layout) : n.why]); }
+  }
+  let T = shown;
+  for (const [, b0] of leaves(shown)) {
+    const at = containers(T).find(([, L]) => L.boxes.has(b0.id)); if (!at) continue;
+    const d = settleTree(T, { type: 'remove', box: at[0], id: b0.id }, emptyMemory(), ctx);
+    if (!d.ok) { out.push(['then remove', b0.id, d.why]); continue; }
+    T = d.layout; out.push(['then remove', b0.id, placesOf(T)]);
   }
   const calm = Object.fromEntries(Object.entries(map).map(([id, m]) => [id, { ...m, temp: 0 }]));
   try { out.push(['calm', placesOf(show(unshow(shown, ctx), new Map(), ctxOf(calm)))]); } catch (e) { out.push(['calm', 'threw']); }
