@@ -141,8 +141,9 @@ export function counterfactual(entry, edits, mapC, ctxOf, ownC = new Map()) {
 /** The places of a tree, by value: per container, every block's column, row, width and height. */
 export const placesOf = (T) => JSON.stringify(containers(T).map(([n, L]) => [n, [...L.boxes.values()].map((b) => [b.id, b.col, b.y, b.w, b.h]).sort()]).sort((x, y) => String(x[0]).localeCompare(String(y[0]))));
 /** What the probes of consequences give on a shown tree (§4.2), by value: each block deleted alone, each elastic text given a set
- *  width narrower, the temporary heights ended; and the blocks deleted one after another, the places after each, since one deletion
- *  alone does not show every gap a tree remembers (the independent review of 84bb4f0: two trees alike under every single probe put a
+ *  width narrower, the temporary heights ended; every two blocks deleted one after the other, from the result and in both orders;
+ *  and the blocks all deleted one after another, the places after each, since one deletion alone does not show every gap a tree
+ *  remembers (the independent review of 84bb4f0: two trees alike under every single probe put a
  *  block five rows apart after two deletions). The blocks are taken in the order of their ids, so that the order a tree keeps its
  *  blocks in is no difference. */
 export function probesOf(shown, map, ctxOf) {
@@ -151,6 +152,18 @@ export function probesOf(shown, map, ctxOf) {
   for (const [box, b] of leaves(shown)) {
     const d = settleTree(shown, { type: 'remove', box, id: b.id }, emptyMemory(), ctx); out.push(['remove', b.id, d.ok ? placesOf(d.layout) : d.why]);
     if (b.kind === 'text' && b.cw == null && b.w > 4) { const n = settleTree(shown, { type: 'size', box, id: b.id, set: { cw: b.w - 3 } }, emptyMemory(), ctx); out.push(['narrow', b.id, n.ok ? placesOf(n.layout) : n.why]); }
+  }
+  // every pair of deletions, each from the result itself and in both orders: one walk through the blocks is one order of them, and
+  // a gap that only another order opens stays unseen (the independent review of 42f67dd)
+  const all = leaves(shown);
+  for (const [box1, b1] of all) {
+    const d1 = settleTree(shown, { type: 'remove', box: box1, id: b1.id }, emptyMemory(), ctx); if (!d1.ok) continue;
+    for (const [, b2] of all) {
+      if (b2.id === b1.id) continue;
+      const at = containers(d1.layout).find(([, L]) => L.boxes.has(b2.id)); if (!at) continue;
+      const d2 = settleTree(d1.layout, { type: 'remove', box: at[0], id: b2.id }, emptyMemory(), ctx);
+      out.push(['remove two', b1.id, b2.id, d2.ok ? placesOf(d2.layout) : d2.why]);
+    }
   }
   let T = shown;
   for (const [, b0] of leaves(shown)) {

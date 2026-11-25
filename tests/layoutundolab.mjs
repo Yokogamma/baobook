@@ -64,6 +64,29 @@ ok('every pair compared on a hundred histories at least, the probes after the re
   const K = (k) => p.trees?.[k]?.boxes.get('K'), each = ['A', 'B', "B'", 'C'].map((k) => [k, K(k)?.open === true, K(k)?.h]);
   ok('an open code block deleted, a line added, the deletion undone: back shown whole at 21 rows by every path, a change of a block only the entry holds', !p.skip && p.held && each.every(([, o, h]) => o && h === 21), p.skip || [p.held, each]);
 }
+// the probes tell two trees with the same rows and another memory of gaps apart (the independent reviews of 84bb4f0 and 42f67dd): in
+// both histories (A) and (B) end on the same rows and under every single deletion alike, and two deletions one after the other put a
+// block on other rows (seed 100098: B2 then B1 leaves B0 a row apart; the first generator's 100091: R0c0 then R0c1 leaves B3 rows apart)
+{
+  const T = (k, o = {}) => ({ text: chars(k), ...o });
+  const p1 = play(draw(100098));
+  ok('seed 100098: (A) and (B) on the same rows, told apart by the probes', !p1.skip && p1.pairs['A ~ B'] === 'the same rows, other probes', p1.skip || p1.pairs);
+  const note = noteOf(30, [{ id: 'B0', kind: 'text', col: 19, y: 8, cw: 7, ch: 4 }, { id: 'B1', kind: 'text', col: 16, y: 9 }, { id: 'B2', kind: 'text', col: 1, y: 8 }, { id: 'B3', kind: 'text', col: 11, y: 9 }, { id: 'B4', kind: 'text', col: 3, y: 12 }, { id: 'B5', kind: 'text', col: 8, y: 8, cw: 4 }, { id: 'R0', kind: 'area', col: 13, y: 6, cw: 14 }],
+    { R0: [{ id: 'R0c0', kind: 'text', col: 5, y: 8, cw: 6 }, { id: 'R0c1', kind: 'text', col: 2, y: 11, cw: 6 }] });
+  const p2 = play({ note, map: { B0: T(3), B1: T(51), B2: T(25), B3: T(15), B4: T(70), B5: T(18), R0: { kind: 'area' }, R0c0: T(27, { temp: 2 }), R0c1: T(4) }, warm: [], stages: [{ action: { type: 'remove', box: null, id: 'B4' }, edits: [{ id: 'B0', content: T(62) }] }] });
+  ok('a deletion undone after typing, two children of an area deleted after it: (A) and (B) on the same rows, told apart by the probes', !p2.skip && p2.pairs['A ~ B'] === 'the same rows, other probes', p2.skip || p2.pairs);
+}
+// a block only an entry holds, counted by the entry that holds it (the independent review of 42f67dd). A is carried; B is typed from x to
+// xx; B is deleted. Typed back to x while only the deletion's entry holds it, its content is no longer what that entry recorded: a
+// change. Typed to the same xx again, it is none, though the carry's entry recorded x
+{
+  const note = noteOf(30, [{ id: 'A', kind: 'text', col: 1, y: 0, cw: 5 }, { id: 'B', kind: 'text', col: 10, y: 0, cw: 5 }, { id: 'F', kind: 'text', col: 20, y: 6, cw: 3 }]);
+  const h = (last) => ({ note, map: { A: { text: 'x' }, B: { text: 'x' }, F: { text: 'x' } }, warm: [], stages: [
+    { action: { type: 'carry', box: null, id: 'A', at: { col: 1, y: 4, frow: 4, w: 6 }, away: false }, edits: [{ id: 'B', content: { text: 'xx' } }] },
+    { action: { type: 'remove', box: null, id: 'B' }, edits: [{ id: 'B', content: { text: last } }] }] });
+  const back = play(h('x')), same = play(h('xx'));
+  ok('B typed x → xx, deleted, then x again while only the deletion\'s entry holds it: a change of a held block; xx again: none', !back.skip && !same.skip && back.held === true && same.held === false, [back.skip || back.held, same.skip || same.held]);
+}
 // a defect of the engine the experiment found, reported and not repaired here (the independent review confirmed it with the inverse
 // carry given straight to the engine): two carries with typing between and after; `inverse` fails the undo of the second carry, RELINK
 // refusing phase 8 with a canonical place that overlaps. (B) answers both undos. With (B) chosen (G27), `inverse` goes in step 3

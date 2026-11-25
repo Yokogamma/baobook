@@ -61,8 +61,10 @@ export function play(h) {
       if (!at) {
         // not in the tree: a block only an entry holds (one of the actions to undo took it away), or one gone before them, which
         // nothing holds and no edit reaches
-        if (!entries.some((x) => holds(x.before, e.id))) continue;
-        map[e.id] = e.content; journal.push({ id: e.id, content: e.content, held: true }); continue;
+        // the entry that holds it is the last one whose tree before has it: the action that took it away
+        let holder = -1; entries.forEach((x, k) => { if (holds(x.before, e.id)) holder = k; });
+        if (holder < 0) continue;
+        map[e.id] = e.content; journal.push({ id: e.id, content: e.content, held: true, holder }); continue;
       }
       map[e.id] = e.content;
       if (one({ type: 'size', box: at[0], id: e.id })) journal.push({ id: e.id, content: e.content }); else map[e.id] = was;
@@ -77,7 +79,9 @@ export function play(h) {
   const trail = {};
   for (const e of all) if (!e.own && holds(first.before, e.id)) (trail[e.id] ??= []).push(JSON.stringify(e.content));
   out.returns = Object.entries(trail).some(([id, l]) => l.some((x) => x !== first.sigs[id]) && sigOf(map, id) === first.sigs[id]);
-  out.held = all.some((e) => e.held && sigOf(map, e.id) !== entries.find((x) => holds(x.before, e.id)).sigs[e.id]);
+  // (the signature that entry recorded for it, when the action took it away, against today's: an edit that leaves the content as that
+  // entry has it is no change of it, whatever an earlier entry recorded; the independent review of 42f67dd)
+  out.held = all.some((e) => e.held && sigOf(map, e.id) !== entries[e.holder].sigs[e.id]);
   out.kinds = { code: all.some((e) => !e.own && e.content.kind === 'code'), temp: all.some((e) => !e.own && 'temp' in e.content), header: all.some((e) => !e.own && e.content.kind === 'area'), own: all.some((e) => e.own) };
   out.queue = queueOf(unshow(first.before, ctx), first.sigs, map).length;
 
