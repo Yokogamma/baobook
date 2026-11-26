@@ -9,6 +9,8 @@
 //   7  histories of random actions with the page's blocks kept beside: after each, a fresh reading of them gives the bridge's fields;
 //      and how many of those notes, opened afresh from the page's blocks, stand as the session left them (counted, reported).
 //
+//   8  a command of the page's own: what the engine makes of the page's blocks after it (same, typed, create, remove, outside).
+//
 //   node tests/layoutbridge.mjs [seed] [notes]
 
 import * as B from '../public/layout/bridge.js';
@@ -249,6 +251,83 @@ function page(blocks, write, bin, made) {
   // stored fields do not hold an elastic block's width, and open() gives it the widest it gets by itself where the session had it
   // narrowed beside a neighbour, or at the right edge. Both are counted, and the second is bounded.
   ok(`7a opened afresh from the page's blocks at the end: of the ${re[0][0] + re[0][1]} notes with no temporary rows ${re[0][0]} stand as the bridge has them and ${re[0][1]} otherwise; of the ${re[1][0] + re[1][1]} with temporary rows, ${re[1][0]} and ${re[1][1]}`, re[0][0] + re[0][1] > 10 && re[0][1] <= (re[0][0] + re[0][1]) * 0.15 && re[1][0] > re[1][1], { re, firstOther });
+}
+
+{ // 8: a command of the page
+  const map = {}, env = envOf(map), set = (bl) => { for (const k of Object.keys(map)) delete map[k]; Object.assign(map, mapOf(bl)); return bl; };
+  const put = (bl, r) => (r.write ? B.patched(bl, r.write) : bl), agree = (note, bl) => flat(B.read(bl, KINDS, note.doc.tree.cols).stored) === flat(note.doc.stored);
+  let bl = set([T('A', 2, 0, { text: 'x'.repeat(30) }), T('B', 2, 1), { id: 'R', kind: 'area', text: '', fx: fxFromCol(30), row: rowFromY(2), cw: 14 }, { id: 'c', text: 'x', parent: 'R', col: 0, row: 0 }, { id: 'e', text: '  ', fx: 0.3, row: 9 }]);
+  let note = B.opened(bl, env);
+  const s0 = B.page(note, bl, env);
+  ok('8 nothing changed on the page: «same», the same note, nothing to write; an empty text is no block of the engine', s0.how === 'same' && s0.note === note && s0.write === null && !note.safe && !note.doc.tree.boxes.has('e'));
+  bl = set(bl.map((b) => (b.id === 'A' ? { ...b, text: 'x'.repeat(400) } : b)));
+  const t = B.page(note, bl, env, { changed: 'A' }); bl = put(bl, t);
+  ok('8a a block\'s content changed: «typed», the rows that follow written, and the page read again agrees with the note', t.how === 'typed' && t.ok && t.content && t.write.patch.has('B') && agree(t.note, bl) && B.page(t.note, bl, env).how === 'same', { how: t.how, patch: [...(t.write?.patch || [])] });
+  note = t.note;
+  const tE = B.page(note, bl, env, { changed: 'e' });
+  ok('8a\' the content of a block the engine does not hold changed and it is still empty: «same»', tE.how === 'same' && tE.note === note);
+  // the empty block gets its first character: one block more
+  bl = set(bl.map((b) => (b.id === 'e' ? { ...b, text: 'new' } : b)));
+  const c = B.page(note, bl, env, { changed: 'e' }); bl = put(bl, c);
+  ok('8b one block more on the page: «create» at its cell, its fields written, and the page agrees', c.how === 'create' && c.ok && c.note.doc.tree.boxes.has('e') && c.write.patch.has('e') && agree(c.note, bl) && B.page(c.note, bl, env).how === 'same' && validate(c.note.doc.tree, env.ctx).length === 0, { how: c.how });
+  note = c.note;
+  bl = set([...bl, { id: 'k', kind: 'code', text: 'a\nb', parent: 'R', col: 1, row: 4, cw: 13 }]);
+  const ck = B.page(note, bl, env); bl = put(bl, ck);
+  ok('8b\' a code block with a set width made in an area: «create» there with that width', ck.how === 'create' && ck.note.doc.tree.areas.get('R').boxes.get('k')?.cw === 13 && agree(ck.note, bl) && validate(ck.note.doc.tree, env.ctx).length === 0, { how: ck.how });
+  note = ck.note;
+  bl = set(bl.filter((b) => b.id !== 'B'));
+  const d = B.page(note, bl, env); bl = put(bl, d);
+  ok('8c one block less: «remove», and the page agrees', d.how === 'remove' && d.ok && !d.note.doc.tree.boxes.has('B') && d.write.removed.includes('B') && agree(d.note, bl));
+  note = d.note;
+  const gone = bl.filter((b) => b.id === 'R' || b.parent === 'R');
+  bl = set(bl.filter((b) => !gone.includes(b)));
+  const dA = B.page(note, bl, env); bl = put(bl, dA);
+  ok('8c\' an area and every child of it gone: one «remove»', dA.how === 'remove' && !dA.note.doc.tree.areas.has('R') && ['R', 'c', 'k'].every((id) => dA.write.removed.includes(id)) && agree(dA.note, bl), { how: dA.how });
+  note = dA.note;
+  // the page's own code moved a stored place
+  bl = set(bl.map((b) => (b.id === 'e' ? { ...b, row: b.row + 7 } : b)));
+  const o = B.page(note, bl, env);
+  ok('8d a stored field changed by the page: «outside», the note opened again from the page, nothing written, the epoch raised', o.how === 'outside' && o.write === null && o.note.epoch === note.epoch + 1 && o.note.doc.undo.length === 0 && agree(o.note, bl) && places(o.note.doc.tree) === places(B.opened(bl, env).doc.tree));
+  note = o.note;
+  // a block of another kind under the same id; several blocks at once; an area with a child at once; a child without its area
+  const kinds = set(bl.map((b) => (b.id === 'A' ? { ...b, kind: 'code' } : b))), k1 = B.page(note, kinds, env);
+  const two = set([...bl, T('p', 20, 20), T('q', 20, 24)]), k2 = B.page(note, two, env);
+  const ar = set([...bl, { id: 'S', kind: 'area', text: '', fx: fxFromCol(30), row: 30, cw: 14 }, { id: 's', text: 'x', parent: 'S', col: 0, row: 0 }]), k3 = B.page(note, ar, env);
+  ok('8e a block of another kind under the same id, two blocks more, an area made with a child: «outside» each', [k1, k2, k3].every((r) => r.how === 'outside' && r.write === null) && k1.note.doc.tree.boxes.get('A').kind === 'code' && k3.note.doc.tree.areas.get('S').boxes.has('s'), [k1.how, k2.how, k3.how]);
+  const n3 = k3.note, half = set(ar.filter((b) => b.id !== 'S')), k4 = B.page(n3, half, env);
+  ok('8e\' an area gone and its child left on the page: «outside», the child on the sheet', k4.how === 'outside' && k4.note.doc.tree.boxes.has('s') && !k4.note.doc.tree.areas.has('S'), k4.how);
+  set(bl);
+  // the safe mode: typing stays, a block more is read again
+  const big = set([T('A', 2, 0), { id: 'X', text: 'x', fx: 0.2, row: 1e20 }]), ns = B.opened(big, env);
+  const big2 = set([...big, T('n', 9, 9)]), ks = B.page(ns, big2, env), ty = B.page(ns, big, env, { changed: 'A' });
+  ok('8f in the safe mode: a block more is «outside» (still safe, nothing written), typing is «typed» with nothing to write', ns.safe && ks.how === 'outside' && ks.note.safe && ks.write === null && ty.how === 'typed' && ty.write === null && ty.note.safe, [ks.how, ty.how]);
+  // typing the engine cannot place puts the note into the safe mode, and the page is told
+  const tall = set([T('A', 2, 0), T('L', 2, MAXCELL - 3)]), nt = B.opened(tall, env);
+  map.A = { text: 'x'.repeat(4000) }; const tf = B.page(nt, tall.map((b) => (b.id === 'A' ? { ...b, text: map.A.text } : b)), env, { changed: 'A' });
+  ok('8g typing that cannot be placed: «typed», not ok, the content the page\'s, nothing to write, the note safe', !nt.safe && tf.how === 'typed' && tf.ok === false && tf.content === true && tf.write === null && tf.note.safe, { safe0: nt.safe, how: tf.how, ok: tf.ok });
+
+  // histories of the page's own commands: after each, the page and the note agree, and asking again is «same»
+  let steps = 0, bad = 0, first = null; const hows = {};
+  for (let i = 0; i < N; i++) {
+    let s = (seed * 97 + i * 7919) >>> 0; const rnd = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296), int = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+    let pg = [T('a0', int(0, 20), 0, { text: 'x'.repeat(int(1, 80)) }), T('a1', int(0, 20), 4), { id: 'R', kind: 'area', text: '', fx: fxFromCol(int(26, 40)), row: rowFromY(int(1, 6)), cw: 14 }, { id: 'r0', text: 'x'.repeat(int(1, 30)), parent: 'R', col: 0, row: 0 }];
+    set(pg); let n = B.opened(pg, env);
+    for (let k = 0; k < 10; k++) {
+      const q = rnd(), live = pg.filter((b) => b.kind !== 'area'), pickB = live[int(0, Math.max(0, live.length - 1))];
+      let changed = null;
+      if (q < 0.35 && pickB) { pg = pg.map((b) => (b.id === pickB.id ? { ...b, text: 'x'.repeat(int(1, 160)) } : b)); changed = pickB.id; }
+      else if (q < 0.6) pg = [...pg, rnd() < 0.3 && pg.some((b) => b.id === 'R') ? { id: 'n' + k, text: 'x'.repeat(int(1, 40)), parent: 'R', col: int(0, 8), row: int(0, 9) } : T('n' + k, int(0, 50), int(0, 30), { text: 'x'.repeat(int(1, 60)), ...(rnd() < 0.3 ? { kind: 'code' } : {}) })];
+      else if (q < 0.75 && pickB) pg = pg.filter((b) => b.id !== pickB.id);
+      else if (q < 0.8) pg = pg.filter((b) => b.id !== 'R' && b.parent !== 'R');
+      else if (q < 0.9 && pickB) pg = pg.map((b) => (b.id === pickB.id ? { ...b, row: b.row + int(1, 5) } : b));
+      else if (pickB) pg = pg.map((b) => (b.id === pickB.id ? { ...b, cw: int(3, 20) } : b));
+      set(pg);
+      const r = B.page(n, pg, env, { changed }); pg = put(pg, r); n = r.note; steps++; hows[r.how] = (hows[r.how] || 0) + 1;
+      const errs = n.safe ? [] : validate(n.doc.tree, env.ctx), again = B.page(n, pg, env);
+      if (errs.length || !agree(n, pg) || again.how !== 'same' || (r.how === 'outside' && r.write !== null)) { bad++; first = first || { i, k, how: r.how, errs: errs.slice(0, 2), again: again.how }; }
+    }
+  }
+  ok(`8h ${steps} commands of the page in ${N} notes (${Object.entries(hows).map(([h, c]) => h + ' ' + c).join(', ')}): after each the tree is valid, the page read again has the fields the note keeps, and asking again is «same»`, bad === 0 && ['typed', 'create', 'remove', 'outside'].every((h) => hows[h] > 5), { bad, first, hows });
 }
 
 process.exit(fails ? 1 : 0);
