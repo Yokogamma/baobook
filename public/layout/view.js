@@ -23,6 +23,9 @@ import { SHEET_ROW0, W0PX, G } from './geometry.js';
 /** Whether a block's title is the element that is held: the one state of focus a measurement reads, so `sign` and the copy that is
  *  measured ask this one question. */
 const titleHeld = (b) => { const t = b.card.querySelector('.ctitle'); return !!t && t === b.el.ownerDocument.activeElement; };
+/** A title's state as the page's styles tell it: held or not, and empty as `:empty` has it (no node at all: a title emptied by
+ *  the keyboard may keep a `<br>`, which is not empty to a style). The copy measured and the signature both read this. */
+const titleState = (b) => { const t = b.card.querySelector('.ctitle'); return (titleHeld(b) ? 'h' : '-') + (t && t.firstChild ? 'f' : 'e'); };
 const cardOf = (el) => el.querySelector('.tcard,.cblk,.ablk');
 /** A copy of a block's element to measure: an area's without its children, which its header's height does not read. */
 function copyOf(b) {
@@ -55,7 +58,7 @@ export function probeOf(host) {
     card.style.maxWidth = cells == null ? 'none' : '';
     // a title that is held is laid out as one with text (the page's styles give `:focus` and `:not(:empty)` the same sizes), and a
     // copy is never focused: an empty title held on the page gets a character no one sees in the copy
-    if (titleHeld(b) && !b.card.querySelector('.ctitle').firstChild) card.querySelector('.ctitle').textContent = '\u200b';
+    if (titleState(b) === 'he') card.querySelector('.ctitle').textContent = '\u200b';
     // in its own container, unless that is not laid out (the body of a collapsed area): nothing there has a size
     const home = b.el.parentNode;
     (home && home.offsetParent !== null ? home : host.sheet).appendChild(c);
@@ -88,7 +91,7 @@ export function probeOf(host) {
       const b = find(id);
       if (!b) return 'gone';
       if (!b.kind) return 't\u0001' + b.txt.innerHTML;
-      const bar = b.card.querySelector('.cbar'), held = titleHeld(b) ? 1 : 0;
+      const bar = b.card.querySelector('.cbar'), held = titleState(b);
       if (b.kind === 'area') return ['a', b.card.className, held, bar.textContent].join('\u0001');
       const pre = b.card.querySelector('.code'), more = b.card.querySelector('.more');
       return ['c', b.card.className, held, bar.textContent, pre.style.height, more.hidden ? 0 : 1, more.textContent, pre.textContent].join('\u0001');
