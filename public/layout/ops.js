@@ -6,7 +6,8 @@
 //
 // What an action writes (§3.4): `diff` of the stored fields as read against the canonical layout the action ends with. A refused or a
 // failed layout writes no place and changes no state. Typing is another matter: the text is the page's to save whatever SETTLE answers,
-// so `typed` always says `content: true`, and after a failure `safe: true`, the note's geometry going to the safe mode (§4.2).
+// so `typed` always says `content: true`, and after a refusal or a failure `safe: true`: the content cannot be undone, so the note's
+// geometry goes to the safe mode (§4.2).
 
 import { settleTree } from './tree.js';
 import { emptyMemory } from './settle.js';
@@ -98,7 +99,7 @@ export function leave(doc, { box, id, at }, env) { return act(doc, { type: 'leav
  *  those of the old content. The text is saved by the page in every case (`content`). */
 export function typed(doc, { box = null, id }, env) {
   const r = run(env, doc.tree, { type: 'size', box, id }, emptyMemory());
-  if (!r.ok) return { ok: false, why: r.why, doc: touched(doc), content: true, safe: r.why === 'failed' };
+  if (!r.ok) return { ok: false, why: r.why, doc: touched(doc), content: true, safe: true };
   return { ...commit(doc, r.layout, env, [], false, r.ran || [box]), content: true, safe: false };
 }
 
@@ -168,7 +169,10 @@ export function undo(doc, env) {
     for (const f of new Set([...Object.keys(was), ...Object.keys(now || {})])) {
       // a sheet block's column is read from its fx, not stored: it is written only as removed, when the block comes back out of an area
       if (f === 'col' && was.parent == null) { if (now && now.parent != null) p.col = undefined; continue; }
-      if ((was[f] ?? null) !== ((now || {})[f] ?? null)) p[f] = was[f];
+      // and so the column the bridge keeps for a block on the sheet is no stored field either: a block that goes back into an area
+      // gets its column there whatever that one is
+      const has = f === 'col' && now && now.parent == null ? undefined : (now || {})[f];
+      if ((was[f] ?? null) !== (has ?? null)) p[f] = was[f];
     }
     stored.set(id, was); patch.set(id, p);
   }
