@@ -100,7 +100,7 @@ const fixture = () => {
   const t = typed(doc, { id: 'A' }, env), A0 = doc.tree.boxes.get('A'), A1 = t.doc.tree.boxes.get('A'), B0 = doc.tree.boxes.get('B'), B1 = t.doc.tree.boxes.get('B');
   ok(`4 typing that makes A taller (${A0.h} rows to ${A1.h}): B follows, its row is written, the text is the page's to save, and no undo entry is made`, t.ok && t.content === true && t.safe === false && A1.h > A0.h && B1.y > B0.y && t.patch.has('B') && t.patch.get('B').row === t.doc.stored.get('B').row && !t.patch.has('A') && t.entry === null && t.doc.undo.length === 0 && inStep(t.doc, env) && t.doc.identity !== doc.identity, [...t.patch]);
   const refused = typed(doc, { id: 'A' }, { ctx: env.ctx, journal: { run: () => ({ ok: false, why: 'refused' }) } });
-  ok('4a typing that SETTLE refuses: the text is still saved, no place is written, the tree and the stored fields are as they were', refused.ok === false && refused.why === 'refused' && refused.content === true && refused.safe === false && refused.patch === undefined && refused.doc.tree === doc.tree && refused.doc.stored === doc.stored && refused.doc.identity !== doc.identity);
+  ok('4a typing that SETTLE refuses: the text is still saved, no place is written, the tree and the stored fields are as they were, and the note goes to the safe mode, the content being what it now is', refused.ok === false && refused.why === 'refused' && refused.content === true && refused.safe === true && refused.patch === undefined && refused.doc.tree === doc.tree && refused.doc.stored === doc.stored && refused.doc.identity !== doc.identity);
   const m = env.ctx.measure, failing = { ...env, ctx: { ...env.ctx, measure: { rows: (id, c) => { if (id === 'A') throw new Error('no measure'); return m.rows(id, c); }, natural: m.natural } } };
   const failed = typed(doc, { id: 'A' }, failing);
   ok('4b typing whose layout fails (the Measure throws): the text is still saved, no place is written, and the note goes to the safe mode', failed.ok === false && failed.why === 'failed' && failed.content === true && failed.safe === true && failed.doc.tree === doc.tree && failed.doc.stored === doc.stored && env.journal.entries().at(-1).unfit?.join() === 'measure');
@@ -153,6 +153,12 @@ const fixture = () => {
   g3 = moved(g3, { x: 6, y: 30 }, env);
   const d3 = dropped(g3, env), s3 = d3.doc.stored.get('c');
   ok('6c a child carried out of its area: a block of the sheet, its parent removed, its fx written', g3.cur === null && d3.ok && d3.doc.tree.boxes.has('c') && s3.parent === undefined && 'fx' in s3 && d3.patch.get('c').parent === undefined && 'parent' in d3.patch.get('c') && inStep(d3.doc, env) && validate(d3.doc.tree, env.ctx).length === 0, d3.patch && [...d3.patch]);
+  // a child carried out to the sheet column that reads as its column in the area, and the carry undone
+  {
+    const f = fixture(), R2 = f.doc.tree.boxes.get('R'), c0 = f.doc.tree.areas.get('R').boxes.get('c');
+    const e2 = enter(f.doc, { id: 'A', to: 'R', at: { col: 3, y: 4 } }, f.env), l2 = leave(e2.doc, { box: 'R', id: 'A', at: { col: 3, y: 30 } }, f.env), u2 = undo(l2.doc, f.env);
+    ok('6c\' a child taken out to the sheet at the column that has its number in the area, and that undone: its column is written with its parent, whatever the sheet\'s column was', e2.ok && l2.ok && l2.doc.stored.get('A').col === 3 && u2.ok && u2.patch.get('A').col === 3 && u2.patch.get('A').parent === 'R' && 'fx' in u2.patch.get('A') && u2.patch.get('A').fx === undefined && !!R2 && !!c0, u2.patch && [...u2.patch]);
+  }
   // from one area into another
   const Q = doc.tree.boxes.get('Q');
   let g4 = carry(doc, { box: 'R', id: 'c', point: pc }, env);
