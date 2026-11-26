@@ -16,6 +16,7 @@ import { createJournal, entriesOf, replay, encode } from '../public/layout/journ
 import { fxFromCol, rowFromY } from '../public/layout/geometry.js';
 import { KINDS } from '../public/layout/kinds.js';
 import { DEFAULT, SETTINGS } from '../public/layout/rules.js';
+import { settleTree } from '../public/layout/tree.js';
 import { stubMeasure } from './lib/measure.mjs';
 
 let fails = 0;
@@ -55,12 +56,34 @@ const T = (id, col, row, o = {}) => ({ id, text: 'x', fx: fxFromCol(col), row: r
   ok('3 a font loaded: no answer is kept, the version and every block\'s signature are others, and the page is asked again', M.stats().kept === 0 && M.version() !== after && M.sign('A') !== s0 && M.rows('A', 5).rows === 8 && P.calls.rows === n0 + 1 && /^[0-9.]+$/.test(M.version()), M.version());
 }
 
+{ // 3a, 3b: the Measure's inputs change while the page answers; an epoch whose signatures change with it
+  const px = { A: 24, B: 24 }, nat = { A: 24 }; let fire = null;
+  const M = createMeasure({ probe: { rows: (id) => { const h = px[id]; if (fire === 'rows') { fire = null; px[id] = 240; M.invalidate(); } return { height: h }; }, natural: (id) => { const w = nat[id]; if (fire === 'natural') { fire = null; nat[id] = 480; M.invalidate(); } return w; } }, sign: (id) => id, cell: CELL });
+  fire = 'rows';
+  const first = M.rows('A', 5), second = M.rows('A', 5), third = M.rows('A', 5), st = M.stats();
+  ok('3a a font loads while the page measures a height: the old height is given for that question and kept for no other; the next question asks the page again and gets the new one, once', first.rows === 1 && second.rows === 10 && third.rows === 10 && st.probed === 2, { first, second, st });
+  fire = 'natural';
+  const n1 = M.natural('A'), n2 = M.natural('A'), n3 = M.natural('A');
+  ok('3a\' the same for a natural width: a number is given, never nothing, and the next question gets the new one', n1 === 1 && n2 === 20 && n3 === 20 && M.stats().probed === 4, { n1, n2, n3 });
+  let c2 = 0, bump = null;
+  const M2 = createMeasure({ probe: { rows: (id) => { if (bump === id) { bump = null; M2.changed('Z'); } c2++; return { height: 24 }; }, natural: () => 24 }, sign: (id) => id, cell: CELL });
+  bump = 'A'; M2.rows('A', 5); M2.rows('A', 5);
+  ok('3a" and for a block\'s content said to change while the page answers: that answer is kept for no other question', c2 === 2 && (M2.rows('A', 5), c2) === 2, c2);
+  // a signature that has the font in it, as §4.3 has it
+  let font = 1; const P = { rows: () => ({ height: 24 * font }), natural: () => 24 };
+  const F = createMeasure({ probe: P, sign: (id) => id + ':font' + font, cell: CELL });
+  F.rows('A', 5); F.rows('B', 5);
+  font = 2; F.invalidate();
+  const v = F.version(), a = F.rows('A', 5), after = F.version(); F.natural('B');
+  ok(`3b a font loads, the page says so, and its signatures change with it: the version is ${v} before the first measurement of the new epoch and after it, and after every other`, a.rows === 2 && after === v && F.version() === v, { v, after, now: F.version() });
+}
+
 { // 5
   const bad = { N: { height: NaN }, I: { height: Infinity }, M: { height: -4 }, X: { height: 24, extra: NaN }, G: { height: 24 } };
   const M = createMeasure({ probe: { rows: (id) => bad[id], natural: (id) => (id === 'G' ? NaN : 24) }, sign: (id) => id, cell: CELL });
   const fails5 = ['N', 'I', 'M', 'X'].map((id) => { try { M.rows(id, 5); return null; } catch (e) { return e.message; } }), nat = (() => { try { M.natural('G'); return null; } catch (e) { return e.message; } })();
   ok('5 a height that is no length (NaN, Infinity, negative), a temporary part or a natural width that is none: a failure with the engine\'s own kind of message, naming the block and no content', fails5.every((m) => /^measure: the (temporary )?height of [NIMX] is no length$/.test(m || '')) && /^measure: the natural width of G is no length$/.test(nat || ''), [...fails5, nat]);
-  ok('5a and nothing of a failed question is kept: asked again, it fails again', (() => { try { M.rows('N', 5); return false; } catch { return true; } })() && (() => { try { createMeasure({ probe: {}, sign: () => '', cell: 0 }); return false; } catch (e) { return /no cell size/.test(e.message); } })());
+  ok('5a and nothing of a failed question is kept: asked again, it fails again', (() => { try { M.rows('N', 5); return false; } catch { return true; } })() && [0, -24, NaN, Infinity, undefined, '24'].every((cell) => { try { createMeasure({ probe: {}, sign: () => '', cell }); return false; } catch (e) { return /no cell size/.test(e.message); } }));
   let n = 0; const K = createMeasure({ probe: { rows: () => ({ height: 24 }), natural: () => 24 }, sign: (id) => id, cell: CELL, keep: 10 });
   for (let i = 0; i < 100; i++) { K.rows('b' + i, 5); n = Math.max(n, K.stats().kept); }
   ok(`5b the answers kept are bounded: at most ${n} of 100 with a bound of 10`, n <= 11 && K.rows('b99', 5).rows === 1, n);
@@ -91,6 +114,26 @@ const T = (id, col, row, o = {}) => ({ id, text: 'x', fx: fxFromCol(col), row: r
   ok('7a the Measure\'s inputs changed in the middle of a command: its answers are not one state, the entry says so and is not replayed', !once && Array.isArray(e2.unfit) && e2.unfit.includes('answers') && Array.isArray(r2.unfit) && r2.same === undefined, { unfit: e2.unfit });
   const j3 = createJournal(); j3.run(a.doc.tree, { type: 'size', box: null, id: 'A' }, null, { ...ctx({ ...P.stub, version: () => 'swordfish' }) });
   ok('7b a version that is not digits is not kept, and the entry is unfit', !j3.export().includes('swordfish') && j3.entries()[0].unfit?.includes('answers'), j3.entries()[0].unfit);
+
+  // the next command after a font loaded in the middle of the last one: asked of the page again, and fit
+  map.C = { text: 'x'.repeat(40) }; M2.changed('C');
+  const before = P2.calls.rows, t3 = B.typed(a2, { id: 'C' }, { ctx: ctx(M2), journal: j2 }), e3 = entriesOf(j2.export())[1];
+  ok('7a\' the next command is measured afresh and its entry is fit and replays', t3.ok && P2.calls.rows > before && e3.unfit === undefined && replay(e3, KINDS).same === true, { unfit: e3.unfit });
+  // a Measure whose version cannot be read
+  for (const [name, mk] of [['a getter that throws', () => Object.defineProperty({ rows: P.stub.rows, natural: P.stub.natural }, 'version', { get() { throw new Error('swordfish'); } })], ['a version that throws', () => ({ ...P.stub, version() { throw new Error('swordfish'); } })], ['a version that is no function', () => ({ ...P.stub, version: 7 })]]) {
+    const j4 = createJournal(), change = { type: 'size', box: null, id: 'A' };
+    let r4 = null, t4 = null; try { r4 = j4.run(a.doc.tree, change, null, ctx(mk())); } catch (err) { t4 = err; }
+    const alone = settleTree(a.doc.tree, change, null, ctx(P.stub));
+    ok(`7c ${name}: the command is answered as settleTree alone answers it, it is in the journal, unfit, with no word of the error`, !t4 && !!r4 && str(r4) === str(alone) && j4.entries().length === 1 && j4.entries()[0].unfit?.includes('answers') && !j4.export().includes('swordfish'), { t4: t4 && t4.message, unfit: j4.entries()[0]?.unfit });
+  }
+  {
+    const broken = { ctx: ctx(Object.defineProperty({ rows: P.stub.rows, natural: P.stub.natural }, 'version', { get() { throw new Error('swordfish'); } })) }, nb = B.opened(blocks, broken);
+    let cb = null, tb = null; try { cb = B.carry(nb, { id: 'C', point: { x: 21.5, y: 3.3 } }, broken); cb = B.moved(nb, cb, { x: 44, y: 20 }); } catch (err) { tb = err; }
+    ok('7d a carry over such a Measure throws nothing; with its version unreadable it keeps the answers it was given', !tb && !!cb && !B.stale(nb, cb), tb && tb.message);
+    const half = { ctx: ctx({ ...P.stub, version() { throw new Error('swordfish'); } }) }, nh = B.opened(blocks, half);
+    let ch = null, th = null; try { ch = B.carry(nh, { id: 'C', point: { x: 21.5, y: 3.3 } }, half); ch = B.moved(nh, ch, { x: 44, y: 20 }); } catch (err) { th = err; }
+    ok('7e and over one whose version throws when asked the carry is stale: it asks nothing and its drop writes nothing', !th && B.stale(nh, ch) && ch.cancelled === true && B.dropped(nh, ch).why === 'stale', th && th.message);
+  }
 
   // 8: a carry
   const n8 = B.opened(blocks, { ctx: ctx(M) }), env8 = { ctx: ctx(M) };

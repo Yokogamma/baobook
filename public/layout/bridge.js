@@ -171,15 +171,19 @@ export function frozen(measure) {
   return {
     rows(id, cells) { const k = id + '\u0000' + cells; if (!rows.has(k)) rows.set(k, { ...measure.rows(id, cells) }); return { ...rows.get(k) }; },
     natural(id) { if (!natural.has(id)) natural.set(id, measure.natural(id)); return natural.get(id); },
-    ...(typeof measure.version === 'function' ? { version: () => measure.version() } : {}),   // the app's Measure says what it reads
+    ...(versioned(measure) ? { version: () => measure.version() } : {}),   // the app's Measure says what it reads
   };
 }
 const idsOf = (tree) => [...tree.order, ...[...(tree.areas || new Map()).values()].flatMap((A) => A.order)];
-/** What the Measure reads, as one value to compare: the caller's version of it, or every block's signature. */
+const versioned = (measure) => { try { return typeof measure.version === 'function'; } catch { return false; } };
+/** What the Measure reads, as one value to compare: the caller's version of it, the Measure's own, or every block's signature.
+ *  When it cannot be read, a value equal to no other: the carry is stale, and writes nothing. */
 function inputs(tree, env) {
-  if (env.version) return env.version();
-  if (typeof env.ctx.measure.version === 'function' && !env.sign) return env.ctx.measure.version();
-  return env.sign ? idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001') : null;
+  try {
+    if (env.version) return env.version();
+    if (versioned(env.ctx.measure) && !env.sign) return env.ctx.measure.version();
+    return env.sign ? idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001') : null;
+  } catch { return {}; }
 }
 
 /** A block picked up: the carry holds the note as it is, its epoch, the Measure's inputs and a frozen Measure. Off in the safe mode. */

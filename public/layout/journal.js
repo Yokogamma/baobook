@@ -151,8 +151,10 @@ export function recording(measure) {
   /** @type {Answers} */
   const answers = { rows: Object.create(null), natural: Object.create(null) };
   let threw = false, bent = false;
-  const versioned = typeof measure.version === 'function', at = () => { try { return String(measure.version()); } catch { return ''; } };
-  const v0 = versioned ? at() : null, moved = () => versioned && at() !== v0;
+  // reading the version is the journal's own business: whatever it does (a getter that throws, a version that throws) changes
+  // nothing of the command, and makes the entry unfit
+  const at = () => { try { const f = measure.version; return f === undefined ? null : typeof f === 'function' ? String(f.call(measure)) : ''; } catch { return ''; } };
+  const v0 = at(), versioned = v0 !== null, moved = () => versioned && at() !== v0;
   if (versioned) { if (/^[0-9.-]{1,32}$/.test(v0)) answers.version = v0; else bent = true; }
   const safely = (f) => { try { return f(); } catch (e) { threw = true; throw e; } };
   const num = (x) => typeof x === 'number';
