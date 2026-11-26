@@ -17,10 +17,13 @@ const open=async(host,opts={})=>{
   pg.on('pageerror',e=>errs.push(e.message)); pg.on('console',m=>{ if(m.type()==='error' && !/Failed to load resource/.test(m.text())) errs.push('console: '+m.text()); });
   if(host) await ctx.route(`https://${host}/**`, async r=>{ const u=new URL(r.request().url()); r.fulfill({response:await r.fetch({url:SITE+u.pathname.slice(1)+u.search})}); });
   const url=host? `https://${host}/` : SITE;
-  await pg.goto(url); await pg.waitForSelector('html[data-ready]'); await pg.waitForTimeout(300);
+  await pg.goto(url); await pg.waitForSelector('html[data-started]'); await pg.waitForTimeout(150);
   return {ctx, pg, errs, url};
 };
-const ready=async pg=>{ await pg.waitForSelector('html[data-ready]'); await pg.waitForTimeout(350); };
+// `data-started`: the page's start() ran to its end, the layout's modules loaded or not
+const ready=async pg=>{ await pg.waitForSelector('html[data-started]'); await pg.waitForTimeout(150); };
+/** The switch clicked: the tab reloads by itself, and the new page is waited for. */
+const flip=async pg=>{ await pg.locator('#setBtn').click(); await Promise.all([pg.waitForEvent('load'), pg.locator('#layRow').click()]); await ready(pg); };
 const setting=(pg,p)=>pg.evaluate(p=>{ const s=JSON.parse(localStorage.getItem('sheet:settings')||'{}'); Object.assign(s,p); localStorage.setItem('sheet:settings',JSON.stringify(s)); },p);
 const go=async(pg,id)=>{ await setting(pg,{current:id}); await pg.evaluate(()=>{ sessionStorage.clear(); history.replaceState(null,'',location.pathname); }); await pg.reload(); await ready(pg); };
 const settings=pg=>pg.evaluate(()=>JSON.parse(localStorage.getItem('sheet:settings')||'{}'));
@@ -56,7 +59,7 @@ const {ctx,pg,errs}=await open(DEV);
 await seed(pg, NOTE); await go(pg,'lay1');
 const before=await geo(pg), sOff=await state(pg), n0=await stored(pg,'lay1');
 ok('2 with the switch off the sheet is the window\'s, here '+sOff.w+' px', sOff.w===W0PX && !sOff.lay && Object.keys(before).length===7, {sOff, before});
-await pg.locator('#setBtn').click(); await pg.locator('#layRow').click(); await ready(pg);
+await flip(pg);
 const sOn=await state(pg), after=await geo(pg), n1=await stored(pg,'lay1');
 ok('2a the switch turned on: the tab reloaded, the setting is saved, the engine lays the note out and the journal can be exported', sOn.lay && sOn.on && sOn.journal && (await settings(pg)).layout===true && sOn.w===W0PX, sOn);
 { const same=Object.keys(before).filter(k=>before[k].l===after[k].l && before[k].t===after[k].t), texts=['Alpha','Beta t','Gamma','Kid on','Kid tw'];
@@ -117,6 +120,28 @@ await txt('Gamma three').click(); await pg.keyboard.press('Control+End'); await 
   ok('7a no word of the note in it', !/Gamma|Alpha|Kid|more|const a/.test(text));
   await pg.keyboard.press('Escape'); }
 
+/* ── 7b: a collapsed area's children are measured where something has a size; a title held and empty ── */
+const rects=pg=>pg.evaluate(()=>Object.fromEntries([...document.querySelectorAll('#sheet .blk')].map(e=>{ const card=e.children[1], r=card.getBoundingClientRect(), f=e.classList.contains('is-area')? null : card.querySelector('.txt,.code');
+  return [f? f.textContent.trim().slice(0,3) : 'area', {x:Math.round(r.left), y:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height), b:Math.round(r.bottom), r:Math.round(r.right)}]; })));
+{ const note={id:'lay3', title:'Collapsed', created:3, updated:Date.now()+90000, blocks:[
+    {id:'A', fx:fxFromCol(4), row:3, kind:'area', cw:14, collapsed:true}, {id:'k', parent:'A', col:0, row:0, text:'One\nTwo\nThree'}, {id:'u', fx:fxFromCol(4), row:7, text:'Under'}]};
+  await seed(pg, note); await go(pg,'lay3');
+  await pg.locator('#sheet .blk.is-area .fold').click(); await pg.waitForTimeout(500);
+  const r1=await rects(pg), n1=await stored(pg,'lay3'); await pg.reload(); await ready(pg); const r2=await rects(pg);
+  const inside=r=>r.One.x>=r.area.x && r.One.r<=r.area.r && r.One.y>=r.area.y && r.One.b<=r.area.b, clear=r=>r.Und.y>=r.area.b;
+  ok('7b an area loaded collapsed and opened: its child is as wide and as tall as its three lines, inside the frame, the block under the area clear of it; the same after a reload', r1.One.h===3*G && r1.One.w>40 && inside(r1) && clear(r1) && JSON.stringify(r1)===JSON.stringify(r2) && !byId(n1).A.collapsed, {r1, r2});
+  // the title: empty, held, with a character, empty again, left
+  const title=pg.locator('#sheet .blk.is-area .ctitle'), steps=[]; const step=async name=>{ await pg.waitForTimeout(350); const r=await rects(pg); steps.push({name, head:await pg.evaluate(()=>document.querySelector('#sheet .is-area .cbar').offsetHeight), ok:inside(r) && clear(r), area:r.area.h, one:[r.One.y, r.One.b], under:r.Und.y}); };
+  await step('empty'); await title.click(); await step('held'); await pg.keyboard.type('X'); await step('text'); await pg.keyboard.press('Backspace'); await step('empty again'); await pg.keyboard.press('Escape'); await pg.locator('#ttl').click(); await step('left');
+  ok('7c an area\'s empty title held, typed in, emptied and left: at every step the child is inside the frame and the block under the area clear of it, whatever the header\'s height ('+steps.map(s=>s.name+' '+s.head).join(', ')+')', steps.every(s=>s.ok) && new Set(steps.map(s=>s.head)).size>1, steps); }
+
+/* ── 7d: no area is drawn in the slice ──────────────────────────────────────────── */
+{ await go(pg,'lay1'); const sb=await pg.locator('#sheet').boundingBox(), n0=(await stored(pg,'lay1')).blocks.filter(b=>b.kind==='area').length;
+  await pg.mouse.move(sb.x+G/2+10*G, sb.y+G/2+24*G); await pg.mouse.down(); await pg.mouse.move(sb.x+G/2+30*G, sb.y+G/2+32*G, {steps:6}); const marq=await pg.locator('.marq').count(); await pg.mouse.up(); await pg.waitForTimeout(500);
+  await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+  const n1=(await stored(pg,'lay1')).blocks.filter(b=>b.kind==='area').length, onPage=await pg.locator('#sheet .blk.is-area').count();
+  ok('7d a drag over the empty sheet shows no frame and makes no area', marq===0 && n0===1 && n1===1 && onPage===1, {marq, n0, n1, onPage}); }
+
 /* ── 8: the text size ───────────────────────────────────────────────────────────── */
 { await setting(pg,{textSys:false, textSheet:20}); await pg.reload(); await ready(pg);
   const g=await geo(pg), cell=await pg.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--g'))), s=await state(pg);
@@ -135,7 +160,7 @@ await txt('Gamma three').click(); await pg.keyboard.press('Control+End'); await 
 
 /* ── 10: off again ──────────────────────────────────────────────────────────────── */
 { await go(pg,'lay1'); const gOn=await geo(pg);
-  await pg.locator('#setBtn').click(); await pg.locator('#layRow').click(); await ready(pg);
+  await flip(pg);
   const s=await state(pg), gOff=await geo(pg), keys=Object.keys(gOn).filter(k=>k!=='const');
   ok('10 the switch turned off: today\'s layout again, the note the engine wrote standing where it stood', !s.lay && !s.on && (await settings(pg)).layout===false && keys.every(k=>gOn[k].l===gOff[k].l && gOn[k].t===gOff[k].t), {s, gOn, gOff}); }
 ok('11 no page errors', !errs.length, errs);
@@ -143,7 +168,7 @@ await ctx.close();
 
 /* ── 12: two tabs: the switch changed in one reloads the other ──────────────────── */
 { const {ctx,pg,errs}=await open(DEV); const p2=await ctx.newPage(); await p2.goto(`https://${DEV}/`); await ready(p2);
-  await pg.locator('#setBtn').click(); await pg.locator('#layRow').click(); await ready(pg); await p2.waitForTimeout(600); await ready(p2);
+  await Promise.all([p2.waitForEvent('load'), flip(pg)]); await ready(p2);
   const a=await state(pg), b=await state(p2);
   ok('12 the switch turned on in one tab: the other tab reloads and runs the engine too', a.lay && b.lay && !errs.length, {a, b, errs}); await ctx.close(); }
 

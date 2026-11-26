@@ -50,7 +50,13 @@ export function probeOf(host) {
     s.width = cells == null ? 'max-content' : cl + cells * g + 'px';
     card.style.width = cells != null && (b.cw || b.kind === 'area') ? cells * g + 'px' : '';
     card.style.maxWidth = cells == null ? 'none' : '';
-    (b.el.parentNode || host.sheet).appendChild(c);
+    // a title that is held is laid out as one with text (the page's styles give `:focus` and `:not(:empty)` the same sizes), and a
+    // copy is never focused: an empty title held on the page gets a character no one sees in the copy
+    const title = b.card.querySelector('.ctitle');
+    if (title && !title.firstChild && title === b.el.ownerDocument.activeElement) card.querySelector('.ctitle').textContent = '\u200b';
+    // in its own container, unless that is not laid out (the body of a collapsed area): nothing there has a size
+    const home = b.el.parentNode;
+    (home && home.offsetParent !== null ? home : host.sheet).appendChild(c);
     try { return read(c, card, g); } finally { c.remove(); }
   }
   const empty = (b) => !b.kind && !(b.txt && b.txt.textContent.replace(/​/g, '').trim());
