@@ -83,33 +83,41 @@ export function patched(blocks, write) {
 }
 
 // ---- the safe mode
-/** A tree shown within the engine's range (§3.5): every place and size of the safe display at most MAXCELL, a block's bottom too. */
+/** A block of the safe display within the engine's range (§3.5): its place first, leaving room for the smallest block (two columns,
+ *  one row), then its size within what is left, so its right side and its bottom are at most MAXCELL. A size that is no number
+ *  (a Measure's answer, a stored value) gives way to `last`, the size it was last shown at, and then to the smallest. */
+function within(b, last = {}) {
+  const whole = (v, lo, hi) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null);
+  const col = whole(b.col, 0, MAXCELL - 2) ?? 0, y = whole(b.y, 0, MAXCELL - 1) ?? 0;
+  const o = { ...b, col, y, w: whole(b.w, 2, MAXCELL - col) ?? whole(last.w, 2, MAXCELL - col) ?? 2, h: whole(b.h, 1, MAXCELL - y) ?? whole(last.h, 1, MAXCELL - y) ?? 1 };
+  o.t = whole(b.t, 0, o.h) ?? 0;
+  if (b.yc != null) o.yc = whole(b.yc, 0, MAXCELL - 1) ?? y;
+  for (const f of ['cw', 'ch']) if (b[f] != null) o[f] = whole(b[f], 1, MAXCELL) ?? 1;
+  return o;
+}
+/** A tree shown within the engine's range, the sheet and every area. */
 function bounded(tree) {
-  const cap = (v, max = MAXCELL) => (Number.isFinite(v) ? Math.max(0, Math.min(max, Math.round(v))) : 0);
-  const one = (L) => ({ ...L, boxes: new Map([...L.boxes].map(([id, b]) => {
-    const y = cap(b.y), col = cap(b.col), o = { ...b, col, y, w: Math.max(2, cap(b.w, MAXCELL - col)), h: Math.max(1, cap(b.h, MAXCELL - y)) };
-    if (b.yc != null) o.yc = y;
-    for (const f of ['cw', 'ch']) if (b[f] != null) o[f] = Math.max(1, cap(b[f]));
-    return [id, o];
-  })) });
+  const one = (L) => ({ ...L, boxes: new Map([...L.boxes].map(([id, b]) => [id, within(b)])) });
   return { ...one(tree), areas: new Map([...(tree.areas || [])].map(([id, A]) => [id, one(A)])) };
 }
 /** The tree as the safe mode shows it: every block where it stands, at the height its content has now, an area's frame round its
- *  children as they now are; nothing settled, no stacks, so blocks may overlap. */
+ *  children as they now are, each within the engine's range after it is measured; nothing settled, no stacks, so blocks may overlap. */
 function safeTree(tree, ctx) {
   const leaves = (L) => {
     const boxes = new Map();
     for (const [id, b] of L.boxes) {
       const { above, ...o } = b;
-      if (!isArea(b)) { try { const r = heightAt(o, cellsOf(o), ctx); o.h = Math.min(r.h, MAXCELL - o.y); o.t = r.t; } catch { /* its last height */ } }
-      boxes.set(id, o);
+      if (!isArea(b)) { try { const r = heightAt(o, cellsOf(o), ctx); o.h = r.h; o.t = r.t; } catch { /* its last height */ } }
+      boxes.set(id, within(o, b));
     }
     return { ...L, boxes };
   };
   const areas = new Map([...(tree.areas || [])].map(([id, A]) => [id, leaves(A)])), sheet = leaves(tree);
   for (const [id, b] of sheet.boxes) {
     if (!isArea(b)) continue;
-    try { const f = frameOf(b, areas.get(id) || null, ctx); sheet.boxes.set(id, { ...b, h: Math.max(1, Math.min(f.h, MAXCELL - b.y)), t: f.t }); } catch { /* its last frame */ }
+    let f = null;
+    try { f = frameOf(b, areas.get(id) || null, ctx); } catch { /* its last frame */ }
+    if (f) sheet.boxes.set(id, within({ ...b, h: f.h, t: f.t }, b));
   }
   return { ...sheet, areas };
 }
