@@ -147,6 +147,21 @@ const T = (id, col, row, o = {}) => ({ id, text: 'x', fx: fxFromCol(col), row: r
     const f = B.frozen({ rows: () => ({ rows: 1, shown: 1 }), natural: () => 1 }), g = B.frozen(Object.defineProperty({}, 'version', { get() { throw new Error('x'); } }));
     ok('7e a Measure with no version has none through a frozen one either, and a carry over it is not stale by that; a version that cannot be read cannot be read through a frozen one', !B.stale(n9, c9) && f.version === undefined && (() => { try { return g.version && false; } catch { return true; } })());
   }
+  // a version that is a method of its Measure, read through the frozen copy a carry works with: called on the Measure it is of
+  class Priv { #rev = '2.5'; constructor(m) { this.rows = m.rows; this.natural = m.natural; } version() { return this.#rev; } }
+  for (const [name, mk, want] of [['a version that reads «this»', (m) => ({ rows: m.rows, natural: m.natural, revision: '1.0', version() { return this.revision; } }), '1.0'], ['a version that reads a private field', (m) => new Priv(m), '2.5']]) {
+    const m9 = { A: { text: 'x'.repeat(60) }, B: { text: 'x' } }, bl = [T('A', 2, 3), T('B', 2, 20, { cw: 5 })], me = mk(stubMeasure(m9)), j9 = createJournal(), e9 = { ctx: ctx(me), journal: j9 }, n9 = B.opened(bl, e9);
+    let c9 = null, d9 = null, t9 = null, fv = null;
+    try {
+      fv = B.frozen(me).version();
+      c9 = B.carry(n9, { id: 'A', point: { x: 3.5, y: 3.3 } }, e9);
+      c9 = B.moved(n9, c9, { x: 20, y: 12 });
+      d9 = B.dropped(n9, c9);
+    } catch (err) { t9 = err; }
+    const es = entriesOf(j9.export());
+    ok(`7f ${name}: through a frozen Measure it is the Measure's own, the carry is not stale, its drop is accepted, and every entry of the carry has that version, is fit and replays`, !t9 && fv === want && fv === me.version() && !c9.cancelled && d9.ok === true && es.length > 0 && es.every((e) => e.answers.version === want && e.unfit === undefined && replay(e, KINDS).same === true), { t9: t9 && t9.message, fv, ok: d9 && d9.ok, unfit: es.map((e) => e.unfit) });
+  }
+  ok('7g a version that is no function is handed through a frozen Measure as it is', B.frozen({ version: 7 }).version === 7);
 
   // 8: a carry
   const n8 = B.opened(blocks, { ctx: ctx(M) }), env8 = { ctx: ctx(M) };

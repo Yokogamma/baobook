@@ -172,8 +172,8 @@ export function frozen(measure) {
     rows(id, cells) { const k = id + '\u0000' + cells; if (!rows.has(k)) rows.set(k, { ...measure.rows(id, cells) }); return { ...rows.get(k) }; },
     natural(id) { if (!natural.has(id)) natural.set(id, measure.natural(id)); return natural.get(id); },
     // the app's Measure says what it reads; read from it each time, so that one that has no version has none here, and one whose
-    // version cannot be read cannot be read here either
-    get version() { return measure.version; },
+    // version cannot be read cannot be read here either; a version that is a method is called on the Measure it is of, not on this copy
+    get version() { const f = measure.version; return typeof f === 'function' ? (...a) => f.apply(measure, a) : f; },
   };
 }
 const idsOf = (tree) => [...tree.order, ...[...(tree.areas || new Map()).values()].flatMap((A) => A.order)];
