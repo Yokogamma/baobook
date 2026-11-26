@@ -171,13 +171,23 @@ export function frozen(measure) {
   return {
     rows(id, cells) { const k = id + '\u0000' + cells; if (!rows.has(k)) rows.set(k, { ...measure.rows(id, cells) }); return { ...rows.get(k) }; },
     natural(id) { if (!natural.has(id)) natural.set(id, measure.natural(id)); return natural.get(id); },
+    // the app's Measure says what it reads; read from it each time, so that one that has no version has none here, and one whose
+    // version cannot be read cannot be read here either; a version that is a method is called on the Measure it is of, not on this copy
+    get version() { const f = measure.version; return typeof f === 'function' ? (...a) => f.apply(measure, a) : f; },
   };
 }
 const idsOf = (tree) => [...tree.order, ...[...(tree.areas || new Map()).values()].flatMap((A) => A.order)];
-/** What the Measure reads, as one value to compare: the caller's version of it, or every block's signature. */
+/** What the Measure reads, as one value to compare: the caller's version of it, every block's signature, or the Measure's own
+ *  version. A Measure that has none gives nothing to compare (the answers already given are all a carry keeps). One whose version
+ *  cannot be read, a getter or a call that throws or a version that is no function, is another matter: a value equal to no other,
+ *  so the carry is stale, asks nothing and writes nothing. */
 function inputs(tree, env) {
-  if (env.version) return env.version();
-  return env.sign ? idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001') : null;
+  try {
+    if (env.version) return env.version();
+    if (env.sign) return idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001');
+    const f = env.ctx.measure.version;
+    return f === undefined ? null : typeof f === 'function' ? f.call(env.ctx.measure) : {};
+  } catch { return {}; }
 }
 
 /** A block picked up: the carry holds the note as it is, its epoch, the Measure's inputs and a frozen Measure. Off in the safe mode. */
