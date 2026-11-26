@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Baobook</title>
-<meta name="baobook-build" content="2026112602">
+<meta name="baobook-build" content="2026112701">
 <meta name="description" data-i18n-attr="content:app.description">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ffffff">
@@ -479,6 +479,7 @@ button:focus-visible{outline:2px solid var(--sel-line);outline-offset:1px}   /* 
 .chip button:hover{background:var(--hover-2)} .chip .x{background:transparent;color:var(--ink-3);padding:2px 6px}
 
 .gbox{position:absolute;border:1.5px dashed var(--sel-line);background:var(--sel);border-radius:6px;pointer-events:none;display:none;transition:left .15s,top .15s}
+.app.lay01 .blk .rz,.app.lay01 .amenu .ungroup{display:none}   /* the new layout's slice: no handles and no ungrouping yet */
 .gbox.on{display:block} .gbox.bad{border-color:rgba(235,87,87,.8);background:rgba(235,87,87,.12)}
 .hbox{position:absolute;border:1.5px dashed var(--sel-line);border-radius:6px;pointer-events:none;display:none;opacity:.45} .hbox.on{display:block} .hbox.hit{opacity:1;background:var(--sel)}   /* where the dragged block came from; lit when a drop puts it back */
 .hbox .lbl{position:absolute;left:6px;top:-9px;font-size:var(--t-xs);font-weight:600;color:var(--ink-2);background:var(--page);padding:0 5px;border-radius:4px;white-space:nowrap;display:none} .hbox.kb .lbl{display:block}   /* "Esc to cancel", for the mouse only */
@@ -703,6 +704,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
         <button class="mi" id="importBtn" type="button" data-i18n="import.button" data-i18n-attr="title:import.title"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg></button><input type="file" id="importFile" accept=".json,application/json" hidden>
         <button class="mi" id="installBtn" type="button" hidden data-i18n="install.button"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
         <div class="hint" id="iosHint" hidden data-i18n="install.iosHint"></div>
+        <label class="mi chk" id="layRow" hidden><input type="checkbox" id="layOn"><span data-i18n="layout.switch"></span></label>
+        <button class="mi" id="layJournal" type="button" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span data-i18n="layout.journal"></span></button>
         <div class="hint" id="buildV"></div>
         <div class="hint" id="bootV"></div>
       </div>
@@ -794,8 +797,8 @@ html:not([data-ready]) body{visibility:hidden}   /* until the language file is a
   <div class="ask-b"><button class="fbtn" id="tszReset" type="button" data-i18n="text.reset"></button><button class="fbtn pri" id="tszDone" type="button" data-i18n="common.done"></button></div>
 </dialog>
 
-<script src="sync.js?b=2026112602" integrity="sha384-DtwvW3+YQpurznX3owNmfD7dVW2Tdd5n2lYPXKJ+s2s9bfUGr0OjjkX8oSN+Rvox"></script>
-<script src="cloud.js?b=2026112602" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
+<script src="sync.js?b=2026112701" integrity="sha384-DtwvW3+YQpurznX3owNmfD7dVW2Tdd5n2lYPXKJ+s2s9bfUGr0OjjkX8oSN+Rvox"></script>
+<script src="cloud.js?b=2026112701" integrity="sha384-hAiyL8z2ovTxtC8LG5aDlDAfazQcjRNNfJWQHvASuB4RDvFxHd2IllvY72NbEKav"></script>
 <script>
 /* ══ i18n: every UI string lives in locales/<lang>.json; the code asks for it with loc('key', {params}) ═══════
    A plural value is an object keyed by Intl.PluralRules categories (one/few/many/other) and picks by params.n;
@@ -806,9 +809,9 @@ const I18N={langs:['uk','en'], fallback:'en', lang:'uk', locale:'uk', dict:{}, p
    was built with, so a deploy that lands between the page and its files never mixes two builds. The scripts carry theirs in the tags above,
    the language files here; the service worker checks its set against the same values, read from the page it installs. Every change of
    sync.js, cloud.js or a language file updates them: `node tests/hashes.mjs --write` (tests/hashes.mjs fails while one is stale). */
-const SRI={'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-d5yZjGOD2q1FAwUln+TBzLlDXq2T9N+XpT64T+nu7D7Tk/lkV0N+XzUJ+0L47XPm', 'layout/gap.js':'sha384-i8cO6kHCzSkKs34IX272xYTNXy9NXW/hibBsrfeMz3iT7C/XUhiMUPgnEV0x4ZeT', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-LrHY1MZ7TocaxwzuFBBLzR84c5vbvv0HpyWQYuF/U40hb2/dFza30nBjMyHLwIil', 'layout/primitives.js':'sha384-lWJHxftiofUu6nYOA9ChQ3oTx4KehzoI0OTRfDyf/+PhAoXLf0cgw+XseuXaiD0d', 'layout/rules.js':'sha384-Ibo04AjE7TehXLB/sOopVgWlHLGnsdMJzw2HsuFqiIirzj3kOZlZtCykgqTje6g9', 'layout/shapes.js':'sha384-5jaQ1BGdYIMPVwZqlmgCBkyOCizuZ0EzkRR6tB7u6335oI7T+DtiD4Hp+1MA49BE', 'layout/size.js':'sha384-PqXC6Y1qLHZzHvfv3uXcPHBD38tguQqhKvaifgQxesB79UGLCuNH3u3RYlG0J4p2', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-rHM9kDSrFGURKX4dn4RwEfDIlGH2fVgsSYFHTFsMUCBJgxCi0h5UfC3S15ZeyuR6', 'layout/validate.js':'sha384-5nkNvRb+S5Q6qswyi/H3aM9AgtEKfO70zQ/hk2xl1U47f6cX7Lk8g2f8x47sDcNn', 'layout/frame.js':'sha384-dJhl19JXrYHzcTyp0e5PqhztiYb7JbIEcPO8cDfOzBlLQwtvPDqeaIBgaHNNEgzk', 'layout/settle.js':'sha384-fn8vtmJOPKgQWSjieXm9Tk+V7uVY7wYea3n8HpfF/DqN/UH4SCESIZ4MgR5WwxOf', 'layout/transition.js':'sha384-tY5NdIF5b93T0Cx5X6NEynqAct58Rjaw8F8ht1wFWykavnSW8e4QLzWhX21b4s8u', 'layout/bridge.js':'sha384-RSVKNNVfz8HwCZK/x9kdUkBFwXUMng0k0yBpGQJ44tAi4oUrCLzJ+mLcUFba6/NQ', 'layout/drag.js':'sha384-mfoXhk+y9JfJQNaeY6WkKryMoAdBAetHivPdOG7tx4cI/AZY8wATKehBvVFhCnb0', 'layout/ops.js':'sha384-hdAKIPwdm/Tfqa4H+IKto0vXfbtD3U8ygGTbmwuDYAKZyL25ECYkZKyAPMvEeVeK', 'layout/journal.js':'sha384-FUpk1Kf09o2zt9XNVqxW5+6qZSCe3HWNrCJrntlnP+KJqsTFbZXe3uMV3iV7pMRP', 'locales/en.json':'sha384-bcKj41imPVbH4BngeFK/wo1ZeAyx0q6DEcAiwXASmmgWFADRivbWuPtlwQKS4Dcu', 'locales/uk.json':'sha384-OJuaa7mdvuRyjqNUocjqpdx0Ws2zX8EKBQeHzb0cckOMzVjJloD8PPEx1PMKWnZ3'};
+const SRI={'owner/model.js':'sha384-UkymYOzvEvIec4m87kxhmLb2QGMc8kiVoBLeRzclbOhGSWCubk08ry5q46KrNnYU', 'lifecycle/model.js':'sha384-IGB6VRD600DntIkqyzVTpYg+UedObZ2Mt5kj9PFyq9Gsyac3g+7eH4Po9rQ6qZM9', 'account/input.js':'sha384-aTgcgixZsMJSQHD0BW/5S+wGMJEKhZhbgmZZQt4JMSKG+5HElShdES8X6W6bLpj3', 'account/model.js':'sha384-oEd7PLayFEgQ1Eo2Cp3KuTqA1aGMtp6bFcIoT5s91Qj51McAwdKamIAi2ANbLL9H', 'account/panel.js':'sha384-hObfY2Paim4uwOdV6LAYsK2fa9nJeYXuJlsutW84PQEtdkO4npgUScj+6p8qZWja', 'account/view.js':'sha384-fclmlKBlGxyP4kEgDfwlshtbhe6j/ItXx8//IeiT1qPpWFnrmAUApHZrehTcFCyr', 'layout/changes.js':'sha384-d5yZjGOD2q1FAwUln+TBzLlDXq2T9N+XpT64T+nu7D7Tk/lkV0N+XzUJ+0L47XPm', 'layout/gap.js':'sha384-i8cO6kHCzSkKs34IX272xYTNXy9NXW/hibBsrfeMz3iT7C/XUhiMUPgnEV0x4ZeT', 'layout/geometry.js':'sha384-/Ap+wRS04SMyGUama02Cl4gszX6V9933Dm3kBzmPGmTULolaBa2misGdf0Rj9llD', 'layout/kinds.js':'sha384-T6sJq/eOvuJZiSXfW7ZSt8YjS9bX1YU20DIu8VTcjeCb4UfapjFv34Tsa4F6askd', 'layout/layout.js':'sha384-LrHY1MZ7TocaxwzuFBBLzR84c5vbvv0HpyWQYuF/U40hb2/dFza30nBjMyHLwIil', 'layout/primitives.js':'sha384-lWJHxftiofUu6nYOA9ChQ3oTx4KehzoI0OTRfDyf/+PhAoXLf0cgw+XseuXaiD0d', 'layout/rules.js':'sha384-Ibo04AjE7TehXLB/sOopVgWlHLGnsdMJzw2HsuFqiIirzj3kOZlZtCykgqTje6g9', 'layout/shapes.js':'sha384-5jaQ1BGdYIMPVwZqlmgCBkyOCizuZ0EzkRR6tB7u6335oI7T+DtiD4Hp+1MA49BE', 'layout/size.js':'sha384-PqXC6Y1qLHZzHvfv3uXcPHBD38tguQqhKvaifgQxesB79UGLCuNH3u3RYlG0J4p2', 'layout/through.js':'sha384-lCq3WQSE/2gouwtGhT/qbzeZap7UrZwSgkIxgRBGib1RVEeSDLBv07cnUHAmH21p', 'layout/tree.js':'sha384-rHM9kDSrFGURKX4dn4RwEfDIlGH2fVgsSYFHTFsMUCBJgxCi0h5UfC3S15ZeyuR6', 'layout/validate.js':'sha384-5nkNvRb+S5Q6qswyi/H3aM9AgtEKfO70zQ/hk2xl1U47f6cX7Lk8g2f8x47sDcNn', 'layout/frame.js':'sha384-dJhl19JXrYHzcTyp0e5PqhztiYb7JbIEcPO8cDfOzBlLQwtvPDqeaIBgaHNNEgzk', 'layout/settle.js':'sha384-fn8vtmJOPKgQWSjieXm9Tk+V7uVY7wYea3n8HpfF/DqN/UH4SCESIZ4MgR5WwxOf', 'layout/transition.js':'sha384-tY5NdIF5b93T0Cx5X6NEynqAct58Rjaw8F8ht1wFWykavnSW8e4QLzWhX21b4s8u', 'layout/bridge.js':'sha384-IS3Gy3NrjDJzbsonvP/D77kTTtPFUyudAe5DTEeyRyLACC/AAG5xxnuXe8cxITvI', 'layout/drag.js':'sha384-mfoXhk+y9JfJQNaeY6WkKryMoAdBAetHivPdOG7tx4cI/AZY8wATKehBvVFhCnb0', 'layout/measure.js':'sha384-TE9zBvN7jmPJOqd0xtd0shIGru2b4N+fA3i96DR+huqlyDQf/eeAFQbmEh/EwNEi', 'layout/page.js':'sha384-iEopvi7kBM5X3GTKPrsRl+qDwfy237ft5LxlNJiuAFJsQ4R3LAyueU8x/CslaMrh', 'layout/view.js':'sha384-6RysF1AEWDE24wuIatzUE/BO2kzpPyLt4db1GBu7KFaKLDCsgk7pqXS85Sot1cVG', 'layout/ops.js':'sha384-hdAKIPwdm/Tfqa4H+IKto0vXfbtD3U8ygGTbmwuDYAKZyL25ECYkZKyAPMvEeVeK', 'layout/journal.js':'sha384-DzM6fNpszs+QvhX8vqXFsdgLypOK/zZSCrD+AkF5oY0zPytQuhgjLDneFJcs+rFQ', 'locales/en.json':'sha384-xkiayn6001KQcVxOt8Kzhqotx97YJhUqZRsTMWpc8JD2Q5JVSNR01TQOaU0uRqId', 'locales/uk.json':'sha384-i76XFchVBq+Wf5NPxxm35XfLWQw6Nh+359sqjar/uz1WybqSNYLafoe19Xkuuh8P'};
 // the development build lives on its own host; production and the tests' 127.0.0.1 are not marked
-const BUILD=2026112602;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
+const BUILD=2026112701;   // the build marker, YYYYMMDDnn: raised by every change of public/, also in <meta name="baobook-build">, the ?b= of sync.js and cloud.js above, sw.js and build.json (tests/appupdate checks they agree)
 // the Firebase SDK (SYNC-PLAN 4.13), imported from gstatic when the account is first used: three self-contained modules (auth and firestore
 // import firebase-app.js by its full URL). Their integrity goes into the import map below too, so bytes other than the ones this page was built
 // with are refused, whether a CDN or a cache answers them. A change of FB_VER runs `node tests/hashes.mjs --write`, which downloads the three
@@ -1336,6 +1339,7 @@ Object.assign(DEBUG,{idb, cur:()=>cur&&cur.id, offerUndo:m=>offerUndo(m,()=>{}),
 const TK='sheet:tab-current', tabCur={ get(){ try{ return sessionStorage.getItem(TK); }catch(_){ return null; } }, set(id){ try{ sessionStorage.setItem(TK,id); }catch(_){} } };
 const saveS=p=>{ Object.assign(S,p); db.setSettings(p); };   // only the keys this tab changed, never its whole copy
 let S=db.settings(), notes=[], cur=null, blocks=[], dirty=false, saveT=null, toastShown=false;
+const LAY_ON=IS_DEV && !TOUCH && !!S.layout;   // the new layout's switch, read once: a tab never runs both layouts
 const now=()=>Date.now();
 function newNote(){ const n={id:'n'+now().toString(36)+Math.random().toString(36).slice(2,6),title:'',blocks:[],created:now(),updated:now()}; notes.unshift(n); if(LOCK) MEM.add(n.id); else { setSnap(n.id, n, null); writeNote(n); } return n; }   // view-only: an empty note to show, never stored. Else the empty note is the snapshot its first edits merge against, even before the first write lands
 /* ══ sync (docs/SYNC-PLAN.md, PR 1): the core in sync.js, the store wrapper SDB above, this driver and the editor snapshot ══
@@ -2167,7 +2171,7 @@ function openNote(n, o={}){ closeActs(); closeHist(); flushSave(); dropUndo(); e
 function drawNote(n){ drawBlocks(n.blocks);
   ttl.textContent=n.title; document.title=docTitle(n); roSync(); renderBacklinks(); }
 function drawBlocks(list){ blocks.slice().forEach(b=>b.el.remove()); blocks=[]; makeAll(list); }
-function makeAll(list){ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }   // areas first: their blocks go inside
+function makeAll(list){ const go=()=>{ list.filter(d=>d.kind || (d.text||'').trim()).sort((x,y)=>(x.kind==='area'?0:1)-(y.kind==='area'?0:1)).forEach(d=>make(d,false)); resolve(); update(); }; if(LAY) LAY.batch(go); else go(); }   // areas first: their blocks go inside
 /* a field write: archive, unarchive, trash, restore, the pin and the colour change one field of a note. set(n) makes the change in memory; fn(x, t, C) makes it on x, a copy
    of the record the write lands on (C is the stored record, undefined when there is none; t the write's time) and returns x, or null when x has it already.
    A field write never takes the place of a change the store lacks: while memory may be ahead of the store (a write failed or on its way, a localStorage
@@ -2279,6 +2283,7 @@ const TABQ=[];   // messages of other tabs that came before the start was done: 
 function tabMsg(m){ if(keptView() || DYING) return;
   if(m.t==='put') takeNote(m.n, m.lrev); else if(m.t==='del') dropNote(m.id); else if(m.t==='owner'){ if(m.by==='account') ownerMoved(m); else leadCheck(); }
   else if(m.t==='auth') authMsg(m); else if(m.t==='st'){ const {t, hidden, ...st}=m; ACC.leadSt=st; accStatus(); if(m.hidden) leadWanted(); } else if(m.t==='st?'){ if(LEAD.on) tellTabs(stMsg()); } else if(m.t==='dev'){ const d=typeof m.name==='string' && m.name? m.name : db.settings().devName; if(d) S.devName=d; if(LEAD.on && SYNC) SYNC.checkOwner().catch(()=>{}); if(ACCT) ACCT.render(); }   // the account's messages: a sign-in or sign-out elsewhere, the leader's status (asked for by a tab that just connected; a hidden leader's makes a visible queued tab ask)
+  else if(m.t==='layout'){ flushSave(); location.reload(); }   // the new layout's switch changed in another tab
   else if(m.t==='format'){ if(+m.v>FORMAT) fmtNewer(); }   // a tab of a newer app recorded its format (IDB-BARRIER-PLAN §4.2 item 4)
   else if(m.t==='lead?'){ if(LEAD.on && document.hidden && hasLocks()){ leadOff(); leadAsk(); } }   // a visible tab wants the lead and this one is hidden: let it go and queue again at once, so the lock comes back here if the asker is gone meanwhile (closed, its request aborted) and nobody is left without a leader
   else if(db.backend==='idb' && m.t==='chg'){ const mine=LREV.get(m.id); if(!(m.lrev!=null && mine!=null && m.lrev<=mine)) takeStored(m.id, {dn:m.dn, dev:m.dev}); }
@@ -2446,7 +2451,8 @@ const solid=a=>live(a).filter(isSolid);
 /* на вузькому екрані — те саме полотно (fx — частка ширини, тож блоки стоять там, де їх поставили, і по горизонталі, і по вертикалі);
    «як на компʼютері» (overview) — зменшене полотно 1024px лише для перегляду нотаток, зроблених на великому екрані */
 let overview=false; const narrowQ=matchMedia('(max-width:640px)'); const OVERVIEW_W=1024;
-const vr=b=>b.row, vc=b=>b.col;
+const vr=b=>b.vrow??b.row, vc=b=>b.vcol??b.col;   // the cell a block is shown at: the new layout's (public/layout/view.js), or the stored one
+let LAY=null;   // the slice of the new layout (public/layout/page.js), when its switch is on: every layout call below goes to it
 function rect(b){ const a=ctn(b), xl=xlOf(vc(b),a), r0=vr(b); return {x0:xl+OFF(), xl, y0:yOf(r0,a), r0, r1:r0+(b.lines||1), x1:xl+(b.w||minw(b))}; }
 function rawWidth(b){ const a=ctn(b), r=rect(b); let right=cW(a)-cPadR(a);
   for(const o of solid(a)){ if(o===b) continue; const q2=rect(o); if(q2.r0<r.r1 && q2.r1>r.r0 && q2.x0>r.x0) right=Math.min(right, q2.xl); }   // картка сусіда закінчується там, де починається ручка наступного: між текстами рівно клітинка
@@ -2483,6 +2489,7 @@ function resolveIn(a, fixed){
 const flowKey=b=>b.parent? b.col : (b.fx||0);
 const flowOrder=a=>live(a).sort((x,y)=>(x.row-y.row)||(flowKey(x)-flowKey(y)));
 function resolve(fixed){
+  if(LAY){ LAY.settle(fixed); return; }
   const a=fixed? ctn(fixed) : null;
   if(a) resolveIn(a, fixed);
   resolveIn(null, a||fixed);
@@ -2546,7 +2553,7 @@ function resizer(b, card, rz, o){
     const up=()=>stop(true), cancel=()=>stop(false), onKey=ev=>{ if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); cancel(); } };
     rz.addEventListener('pointermove',move); rz.addEventListener('pointerup',up); rz.addEventListener('pointercancel',cancel); document.addEventListener('keydown',onKey,true); });
 }
-function relayout(b){ const before=b.lines; render(b); if(b.lines!==before) resolve(b); else growSheet(); }
+function relayout(b){ if(LAY){ LAY.settle(b); return; } const before=b.lines; render(b); if(b.lines!==before) resolve(b); else growSheet(); }
 
 /* текстовий блок */
 function buildText(b){
@@ -2628,7 +2635,7 @@ function buildCode(b){
   ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
   ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
   ttlEl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttlEl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
-  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
+  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title || (!b.title && ttlEl.firstChild)) ttlEl.textContent=b.title; relayout(b); flushSave(); });
   ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
   if(b.wrap===undefined) b.wrap=true; b.wrap=!!b.wrap; b.num=!!b.num;   // перенос типово: без горизонтальної смуги
   card.classList.toggle('wrapped',b.wrap); card.querySelector('.wrapb').setAttribute('aria-pressed',b.wrap); card.classList.toggle('num',b.num); card.querySelector('.num').setAttribute('aria-pressed',b.num);
@@ -2788,7 +2795,7 @@ function buildArea(b){
   ttlEl.addEventListener('input',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); markDirty(); });
   ttlEl.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); ttlEl.blur(); } });
   ttlEl.addEventListener('paste',e=>{ e.preventDefault(); histRec(ttlEl,'cmd'); document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text').replace(/\s*\n\s*/g,' ')); });
-  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title) ttlEl.textContent=b.title; relayout(b); flushSave(); });
+  ttlEl.addEventListener('blur',()=>{ b.title=ttlEl.textContent.replace(/\n/g,' ').trim(); if(ttlEl.textContent!==b.title || (!b.title && ttlEl.firstChild)) ttlEl.textContent=b.title; relayout(b); flushSave(); });
   ttlEl.addEventListener('focus',()=>relayout(b)); ttlEl.addEventListener('input',()=>relayout(b));
   // клік у порожнє місце області → текстовий блок усередині
   const createIn=(e,focus)=>{ const r=b.abody.getBoundingClientRect(); const col=colOfX(e.clientX-r.left,b,{}), row=rowOfY(e.clientY-r.top-G()/2,b); const probe={col,row,lines:1,w:MINW,parent:b.id}; const ok=fits(probe);
@@ -2906,6 +2913,7 @@ function popMenu(anchor, host, cls, items, o={}){ if(popOpen && popOpen.anchor==
 // the block's menu: «⋯» of a text block on touch, the right button on ⋮⋮ of any block. A code card and an area keep their other actions in their header
 function blockMenu(b){ const copy={ico:ICO.copy, label:loc('block.copy'), act:()=>copyBlock(b)}, link={ico:ICO.link, label:loc('link.copy'), act:()=>copyLink(cur.id+'/'+b.id)};
   if(b.kind) return [copy, link];
+  if(LAY) return [copy, link, {ico:ICO.trash, label:loc('common.delete'), danger:true, act:()=>removeWithUndo(b)}];   // the slice has no position mode, no size menu and no «В область» yet
   return [copy, link,
     ...(selBlk===b? [] : [{ico:ICO_SEL, label:loc('block.select'), small:loc('block.select.hint'), act:()=>enterSel(b)}]),   // у режимі положення блок уже виділено
     ...(b.parent? [{label:loc('block.pullOut'), small:loc('block.pullOut.hint'), act:()=>pullOut(b)}] : (areas().length? [{label:loc('block.moveInto'), small:loc('areas.count',{n:areas().length}), act:()=>pickArea(b)}] : [])),   // альтернатива перетягуванню
@@ -3101,7 +3109,7 @@ function createArea(col,row,cw,rows,focus){ const b=make({kind:'area',col,row,cw
 /* миша: клік → текстовий блок, протяжка → область. Тач: клік одразу створює блок (протяжка — прокрутка сторінки) */
 /* рамка області мишею: протягнути по порожньому місцю (поріг 6px); клік без руху — блок у точці */
 const marqGest=gesture(sheet, {manual:true, slop:6,
-  onMove:(e,g)=>{ if(!g.moved) return; const d=g.data; if(!d.marq){ d.marq=el('div','marq'); sheet.classList.remove('hov'); } drawMarq(e,d.m,d.marq); },
+  onMove:(e,g)=>{ if(!g.moved || LAY) return; const d=g.data; if(!d.marq){ d.marq=el('div','marq'); sheet.classList.remove('hov'); } drawMarq(e,d.m,d.marq); },   // the new layout's slice draws no area: the press makes a block where it began
   onEnd:(e,g)=>{ try{ sheet.releasePointerCapture(g.id); }catch(_){} const d=g.data; if(!d.marq){ createAt(g.down); return; } const r=marqCells(e,d.m); d.marq.remove(); if(r.cw>=2 && r.rows>=2) createArea(r.col,r.row,Math.max(12,r.cw),Math.max(3,r.rows),true); else createAt(g.down); },
   onCancel:(e,g)=>{ if(g.data.marq) g.data.marq.remove(); } });
 function marqCells(e,m){ const s=sheet.getBoundingClientRect(), x=e.clientX-s.left, y=e.clientY-s.top;
@@ -3171,8 +3179,8 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     b.el.classList.add('drag'); gbox.className='gbox on'; };
   const held=e=>o.hold && e.pointerType!=='mouse';   // за шапку пальцем — після утримання; мишею і за ручку — одразу
   gesture(grip, { filter:e=>!(o.skip && o.skip(e)), holdMs:e=>held(e)? HOLD_DRAG_MS : 0, slop:HOLD_SLOP,
-    onDown:(e,g)=>{ e.stopPropagation(); if(!held(e)){ e.preventDefault(); start(e); } },   // до спрацювання утримання палець гортає сторінку як звичайно
-    onHold:(e,g)=>{ b.el.classList.add('lift'); start(e); },
+    onDown:(e,g)=>{ e.stopPropagation(); if(LAY){ e.preventDefault(); return; } if(!held(e)){ e.preventDefault(); start(e); } },   // до спрацювання утримання палець гортає сторінку як звичайно
+    onHold:(e,g)=>{ if(LAY) return; b.el.classList.add('lift'); start(e); },
     onMove:(e,g)=>{ if(!probe) return;
     if(e.buttons&2){ const no=ev=>ev.preventDefault(); window.addEventListener('contextmenu',no,true); setTimeout(()=>window.removeEventListener('contextmenu',no,true),1500); end(true); return; }   // right button pressed mid-drag: cancel, and no context menu on its release
     if(Math.abs(e.clientX-(gx+b.el.getBoundingClientRect().left))+Math.abs(e.clientY-(gy+b.el.getBoundingClientRect().top))>2) moved=true;
@@ -3200,7 +3208,7 @@ function drag(b, grip, o={}){   // o.hold — на дотику перенос �
     else { const give=approach(); give.forEach(o=>o.hidden=true); bad=tooTight(probe); give.forEach(o=>o.hidden=false);   // a neighbour that is about to move down leaves room
       if(bad){ live(null).forEach(render); if(target) live(target).forEach(render); render(probe); } else resolve(probe); }
     gbox.className='gbox on'+(bad?' bad':''); hbox.className='hbox'+(moved?' on':'')+(home?' hit':'')+(ptype==='mouse'?' kb':''); mark(moved); },
-    onEnd:()=>end(), onCancel:()=>end(true) });
+    onEnd:(e,g)=>{ if(LAY){ if(!g.moved && !o.quiet){ if(b.kind==='code') focusBlock(b); else copyBlock(b, grip); } return; } end(); }, onCancel:()=>end(true) });   // the new layout's slice carries nothing yet: a press without a move acts as before
   const end=cancel=>{   // cancel: Esc, the right button, leaving the window, or the browser took the gesture away (pointercancel) — nothing changes
     if(!probe) return; listen(false); mark(false);
     const back=cancel || home || !moved || gbox.classList.contains('bad') || (probe.parent===from.parent && probe.col===from.col && probe.row===from.row); blocks.splice(blocks.indexOf(probe),1); b.hidden=false;
@@ -3439,7 +3447,7 @@ function textNow(){ if(S.textSys!==false){ const k=sysK(), base=probePx('medium 
   return {sys:false, k:UI_STEPS.includes(S.textUi)? S.textUi : 1, fs:FS_STEPS.includes(S.textSheet)? S.textSheet : FS_BASE}; }
 function applyText(){ const t=textNow(), r=document.documentElement.style; r.setProperty('--k', String(t.k)); r.setProperty('--fs', t.fs+'px'); r.setProperty('--g', Math.round(t.fs*1.5)+'px'); }
 const manual=t=>({textSys:false, textSheet:FS_STEPS[near(FS_STEPS,t.fs)], textUi:UI_STEPS[near(UI_STEPS,t.k)]});   // the sizes shown now as manual ones: leaving system mode moves nothing
-function setText(p){ saveS(p); applyText(); textUI(); applyMode(); layoutBottom(); }
+function setText(p){ saveS(p); applyText(); textUI(); applyMode(); if(LAY) LAY.remeasure(); layoutBottom(); }
 const tszDlg=$('tsz'), tszSys=$('tszSys'), tszSheet=$('tszSheet'), tszUi=$('tszUi'), textV=$('textV');
 const uiName=i=>loc(['text.ui.0','text.ui.1','text.ui.2','text.ui.3'][i]);
 tszUi.innerHTML=UI_STEPS.map((k,i)=>'<button type="button" role="radio" data-i="'+i+'" aria-label="'+escHtml(uiName(i))+'">A</button>').join('');
@@ -3500,10 +3508,12 @@ async function start(){
   notes.sort((a,b)=>b.updated-a.updated);
   const how=((performance.getEntriesByType && performance.getEntriesByType('navigation')[0])||{}).type;   // a reload keeps this tab's note (its address names it anyway)
   renderList(); const byId=id=>id && notes.find(n=>n.id===id && !n.deleted), to=how==='reload' && !TORN? null : hashTo(), t=to && linkTarget(to);   // an address with a note (a link opened in a new tab, a bookmark) wins; also on a reload out of the recovery strip (TORN): the app never started on that address
+  if(LAY_ON){ try{ LAY=(await import('./layout/page.js')).start({sheet, build:BUILD, blocks:()=>blocks, px:()=>({g:G(), cl:CL()}), left:xlOf, top:yOf, plain:render, ro:()=>ro() || !!H.view, dirty:markDirty, grow:growSheet,
+      safe:on=>{ sheet.classList.toggle('lay-safe',on); if(on) say(loc('layout.safe')); }}); app.classList.add('lay01'); $('layJournal').hidden=false; }catch(e){ console.error('layout: the modules did not load', e); } }   // the new layout behind its switch (docs/LAYOUT-SEAMS-PLAN.md §8.1); without its modules (offline before they were fetched) the tab runs today's layout
   openNote((t && t.n)||byId(tabCur.get())||byId(S.current)||firstNote(), {restore:!(t && t.n)}); field(); storageUI();
   if(t && t.n && t.bid){ setHash(to); showBlock(t); }   // a note that is not here: the usual note, quietly (the address may be this tab's own, from before a reload)
   clearTimeout(w1); clearTimeout(w2); clearInterval(beat); app.classList.remove('wait'); boot('start'); setTimeout(probeSweep, 2000);   // after every start that finished: leftovers of starts that ended before their probe was deleted
-  STARTED=true; roSync(); snapSave(); copiesLoad(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
+  STARTED=true; document.documentElement.dataset.started=''; roSync(); snapSave(); copiesLoad(); TABQ.splice(0).forEach(tabMsg); if(SYNC && SYNC.owner) leadAsk(); accStart();   // from here the notes can change, and a LOCK found later (a reopened connection) locks the screen at once; with an owner the tab asks to lead (the engine runs only in the leader), and the account brings the cloud
 }
 applyText(); textUI();
 if(THEMES.includes(S.theme)) document.documentElement.dataset.theme=S.theme; themeUI();
@@ -3516,6 +3526,9 @@ applyMode(); start();
 /* ══ language: the choice is saved in settings and applied by reloading, so every string comes from one file ══ */
 langSel.innerHTML=I18N.langs.map(l=>'<option value="'+l+'">'+locA('lang.'+l)+'</option>').join(''); langSel.value=I18N.lang;
 langSel.addEventListener('change',()=>{ saveS({lang:langSel.value}); location.reload(); });
+// «Нова розкладка (0.1)»: on the development site only, a device setting read once when the tab starts; changing it reloads every tab of the origin, so no two tabs lay the same notes out in two ways
+$('layRow').hidden=!IS_DEV || TOUCH; $('layOn').checked=!!S.layout; $('layOn').addEventListener('change',e=>{ flushSave(); saveS({layout:e.target.checked}); tellTabs({t:'layout'}); setTimeout(()=>location.reload(), 80); });   // a moment for the message to leave before this page goes
+$('layJournal').addEventListener('click',()=>{ if(LAY) LAY.exportJournal(); });
 
 /* налаштування за шестернею: закривається вибором пункту, дотиком поза меню, Esc або системним «Назад»; з клавіатури фокус одразу в меню */
 function setMenu(open, o={}){ if(open===!setPop.hidden) return; if(open){ closeActs(); bootUI(); } setPop.hidden=!open; app.classList.toggle('menu', open);   // the settings and a list item's action mode never stay open together (LIST-ACTIONS-PLAN 4.4)
