@@ -72,7 +72,8 @@ A Node probe on c6f1003 showed that the engine's API accepts a `writeLocal` of a
 
 1. A step compares the store's epoch with one memory, `S.epoch`, which only a load moves.
 2. A step never sends to a cloud that is not the owner's: a cloud adapter whose `uid` differs from the owner's leaves the step idle.
-3. A late network result of an old engine is dropped by the epoch check of its transaction, as today.
+3. A late network result of an old engine is dropped by the epoch check of its transaction.
+4. A step that waits on the network compares the epoch it read before the request, not the engine's memory at the time of the result. The sixth review of #146 found this not true on main: a page of versions requested for the previous owner and answered after the new owner's load wrote `cursor:versions.done=true` into the new owner's store, because the check reads the memory as it is when the result comes (`tx()` at the time of the write). Fixed on main apart from this plan (a separate task); stage 2 keeps the rule.
 
 ### 3.5 Two results instead of one
 
@@ -190,6 +191,8 @@ Beside the matrix:
 - An `epoch` record without `era`, written as old code writes it: a write with the earlier era is refused.
 - `expectEpoch` refuses after a change that kept the records.
 - `lrev` after a change that kept the records is above every `lrev` before it.
+- Two failed adopting loads in a row (an erase, then a change that keeps the records, both loads failing after their commits): a write with the era of the screen read before the erase is refused (on #146 the second failure cleared the guard, sixth review).
+- Three or more overlapping changes, with a `same` change and a `reload()` between them: the late end of an older load changes neither `S.loaded` nor the cloud connection of the engine that loaded the newest one.
 
 ### 8.2 Browser
 
@@ -207,6 +210,12 @@ Beside the matrix:
 - A `put` delayed across an erase and the start of a new page (it waits in `TABQ`): nothing of it reaches the new screen or the store.
 - An export with history from an old screen locked after an erase, with the new owner's history already in the store: the file holds the old screen's notes and no history.
 - `tests/appsaveoverlap.mjs` as it is, and its case again with a change of owner that keeps the records between the two saves: the deleted block stays deleted.
+- The scenarios the sixth review of #146 reproduced (2026-11-23), required for stage 3:
+  - **two tabs and `lrev`, with the load held:** one tab binds a new owner and its adopting load waits; the other tab edits the text and saves; the first saves an edit of the title. Both edits are in the store (on #146 the text was lost with no error: `editorDelta`'s fast path saw equal `lrev`).
+  - **a first sign-in failing after its commit while text is typed:** the load after the commit is held, a line is typed, the load fails before the 300 ms autosave. The line is in the store after the start, or, if it cannot be written, left on the screen with the export (on #146 the page set `DYING` before saving and reloaded over it).
+  - **a write held when the «owner» message arrives:** a tab without the SDK, `ACC.otherTab` false, a save in flight when another tab's change that keeps the records is announced. No lock; the edit is in the store under the new owner (on main and on #146 `ownerMoved` waits for the old engine's write, which gets `epoch`, and the tab locks with the edit unsaved). The browser helper must not press Escape and wait before the change, or the write is no longer held.
+  - **an erase whose load meets another tab's binding:** the tab that erased ends on `epoch`; a third tab with an old screen and `ACC.otherTab` false learns of the erase, by the era it reads, not by a message the erasing tab may never send.
+  - **`lrevOf()` failing after a successful `setOwner`:** the page reports the change to the other tabs and does not stay unlocked over another owner's records (found on main, sixth review; fixed apart from this plan).
 
 ### 8.3 Expectations that change
 
@@ -242,4 +251,5 @@ Not opened: Signal Desktop, Joplin, Logseq, AFFiNE, Excalidraw, automerge-repo, 
 - **The architecture review of #146 (2026-11-13), three passes with the owner.** Pass 1: five major gaps (the era read with the screen's records, the fallback copies, compatibility one way only, the false lock through reads and the lead, the `lrev` collision). Pass 2: two major and one minor (the `NK` exception, the tabs before the format guard, `syncguard` 5s9). Pass 3: none; the plan merged by #151.
 - **Preflight over main at 2ee9dfc (2026-11-13): three high, two medium.** High: the page chooses the path of a deletion by the owner in memory (§3.3 item 7); a message between tabs carries a note with no origin, `TABQ` included (§3.8); the export's history is read outside the rule of the era (§3.9). Medium: stages 2 and 3 as two active PRs leave an unsafe `main` on `.dev` (§7); the overlapping saves were called an open separate task though main has `laterSnap()` and `tests/appsaveoverlap.mjs` (§3.3 item 8, §8.2, §9). The Node matrix now names every operation (§8.1).
 - **Review of #153 at 263d85a (2026-11-13): one high, two minor.** High: the text a deletion is confirmed by was called cosmetic; a change of owner while the dialog is open widens the deletion to every device (§3.3 item 9). Minor: the device name's exception was in the matrix and not in the rule (§3.3 item 1); the dormant stage 2 named 5s* as a suite of main, where they are not (§7).
+- **The sixth independent review of #146 at 8a39bdd (2026-11-23): one blocker, five major, two minor.** The blocker is the `lrev` collision this plan's §3.7 foresaw, now reproduced in two tabs; #146 was closed without merging the same day. Its scenarios are required regressions in §8.1 and §8.2; two of its findings are on main and fixed apart (§3.4 item 4; `lrevOf()` after `setOwner`).
 - **Stage 1 (2026-11-13).** Writing the rules as functions found one of them unsatisfiable: §4 rule 4 asked an old `FX` copy for the initial era and a matching epoch at once, and a device with an owner never reads as the initial era. The rule is now one condition for each kind of copy.
