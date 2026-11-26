@@ -202,16 +202,20 @@ const cursorMax=(a,b)=>!a? b : !b? a : (cmpSrv(a.srv,b.srv)<0 || (cmpSrv(a.srv,b
 function makeSync(deps){
   const {now, random}=deps, vnow=deps.vnow||now;
   // the era of the screen (docs/OWNER-ERA-PLAN.md §3, §7.1). Given (deps.era), the rules of public/owner/model.js (deps.ownerModel) decide: a write of the
-  // user compares the era and reads the owner inside its own transaction and waits for no load (§3.3), the steps keep one memory that only a load moves
-  // (§3.4), a change of owner writes the era and keeps `lrev` above what a screen remembers (§3.1, §3.7). Not given, every check below is main's as it
-  // was. The era is never refreshed from the store: a new screen is a new engine. A missing model is an error here, never a fall back to the old checks
-  const ERA=deps.era, ERA_ON=ERA!==undefined && ERA!==null, OM=ERA_ON? deps.ownerModel : null;
-  if(ERA_ON){ if(typeof ERA!=='string' || !ERA) throw new TypeError('makeSync: deps.era is the era of a screen, a non-empty string');
+  // user compares the era and reads the owner inside its own transaction and waits for nothing (§3.3), a change of owner writes the era and keeps `lrev`
+  // above what a screen remembers (§3.1, §3.7). Not given, every check below is main's as it was. The era is never refreshed from the store: a new
+  // screen is a new writer. A missing model is an error here, never a fall back to the old checks
+  // With an era the core is two objects (§7.3). makeSync gives the WRITER: the user's writes and reads by the era, setOwner, no memory of the queue, no
+  // cloud call. The writer makes RUNNERS (runner({epoch, owner, cloud})): the cloud side, each of one (epoch, env, uid, adapter) for its whole life, with
+  // one initialisation; a runner ends for good (end(), or a store that is no longer its owner's) and another is made. RUN is a runner's identity
+  const RUN=deps.__run||null, ERA=RUN? undefined : deps.era, WR=ERA!==undefined && ERA!==null, ERA_ON=WR || !!RUN, OM=ERA_ON? deps.ownerModel : null;
+  let alive=true, endedBy=null;   // a runner's life: checked when a transaction is admitted, before a cloud call and after its answer, and before any effect is published (§7.3.2)
+  if(WR){ if(typeof ERA!=='string' || !ERA) throw new TypeError('makeSync: deps.era is the era of a screen, a non-empty string');
     for(const f of ['judgeWrite','judgeRead','judgeView','memoryCurrent','nextEpoch','erases','expected','keptLrev','judgeReach','cloudIsOwners']) if(!OM || typeof OM[f]!=='function') throw new TypeError('makeSync: deps.era needs deps.ownerModel ('+f+')'); }
   // every transaction of the core is timed here, the direct ones (the quota, the start's records) included: a slow store shows in the status. Each
   // open one is kept by its own id, so a quick read beside a held write neither restarts nor ends its wait
-  const db={ tx:(stores, mode, fn)=>{ const t1=Date.now(), id=S.txSeq=(S.txSeq||0)+1; S.txOpen.set(id,t1); return Promise.resolve(deps.db.tx(stores, mode, fn)).finally(()=>{ S.txOpen.delete(id); noteTx(Date.now()-t1); }); } }; let devId=deps.devId||'dev', devName=deps.devName||'';   // the store's `device` record once loaded (§4.3): every tab of one device writes as one device, so a receipt proves any tab's attempt
-  const emit=(fn,...a)=>{ try{ if(typeof fn==='function') fn(...a); }catch(_){} };
+  const db={ tx:(stores, mode, fn)=>{ if(RUN){ const f0=fn; fn=async t=>{ await runCheck(t); return f0(t); }; if(!stores.includes('sync')) stores=[...stores,'sync']; } const t1=Date.now(), id=S.txSeq=(S.txSeq||0)+1; S.txOpen.set(id,t1); return Promise.resolve(deps.db.tx(stores, mode, fn)).finally(()=>{ S.txOpen.delete(id); noteTx(Date.now()-t1); }); } }; let devId=deps.devId||'dev', devName=deps.devName||'';   // the store's `device` record once loaded (§4.3): every tab of one device writes as one device, so a receipt proves any tab's attempt
+  const emit=(fn,...a)=>{ if(RUN && !alive) return; try{ if(typeof fn==='function') fn(...a); }catch(_){} };
   const pace={...PACE, ...(deps.pace||{})};
   const S={txOpen:new Map(), ranAt:new Map(), loaded:false, started:false, owner:null, epoch:null, cloud:deps.cloud||null, online:true, denied:false, paused:false, nospace:false,
     cursor:{notes:null, versions:null}, quota:null, quotaDirty:false, jobs:new Map(), tries:new Map(), refetch:new Set(), err:new Map(), sends:new Map(), bytes:new Map(),
@@ -220,6 +224,7 @@ function makeSync(deps){
     waiting:new Map(), netBusy:false, stepping:null, typed:new Map(), left:new Set(), lastStatus:null, retryAt:{notes:0, versions:0}, lastReconnect:0, rejected:new Set(),
     readOk:false, unverified:false, reauth:false, unauth:0, lastPurge:0,
     vjobs:new Map(), vtries:new Map(), vrefetch:new Set(), verr:new Map(), vblocked:new Set(), vrejected:new Set(), vlastDelivered:new Map(), vjudge:false, relisten:{notes:null, versions:null}};   // the version queue (§4.9): its own maps; vblocked: creates and renames waiting for their note to reach the cloud   // access (§4.11, §4.18): the first read since connecting failed on the network (unverified) or the sign-in must be repeated (reauth)
+  if(RUN){ S.epoch=RUN.epoch; S.owner=RUN.owner; }
   const LOG=[]; const log=ev=>{ ev.at=now(); LOG.push(ev); if(LOG.length>3000) LOG.shift(); emit(deps.log, ev); };
   const budgets=()=>deps.budgets||budgetOf(deps.env);
   const K={meta:(c,id)=>'meta:'+c+':'+id, out:(c,id)=>'out:'+c+':'+id, tr:(c,id)=>'try:'+c+':'+id, refetch:(c,id)=>'refetch:'+c+':'+id, seen:(c,id)=>'seen:'+c+':'+id, purged:id=>'purged:n:'+id, quarantine:(c,id)=>'quarantine:'+c+':'+id, cursor:col=>'cursor:'+col, scan:col=>'scan:'+col};
@@ -233,33 +238,26 @@ function makeSync(deps){
   async function getMeta(t,c,id){ const m=await t.get('sync',K.meta(c,id)); return m? {...defMeta(c,id), ...m} : defMeta(c,id); }
   async function check(t){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'); const eid=ep? ep.id : null, uid=ow? ow.uid : null, env=ow? ow.env : null;
     if(eid!==S.epoch || uid!==(S.owner? S.owner.uid : null) || env!==(S.owner? S.owner.env : null)) refuse(ep, ow, {own:true}); return {epoch:ep||null, owner:ow||null}; }
-  // a store that is not this memory's. Without an era: «reload». With one, the two results of §3.5: the era moved (the screen is of erased records) is
-  // «reload»; the same era under another owner is «stale» (the queue in memory is of the previous owner; the engine is to be replaced, the editor is
-  // not locked). o.own (a step): the owner this engine's own setOwner is writing is no news to the page, the step is refused quietly
-  function refuse(ep, ow, o={}){
-    if(!ERA_ON) setStatus('reload');
-    else if(OM.judgeView(ERA, {epoch:S.epoch, owner:S.owner}, {epoch:ep||null, owner:ow||null})==='era') setStatus('reload');
-    else if(!(o.own && [...PENDING].some(g=>sameOwner(g, ep? ep.id : null, ow)))) setStatus('stale');
-    if(ERA_ON && !(o.own && [...PENDING].some(g=>sameOwner(g, ep? ep.id : null, ow)))) stopListeners();   // an engine told to be replaced or reloaded listens to no cloud meanwhile
-    throw fail('epoch'); }
-  // the work queued for after a commit: cache updates (after) and events for the page (after.ev). With an era, the cache updates apply only when the
-  // memory is of the epoch and owner the transaction read (§3.3 item 4); otherwise the memory is marked not loaded (a flag, never a wait: §3.3 item 8)
-  // and the next load reads the store. The events always go: the write happened
-  // the generation of the engine's cloud work (only with an era): it moves whenever the owner in the store or the cloud adapter changes, inside the
-  // transaction that changes the owner, so before the adopting load. A step keeps the generation it began under: its transactions, the answers of its
-  // cloud calls, the deliveries it queued and its listeners are all of that generation, and none is applied under another (§3.4 item 2). The memory
-  // alone cannot tell: after the engine's own change it is the new owner's, while a page fetched from the previous owner's cloud is still being applied
-  const gen=()=>S.gen||0, bump=()=>{ S.gen=gen()+1; }, staleStep=()=>ERA_ON && S.stepGen!=null && S.stepGen!==gen();
+  // a store that is not this memory's (the branch without an era): «reload». A runner never gets here: runCheck ends it first
+  function refuse(ep, ow, o={}){ setStatus('reload'); throw fail('epoch'); }
+  // every transaction of a runner, reads included (§7.3.2 checks 2 and 4): an ended runner's is refused, and a store of another epoch or owner ends
+  // the runner. The runner has no era: it reports the mismatch, and the writer says which of §3.5's two results that is
+  async function runCheck(t){ if(!alive) throw Object.assign(fail('epoch'), {ended:true}); const ep=(await t.get('sync','epoch'))||null, ow=(await t.get('sync','owner'))||null;
+    if((ep? ep.id : null)!==RUN.epoch || !ow || ow.uid!==RUN.owner.uid || ow.env!==RUN.owner.env){ endRun('mismatch'); throw Object.assign(fail('epoch'), {ended:true}); } TXO.set(t, {epoch:ep, owner:ow}); }
+  // the end of a runner, for good: no cloud call after it, no listener, no delivery, no effect published; one notice with the reason (deps.onEnd),
+  // which is not an effect of its work and goes whatever its last step said. Reasons: mismatch, lead, adapter, storage, page
+  function endRun(reason){ if(!RUN || !alive) return; alive=false; endedBy=reason||'page'; S.started=false; stopListeners(); S.inbox.length=0; LOG.push({t:'runner-end', reason:endedBy, at:now()}); try{ RUN.gone(); }catch(_){}
+    const f=deps.onEnd; if(typeof f==='function') Promise.resolve().then(()=>{ try{ f(endedBy); }catch(_){} }); }
+  // the work queued for after a commit: cache updates (after) and events for the page (after.ev). The writer has no cache: only the events go, and a
+  // signal to the runner follows (§3.3 item 4). Without an era and in a runner both kinds run, in order
+  const staleStep=()=>!!RUN && !alive;
   const mkAfter=()=>{ const list=[], a=f=>{ list.push({f}); }; a.ev=f=>{ list.push({f, ev:true}); }; a.list=list; return a; };
-  const memIs=st=>OM.memoryCurrent({epoch:S.epoch, owner:S.owner}, st);
   // what a transaction of the era mode read of the store's owner state: {epoch, owner} (the records), by its transaction object
   const TXO=new WeakMap();
   // the owner a decision inside a transaction takes (§3.3 item 2): the one that transaction read; without an era, the engine's memory, as before
   const ownerIn=t=>{ const st=TXO.get(t); return st? st.owner : S.owner; };
   // one transaction of the engine's own (a step) with the epoch check against the memory; `after` queues work for after the commit
-  // o.free: a transaction of the engine that belongs to no step (the start's own), so no generation is asked of it
-  async function tx(stores, fn, o){ const after=mkAfter(); let st=null; const t0=await db.tx(stores,'readwrite', async t=>{ st=await check(t); if(!(o && o.free) && staleStep()) throw fail('epoch'); return fn(t, after); });
-    const cur=!ERA_ON || memIs(st); for(const x of after.list){ if(cur || x.ev) await x.f(); } if(!cur) S.loaded=false; return t0; }
+  async function tx(stores, fn){ const after=mkAfter(); const t0=await db.tx(stores,'readwrite', async t=>{ await check(t); return fn(t, after); }); for(const x of after.list) await x.f(); return t0; }
   // one transaction of the user's (§3.3; only with an era): the era of the store against the era of the screen, the owner read here, the device record
   // too (no load ran before it). `op` names the operation: the device name is of no era (§3.3 item 1). Nothing here depends on the engine's memory
   async function utx(stores, op, fn){ const after=mkAfter(); let st=null;
@@ -267,8 +265,12 @@ function makeSync(deps){
       if(!OM.judgeWrite(ERA, ep, op).ok){ setStatus('reload'); throw fail('epoch'); }
       const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       st={epoch:ep, owner:ow}; TXO.set(t, st); return fn(t, after); });
-    const cur=memIs(st); for(const x of after.list){ if(cur || x.ev) await x.f(); } if(!cur) S.loaded=false; return t0; }
-  const wtx=ERA_ON? utx : (stores, op, fn)=>tx(stores, fn);   // a write of the user: by the era, or main's transaction with the epoch check
+    for(const x of after.list){ if(x.ev) await x.f(); } signal(); return t0; }
+  // the signal of a committed write (§7.3.3 item 4): fired, never awaited; an error of it does not change the result of the write
+  const LIVE=new Set(); function signal(){ for(const r of LIVE){ try{ r.nudge(); }catch(_){} } const f=deps.onCommit; if(typeof f==='function'){ try{ f(); }catch(_){} } }
+  // a hint of no owner (typed, left, the size of a note): the writer hands it to its live runners; lost when a runner is replaced (§7.3.3 item 6)
+  function hint(kind, id, v){ if(WR){ for(const r of LIVE){ try{ r._hint(kind, id, v); }catch(_){} } return; } if(kind==='bytes') S.bytes.set(id, v); else if(kind==='typed') S.typed.set(id, now()); else if(kind==='left') S.left.add(id); }
+  const wtx=WR? utx : (stores, op, fn)=>tx(stores, fn);   // a write of the user: by the era, or main's transaction with the epoch check
   const lazy=()=>!ERA_ON && !S.loaded;   // main's wait for the first load before a write or a read of the user; with an era nothing of the user waits for a load
   // how long the store takes: a write over pace.slowTx makes the status say so for a minute (the device's storage, not the network, holds the sync back)
   function noteTx(ms){ if(ms>=pace.slowTx){ S.slowMs=ms; S.slowAt=Date.now(); } }
@@ -322,8 +324,8 @@ function makeSync(deps){
   // store that moved after an accepted load's read leaves only this refusal (the caller's catch). Nothing waits for the load
   function rtx(stores, fn){
     // with an era (§3.2 item 4): no load, no allowance; the read compares the era in its own transaction and takes the owner it read
-    if(ERA_ON) return db.tx(stores.includes('sync')? stores : [...stores,'sync'],'readonly', async t=>{ const ep=(await t.get('sync','epoch'))||null, ow=(await t.get('sync','owner'))||null;
-      if(!OM.judgeRead(ERA, ep).ok){ setStatus('reload'); throw fail('epoch'); } TXO.set(t, {epoch:ep, owner:ow}); return fn(t); });
+    if(WR) return db.tx(stores.includes('sync')? stores : [...stores,'sync'],'readonly', async t=>{ const ep=(await t.get('sync','epoch'))||null, ow=(await t.get('sync','owner'))||null;
+      if(!OM.judgeRead(ERA, ep).ok){ setStatus('reload'); throw fail('epoch'); } const dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); } TXO.set(t, {epoch:ep, owner:ow}); return fn(t); });
     const as=[...LOADS].map(l=>l.list()).filter(Boolean).map(allowance), end=()=>{ for(const a of as) a.end(); }; let tx;
     try{ tx=db.tx(as.length && !stores.includes('sync')? [...stores,'sync'] : stores,'readonly', async t=>{ if(as.length){ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!as.every(a=>a.ok(eid,ow))) throw fail('epoch'); } return fn(t); }); }catch(e){ end(); throw e; }   // an adapter that throws at once (not this app's SDB, which rejects) must not leave the allowances open
     return tx.finally(end); }
@@ -331,9 +333,6 @@ function makeSync(deps){
   async function loadV(t){ S.vjobs.clear(); S.vtries.clear(); S.vrefetch.clear();
     for(const j of await t.range('sync','out:v:','out:v:\uffff')){ const id=j.k.slice(6); S.vjobs.set(id, j); if(!j.tomb && !(await t.get('sync',K.meta('v',id)))) S.vjudge=true; }
     for(const r of await t.range('sync','try:v:','try:v:\uffff')) S.vtries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:v:','refetch:v:\uffff')) S.vrefetch.add(r.k.slice(10)); }
-  // with an era every delivery waiting in the inbox names the generation it came under: the step applies none of another owner's or another adapter's.
-  // A version that waits for its note (S.waiting, meta.wait) is of the epoch its meta is of: every adapter an epoch may use is its owner's (cloudOk)
-  const inboxed=m=>{ if(ERA_ON) m.gen=gen(); return m; };
   function addWaiting(doc){ const list=S.waiting.get(doc.note)||[]; const i=list.findIndex(d=>d.id===doc.id); if(i<0) list.push(doc); else if((doc.rev||0)>=(list[i].rev||0)) list[i]=doc; S.waiting.set(doc.note,list); }   // a later state of the same version replaces the earlier one
   // the job maps are a cache of the store: another runner over the same store (an old leader finishing its step, PR 2) may have added work.
   // Only the queue of this memory's epoch and owner is taken: after another tab's change of owner the store holds the new owner's jobs and attempts,
@@ -342,7 +341,7 @@ function makeSync(deps){
   // as they were. The owner this engine's own setOwner is writing is not another tab's: nothing is read and nothing reported, its load follows;
   // the answer is then `own`, and the step that asked ends there (stepOnce)
   async function reloadQueue(){ S.queueAt=now(); const own=allowance([...PENDING]); try{ return await db.tx(['sync'],'readonly', async t=>{
-      const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!sameOwner(known(),eid,ow)){ if(own.ok(eid,ow)){ if(ERA_ON && !OM.judgeRead(ERA, ep).ok){ setStatus('reload'); throw fail('epoch'); } return 'own'; } if(ERA_ON) refuse(ep, ow); setStatus('reload'); throw fail('epoch'); }   // with an era the refusal says which of the two results it is (§3.5): this engine's own change that kept the records is `own` (quiet, the step is run again), its own erase is «reload» like anyone's, another engine's change that kept them is «stale»
+      const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), eid=ep? ep.id : null; if(!sameOwner(known(),eid,ow)){ if(own.ok(eid,ow)) return 'own'; setStatus('reload'); throw fail('epoch'); }   // with an era the refusal says which of the two results it is (§3.5): this engine's own change that kept the records is `own` (quiet, the step is run again), its own erase is «reload» like anyone's, another engine's change that kept them is «stale»
       S.jobs.clear(); S.tries.clear(); S.refetch.clear();
       for(const j of await t.range('sync','out:n:','out:n:\uffff')) S.jobs.set(j.k.slice(6), j); for(const r of await t.range('sync','try:n:','try:n:\uffff')) S.tries.set(r.k.slice(6), r); for(const r of await t.range('sync','refetch:n:','refetch:n:\uffff')) S.refetch.add(r.k.slice(10)); await loadV(t);
       // with an era the marks that block a queued job are read with the queue: another tab's write may have lifted one (a note typed in again) while this engine led
@@ -358,7 +357,7 @@ function makeSync(deps){
     if(o.owner){ S.everCaughtUp=false; S.denied=false; S.reauth=false; S.unauth=0; S.totals={notes:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}, versions:{pending:true, strikes:0, last:0, lastMatch:0, mismatchAt:0}}; } S.loaded=false; }
   // a tab that becomes the leader (§4.10) starts from the store: the previous leader moved the cursor, resolved attempts and spent the budget while this
   // tab's memory stood still. The pause is reset too, since load() only ever sets it (a budget spent yesterday must not pause a leader of today)
-  async function reload(){ if(ERA_ON){ stopListeners(); bump(); } const guard=S.everLoaded? known() : null;   // a tab that waited for the lock must not adopt an owner it never knew
+  async function reload(){ const guard=S.everLoaded? known() : null;   // a tab that waited for the lock must not adopt an owner it never knew
     resetMemory(); S.paused=false; S.listenPaused=false; S.nospace=false; S.sweptOnce=false; S.denied=false; S.reauth=false; S.unauth=0; S.readOk=false; S.unverified=false; S.lastPurge=0; S.errorUntil=0; S.stepErrors=0; S.queueAt=0; S.refetchRetry=0; S.quota=null; S.quotaDirty=false; await load({guard}); }
   const blocked=()=>S.denied || S.reauth;   // nothing talks to the cloud until the access or the sign-in is sorted out (reload() or a new owner clears both)
   // (epoch, env, uid) of the store against this engine's (§4.11, on pageshow/resume and when another tab reports a change of owner); the device record is refreshed on the way.
@@ -367,7 +366,7 @@ function makeSync(deps){
   async function checkOwner(){ if(!S.loaded || LOADP){ try{ await (S.loaded? LOADP : load()); }catch(e){ if(e && e.code==='epoch') return false; throw e; } } const a=allowance([known(), ...PENDING]);   // a load in flight (a fresh engine's first one, a reload) ends first: its owner is the one to compare
     try{ return await db.tx(['sync'],'readonly', async t=>{ const ep=await t.get('sync','epoch'), ow=await t.get('sync','owner'), dv=await t.get('sync','device'); if(dv && dv.id){ devId=String(dv.id); if(dv.name) devName=String(dv.name); }
       return a.ok(ep? ep.id : null, ow); }); }finally{ a.end(); } }
-  const nudge=()=>{ S.queueAt=0; };   // another tab wrote: the next step reads the queue again instead of waiting for its minute
+  const nudge=()=>{ S.queueAt=0; S.asked=true; };   // another tab wrote: the next step reads the queue again instead of waiting for its minute
 
   /* ── budget and pace ── */
   function quotaNow(){ const day=dayKey(now()); if(!S.quota || S.quota.day!==day){ S.quota={k:'quota', day, reads:0, writes:0, lastSend:0}; S.quotaDirty=true; S.paused=false; } return S.quota; }
@@ -435,7 +434,7 @@ function makeSync(deps){
     meta.lrev=(meta.lrev||0)+1; if(o.baseEq) meta.baseLrev=meta.lrev;
     const bytes=docBytes(wireBody(stored))+512+(meta.base && meta.base.rcpt? bytesOf(JSON.stringify(meta.base.rcpt)) : 0);
     if(bytes>DOC_MAX) meta.err='size'; else if(meta.err==='size' || meta.err==='invalid') delete meta.err;
-    t.put('notes',stored); putMeta(t,meta,after); after(()=>{ S.bytes.set(id,bytes); });
+    t.put('notes',stored); putMeta(t,meta,after); after.ev(()=>hint('bytes', id, bytes));
     if(o.copies) await writeCopies(t, id, o.copies, o.t||now(), after, o.from);
     return {lrev:meta.lrev, note:stored}; }
   async function writeLocal(id, delta){ if(lazy()) await load();
@@ -528,7 +527,7 @@ function makeSync(deps){
     catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return 'epoch'; if(/Quota/i.test(e.name||'') || e.code==='quota') return (await quotaTrouble(doc.id))? 'nospace' : 'error'; log({t:'apply-error', id:doc.id, error:String(e)}); try{ await tx(['sync'], async(t,after)=>{ setRefetch(t,doc.id,after); }); }catch(_){} return 'error'; } }
   // after a note's document is committed: what the listener compares, and the versions that waited for it
   function noteApplied(doc, r, source){ if(source==='delivery') S.lastDelivered.set(doc.id, doc.rev);
-    const w=S.waiting.get(doc.id); if(w && w.length && r!=='skipped'){ S.waiting.delete(doc.id); for(const d of w) S.inbox.unshift(inboxed({col:'versions', doc:d, source:'wait'})); } }
+    const w=S.waiting.get(doc.id); if(w && w.length && r!=='skipped'){ S.waiting.delete(doc.id); for(const d of w) S.inbox.unshift({col:'versions', doc:d, source:'wait'}); } }
   // delivered notes (a catch-up page, or the listener's run in the inbox), PAGE_TX documents per transaction (a slow store pays its cost per
   // transaction, not per document: a new device's first snapshot is every note of the account); a chunk that fails is applied again one document
   // at a time, which keeps every error path of applyIncoming (quarantine, refetch, no space). recv holds the ids taken, so the listener's snapshot and the page that repeats it count a note once
@@ -549,9 +548,12 @@ function makeSync(deps){
   // read succeeded, is «could not check» (unverified); `reauthAfter` unauthenticated answers in a row mean the sign-in must be repeated
   // with an era, an answer or a refusal that comes back after the generation moved is of another cloud: it is dropped as a lost call, and says nothing of
   // this owner's access (a «permission-denied» of the previous owner's adapter while the new owner is being loaded must not deny the new one)
-  async function net(fn, o={}){ if(!S.online) return {error:{code:'unavailable', message:'offline'}}; const g0=gen(), moved=()=>ERA_ON && gen()!==g0;
-    try{ const value=await fn(); if(moved()) return {error:{code:'unavailable', message:'owner changed'}}; S.unauth=0; if(o.read){ S.readOk=true; if(S.unverified){ S.unverified=false; log({t:'verified'}); } } return {value}; }
-    catch(e){ const error=errOf(e); if(moved()) return {error:{code:'unavailable', message:'owner changed'}};
+  // a runner that ended makes no call, and the answer of a call already out is cancelled: not a network error, it says nothing of the access and
+  // counts for nothing (§7.3.2 check 3). What its caller then tries is refused by runCheck, and nothing it would publish goes out
+  const CANCELLED=()=>({cancelled:true, error:{code:'cancelled', message:'the runner ended'}});
+  async function net(fn, o={}){ if(staleStep()) return CANCELLED(); if(!S.online) return {error:{code:'unavailable', message:'offline'}}; const moved=staleStep;
+    try{ const value=await fn(); if(moved()) return CANCELLED(); S.unauth=0; if(o.read){ S.readOk=true; if(S.unverified){ S.unverified=false; log({t:'verified'}); } } return {value}; }
+    catch(e){ const error=errOf(e); if(moved()) return CANCELLED();
       if(error.code==='unauthenticated'){ S.unauth++; if(S.unauth>=pace.reauthAfter && !S.reauth){ S.reauth=true; log({t:'reauth'}); setStatus('reauth'); } }
       else if(error.code==='permission-denied' && o.read){ if(!S.denied){ S.denied=true; log({t:'denied', kind:o.kind||'read'}); setStatus('denied'); } }
       else if(o.read && isNetErr(error.code) && !S.readOk && !S.unverified){ S.unverified=true; log({t:'unverified', code:error.code}); setStatus('unverified'); }
@@ -889,15 +891,16 @@ function makeSync(deps){
       if(last){ c.after=last; try{ await tx(['sync'], async(t,after)=>bumpCursor(t,col,last,after)); }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // with the owner check: a page of the old owner must not leave its cursor to the new one
       if(docs.length<200 && col==='versions'){ try{ await tx(['sync'], async t=>{ const st=await t.get('sync',K.cursor('versions')); if(!st || !st.done) t.put('sync',{...(st||{}), k:K.cursor('versions'), done:true}); }); S.cursor.versions={...(S.cursor.versions||{}), done:true}; }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // the first catch-up of versions has ended, also with no document at all
       if(staleStep()) return true;
+      if(RUN && docs.length<200 && col==='notes' && !(S.cursor.notes && S.cursor.notes.caught)){ try{ await tx(['sync'], async t=>{ const st=await t.get('sync',K.cursor('notes')); if(!st || !st.caught) t.put('sync',{...(st||{}), k:K.cursor('notes'), caught:true}); }); S.cursor.notes={...(S.cursor.notes||{}), caught:true}; }catch(e){ if(e.code==='epoch' || e.code==='locked' || e.code==='frozen') return true; throw e; } }   // this epoch's first catch-up of notes ended, accounted to its end: the writer reads the mark for «never in the cloud» (§7.3.3 item 5); it goes with the cursor at a change of owner
       if(docs.length<200){ c.active=false; S.catchupDone[col]=true; log({t:'catchup-done', col}); if(col==='notes'){ S.everCaughtUp=true; versionsNow(); if(!S.catchup.versions || !S.catchup.versions.active) startCatchup('versions'); } S.totals[col].pending=true; }
       return true; } finally{ S.netBusy=false; } }
   // a listener that ends with an error is not restarted by the SDK: unless refused, the step starts it again after a growing pause (`relisten`), from the
   // cursor as a reconnect does (§4.6); the pause starts anew only after a listener that lived longer than the longest pause, so one that keeps ending
   // right after its snapshot does not restart every retryMin; a callback of a listener already replaced or stopped changes nothing
-  function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
+  function startListener(col){ if(!S.cloud || !S.cloud.listen || S.paused || staleStep()) return; if(S.listen[col]){ try{ S.listen[col](); }catch(_){} }
     const tries=S.relisten[col]? S.relisten[col].tries : 0; S.relisten[col]=null; S.snapshot[col]=false; const from=srvMinus(S.cursor[col] && S.cursor[col].srv, 2*60000), me={}, since=now();
-    S.listenId={...S.listenId, [col]:me}; const g0=gen(), mine=()=>S.listenId && S.listenId[col]===me && (!ERA_ON || gen()===g0);
-    const off=S.cloud.listen(col, from, (docs, info)=>{ if(!mine()) return; if(info && info.snapshot){ S.snapshot[col]=true; S.readOk=true; if(col==='notes') versionsNow(); } if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push(inboxed({col, doc:d, source:'delivery'})); emit(deps.wake); },
+    S.listenId={...S.listenId, [col]:me}; const mine=()=>S.listenId && S.listenId[col]===me && !staleStep();
+    const off=S.cloud.listen(col, from, (docs, info)=>{ if(!mine()) return; if(info && info.snapshot){ S.snapshot[col]=true; S.readOk=true; if(col==='notes') versionsNow(); } if(docs && docs.length) countRead(docs.length); for(const d of docs||[]) S.inbox.push({col, doc:d, source:'delivery'}); emit(deps.wake); },
       err=>{ if(!mine()) return; const code=errOf(err).code; log({t:'listen-error', col, code}); S.snapshot[col]=false; S.listen[col]=null; S.listenId={...S.listenId, [col]:null};
         if(code==='permission-denied'){ if(!S.denied){ S.denied=true; log({t:'denied', kind:'listen'}); setStatus('denied'); } return; }
         const n=(now()-since>pace.retryMax? 0 : tries)+1; S.relisten[col]={tries:n, at:now()+backoffMs(n)}; emit(deps.wake); });   // every delivered document is a billed read (§4.17); a refused listener is a refused read
@@ -973,7 +976,7 @@ function makeSync(deps){
   // report «reload», which locks the very tab that binds. The step ends idle and asks to be run again shortly; setOwner's load brings the queue.
   // A stopped engine asks for nothing: its step would be idle anyway, and the page must not wake it twenty times a second while a change waits for the store
   const ownChange=()=>({did:'idle', next:S.started? now()+50 : Infinity, status:S.lastStatus});
-  async function stepOnce(){ if(PENDING.size) return ownChange(); if(!S.loaded){ if(!ERA_ON) await load(); else { try{ await load(); }catch(e){ if(e && e.code==='epoch') return {did:'idle', next:Infinity, status:S.lastStatus}; throw e; } } } const nowT=now(); quotaNow();   // with an era a store of another owner (the refusal told the page which of the two results) leaves the step idle, not failing
+  async function stepOnce(){ if(PENDING.size) return ownChange(); if(!S.loaded){ if(RUN) await init(); else await load(); } const nowT=now(); quotaNow();
     if(!S.started || !cloudOk()){ return {did:'idle', next:Infinity, status:status()}; }
     if(S.listenPaused && !S.paused){ S.listenPaused=false; reconnect(); }   // the day turned: the budget is back, so are the listeners
     if((S.errorUntil||0)>nowT) return {did:'idle', next:S.errorUntil, status:status()};
@@ -982,7 +985,6 @@ function makeSync(deps){
     if((!S.jobs.size && !S.tries.size && !S.vjobs.size && !S.vtries.size) || nowT-(S.queueAt||0)>60000){ try{ if(await reloadQueue()==='own') return ownChange(); }catch(e){ if(e && e.code==='epoch') return {did:'idle', next:Infinity, status:status()}; throw e; } }   // the store is another owner's now: the refusal told the page («reload»), the step does nothing, with no error pause
     if(S.vjudge) await vmigrate({jobs:true});   // a version job written without a meta (code before 4a in another tab): judged before anything sends it
     try{
-      if(ERA_ON && S.inbox.some(m=>m.gen!==gen())){ const n=S.inbox.length; S.inbox=S.inbox.filter(m=>m.gen===gen()); log({t:'inbox-dropped', n:n-S.inbox.length}); }
       if(S.inbox.length){ const isNote=m=>m.col==='notes' && m.source==='delivery';
         if(isNote(S.inbox[0])){ const run=[]; while(run.length<PAGE_TX && S.inbox.length && isNote(S.inbox[0])) run.push(S.inbox.shift().doc); await applyNotesPage(run); return {did:'inbox', next:nowT}; }   // a run of delivered notes goes as one transaction
         const m=S.inbox.shift(); await applyIncoming(m.col, m.doc, m.source); return {did:'inbox', next:nowT}; }
@@ -999,9 +1001,10 @@ function makeSync(deps){
       return {did:'idle', next:nextWake(nowT), status:status()}; }
     finally{ await flushQuota(); } }
   // an error outside a send or an attempt (a page, the totals, a scan, the inbox) pauses the engine for a growing while instead of failing the step
-  function step(){ if(S.stepping) return S.stepping; S.stepping=(async()=>{ try{ if(ERA_ON) S.stepGen=gen(); const r=await stepOnce(); if(r.did!=='idle') S.stepErrors=0; return r; }
-      catch(e){ S.stepErrors=(S.stepErrors||0)+1; S.errorUntil=now()+backoffMs(S.stepErrors); log({t:'step-error', kind:'step', code:e && e.code, error:String(e && e.message || e), next:S.errorUntil}); return {did:'error', next:S.errorUntil, status:status()}; }
-      finally{ S.stepping=null; S.stepGen=null; } })(); return S.stepping; }
+  const ENDED=()=>({did:'ended', next:Infinity, status:S.lastStatus});
+  function step(){ if(S.stepping) return S.stepping; if(staleStep()) return Promise.resolve(ENDED()); S.stepping=(async()=>{ try{ S.asked=false; let r=await stepOnce(); if(staleStep()) return ENDED(); if(r.did!=='idle') S.stepErrors=0; else if(RUN && S.asked) r={...r, next:now()}; return r; }   // a signal that came during the step is one more step after it (§7.3.3 item 4)
+      catch(e){ if(staleStep()) return ENDED(); S.stepErrors=(S.stepErrors||0)+1; S.errorUntil=now()+backoffMs(S.stepErrors); log({t:'step-error', kind:'step', code:e && e.code, error:String(e && e.message || e), next:S.errorUntil}); return {did:'error', next:S.errorUntil, status:status()}; }
+      finally{ S.stepping=null; } })(); return S.stepping; }
   async function idle(limit=200){ let r; for(let i=0;i<limit;i++){ r=await step(); if(r.did==='idle') break; } return r; }
 
   /* ── the automatic purge by the device clock (§4.8): candidates are notes in the trash whose server date `tsrv` is known and over the term
@@ -1017,47 +1020,52 @@ function makeSync(deps){
   // o.expectEpoch: the epoch the caller decided over (a dialog); another one in the store means another tab changed the owner first → `epoch`
   // with an era nothing is loaded first: the transaction reads the epoch and the owner itself, so a memory another engine's change left behind (and a
   // write marked not loaded) does not refuse the change before its own checks
-  async function setOwner(owner, o={}){ if(lazy()) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
-  // With an era (§3.1, §3.6, §3.7): the `epoch` record carries the era (kept by a change that keeps the records, new with an erase); «the same owner
-  // again» is decided over the store, not over a memory another tab's change left behind; a note that stays keeps its `lrev` above every number a
-  // screen remembers (previous + 1, ahead of no base; an empty note, which gets no job, previous + 1 with nothing ahead, so a document of its id still
-  // replaces it); the metas of versions start anew as before (no screen remembers them, and `lrev` 1 is what «not renamed here» reads). An error of
-  // the adopting load says the change itself is in the store (`committed`, `erase`): a hint for the page, not what safety rests on
-  async function setOwnerNow(owner, o, mine){ const same0=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env, erase=ERA_ON? OM.erases(owner, o) : (!!o.erase || !owner); let same=same0;
-    await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ const ep=o.expectEpoch!==undefined || ERA_ON? ((await t.get('sync','epoch'))||null) : null;
-      if(o.expectEpoch!==undefined){ if(ERA_ON? !OM.expected(o.expectEpoch, ep) : (ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
-      same=same0; mine.refresh=null; if(ERA_ON){ const ow=(await t.get('sync','owner'))||null; same=!o.erase && !!owner && !!ow && ow.uid===owner.uid && ow.env===owner.env;   // by the store alone: the memory may be of an owner another engine replaced
-        if(same && !memIs({epoch:ep, owner:ow})){ mine.refresh={epoch:ep? ep.id : null, uid:ow.uid, env:ow.env}; if(mine.exp) PENDING.delete(mine.exp); mine.exp=mine.refresh; ownAdd(mine.exp); bump(); } }   // registered as this engine's own, so a step or a check beside the refreshing load is not told «stale»
+  async function setOwner(owner, o={}){ if(!S.loaded) await load(); const mine={}; try{ return await setOwnerNow(owner, o, mine); }finally{ if(mine.exp) PENDING.delete(mine.exp); } }
+  async function setOwnerNow(owner, o, mine){ const same=!o.erase && S.owner && owner && S.owner.uid===owner.uid && S.owner.env===owner.env;
+    await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ if(o.expectEpoch!==undefined){ const ep=await t.get('sync','epoch'); if((ep? ep.id : null)!==o.expectEpoch) throw fail('epoch'); }
       if(same){ t.put('sync',{k:'owner', ...owner}); return; }
-      const eid='e'+now().toString(36)+random().toString(36).slice(2,8), epoch=ERA_ON? OM.nextEpoch(ep, {id:eid, erase}) : {k:'epoch', id:eid}; t.put('sync',epoch);
+      const epoch={k:'epoch', id:'e'+now().toString(36)+random().toString(36).slice(2,8)}; t.put('sync',epoch);
       if(mine.exp) PENDING.delete(mine.exp); mine.exp={epoch:epoch.id, uid:owner? owner.uid : null, env:owner? owner.env : null}; ownAdd(mine.exp);   // the owner this transaction writes (a retried callback replaces its own)
-      const kept=new Map(); if(ERA_ON && !erase) for(const m of await t.range('sync','meta:n:','meta:n:￿')) kept.set(m.k.slice(7), m);
       for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'￿')) t.del('sync',r.k);
+      const erase=!!o.erase || !owner;
       if(erase){ for(const n of await t.range('notes','','￿')) t.del('notes',n.id); for(const v of await t.range('versions','','￿')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['￿','￿'])) t.del('blobs',[b.note,b.h]); }
-      if(owner){ t.put('sync',{k:'owner', ...owner}); if(!erase){ for(const n of await t.range('notes','','￿')){
-            if(isEmpty(n)){ if(ERA_ON && kept.has(n.id) && +kept.get(n.id).lrev>0){ const l=OM.keptLrev(kept.get(n.id)).lrev; t.put('sync',{...defMeta('n',n.id), lrev:l, baseLrev:l}); } continue; }
-            t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); t.put('sync',{...defMeta('n',n.id), ...(ERA_ON? OM.keptLrev(kept.get(n.id)) : {lrev:1})}); }
-          const noop=()=>{}; noop.ev=noop; for(const v of await t.range('versions','','￿')){ if(v.name && v.reason!=='copy') await queueV(t, v, noop, {force:true}); } } }   // the queued note is a local change ahead of no base (lrev 1 over baseLrev 0): a document of the same id in the new owner's cloud is merged with it (merge0) and the job stays, instead of replacing it
+      if(owner){ t.put('sync',{k:'owner', ...owner}); if(!erase){ for(const n of await t.range('notes','','￿')){ if(isEmpty(n)) continue; t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); t.put('sync',{...defMeta('n',n.id), lrev:1}); } const noop=()=>{}; for(const v of await t.range('versions','','￿')){ if(v.name && v.reason!=='copy') await queueV(t, v, noop, {force:true}); } } }   // the queued note is a local change ahead of no base (lrev 1 over baseLrev 0): a document of the same id in the new owner's cloud is merged with it (merge0) and the job stays, instead of replacing it
       else t.del('sync','owner');
-      S.loaded=false; if(ERA_ON) bump(); });
-    // an error of an adopting load says the change itself is in the store; a frozen error cannot take the hint, a copy carries it
-    const adopting=async(exp, erased)=>{ try{ await load({adopt:exp}); }catch(e){ let err=e; try{ e.committed=true; e.erase=erased; }catch(_){ err=Object.assign(new Error(e && e.message || String(e)), {name:e && e.name, code:e && e.code, committed:true, erase:erased, cause:e}); } throw err; } };
-    if(same && mine.refresh){ stopListeners(); resetMemory({owner:true}); await adopting(mine.refresh, false); if(S.started) connectCloud(); return; }   // the store already has this owner and the memory another: the memory is read anew; the epoch, the queue and the registry of deletions stay
+      S.loaded=false; });
     if(same){ if(S.started) connectCloud(); return; }   // the same owner again (every start of a signed-in device): the memory stays as loaded from the store, the cursor included, so nothing is read anew
-    if(ERA_ON) stopListeners();   // the listeners are of the previous owner's cloud: none outlives the change, whatever adapter comes next
-    resetMemory({owner:true});
-    if(!ERA_ON) await load({adopt:mine.exp});
-    else await adopting(mine.exp, erase);
-    if(S.started) connectCloud(); }
+    resetMemory({owner:true}); await load({adopt:mine.exp}); if(S.started) connectCloud(); }
+  // the writer's change of owner (§7.3.3): two checks, apart. The era of this screen, as for every write: another era is «reload» and nothing changes.
+  // Then the epoch the decision was made over (always given; null for a store with none): any other epoch refuses. Nothing is loaded. It returns
+  // {epoch, changed, erased}; changed is false only for an ordinary bind of the (env, uid) the store already names. The `epoch` record carries the era
+  // (kept by a change that keeps the records, new with an erase); a note that stays keeps its `lrev` above every number a screen remembers (§3.7)
+  async function setOwnerW(owner, o={}){ if(o.expectEpoch===undefined) throw new TypeError('setOwner: expectEpoch is the epoch the decision was made over (null for a store with none)');
+    const erase=OM.erases(owner, o); let out=null;
+    await db.tx(['notes','versions','blobs','sync'],'readwrite', async t=>{ const ep=(await t.get('sync','epoch'))||null, ow=(await t.get('sync','owner'))||null;
+      if(!OM.judgeWrite(ERA, ep, 'setOwner').ok){ setStatus('reload'); throw Object.assign(fail('epoch'), {era:true}); }
+      if(!OM.expected(o.expectEpoch, ep)) throw Object.assign(fail('epoch'), {expect:true});
+      if(!erase && ow && ow.uid===owner.uid && ow.env===owner.env){ t.put('sync',{k:'owner', ...owner}); out={epoch:ep? ep.id : null, changed:false, erased:false}; return; }
+      const eid='e'+now().toString(36)+random().toString(36).slice(2,8), epoch=OM.nextEpoch(ep, {id:eid, erase}); t.put('sync',epoch); TXO.set(t, {epoch, owner:owner||null});
+      const kept=new Map(); if(!erase) for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) kept.set(m.k.slice(7), m);
+      for(const pre of ['meta:','seen:','out:','try:','refetch:','purged:','cursor:','quarantine:','scan:']) for(const r of await t.range('sync',pre,pre+'\uffff')) t.del('sync',r.k);
+      if(erase){ for(const n of await t.range('notes','','\uffff')) t.del('notes',n.id); for(const v of await t.range('versions','','\uffff')) t.del('versions',v.id); for(const b of await t.range('blobs',[''],['\uffff','\uffff'])) t.del('blobs',[b.note,b.h]); }
+      if(owner){ t.put('sync',{k:'owner', ...owner}); if(!erase){ for(const n of await t.range('notes','','\uffff')){
+            if(isEmpty(n)){ if(kept.has(n.id) && +kept.get(n.id).lrev>0){ const l=OM.keptLrev(kept.get(n.id)).lrev; t.put('sync',{...defMeta('n',n.id), lrev:l, baseLrev:l}); } continue; }
+            t.put('sync',{k:K.out('n',n.id), tries:0, next:0}); t.put('sync',{...defMeta('n',n.id), ...OM.keptLrev(kept.get(n.id))}); }
+          const noop=()=>{}; noop.ev=noop; for(const v of await t.range('versions','','\uffff')){ if(v.name && v.reason!=='copy') await queueV(t, v, noop, {force:true}); } } }
+      else t.del('sync','owner');
+      out={epoch:eid, changed:true, erased:erase}; });
+    if(out.changed) for(const r of [...LIVE]){ try{ r.end('mismatch'); }catch(_){} }   // their identity is of the previous epoch: each would end at its next transaction anyway
+    signal(); return out; }
+  // a runner for the epoch and the owner the store has (the page read them through ownerNow), with its adapter, which names its namespace and is the owner's
+  function runner(o={}){ const ow=o.owner, c=o.cloud; if(!ow || !ow.uid || !ow.env || typeof o.epoch!=='string' || !o.epoch) throw new TypeError('runner: an epoch and an owner (env, uid)');
+    if(!c || c.uid!==ow.uid || c.env!==ow.env) throw new TypeError("runner: the adapter names its namespace (env, uid), and it is the owner's");
+    let r=null; r=makeSync({...deps, era:undefined, cloud:c, onEnd:o.onEnd||deps.onEnd, __run:{epoch:o.epoch, owner:{...ow}, gone:()=>{ LIVE.delete(r); }}}); LIVE.add(r); return r; }
+  // the store's epoch and owner as they are now, judged by the era of this screen first (another era: «reload» and `epoch`)
+  const ownerNow=()=>rtx(['sync'], async t=>{ const st=TXO.get(t); return {epoch:st.epoch? st.epoch.id : null, owner:st.owner, era:ERA}; });
   // «Створити копію нотатки» (§4.18): the note the rules refuse for its receipts stays here as it is; its job goes, so the copy syncs in its place
   async function unqueue(id){ if(lazy()) await load(); return wtx(['sync'], 'unqueue', async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err!=='receipts') return {ok:false, code:'receipts'}; delete meta.err; putMeta(t,meta,after); dropJob(t,id,after); dropRefetch(t,id,after); return {ok:true}; }); }
-  // §3.4 item 2: with an era, a cloud adapter that names another user than the owner is not used: no step, no listener, no send
-  // An adapter that names no user is bound to the epoch it is first connected under and is not used under another: after a change of owner the page
-  // hands a new adapter. swapCloud is the one way an adapter is replaced (setCloud, start): the listeners of the one that goes end, the generation moves
-  const BOUND=new WeakMap();
-  const cloudOk=()=>!!S.cloud && !!S.owner && (!ERA_ON || (OM.cloudIsOwners(S.owner, S.cloud) && (S.cloud.uid!=null || !BOUND.has(S.cloud) || BOUND.get(S.cloud)===S.epoch)));
-  const swapCloud=c=>{ if(ERA_ON && c!==S.cloud){ stopListeners(); bump(); } S.cloud=c; };
-  function connectCloud(){ if(!cloudOk()) return; if(ERA_ON && S.cloud.uid==null && !BOUND.has(S.cloud)) BOUND.set(S.cloud, S.epoch); S.readOk=false; S.unverified=false; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); listenVersions(); }
+  const cloudOk=()=>!!S.cloud && !!S.owner;   // a runner's adapter is fixed and of its owner's namespace: the writer makes no runner otherwise (§7.3.1)
+  function connectCloud(){ if(!cloudOk()) return; S.readOk=false; S.unverified=false; if(S.paused){ S.listenPaused=true; return; } startCatchup('notes'); S.catchup.versions=null; S.catchupDone.versions=false; startListener('notes'); listenVersions(); }
   // the first load of versions waits for the notes: the versions listener's first snapshot is every version of the account with its bodies, and it
   // would share the inbox with the notes; it starts after the notes' snapshot (below), and at once when the versions catch-up already ended once
   function listenVersions(){ if(S.cursor.versions && S.cursor.versions.done) startListener('versions'); else S.versionsLater=true; }
@@ -1066,8 +1074,11 @@ function makeSync(deps){
   function versionsNow(){ if(S.versionsLater && S.started && !S.paused){ S.versionsLater=false; startListener('versions'); } }
   // every start has a run id; stop() and a later start move it on, so a start that was waiting on its transaction when either came connects nothing
   // and changes nothing of the run that superseded it (a tab that lost the lead during its start and got it back before that start finished)
-  async function start(o={}){ if(!S.loaded) await load(); if(o.cloud!==undefined) swapCloud(o.cloud); const run=S.runId=(S.runId||0)+1; S.started=true;
-    if(cloudOk()){ try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:deps.format||3}); }); }catch(_){} try{ await recheckQuarantine(); }catch(_){} try{ await vmigrate({free:true}); }catch(e){ log({t:'vmigrate-error', error:String(e)}); } if(!S.started || S.runId!==run) return; connectCloud(); } }
+  // a runner's one initialisation, one shared result (§7.3.1): the load of the queue for its epoch. A store of another owner, or a storage error,
+  // fails it and ends the runner; nothing of a runner acts before it succeeds and nothing loads again afterwards
+  let INIT=null; function init(){ if(!INIT) INIT=(async()=>{ try{ await load(); }catch(e){ endRun(e && e.code==='epoch'? 'mismatch' : 'storage'); throw e; } })(); return INIT; }
+  async function start(o={}){ if(RUN){ await init(); if(!alive) return; } else { if(!S.loaded) await load(); if(o.cloud!==undefined) S.cloud=o.cloud; } const run=S.runId=(S.runId||0)+1; S.started=true;
+    if(cloudOk()){ if(!RUN) try{ await db.tx(['sync'],'readwrite', async t=>{ if(!(await t.get('sync','format'))) t.put('sync',{k:'format', v:deps.format||3}); }); }catch(_){} try{ await recheckQuarantine(); }catch(_){} try{ await vmigrate({free:true}); }catch(e){ log({t:'vmigrate-error', error:String(e)}); } if(!S.started || S.runId!==run) return; connectCloud(); } }
   // a note quarantined for its shape is checked again under the current normalizer (an update may accept what an older one refused, §4.15): one that passes
   // is marked and read from the cloud again; the read goes through rule 1 against the kept seen record (an equal document is fresh, a recreated one is
   // recognized), and the quarantine with its copy leaves only in the transaction that applies the document. One that still fails stays as it is
@@ -1082,7 +1093,7 @@ function makeSync(deps){
   async function purgeLocal(id, o={}){ if(lazy()) await load(); try{ return await wtx(['notes','sync','versions','blobs'], 'purgeLocal', async(t,after)=>{ const C=await t.get('notes',id); if(!C) return {ok:false, code:'missing'};
       if(ERA_ON){ const v=OM.judgeReach(o.reach||'here', ownerIn(t)); if(!v.ok) return {ok:false, code:'reach', reach:v.reach}; }   // §3.3 item 9: the owner makes the deletion reach further than the user confirmed (none named: this device only); nothing is deleted, the page asks again
       const meta=await getMeta(t,'n',id), seen=await t.get('sync',K.seen('n',id)), tr=await t.get('sync',K.tr('n',id)), copies=(await versionsOf(t,id)).filter(v=>v.reason==='copy').length;
-      const caught=ERA_ON? memIs(TXO.get(t)) && S.everCaughtUp : S.everCaughtUp;   // §3.3 item 5: «caught up» of a memory that is not of this epoch says nothing of this owner's cloud
+      const caught=WR? !(await t.get('sync',K.refetch('n',id))) && !!((await t.get('sync',K.cursor('notes')))||{}).caught : S.everCaughtUp;   // §3.3 item 5: «caught up» of a memory that is not of this epoch says nothing of this owner's cloud
       const never=!ownerIn(t) || (!meta.base && !seen && !tr && caught);
       await deleteRecord(t,id,{after, own:true, never}); after(()=>{ S.bytes.delete(id); S.sends.delete(id); S.err.delete(id); });   // nothing in the cloud to tombstone (decision 2 of the implementation plan)
       if(never){ t.del('sync',K.meta('n',id)); dropJob(t,id,after); dropRefetch(t,id,after); after.ev(()=>emit(deps.onChange,{id, kind:'purged'})); return {ok:true, tomb:false, copies}; }
@@ -1172,10 +1183,18 @@ function makeSync(deps){
   async function seenAll(){ if(lazy()) await load(); return rtx(['sync'], async t=>({notes:await t.range('sync','seen:n:','seen:n:\uffff'), versions:await t.range('sync','seen:v:','seen:v:\uffff')})); }
   async function lrevOf(ids){ if(lazy()) await load(); return rtx(['sync'], async t=>{ const out={}; for(const m of await t.range('sync','meta:n:','meta:n:\uffff')) out[m.k.slice(7)]=m.lrev||0; return out; }); }
 
+  const typed=id=>{ hint('typed', id); if(WR || S.err.get(id)==='loop'){ wtx(['sync'], 'typed', async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } };
+  const left=id=>{ hint('left', id); emit(deps.wake); };
+  const common={usedStored, limits:()=>({...budgets()}), busyMs};
+  // the writer (§7.3.1 item 1): no step, no load, no cloud
+  if(WR) return {...common, kind:'writer', writeLocal, purgeLocal, unqueue, deviceName, countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, typed, left,
+    setOwner:setOwnerW, runner, ownerNow, runners:()=>[...LIVE], get era(){ return ERA; }, get log(){ return LOG; }, get devId(){ return devId; }, get devName(){ return devName; }};
+  // a runner (§7.3.1 item 2): no write of the user, no setOwner, no reload, no setCloud, no checkOwner; tombstoneAuto runs only inside its own step
+  if(RUN) return {...common, kind:'runner', init, start, step, idle, status, online, reconnect, nudge, end:reason=>endRun(reason||'page'), stop:()=>endRun('page'), autoPurge, usedToday:()=>{ const q=quotaNow(); return {reads:q.reads, writes:q.writes}; },
+    _hint:(k,id,v)=>hint(k,id,v), get log(){ return LOG; }, get devId(){ return devId; }, get devName(){ return devName; }, get alive(){ return alive; }, get ended(){ return endedBy; }, get owner(){ return S.owner; }, get epoch(){ return RUN.epoch; }, get cloud(){ return S.cloud; }, hasOwner:()=>true, isOnline:()=>S.online, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
   return {_own:()=>({open:OWN.open, len:OWN.length, loads:LOADS.size}), start, stop, step, idle, status, online, reconnect, setOwner, reload, checkOwner, nudge, writeLocal, purgeLocal, unqueue, tombstoneAuto, autoPurge, deviceName, usedToday:()=>{ const q=quotaNow(); return {reads:q.reads, writes:q.writes}; }, usedStored,  limits:()=>({...budgets()}), countCopies, copiesCount, restoreCopy, undoRestore, dropCopies, putCopies, purgeOldLocal, importNote, importMany, state, seenAll, lrevOf, versionLocal, versionStates, importHistory, unsynced, get devId(){ return devId; }, get devName(){ return devName; },
-    typed:id=>{ S.typed.set(id,now()); if(ERA_ON || S.err.get(id)==='loop'){ wtx(['sync'], 'typed', async(t,after)=>{ const meta=await getMeta(t,'n',id); if(meta.err==='loop'){ delete meta.err; putMeta(t,meta,after); } }).catch(()=>{}); } },
-    left:id=>{ S.left.add(id); emit(deps.wake); }, setCloud:c=>{ swapCloud(c); if(S.started) connectCloud(); },
-    get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, get era(){ return ERA_ON? ERA : undefined; }, hasOwner:()=>!!S.owner, isOnline:()=>S.online, busyMs, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
+    typed, left, setCloud:c=>{ S.cloud=c; if(S.started) connectCloud(); },
+    get log(){ return LOG; }, get owner(){ return S.owner; }, get epoch(){ return S.epoch; }, hasOwner:()=>!!S.owner, isOnline:()=>S.online, busyMs, jobs:()=>[...S.jobs.keys()], tries:()=>[...S.tries.keys()], vjobs:()=>[...S.vjobs.keys()], vtries:()=>[...S.vtries.keys()], inboxSize:()=>S.inbox.length, _S:S};
 }
 
 return {DOC_MAX, V_BODY_MAX, LIM, SERVICE, isColor, hashOf, canon, cjson, hashDoc, noteBody, noUpdated, sameDoc, docBytes, cmpSrv, clearlyNewer, validSrv, normBlock, normBlocks, normNote, normVersion,

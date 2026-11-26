@@ -1,14 +1,18 @@
-// The sync core with the era of a screen (docs/OWNER-ERA-PLAN.md, stage 2; Node, over MemStore). An engine made with `deps.era` and the rules of
-// public/owner/model.js (`deps.ownerModel`, §7.1) is the new mode; nothing in the app makes one yet, and without `deps.era` the engine is main's
-// (the other sync*.mjs run over it unchanged). Here:
+// The sync core with the era of a screen (docs/OWNER-ERA-PLAN.md, stage 2; Node, over MemStore). With `deps.era` and the rules of
+// public/owner/model.js (`deps.ownerModel`, §7.1) the core is two objects (§7.3): the writer (the user's writes and reads by the era, setOwner) and
+// runners (the cloud side, each of one epoch, owner and adapter for its whole life). Nothing in the app makes either yet, and without `deps.era` the
+// engine is main's (the other sync*.mjs run over it unchanged). The cases drive them through the test page of tests/lib/erapage.mjs (`d.sync`), and
+// reach the two objects themselves (`d.sync.writer`, `d.sync.runner`) where the order of calls is the point. Here:
 //   W.   the wiring contract of §7.1;
-//   M.   the matrix of §8.1, one row per operation of the user in the core: (a) ordered after the commit of a change that kept the records and before
-//        the adopting load, the operation is accepted and decides by the new owner; (b) called with the era of a screen read before an erase, it is refused;
-//   5s.  the cases of #146 (`syncguard` 5s–5s10) carried over and read again by §8.3: what was «this engine remembers its erase» is now the era;
-//   B.   the cases beside the matrix (§8.1) and the rules of §3.3, §3.4, §3.6 and §3.7 one by one.
+//   M.   the matrix of §8.1, one row per operation of the user: (a) through the writer, right behind a change that kept the records, the operation is
+//        accepted and decides by the new owner; (b) called with the era of a screen read before an erase, it is refused;
+//   5s.  the cases of #146 (`syncguard` 5s–5s10) read again by §8.3 and §7.3.8;
+//   B.   the cases beside the matrix (§8.1), the rules of §3.3, §3.4, §3.6 and §3.7 one by one, and the cases of the review rounds, on the end of an instance;
+//   N.   the end of a runner (§7.3.2): a call already out, an identity the store has left, a transaction already admitted.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
+import { eraPage } from './lib/erapage.mjs';
 import * as OM from '../public/owner/model.js';
 const S=loadCore(); let fails=0; const ok=(n,c)=>{ if(!c) fails++; console.log((c?'✓ ':'✗ ')+n); };
 const U=n=>({env:'test', uid:n, email:n+'@test'});
@@ -22,16 +26,17 @@ const planned=db=>{ const plan=[], held=[]; const real=db.tx.bind(db), W={plan, 
     if(a==='holdfail') return new Promise(hold).then(()=>{ throw Object.assign(new Error('load failed'),{name:'UnknownError'}); });
     return real(st,mode,fn); }; return W; };
 // an engine over `db` for a screen of `era`; o.store: the wrapper its transactions go through; o.uid: the user the cloud adapter names
-function dev(cloud, name, db, era, o={}){ const d={name, db, logs:[], status:[], changes:[], calls:0};
+function dev(cloud, name, db, era, o={}){ const d={name, db, logs:[], status:[], changes:[], calls:0, signals:0};
   const c=f=>(...a)=>{ d.calls++; return f(...a); };
   d.proxy={ get:c((col,i)=>cloud.get(col,i,{dev:name})), page:c((col,q,n)=>cloud.page(col,q,n,{dev:name})), totals:c(col=>cloud.totals(col,{dev:name})), scan:c((col,q,n)=>cloud.scan(col,q,n,{dev:name})), txn:c((col,i,f)=>cloud.txn(col,i,f,{dev:name})),
     listen:c((col,from,onDocs,onErr)=>cloud.listen(col,from,onDocs,onErr,{dev:name})) }; if(o.uid) d.proxy.uid=o.uid;
-  d.sync=S.makeSync({db:o.store||db, cloud:d.proxy, now:()=>cloud.now(), random:Math.random, cleanRich:h=>h, env:'test', devId:name, devName:'Device '+name, budgets:{reads:1e9, writes:1e9},
-    pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50}, log:e=>d.logs.push(e), onChange:e=>d.changes.push(e), onStatus:code=>d.status.push(code), era, ownerModel:OM, ...(o.deps||{})}); return d; }
+  d.sync=eraPage(S, {db:o.store||db, cloud:d.proxy, now:()=>cloud.now(), random:Math.random, cleanRich:h=>h, env:'test', devId:name, devName:'Device '+name, budgets:{reads:1e9, writes:1e9},
+    pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50}, log:e=>d.logs.push(e), onChange:e=>d.changes.push(e), onStatus:code=>d.status.push(code), onCommit:()=>{ d.signals++; }, era, ownerModel:OM, ...(o.deps||{})}); return d; }
 const edit=(d,id,fn)=>d.sync.writeLocal(id,(C,m,t)=>fn(C,t));
 const note=(d,id,text,x={})=>edit(d,id,(C,t)=>({title:text? id : '', blocks:text? [{id:'b',row:1,fx:0,text}] : [], created:t, updated:t, ...x}));
 const code=p=>Promise.resolve(p).then(r=>r && r.ok!==false? 'ok' : (r && r.code)||'refused', e=>'throw:'+((e && e.code)||(e && e.name)));
-const cErr=e=>(e.committed? 'committed'+(e.erase? '+erase' : '')+':' : '')+(e.code||e.name);
+const cErr=e=>(e.era? 'era:' : e.expect? 'expect:' : '')+(e.code||e.name);   // a refused change of owner: by the era of the screen, or by the epoch of the decision
+const epNow=db=>(db.get('sync','epoch')||{}).id||null;
 const vrec=(cloud,id,nid,name,x={})=>({id, note:nid, t:cloud.now(), w:cloud.now(), reason:'manual', keep:1, inline:1, title:'', sig:'s-'+id, blocks:[{id:'b',row:1,fx:0,s:'body '+id}], ...(name? {name} : {}), ...x});
 const copy=(cloud,id,nid,text)=>({id, note:nid, t:cloud.now(), w:cloud.now(), reason:'copy', keep:1, inline:1, title:'copy', sig:'c-'+id, updated:cloud.now(), dev:'other', blocks:[{id:'b',row:1,fx:0,s:text}]});
 const tick=(ms=20)=>new Promise(r=>setTimeout(r,ms));
@@ -70,14 +75,14 @@ function runAll(cloud, A){ const t=cloud.now();
     A.sync.dropCopies('k1',['cp2']), A.sync.putCopies('k1',[copy(cloud,'cp4','k1','put back')]),
     A.sync.unqueue('k1'), A.sync.deviceName('Renamed device') ]; }
 
-// (a) a first sign-in: the engine's memory has no owner until the adopting load, the store has one from the commit on
+// (a) a first sign-in: every operation is called right behind the change, before its commit is known and before any runner is made
 { const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'MA',db,'0',{store:W}); await A.sync.start(); await seed(cloud, A, db);
   const jobs0=db.all('sync').filter(r=>r.k.startsWith('out:')).length; A.status.length=0; A.changes.length=0;
-  W.plan.push('hold'); const bind=A.sync.setOwner(U('m1')).then(()=>'ok', cErr);   // its transaction is queued first; its adopting load is held
+  const bind=A.sync.writer.setOwner(U('m1'),{expectEpoch:null}).then(r=>r.changed && !r.erased? 'ok' : 'odd', cErr);   // its transaction is queued first; the page has not heard of it
   const ps=runAll(cloud, A), raw=await Promise.all(ps.map(p=>Promise.resolve(p).then(r=>r, e=>({ok:false, thrown:e.code||e.name})))), R=Object.fromEntries(OPS.map((o,i)=>[o, raw[i]]));
-  const g=k=>db.get('sync',k), mem={epoch:A.sync.epoch, owner:A.sync.owner, loaded:A.sync._S.loaded, jobs:A.sync.jobs()};
-  ok('Ma the change kept the records and committed (the store names '+(g('owner')||{}).uid+', era '+eraNow(db)+'); the engine\'s memory has not moved (epoch '+mem.epoch+', owner '+mem.owner+'), no job before it ('+jobs0+')',
-    (g('owner')||{}).uid==='m1' && eraNow(db)==='0' && mem.epoch===null && mem.owner===null && jobs0===0);
+  const g=k=>db.get('sync',k), mem={runner:A.sync.runner, signals:A.signals};
+  ok('Ma the change kept the records and committed (the store names '+(g('owner')||{}).uid+', era '+eraNow(db)+'); no runner exists yet ('+mem.runner+'), no job before it ('+jobs0+')',
+    (g('owner')||{}).uid==='m1' && eraNow(db)==='0' && mem.runner===null && jobs0===0);
   ok('Ma writeLocal: accepted, the note has its `out:n:` job', R['writeLocal'].ok && !!db.get('notes','w1') && !!g('out:n:w1'));
   ok('Ma purgeLocal confirmed as «all»: a tombstone job, not a local-only delete ('+JSON.stringify({tomb:R['purgeLocal all'].tomb, job:g('out:n:p1')})+')', R['purgeLocal all'].ok && R['purgeLocal all'].tomb===true && !db.get('notes','p1') && !!g('out:n:p1') && g('out:n:p1').tomb===true && !!g('purged:n:p1'));
   ok('Ma purgeLocal confirmed as «here»: refused with `reach` (now «'+R['purgeLocal here'].reach+'»), nothing deleted, no tombstone', R['purgeLocal here'].ok===false && R['purgeLocal here'].code==='reach' && R['purgeLocal here'].reach==='all' && !!db.get('notes','p2') && !!g('out:n:p2') && !g('out:n:p2').tomb && !g('purged:n:p2'));
@@ -91,14 +96,14 @@ function runAll(cloud, A){ const t=cloud.now();
   ok('Ma dropCopies and putCopies: local only, accepted', R['dropCopies'].ok && R['dropCopies'].removed.length===1 && !db.get('versions','cp2') && R['putCopies'].ok && !!db.get('versions','cp4'));
   ok('Ma unqueue: accepted over the new metas (no refusal by the owner; its own answer is «'+R['unqueue'].code+'»)', !R['unqueue'].thrown && R['unqueue'].code==='receipts');
   ok('Ma deviceName: accepted ('+A.sync.devName+')', R['deviceName'].ok && A.sync.devName==='Renamed device' && g('device').name==='Renamed device');
-  ok('Ma no operation waited for the load or told the page anything ('+JSON.stringify(A.status)+'); the cache took nothing of another epoch (jobs in memory: '+mem.jobs.length+', marked not loaded), the events still went ('+A.changes.filter(e=>e.kind==='version').length+' of versions)',
-    !A.status.includes('reload') && !A.status.includes('stale') && mem.jobs.length===0 && A.changes.some(e=>e.kind==='version' && e.id==='vc') && A.changes.some(e=>e.kind==='purged' && e.id==='p1'));
-  W.release(); const b=await bind; await A.sync.idle(400); await A.sync.idle(400);
-  ok('Ma the adopting load then reads all of it ('+b+', owner '+(A.sync.owner||{}).uid+'): the notes and versions written in the window reach the new owner\'s cloud, the purged note leaves a tombstone',
+  ok('Ma no operation waited for anything or told the page of a refusal ('+JSON.stringify(A.status)+'); each commit signalled the runner\'s side ('+mem.signals+' signals), the events went ('+A.changes.filter(e=>e.kind==='version').length+' of versions)',
+    !A.status.includes('reload') && !A.status.includes('stale') && mem.signals>=10 && A.changes.some(e=>e.kind==='version' && e.id==='vc') && A.changes.some(e=>e.kind==='purged' && e.id==='p1'));
+  const b=await bind; await A.sync.reconcile(); await A.sync.idle(400); await A.sync.idle(400);
+  ok('Ma a runner made afterwards reads all of it ('+b+', owner '+(A.sync.owner||{}).uid+'): the notes and versions written in the window reach the new owner\'s cloud, the purged note leaves a tombstone',
     b==='ok' && A.sync.owner.uid==='m1' && !!cloud.doc('notes','w1') && !!cloud.doc('notes','i1') && !!cloud.doc('notes','i3') && !!cloud.doc('notes','c1') && !!cloud.doc('notes','u1') && !!cloud.doc('versions','vc') && !!cloud.doc('versions','vh') && !!cloud.doc('notes','p2') && !cloud.doc('notes','w1').purged); }
 
 // (a) again for a change from one owner to another that keeps the records, made by another engine over the same store (another tab): this engine's
-// memory is the previous owner's for good, and its «caught up» says nothing of the new owner's cloud (§3.3 item 5)
+// writer goes on, and «caught up» under the previous owner says nothing of the new owner's cloud: the mark went with the cursor (§3.3 item 5)
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'MB',db,'0'); await A.sync.setOwner(U('m2')); await A.sync.start(); await seed(cloud, A, db); await A.sync.idle(400); await A.sync.idle(400);
   const caught=A.sync._S.everCaughtUp, inCloud=!!cloud.doc('notes','p1'); A.sync.stop();
   const cloud2=new TestCloud({start:START}), X=dev(cloud2,'MB',db,eraNow(db)); await X.sync.setOwner(U('m3'));   // records kept; the new owner's cloud is empty
@@ -109,83 +114,83 @@ function runAll(cloud, A){ const t=cloud.now();
   ok('Mb another engine changed the owner and kept the records (era '+eraNow(db)+'): every operation of the old engine is still accepted or answered by its own rule ('+OPS.filter((o,i)=>raw[i].thrown || raw[i].code==='epoch').join(', ')+')', !raw.some(r=>r.thrown || r.code==='epoch'));
   ok('Mb «delete forever» decides by the new owner, not by a memory that caught up under the previous one (caught up '+caught+', in the old cloud '+inCloud+'): a tombstone job', caught===true && inCloud && R['purgeLocal all'].tomb===true && (g('out:n:p1')||{}).tomb===true);
   ok('Mb the jobs are the new owner\'s: the saved and imported notes, the versions (the rename counted: lrev '+(g('meta:v:vr')||{}).lrev+'), the reach of a deletion', (g('meta:v:vr')||{}).lrev===2 && !!g('out:n:w1') && !!g('out:n:i2') && !!g('out:v:vc') && !!g('out:v:vh') && R['purgeLocal here'].code==='reach' && R['version delete here'].code==='reach' && (g('out:v:vd2')||{}).tomb===true);
-  ok('Mb the engine is not told «reload», its memory is marked not loaded and holds none of it ('+JSON.stringify([...new Set(A.status)])+')', !A.status.includes('reload') && A.sync._S.loaded===false && !A.sync.jobs().includes('w1') && A.sync.owner.uid==='m2'); }
+  ok('Mb the screen is not told «reload» ('+JSON.stringify([...new Set(A.status)])+')', !A.status.includes('reload')); }
 
 // (b) the era of a screen read before an erase: every operation is refused and writes nothing; the device name is the exception
 for(const who of ['another engine','this engine','a fresh engine of the old screen']){
   const cloud=new TestCloud({start:START}), db=new MemStore(), A0=dev(cloud,'MC',db,'0'); await A0.sync.setOwner(U('m4')); await seed(cloud, A0, db);
   const era0=eraNow(db); if(who==='this engine') await A0.sync.setOwner(U('m5'),{erase:true}); else await dev(cloud,'MC',db,era0).sync.setOwner(U('m5'),{erase:true});
-  const A=who==='a fresh engine of the old screen'? dev(cloud,'MC',db,era0) : A0; A.status.length=0; const w0=db.writes;
+  const A=who==='a fresh engine of the old screen'? dev(cloud,'MC',db,era0) : A0; const w0=db.writes;
   const cs=await Promise.all(runAll(cloud, A).map(code)), bad=OPS.filter((o,i)=>o!=='deviceName' && cs[i]!=='epoch' && cs[i]!=='throw:epoch');
   ok('Mc an erase by '+who+' (era '+era0+' → '+eraNow(db)+'): every operation with the old era is refused ('+(bad.join(', ')||'all')+'), the device name is not ('+cs[OPS.indexOf('deviceName')]+'), and only it wrote ('+(db.writes-w0)+')',
     era0!==eraNow(db) && !bad.length && cs[OPS.indexOf('deviceName')]==='ok' && db.writes-w0===1 && db.all('notes').length===0 && db.all('versions').length===0 && !db.all('sync').some(r=>r.k.startsWith('out:')) && A.status.includes('reload'));
   const reads=await Promise.all([A.sync.versionStates('vn'), A.sync.lrevOf(), A.sync.state('p1'), A.sync.copiesCount(), A.sync.countCopies('k1'), A.sync.unsynced(), A.sync.seenAll()].map(code));
   ok('Mc the reads that feed that screen are refused the same way ('+[...new Set(reads)].join(', ')+')', reads.every(c=>c==='throw:epoch')); }
 
-/* ── 5s. the cases of #146, for the new mode (§8.3) ── */
+/* ── 5s. the cases of #146, for a writer and runners (§8.3, §7.3.8) ── */
 { const cloud=new TestCloud({start:START});
-  // 5s, 5s1: the user's writes ordered right after this engine's own setOwner land under the new owner
-  const dbA=new MemStore(), WA=planned(dbA), A=dev(cloud,'S1',dbA,'0',{store:WA}); await A.sync.setOwner(U('u1')); await A.sync.start(); await A.sync.idle(300); await note(A,'d1','for deletion',{deleted:START}); A.status.length=0;
-  const o0=WA.opened, bind=A.sync.setOwner(U('s2')).then(()=>'ok', cErr), o1=WA.opened-o0, ws=[note(A,'s1','saved'), A.sync.importNote({id:'s3', title:'import', blocks:[], created:1, updated:1}), A.sync.purgeLocal('d1',{reach:'all'})].map(code), memAtCall=A.sync.owner.uid, o2=WA.opened-o0;   // the writes are called while the change is in flight; each opened its transaction in its call
-  const out=[await bind, ...(await Promise.all(ws))];
-  ok('5s the user\'s writes called while this engine\'s own setOwner is in flight (its memory still names '+memAtCall+'; transactions opened in the calls: '+o1+' then '+o2+'; bind, save, import, delete forever: '+out.join(', ')+') land under the new owner: no «reload», no «stale» ('+JSON.stringify([...new Set(A.status)])+'), the engine names '+A.sync.owner.uid,
-    memAtCall==='u1' && o1===1 && o2===4 && out.every(c=>c==='ok') && !A.status.includes('reload') && !A.status.includes('stale') && A.sync.owner.uid==='s2' && !!dbA.get('notes','s1') && !!dbA.get('notes','s3') && !dbA.get('notes','d1') && await A.sync.checkOwner()===true);
-  ok('5s1 the saved note is queued for the new owner, the deleted one leaves a tombstone job', !!dbA.get('sync','out:n:s1') && (dbA.get('sync','out:n:d1')||{}).tomb===true);
+  // 5s, 5s1: the user's writes ordered right after this screen's own change of owner land under the new owner
+  const dbA=new MemStore(), WA=planned(dbA), A=dev(cloud,'S1',dbA,'0',{store:WA}); await A.sync.setOwner(U('u1')); await A.sync.start(); await A.sync.idle(300); await note(A,'d1','for deletion',{deleted:START}); await A.sync.idle(300); A.status.length=0;
+  const r0=A.sync.runner, o0=WA.opened, bind=A.sync.writer.setOwner(U('s2'),{expectEpoch:epNow(dbA)}).then(r=>r.changed? 'ok' : 'same', cErr), o1=WA.opened-o0, ws=[note(A,'s1','saved'), A.sync.importNote({id:'s3', title:'import', blocks:[], created:1, updated:1}), A.sync.purgeLocal('d1',{reach:'all'})].map(code), o2=WA.opened-o0;   // the writes are called while the change is in flight; each opened its transaction in its call
+  const out=[await bind, ...(await Promise.all(ws))]; await tick(); const ended=[r0.alive, r0.ended, ...A.sync.ends]; await A.sync.reconcile();
+  ok('5s the user\'s writes called while this screen\'s own setOwner is in flight (transactions opened in the calls: '+o1+' then '+o2+'; bind, save, import, delete forever: '+out.join(', ')+') land under the new owner: no «reload», no «stale» ('+JSON.stringify([...new Set(A.status)])+'); the runner of the previous epoch ended ('+ended.join(', ')+') and the next one is of '+A.sync.runner.owner.uid,
+    o1===1 && o2===4 && out.every(c=>c==='ok') && !A.status.includes('reload') && !A.status.includes('stale') && ended[0]===false && ended[1]==='mismatch' && ended.includes('mismatch') && A.sync.runner!==r0 && A.sync.runner.owner.uid==='s2' && !!dbA.get('notes','s1') && !!dbA.get('notes','s3') && !dbA.get('notes','d1') && await A.sync.checkOwner()===true);
+  ok('5s1 the saved note is queued for the new owner, the deleted one leaves a tombstone job (it reached the previous cloud: '+!!cloud.doc('notes','d1')+')', !!dbA.get('sync','out:n:s1') && (dbA.get('sync','out:n:d1')||{}).tomb===true);
   // 5s2: an erase, then a save ordered behind it
   const dbE=new MemStore(), E=dev(cloud,'S2',dbE,'0'); await E.sync.setOwner(U('u1')); E.status.length=0;
-  const er=E.sync.setOwner(null,{erase:true}).then(()=>'ok', cErr), we=code(note(E,'e1','after the erase')), oe=[await er, await we];
+  const er=E.sync.writer.setOwner(null,{erase:true, expectEpoch:epNow(dbE)}).then(r=>r.erased? 'ok' : 'kept', cErr), we=code(note(E,'e1','after the erase')), oe=[await er, await we];
   ok('5s2 after an erase a save ordered behind it is refused ('+oe.join(', ')+'), nothing of it stored, the page is told «reload»', oe[0]==='ok' && oe[1]==='epoch' && !dbE.get('notes','e1') && E.status.includes('reload'));
-  // 5s3: a step of the engine ordered after its own setOwner stays strict, and quiet
-  const dbQ=new MemStore(), Q=dev(cloud,'S3',dbQ,'0'); await Q.sync.setOwner(U('u1')); await note(Q,'q1','trash',{deleted:START}); Q.status.length=0;
-  const bq=Q.sync.setOwner(U('s4')).then(()=>'ok', cErr), tq=code(Q.sync.tombstoneAuto('q1')), oq=[await bq, await tq];
-  ok('5s3 an engine step ordered right after this engine\'s own setOwner is refused quietly ('+oq.join(', ')+'; «reload» '+Q.status.filter(c=>c==='reload').length+', «stale» '+Q.status.filter(c=>c==='stale').length+'), the engine names '+Q.sync.owner.uid,
-    oq[0]==='ok' && oq[1]==='throw:epoch' && !Q.status.includes('reload') && !Q.status.includes('stale') && Q.sync.owner.uid==='s4' && !(dbQ.get('sync','out:n:q1')||{}).tomb && await Q.sync.checkOwner()===true);
-  // 5s4: a first sign-in; nothing waits for the load, each write queues its job in its own transaction
+  // 5s3, read again by §7.3.8: there is no step of the previous owner «right after» a change. The runner ends with the change; what it is asked for
+  // afterwards makes no cloud call and opens no transaction. The runner names no result: a kept change reads as «stale» (the writer's read of the
+  // store passes, nothing is locked), an erase as «reload»
+  for(const erase of [false, true]){ const dbQ=new MemStore(), WQ=planned(dbQ), Q=dev(cloud,'S3'+(erase? 'e' : ''),dbQ,'0',{store:WQ}); await Q.sync.setOwner(U('u1')); await Q.sync.start(); await note(Q,'q1','trash',{deleted:START}); await Q.sync.idle(300); const r=Q.sync.runner; Q.status.length=0;
+    await Q.sync.writer.setOwner(U('s4'),{erase, expectEpoch:epNow(dbQ)}); await tick(); const calls0=Q.calls, o0=WQ.opened, st=await r.step(), st2=await r.start().then(()=>'returned', e=>'throw'), view=await Q.sync.writer.ownerNow().then(v=>'stale:'+v.owner.uid, e=>'reload:'+e.code);
+    ok('5s3'+(erase? 'b an erase' : 'a a change that kept the records')+': the runner ended ('+r.ended+', one notice: '+JSON.stringify(Q.sync.ends)+'); a step and a start asked of it afterwards do nothing ('+st.did+', '+st2+'; cloud calls '+(Q.calls-calls0)+', transactions '+(WQ.opened-o0-1)+'), it has no `tombstoneAuto` to call; the writer reads '+view+' ('+JSON.stringify([...new Set(Q.status)])+')',
+      r.alive===false && r.ended==='mismatch' && Q.sync.ends.length===1 && st.did==='ended' && st.next===Infinity && Q.calls===calls0 && WQ.opened-o0===1 && r.tombstoneAuto===undefined && r.setOwner===undefined && r.reload===undefined && r.setCloud===undefined && r.checkOwner===undefined
+      && view===(erase? 'reload:epoch' : 'stale:s4') && Q.status.includes('reload')===erase && !Q.status.includes('stale')); }
+  // 5s4: a first sign-in; nothing waits for anything, each write queues its job in its own transaction
   const dbF=new MemStore(), F=dev(cloud,'S5',dbF,'0'); await F.sync.start(); await F.sync.idle(300); F.status.length=0; await note(F,'f0','before the sign-in');
-  const bf=F.sync.setOwner(U('s6')).then(()=>'ok', cErr);
+  const bf=F.sync.writer.setOwner(U('s6'),{expectEpoch:null}).then(()=>'ok', cErr);
   const fs=[note(F,'f1','first sign-in'), F.sync.importNote({id:'f2', title:'import', blocks:[{id:'b',row:1,fx:0,text:'from a file'}], created:1, updated:1}), F.sync.versionLocal({op:'create', rec:vrec(cloud,'fv1','f0','Named')}), F.sync.importHistory({versions:[vrec(cloud,'fv2','f0','From a file')], blobs:[]}, ['f0'])].map(code);
-  const of=[await bf, ...(await Promise.all(fs))]; await F.sync.idle(300); await F.sync.idle(300);
+  const of=[await bf, ...(await Promise.all(fs))]; await F.sync.reconcile(); await F.sync.idle(300); await F.sync.idle(300);
   ok('5s4 a first sign-in: the save, the import, a named version and a history import ordered right after setOwner ('+of.join(', ')+') are queued for the new owner and reach its cloud; no «reload»',
     of.every(c=>c==='ok') && !F.status.includes('reload') && F.sync.owner.uid==='s6' && !!cloud.doc('notes','f1') && !!cloud.doc('notes','f2') && !!cloud.doc('notes','f0') && !!cloud.doc('versions','fv1') && !!cloud.doc('versions','fv2'));
-  // 5s5–5s7, read again: on #146 a write called before an erase waited for the engine's first load and so was ordered after the erase. Here a write
-  // waits for nothing: called first, it is ordered first, lands, and is erased with the rest; called after, it is refused, whatever became of the load
-  for(const failLoad of [false, true]){ const dbG=new MemStore(), G=dev(cloud, 'S7', dbG, '0'); await G.sync.setOwner(U('u1')); await note(G,'g0','old'); const era0=eraNow(dbG);
-    const W=planned(dbG), H=dev(cloud,'S7',dbG,era0,{store:W});   // the same store opened anew (a reload): this engine has loaded nothing
+  // 5s5, 5s7 (5s6 went with the adopting load): a write waits for nothing. Called before an erase it is ordered first, lands, and is erased with the
+  // rest; called after, it is refused
+  { const dbG=new MemStore(), G=dev(cloud, 'S7', dbG, '0'); await G.sync.setOwner(U('u1')); await note(G,'g0','old'); const era0=eraNow(dbG);
+    const W=planned(dbG), H=dev(cloud,'S7',dbG,era0,{store:W});   // the same store opened anew (a reload): a writer that has read nothing
     const wh=code(edit(H,'g0',(C,t)=>({...C, blocks:[{id:'b',row:1,fx:0,text:'old, added to'}], updated:t}))), opened=W.opened;
-    if(failLoad) W.plan.push('fail');   // the erase loads nothing before its transaction; its adopting load fails
-    const eh=H.sync.setOwner(null,{erase:true}).then(()=>'ok', cErr), oh=[await wh, await eh];
-    ok('5s'+(failLoad? '6' : '5')+' a write called before an erase of this engine'+(failLoad? ', the erase\'s adopting load failing,' : '')+' is ordered before it without a load (its transaction opened in the call: '+opened+'), lands and is erased ('+oh.join(', ')+'): the device stays empty',
-      opened===1 && oh[0]==='ok' && oh[1]===(failLoad? 'committed+erase:UnknownError' : 'ok') && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner'));
+    const eh=H.sync.writer.setOwner(null,{erase:true, expectEpoch:epNow(dbG)}).then(r=>r.erased? 'ok' : 'kept', cErr), oh=[await wh, await eh];
+    ok('5s5 a write called before an erase of this screen is ordered before it, with nothing read first (its transaction opened in the call: '+opened+'), lands and is erased ('+oh.join(', ')+'): the device stays empty',
+      opened===1 && oh[0]==='ok' && oh[1]==='ok' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0') && !dbG.get('sync','owner'));
     const wa=await code(edit(H,'g0',(C,t)=>({...(C||{}), title:'old', blocks:[{id:'b',row:1,fx:0,text:'added after'}], created:t, updated:t})));
-    ok('5s7 a save called after that erase'+(failLoad? ', whose adopting load failed,' : '')+' is refused ('+wa+'): nothing of the erased note comes back', wa==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0')); }
-  // 5s8: two changes of owner overlapping, the older one (records kept) ending after a newer erase whose load failed
-  { const dbK=new MemStore(), K0=dev(cloud,'S9',dbK,'0'); await K0.sync.setOwner(U('u1')); await note(K0,'k0','old'); const era0=eraNow(dbK);
-    const W=planned(dbK), K=dev(cloud,'S9',dbK,era0,{store:W}); await K.sync.checkOwner();   // loaded
-    W.plan.push('hold'); const p1=K.sync.setOwner(U('s10')).then(()=>'ok', cErr); await tick();
-    W.plan.push('fail'); const p2=await K.sync.setOwner(U('s11'),{erase:true}).then(()=>'ok', cErr);
-    W.release(); const r1=await p1, wk=await code(edit(K,'k0',(C,t)=>({...(C||{}), title:'old', blocks:[{id:'b',row:1,fx:0,text:'old, brought back'}], created:t, updated:t})));
-    ok('5s8 an older change ending after a newer erase whose load failed ('+[r1, p2].join(', ')+'): a save of the erased note from the old screen is refused ('+wk+')', p2==='committed+erase:UnknownError' && wk==='epoch' && !dbK.get('notes','k0')); }
-  // 5s9, split in two by §8.3: an older erase whose load fails after a newer change loaded
+    ok('5s7 a save called after that erase is refused ('+wa+'): nothing of the erased note comes back', wa==='epoch' && !dbG.get('notes','g0') && !dbG.get('sync','out:n:g0')); }
+  // 5s8: two changes of owner of one screen overlapping, each decided over the same epoch, in both orders. Two refusals, apart (§7.3.3 item 2): a
+  // change that kept the records came first: the second is refused by the epoch of its decision, and the user is asked again, with no «reload».
+  // An erase came first: the second is refused by the era of the screen, which may change nothing any more
+  for(const first of ['kept','erase']){ const dbK=new MemStore(), K0=dev(cloud,'S9',dbK,'0'); await K0.sync.setOwner(U('u1')); await note(K0,'k0','old'); const era0=eraNow(dbK), e0=epNow(dbK);
+    const K=dev(cloud,'S9',dbK,era0), p1=K.sync.writer.setOwner(U('s10'),{erase:first==='erase', expectEpoch:e0}).then(()=>'ok', cErr), p2=K.sync.writer.setOwner(U('s11'),{erase:first!=='erase', expectEpoch:e0}).then(()=>'ok', cErr), rs=[await p1, await p2];
+    const wk=await code(edit(K,'k0',(C,t)=>({...(C||{}), title:'old', blocks:[{id:'b',row:1,fx:0,text:'old, written again'}], created:t, updated:t})));
+    ok('5s8 '+(first==='kept'? 'a change that kept the records, then an erase' : 'an erase, then a change that keeps the records')+', both decided over one epoch ('+rs.join(', ')+'): the store names '+dbK.get('sync','owner').uid+'; '+(first==='kept'? 'the erase is refused by the epoch, the records stay, the screen saves ('+wk+') and is not told «reload»' : 'the second is refused by the era, and a save of the erased note from that screen too ('+wk+')'),
+      rs[0]==='ok' && dbK.get('sync','owner').uid==='s10' && (first==='kept'? rs[1]==='expect:epoch' && wk==='ok' && !!dbK.get('notes','k0') && !K.status.includes('reload') : rs[1]==='era:epoch' && wk==='epoch' && !dbK.get('notes','k0') && K.status.includes('reload'))); }
+  // 5s9, split in two by §8.3: after an erase and a later change of owner the old screen stays refused; a new screen saves
   { const dbL=new MemStore(), L0=dev(cloud,'S12',dbL,'0'); await L0.sync.setOwner(U('u1')); const era0=eraNow(dbL);
-    const W=planned(dbL), L=dev(cloud,'S12',dbL,era0,{store:W}); await L.sync.checkOwner();
-    W.plan.push('holdfail'); const p1=L.sync.setOwner(U('s13'),{erase:true}).then(()=>'ok', cErr); await tick();
-    const p2=await L.sync.setOwner(U('s14')).then(()=>'ok', cErr); W.release(); const r1=await p1;
-    const wl=await code(note(L,'l1','under s14'));
-    ok('5s9a the old screen is refused, even though its engine loaded the newer owner ('+[r1, p2].join(', ')+'; the engine names '+(L.sync.owner||{}).uid+', the save: '+wl+')', r1==='committed+erase:UnknownError' && p2==='ok' && L.sync.owner.uid==='s14' && wl==='epoch' && !dbL.get('notes','l1'));
+    const L=dev(cloud,'S12',dbL,era0); await L.sync.setOwner(U('s13'),{erase:true}); await dev(cloud,'S12',dbL,eraNow(dbL)).sync.setOwner(U('s14'));
+    const wl=await code(note(L,'l1','under s14')), again=await L.sync.setOwner(U('s15'),{expectEpoch:epNow(dbL)}).then(()=>'ok', cErr);
+    ok('5s9a the old screen is refused whatever owner came since (the store names '+dbL.get('sync','owner').uid+'; its save: '+wl+', its change of owner with the epoch of today: '+again+')', dbL.get('sync','owner').uid==='s14' && wl==='epoch' && again==='era:epoch' && !dbL.get('notes','l1'));
     const N=dev(cloud,'S12',dbL,eraNow(dbL)), wn=await code(note(N,'l1','under s14'));   // a new screen: the records and the era read together
     ok('5s9b a new screen, which read the era with the records, saves ('+wn+') and its note is queued for '+(dbL.get('sync','owner')||{}).uid, wn==='ok' && !!dbL.get('notes','l1') && !!dbL.get('sync','out:n:l1') && dbL.get('sync','owner').uid==='s14'); }
-  // 5s10: the hint of a committed change survives a frozen error
-  { const dbM=new MemStore(), M0=dev(cloud,'S15',dbM,'0'); await M0.sync.setOwner(U('u1'));
-    const W=planned(dbM), M=dev(cloud,'S15',dbM,eraNow(dbM),{store:W}); await M.sync.checkOwner();
-    W.plan.push('freeze'); const pm=await M.sync.setOwner(null,{erase:true}).then(()=>'ok', cErr);
-    ok('5s10 a frozen error of the adopting load still reports the committed erase ('+pm+'), with its code', pm==='committed+erase:frozen-x'); } }
+  // 5s10 (the hint of a committed change on the error of an adopting load) has no subject: setOwner loads nothing, and its result says what it wrote
+  { const dbM=new MemStore(), M=dev(cloud,'S15',dbM,'0'); const r1=await M.sync.writer.setOwner(U('u1'),{expectEpoch:null}), r2=await M.sync.writer.setOwner({...U('u1'), email:'new@test'},{expectEpoch:r1.epoch}), noExp=await M.sync.writer.setOwner(U('u2')).then(()=>'ok', e=>e.name);
+    ok('5s10 setOwner answers with what it wrote ('+JSON.stringify(r1)+'; the same owner again: '+JSON.stringify(r2)+', the email '+dbM.get('sync','owner').email+'); without the epoch of the decision it is not made ('+noExp+')',
+      r1.changed===true && r1.erased===false && r1.epoch===epNow(dbM) && r2.changed===false && r2.epoch===r1.epoch && dbM.get('sync','owner').email==='new@test' && noExp==='TypeError'); } }
 
 /* ── B. beside the matrix (§8.1), and the rules one by one ── */
 // B1 (§3.3 item 3): a write opens its transaction in the call, with no load before it, also on an engine that never loaded and one whose load failed
 { const cloud=new TestCloud({start:START}), db=new MemStore(); await dev(cloud,'B1',db,'0').sync.setOwner(U('b1'));
   const W=planned(db), A=dev(cloud,'B1',db,eraNow(db),{store:W}); W.plan.push('fail','fail','fail'); const t0=db.txCount, p=note(A,'n1','no load'), opened=W.opened, r=await p;
   ok('B1 a save on an engine that never loaded (every read of the store would fail) opens one readwrite transaction in the call ('+opened+') and lands with its job; the plan of failing reads is untouched ('+W.plan.length+')',
-    opened===1 && r.ok && W.opened===1 && db.txCount-t0===1 && !!db.get('sync','out:n:n1') && W.plan.length===3 && A.sync._S.loaded===false); }
+    opened===1 && r.ok && W.opened===1 && db.txCount-t0===1 && !!db.get('sync','out:n:n1') && W.plan.length===3 && A.sync.runner===null); }
 // B2 (§8.1): an `epoch` record without `era`, written as code before the plan writes it
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B2',db,'0'); await note(A,'n1','before');
   db.data.sync.set('epoch',{k:'epoch', id:'eold1'}); db.data.sync.set('owner',{k:'owner', ...U('old')});   // old code signed in and kept the records
@@ -195,7 +200,7 @@ for(const who of ['another engine','this engine','a fresh engine of the old scre
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B3',db,'0'); await A.sync.setOwner(U('b3')); const e1=A.sync.epoch;
   await dev(cloud,'B3',db,'0').sync.setOwner(U('b3x')); const era=eraNow(db), w0=db.writes;
   const r=await A.sync.setOwner(null,{erase:true, expectEpoch:e1}).then(()=>'ok', cErr), F=dev(cloud,'B3',db,'0'), rf=await F.sync.setOwner(null,{erase:true, expectEpoch:e1}).then(()=>'ok', cErr);
-  ok('B3 an erase confirmed over an epoch that a change keeping the records replaced is refused, by the stale engine ('+r+') and by a fresh one ('+rf+'): nothing written, the era stays '+era, era==='0' && r==='epoch' && rf==='epoch' && db.writes===w0 && db.get('sync','owner').uid==='b3x');
+  ok('B3 an erase confirmed over an epoch that a change keeping the records replaced is refused, by the stale engine ('+r+') and by a fresh one ('+rf+'): nothing written, the era stays '+era, era==='0' && r==='expect:epoch' && rf==='expect:epoch' && db.writes===w0 && db.get('sync','owner').uid==='b3x');
   const r2=await F.sync.setOwner(null,{erase:true, expectEpoch:db.get('sync','epoch').id}).then(()=>'ok', cErr);
   ok('B3a asked again over the epoch in force, it goes ('+r2+') and starts a new era', r2==='ok' && eraNow(db)!=='0' && !db.get('sync','owner')); }
 // B4 (§3.7): `lrev` across a change that keeps the records
@@ -211,21 +216,22 @@ for(const who of ['another engine','this engine','a fresh engine of the old scre
   ok('B4c the screen\'s number, the change\'s and another tab\'s next save are three numbers ('+[...seen].join(', ')+')', seen.size===3 && r.lrev===3);
   const C=dev(cloud,'B4',db,'0'); await C.sync.setOwner(U('b4y')); const again=await C.sync.lrevOf();
   ok('B4d a second change goes on from there ('+JSON.stringify(again)+')', again.n1===after.n1+1 && again.n2===r.lrev+1 && again.e1===4); }
-// B5 (§3.4): the steps against one memory that only a load moves; no send to a cloud that is not the owner's
+// B5 (§3.4): a runner's identity never changes, and every transaction of it checks the store against it; its adapter is of the owner's namespace
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B5',db,'0'); await A.sync.setOwner(U('b5')); await A.sync.start(); await note(A,'n1','mine'); await note(A,'t1','trash',{deleted:START}); await A.sync.idle(400); await A.sync.idle(400);
-  const X=dev(cloud,'B5',db,'0'); await X.sync.setOwner(U('b5x')); await note(X,'x1','the new owner\'s'); A.status.length=0; const calls=A.calls, e0=A.sync.epoch;
-  const st=await A.sync.step(), ta=await code(A.sync.tombstoneAuto('t1')), co=await A.sync.checkOwner();
-  ok('B5 another engine changed the owner and kept the records: this engine\'s step does nothing ('+st.did+'), its memory is where its load left it, the new owner\'s queue is not read into it ('+A.sync.jobs().join(',')+'), no cloud call ('+(A.calls-calls)+')',
-    st.did==='idle' && A.sync.epoch===e0 && A.sync.owner.uid==='b5' && !A.sync.jobs().includes('x1') && A.calls===calls && ta==='throw:epoch' && co===false);
-  ok('B5a the page is told «stale», not «reload» ('+JSON.stringify([...new Set(A.status)])+'): the queue is of the previous owner, the records are the screen\'s', A.status.includes('stale') && !A.status.includes('reload'));
+  const X=dev(cloud,'B5',db,'0'); await X.sync.setOwner(U('b5x')); await note(X,'x1','the new owner\'s'); A.status.length=0; const r=A.sync.runner, calls=A.calls, e0=r.epoch;
+  const st=await r.step(); await tick(); const co=await A.sync.checkOwner();
+  ok('B5 another screen changed the owner and kept the records: this runner\'s next step ends it ('+st.did+', '+r.ended+', notices '+JSON.stringify(A.sync.ends)+'); its identity is what it was made with, the new owner\'s queue is not read into it ('+r.jobs().join(',')+'), no cloud call ('+(A.calls-calls)+')',
+    st.did==='ended' && r.alive===false && r.ended==='mismatch' && A.sync.ends.join()==='mismatch' && r.epoch===e0 && r.owner.uid==='b5' && !r.jobs().includes('x1') && A.calls===calls && co===false);
+  ok('B5a the page is told neither «stale» nor «reload» by a status ('+JSON.stringify([...new Set(A.status)])+'): the runner reported a mismatch, and the writer, which holds the era, reads the store without a refusal', !A.status.includes('stale') && !A.status.includes('reload') && (await A.sync.writer.ownerNow()).owner.uid==='b5x');
   const w=await code(note(A,'n1','still typing'));
   ok('B5b and a save from that screen lands meanwhile ('+w+'), queued for the new owner', w==='ok' && !!db.get('sync','out:n:n1') && db.get('notes','n1').blocks[0].text==='still typing');
-  await dev(cloud,'B5',db,'0').sync.setOwner(U('b5y'),{erase:true}); A.status.length=0; A.sync._S.queueAt=0; const st2=await A.sync.step(), ta2=await code(A.sync.tombstoneAuto('t1'));
-  ok('B5c after an erase the same step tells «reload» ('+JSON.stringify([...new Set(A.status)])+', '+st2.did+', '+ta2+')', A.status.includes('reload') && !A.status.includes('stale') && st2.did==='idle' && ta2==='throw:epoch');
-  // a cloud adapter that names another user than the owner is not used
-  const db2=new MemStore(), cloudB=new TestCloud({start:START}), O=dev(cloudB,'B5o',db2,'0',{uid:'someone-else'}); await O.sync.setOwner(U('b5o')); await O.sync.start(); await note(O,'o1','not to be sent'); const r=await O.sync.idle(50); O.sync.reconnect();
-  ok('B5d an adapter of another user than the owner leaves the step idle ('+r.did+'): no listener, no read, no send ('+O.calls+' calls), the job waits', r.did==='idle' && O.calls===0 && !cloudB.doc('notes','o1') && !!db2.get('sync','out:n:o1'));
-  const P=dev(cloudB,'B5o',db2,'0',{uid:'b5o'}); await P.sync.start(); await P.sync.idle(300);
+  await A.sync.reconcile(); const r2=A.sync.runner; await dev(cloud,'B5',db,'0').sync.setOwner(U('b5y'),{erase:true}); A.status.length=0; r2.nudge(); const st2=await r2.step(), view=await A.sync.writer.ownerNow().then(()=>'read', e=>e.code);
+  ok('B5c the page made the next runner, of '+r2.owner.uid+'; after an erase its step ends it the same way ('+st2.did+', '+r2.ended+'), and it is the writer that says «reload» ('+view+', '+JSON.stringify([...new Set(A.status)])+')', r2!==r && r2.owner.uid==='b5x' && st2.did==='ended' && r2.ended==='mismatch' && view==='epoch' && A.status.includes('reload') && !A.status.includes('stale'));
+  // the adapter names its namespace, and it is the owner's: no runner is made otherwise
+  const db2=new MemStore(), cloudB=new TestCloud({start:START}), O=dev(cloudB,'B5o',db2,'0'); await O.sync.setOwner(U('b5o')); await note(O,'o1','not to be sent'); const ow=db2.get('sync','owner'), ep=epNow(db2);
+  const mk=c=>{ try{ O.sync.writer.runner({epoch:ep, owner:ow, cloud:c}); return 'made'; }catch(e){ return e.name; } }, made=[mk({...O.proxy, uid:'someone-else', env:'test'}), mk({...O.proxy, uid:'b5o', env:'prod'}), mk(O.proxy), mk(null), mk({...O.proxy, uid:'b5o', env:'test'})];
+  ok('B5d an adapter of another user, of another environment, one that names no namespace, and none: no runner ('+made.slice(0,4).join(', ')+'), no call ('+O.calls+'); the owner\'s own: '+made[4], made.slice(0,4).every(x=>x==='TypeError') && made[4]==='made' && O.calls===0 && O.sync.writer.runners().length===1);
+  const P=O.sync.writer.runners()[0]; await P.start(); await P.idle(300);
   ok('B5e the owner\'s own adapter sends it', !!cloudB.doc('notes','o1')); }
 // B6 (§3.3 item 7): a deletion without an owner goes through the core and stays on the device; a wider confirmation than the effect goes on
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B6',db,'0'); await note(A,'a','x'); await note(A,'b','y'); await note(A,'c','kept'); await note(A,'old','z',{deleted:5});
@@ -242,7 +248,7 @@ for(const who of ['another engine','this engine','a fresh engine of the old scre
 // B8 (§3.1): what a change of owner writes of the era
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B8',db,'0'); const eras=[eraNow(db)];
   await A.sync.setOwner(U('b8')); eras.push(db.get('sync','epoch').era); await A.sync.setOwner(U('b8x')); eras.push(db.get('sync','epoch').era);
-  await A.sync.setOwner(U('b8y'),{erase:true}); const ep=db.get('sync','epoch'); eras.push(ep.era); await A.sync.setOwner(null); eras.push(db.get('sync','epoch').era);
+  await A.sync.setOwner(U('b8y'),{erase:true}); const ep=db.get('sync','epoch'); eras.push(ep.era); await dev(cloud,'B8',db,eraNow(db)).sync.setOwner(null); eras.push(db.get('sync','epoch').era);
   ok('B8 a first sign-in and a change that keeps the records copy the era in force, an erase and a sign-out start a new one ('+eras.join(' → ')+')', eras[0]==='0' && eras[1]==='0' && eras[2]==='0' && eras[3]===ep.id && eras[4]===db.get('sync','epoch').id && eras[4]!==eras[3]);
   const dbL=new MemStore(), L=S.makeSync({db:dbL, cloud:null, now:()=>cloud.now(), random:Math.random}); await L.setOwner(U('b8'));
   ok('B8a an engine without an era writes none, as before ('+JSON.stringify(dbL.get('sync','epoch'))+')', !('era' in dbL.get('sync','epoch'))); }
@@ -258,72 +264,69 @@ for(const who of ['another engine','this engine','a fresh engine of the old scre
   ok('B10 typed and saved from an engine whose memory is of the previous owner ('+w+'): the mark «loop» the store holds is lifted ('+m.err+'), the job stays', w==='ok' && m.err===undefined && !!db.get('sync','out:n:n1') && db.get('notes','n1').blocks[0].text==='typed after the change');
   const N=dev(cloud,'B10',db,eraNow(db)); await N.sync.start(); await N.sync.idle(300); await N.sync.idle(300);
   ok('B10a and a new engine sends it ('+((cloud.doc('notes','n1')||{blocks:[{}]}).blocks[0].text)+')', (cloud.doc('notes','n1')||{blocks:[{}]}).blocks[0].text==='typed after the change');
-  db.data.sync.set('meta:n:n1',{...db.get('sync','meta:n:n1'), err:'loop'}); await N.sync.reload(); N.sync.typed('n1'); await tick();
-  ok('B10b on an engine whose memory knows the mark, typed alone lifts it, as before', db.get('sync','meta:n:n1').err===undefined);
-  await dev(cloud,'B10',db,eraNow(db)).sync.setOwner(U('t3'),{erase:true}); A.sync._S.err.set('n1','loop'); const w0=db.writes; A.status.length=0; A.sync.typed('n1'); await tick();
+  db.data.sync.set('meta:n:n1',{...db.get('sync','meta:n:n1'), err:'loop'}); N.sync.typed('n1'); await tick();
+  ok('B10b typed alone lifts the mark, by the store', db.get('sync','meta:n:n1').err===undefined);
+  await dev(cloud,'B10',db,eraNow(db)).sync.setOwner(U('t3'),{erase:true}); const w0=db.writes; A.status.length=0; A.sync.typed('n1'); await tick();
   ok('B10c from a screen of erased records typed writes nothing ('+(db.writes-w0)+') and the page is told «reload»', db.writes===w0 && A.status.includes('reload')); }
-// B11 (§3.4 item 2; the review of 877d7df, finding 1): nothing of the previous owner's cloud reaches the store after a change of owner. Its listeners
-// end with the change, a delivery already waiting is not applied, and an answer of a call in flight is dropped
-{ const cloudA=new TestCloud({start:START}), cloudB=new TestCloud({start:START}), db=new MemStore(), E=dev(cloudA,'B11',db,'0',{uid:'a'}); await E.sync.setOwner(U('a')); await E.sync.start(); await note(E,'mine','of A'); await E.sync.idle(300); await E.sync.idle(300);
+// B11 (the review of 877d7df, finding 1; rewritten on the end of an instance, §7.3.8): nothing of a runner that ended reaches the store. Its listeners
+// end with it, a delivery already waiting is not applied, and the answer of a call in flight is cancelled
+{ const cloudA=new TestCloud({start:START}), cloudB=new TestCloud({start:START}), db=new MemStore(), E=dev(cloudA,'B11',db,'0'); await E.sync.setOwner(U('a')); await E.sync.start(); await note(E,'mine','of A'); await E.sync.idle(300); await E.sync.idle(300);
   const live=()=>cloudA.subs.filter(x=>x.dev==='B11' && x.live!==false).length, live0=live(), sent=!!cloudA.doc('notes','mine');
   await E.sync.setOwner(U('b'),{erase:true}); const live1=live();
   cloudA.advance(1000); cloudA.write('notes',{id:'secretA', title:'secret', blocks:[{id:'b',row:1,fx:0,text:'A only'}], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); cloudA.pump();
-  E.sync.setCloud(dev(cloudB,'B11',db,eraNow(db),{uid:'b'}).proxy); await E.sync.idle(300); await E.sync.idle(300);
-  ok('B11 the listeners of the previous owner\'s cloud end with the change ('+live0+' → '+live1+'), and a note written there afterwards never reaches the new owner\'s store ('+db.all('notes').map(n=>n.id).join(',')+')', sent && live0>0 && live1===0 && !db.get('notes','secretA') && db.all('notes').length===0 && E.sync.owner.uid==='b');
-  // a delivery that was already waiting when the owner changed (the listener's callback ran, the step had not)
-  const db2=new MemStore(), F=dev(cloudA,'B11f',db2,'0',{uid:'a'}); await F.sync.setOwner(U('a')); await F.sync.start(); await F.sync.idle(300);
-  cloudA.advance(1000); cloudA.write('notes',{id:'lateA', title:'late', blocks:[{id:'b',row:1,fx:0,text:'A only'}], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); cloudA.pump(); const waiting=F.sync.inboxSize();
-  const unnamed=dev(cloudB,'B11f',db2,'0').proxy; F.sync._S.inbox.push(...F.sync._S.inbox.splice(0));   // the deliveries stay as they are
-  const keep=F.sync._S.inbox.slice(); await F.sync.setOwner(U('b')); F.sync._S.inbox.push(...keep); F.sync.setCloud(unnamed); await F.sync.idle(300); await F.sync.idle(300);
-  ok('B11a a delivery of the previous owner\'s listener still waiting after the change ('+waiting+' waiting, put back past the reset) is dropped by its origin, not applied under the new owner ('+F.logs.filter(e=>e.t==='inbox-dropped').length+' drop logged)', waiting>0 && !db2.get('notes','lateA') && F.logs.some(e=>e.t==='inbox-dropped') && F.sync.owner.uid==='b');
-  // an answer in flight: the read of a send is held while the owner changes and the records are kept; the send does not go on to the old adapter
-  const cloudC=new TestCloud({start:START}), db3=new MemStore(), G=dev(cloudC,'B11g',db3,'0',{uid:'a'}); await G.sync.setOwner(U('a')); await G.sync.start(); await G.sync.idle(300); await note(G,'n1','kept across the change');
-  let rel; const hold=new Promise(r=>{ rel=r; }); cloudC.fault('hold',{dev:'B11g', op:'get', promise:hold}); const st=G.sync.step(); await tick(); await G.sync.setOwner(U('b')); rel(); await st; await G.sync.idle(100);
-  ok('B11b a read answered after the owner changed is dropped: the note, now the new owner\'s, is not sent on to the previous owner\'s cloud', !cloudC.doc('notes','n1') && !!db3.get('sync','out:n:n1') && !G.sync._S.denied && G.sync.owner.uid==='b'); }
-// B12 (the review of 877d7df, finding 2): «the same owner» is read from the store. An engine whose memory names another owner asks for the owner the
-// store already has: no new epoch, the queue and a deletion waiting to be sent stay, only the memory is read anew
+  const E2=dev(cloudB,'B11',db,eraNow(db)); await E2.sync.start(); await E2.sync.idle(300); await E2.sync.idle(300);
+  ok('B11 the listeners of the previous owner\'s cloud end with the change ('+live0+' → '+live1+'), and a note written there afterwards never reaches the new owner\'s store ('+db.all('notes').map(n=>n.id).join(',')+'); the old screen gets no runner ('+E.sync.runner+', '+E.sync.locked+')', sent && live0>0 && live1===0 && !db.get('notes','secretA') && db.all('notes').length===0 && E2.sync.runner.owner.uid==='b' && E.sync.runner===null && E.sync.locked==='reload');
+  // a delivery that was already waiting when the runner ended (the listener's callback ran, the step had not), the lead lost within one epoch
+  const db2=new MemStore(), F=dev(cloudA,'B11f',db2,'0'); await F.sync.setOwner(U('a')); await F.sync.start(); await F.sync.idle(300);
+  cloudA.advance(1000); cloudA.write('notes',{id:'lateA', title:'late', blocks:[{id:'b',row:1,fx:0,text:'A only'}], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); cloudA.pump(); const r=F.sync.runner, waiting=r.inboxSize(), keep=r._S.inbox.slice();
+  r.end('lead'); const dropped=r.inboxSize(); r._S.inbox.push(...keep); const st=await r.step(); F.changes.length=0; cloudA.advance(1000); cloudA.write('notes',{id:'laterA', title:'later', blocks:[], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); cloudA.pump(); await tick();
+  ok('B11a a delivery waiting when the runner ended ('+waiting+' waiting, '+dropped+' after the end; put back by hand: the step is «'+st.did+'») is not applied, and its listeners deliver nothing more ('+r.inboxSize()+' in its inbox, the put-back one)', waiting>0 && dropped===0 && st.did==='ended' && !db2.get('notes','lateA') && r.inboxSize()===keep.length && !F.changes.length);
+  // an answer in flight: the read of a send is held while the owner changes and the records are kept; the send does not go on
+  const cloudC=new TestCloud({start:START}), db3=new MemStore(), G=dev(cloudC,'B11g',db3,'0'); await G.sync.setOwner(U('a')); await G.sync.start(); await G.sync.idle(300); await note(G,'n1','kept across the change');
+  let rel; const hold=new Promise(r=>{ rel=r; }); cloudC.fault('hold',{dev:'B11g', op:'get', promise:hold}); const rg=G.sync.runner, sg=rg.step(); await tick(); await G.sync.writer.setOwner(U('b'),{expectEpoch:epNow(db3)}); rel(); const dg=await sg;
+  ok('B11b a read answered after its runner ended is cancelled ('+dg.did+'): the note, now the new owner\'s, is not sent on to the previous owner\'s cloud, nothing is said of the access', dg.did==='ended' && !cloudC.doc('notes','n1') && !!db3.get('sync','out:n:n1') && !rg._S.denied && !G.status.includes('denied'));
+  // only the adapter is replaced, the owner stays: the old runner's waiting delivery is not applied, and it does not touch the new runner's inbox
+  const db4=new MemStore(), H=dev(cloudA,'B11c',db4,'0'); await H.sync.setOwner(U('a')); await H.sync.start(); await H.sync.idle(300);
+  cloudA.advance(1000); cloudA.write('notes',{id:'lateC', title:'late', blocks:[{id:'b',row:1,fx:0,text:'A only'}], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); cloudA.pump(); const old=H.sync.runner, w4=old.inboxSize();
+  await H.sync.setCloud(dev(cloudB,'B11c',db4,'0').proxy); const nw=H.sync.runner; cloudB.write('notes',{id:'ofB', title:'new session', blocks:[], created:cloudB.now(), updated:cloudB.now()},{dev:'phone'}); cloudB.pump(); const in1=nw.inboxSize(), so=await old.step(), in2=nw.inboxSize(); await H.sync.idle(300);
+  ok('B11c a delivery waiting when only the adapter is replaced ('+w4+' waiting; the old runner ended: '+old.ended+', its step «'+so.did+'») is not applied; the new runner\'s inbox is its own ('+in1+' before the old step, '+in2+' after) and is applied', w4>0 && old.ended==='adapter' && so.did==='ended' && !db4.get('notes','lateC') && nw!==old && in1>0 && in2===in1 && !!db4.get('notes','ofB')); }
+// B12 (the review of 877d7df, finding 2): «the same owner» is read from the store. A screen asks for the owner the store already has: no new epoch,
+// the queue and a deletion waiting to be sent stay
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B12',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(100);
   const X=dev(cloud,'B12',db,'0'); await X.sync.setOwner(U('b')); await X.sync.start(); await note(X,'gone','to be deleted'); await X.sync.idle(300); await X.sync.idle(300); X.sync.stop();
   const inCloud=!!cloud.doc('notes','gone'); await X.sync.purgeLocal('gone',{reach:'all'}); const e2=db.get('sync','epoch').id, tomb=db.get('sync','out:n:gone');
-  A.sync.stop(); await A.sync.setOwner(U('b'),{expectEpoch:e2});
-  ok('B12 the store already names the owner asked for: the epoch stays ('+(db.get('sync','epoch').id===e2)+'), the tombstone job and the registry of the deletion stay, the memory is the store\'s now ('+A.sync.owner.uid+', '+(A.sync.epoch===e2)+', jobs '+A.sync.jobs().join(',')+')',
-    inCloud && !!tomb && tomb.tomb===true && db.get('sync','epoch').id===e2 && (db.get('sync','out:n:gone')||{}).tomb===true && !!db.get('sync','purged:n:gone') && A.sync.owner.uid==='b' && A.sync.epoch===e2 && A.sync.jobs().includes('gone'));
-  await A.sync.start(); await A.sync.idle(300); await A.sync.idle(300); const N=dev(cloud,'B12',db,eraNow(db)); await N.sync.start(); await N.sync.idle(300); await N.sync.idle(300);
+  A.sync.stop(); const res=await A.sync.setOwner(U('b'),{expectEpoch:e2});
+  ok('B12 the store already names the owner asked for ('+JSON.stringify(res)+'): the epoch stays, the tombstone job and the registry of the deletion stay',
+    inCloud && !!tomb && tomb.tomb===true && res.changed===false && res.epoch===e2 && db.get('sync','epoch').id===e2 && (db.get('sync','out:n:gone')||{}).tomb===true && !!db.get('sync','purged:n:gone') && A.sync.owner.uid==='b');
+  await A.sync.start(); await A.sync.idle(300); await A.sync.idle(300);
   ok('B12a the deletion reaches the cloud ('+!!(cloud.doc('notes','gone')||{}).purged+') and the note does not come back to the device', (cloud.doc('notes','gone')||{}).purged && !db.get('notes','gone')); }
 
-/* ── the second round of the independent review (at 6220954) ── */
-// B11c: a delivery waiting in the inbox is dropped when only the adapter changed (the same owner), with nothing put back by hand
-{ const cloudA=new TestCloud({start:START}), cloudB=new TestCloud({start:START}), db=new MemStore(), F=dev(cloudA,'B11c',db,'0'); await F.sync.setOwner(U('a')); await F.sync.start(); await F.sync.idle(300);
-  cloudA.advance(1000); cloudA.write('notes',{id:'lateA', title:'late', blocks:[{id:'b',row:1,fx:0,text:'A only'}], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); cloudA.pump(); const waiting=F.sync.inboxSize();
-  F.sync.setCloud(dev(cloudB,'B11c',db,'0').proxy); await F.sync.idle(300); await F.sync.idle(300);
-  ok('B11c a delivery waiting when only the adapter is replaced ('+waiting+' waiting) is dropped by its generation ('+F.logs.filter(e=>e.t==='inbox-dropped').length+' drop logged)', waiting>0 && !db.get('notes','lateA') && F.logs.some(e=>e.t==='inbox-dropped')); }
+/* ── the second round of the independent review (at 6220954), on the end of an instance ── */
 // B13: a page already fetched from the previous owner's cloud does not go on being applied after the owner changed. The store is slow, so the page is
-// applied in chunks with a pause between them, and the whole change of owner (its adopting load too) ends inside that pause
+// applied in chunks with a pause between them, and the whole change of owner ends inside that pause
 { const cloudA=new TestCloud({start:START}), db=new MemStore(); for(let i=0;i<60;i++){ cloudA.advance(10); cloudA.write('notes',{id:'pg'+String(i).padStart(2,'0'), title:'A', blocks:[{id:'b',row:1,fx:0,text:'of A '+i}], created:cloudA.now(), updated:cloudA.now()},{dev:'phone'}); }
   const slow={tx:(st,mode,fn)=>mode==='readwrite'? new Promise(r=>setTimeout(r,3)).then(()=>db.tx(st,mode,fn)) : db.tx(st,mode,fn)};
-  const E=dev(cloudA,'B13',db,'0',{uid:'a', store:slow, deps:{pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50, slowTx:1}}});
-  await E.sync.setOwner(U('a')); cloudA.fault('fail',{dev:'B13', op:'listen', n:2}); await E.sync.start();   // no listener: the notes come by the catch-up page
-  let did=''; const run=(async()=>{ for(let i=0;i<8 && did!=='page';i++) did=(await E.sync.step()).did; })();
+  const E=dev(cloudA,'B13',db,'0',{store:slow, deps:{pace:{dev:0, note:0, big:0, huge:0, slow:0, retryMin:10, retryMax:50, slowTx:1}}});
+  await E.sync.setOwner(U('a')); cloudA.fault('fail',{dev:'B13', op:'listen', n:2}); await E.sync.start(); const r=E.sync.runner;   // no listener: the notes come by the catch-up page
+  let did=''; const run=(async()=>{ for(let i=0;i<8 && did!=='page' && did!=='ended';i++) did=(await r.step()).did; })();
   for(let i=0;i<400 && db.all('notes').length===0;i++) await tick(5); const mid=db.all('notes').length;
   await E.sync.setOwner(U('b'),{erase:true}); const after=db.all('notes').length; await run; await tick(250);
-  ok('B13 the owner changed between two chunks of a page of the previous owner ('+mid+' of 60 applied, the step: '+did+'): the rest is not applied under the new owner ('+db.all('notes').length+' notes, cursor '+!!db.get('sync','cursor:notes')+', caught up '+E.sync._S.everCaughtUp+')',
-    did==='page' && mid>0 && mid<60 && after===0 && db.all('notes').length===0 && !db.get('sync','cursor:notes') && E.sync._S.everCaughtUp===false && E.sync.owner.uid==='b'); }
-// B14: an adapter that names no user is not listened to again under another owner; an adapter taken away at start ends its listeners
-{ const cloud=new TestCloud({start:START}), db=new MemStore(), E=dev(cloud,'B14',db,'0'); await E.sync.setOwner(U('a')); await E.sync.start(); await E.sync.idle(300);
-  const live=n=>cloud.subs.filter(x=>x.dev===n && x.live!==false).length, l0=live('B14'); await E.sync.setOwner(U('b'),{erase:true}); await note(dev(cloud,'B14',db,eraNow(db)),'nb','of B'); const st=await E.sync.idle(50), l1=live('B14');
-  ok('B14 an unnamed adapter connected under one owner is not used under the next ('+l0+' listeners → '+l1+', the step '+st.did+', calls after: none sent)', l0>0 && l1===0 && st.did==='idle' && !cloud.doc('notes','nb'));
-  const db2=new MemStore(), G=dev(cloud,'B14g',db2,'0'); await G.sync.setOwner(U('a')); await G.sync.start(); await G.sync.idle(300); const g0=live('B14g'); await G.sync.start({cloud:null}); const g1=live('B14g');
-  ok('B14a start with the adapter taken away ends the listeners of the one that was there ('+g0+' → '+g1+')', g0>0 && g1===0); }
-// B15: a refusal of the previous owner's cloud that arrives while the new owner is being loaded says nothing of the new owner's access
-{ const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), G=dev(cloud,'B15',db,'0',{uid:'a', store:W}); await G.sync.setOwner(U('a')); await G.sync.start(); await G.sync.idle(300); await note(G,'n1','text');
-  let refuseGet; G.proxy.get=()=>new Promise((_,rej)=>{ refuseGet=rej; }); const st=G.sync.step(); for(let i=0;i<50 && !refuseGet;i++) await tick(2);
-  G.status.length=0; W.plan.push('hold'); const bind=G.sync.setOwner(U('b')).then(()=>'ok', cErr); await tick();
-  refuseGet(Object.assign(new Error('refused'),{code:'permission-denied'})); await tick(); const deniedMid=G.sync._S.denied; W.release(); const b=await bind; await st;
-  ok('B15 «permission-denied» of the previous owner\'s adapter, between the commit of the change and its load ('+b+'): the new owner is not denied (during '+deniedMid+', after '+G.sync._S.denied+', statuses '+JSON.stringify([...new Set(G.status)])+')',
-    !!refuseGet && b==='ok' && deniedMid===false && G.sync._S.denied===false && !G.status.includes('denied') && G.sync.owner.uid==='b'); }
+  ok('B13 the owner changed between two chunks of a page of the previous owner ('+mid+' of 60 applied, the step: '+did+'): the rest is not applied under the new owner ('+db.all('notes').length+' notes, cursor '+!!db.get('sync','cursor:notes')+', caught up '+r._S.everCaughtUp+')',
+    did==='ended' && mid>0 && mid<60 && after===0 && db.all('notes').length===0 && !db.get('sync','cursor:notes') && r._S.everCaughtUp===false && db.get('sync','owner').uid==='b'); }
+// B14a: an adapter taken away ends the runner and its listeners (B14's rebinding of an unnamed adapter went: an adapter names its namespace, B5d)
+{ const cloud=new TestCloud({start:START}), live=n=>cloud.subs.filter(x=>x.dev===n && x.live!==false).length;
+  const db2=new MemStore(), G=dev(cloud,'B14g',db2,'0'); await G.sync.setOwner(U('a')); await G.sync.start(); await G.sync.idle(300); const g0=live('B14g'), r=G.sync.runner; await G.sync.start({cloud:null}); const g1=live('B14g');
+  ok('B14a the adapter taken away ends the runner ('+r.ended+') and the listeners of the one that was there ('+g0+' → '+g1+'); none is made without an adapter ('+G.sync.runner+')', g0>0 && g1===0 && r.ended==='adapter' && G.sync.runner===null); }
+// B15: a refusal of the previous owner's cloud that arrives after its runner ended says nothing of the new owner's access
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), G=dev(cloud,'B15',db,'0'); await G.sync.setOwner(U('a')); await G.sync.start(); await G.sync.idle(300); await note(G,'n1','text');
+  let refuseGet; G.proxy.get=()=>new Promise((_,rej)=>{ refuseGet=rej; }); const r=G.sync.runner, st=r.step(); for(let i=0;i<50 && !refuseGet;i++) await tick(2);
+  G.status.length=0; G.logs.length=0; await G.sync.setOwner(U('b')); const r2=G.sync.runner;
+  refuseGet(Object.assign(new Error('refused'),{code:'permission-denied'})); const d=await st; await tick();
+  ok('B15 «permission-denied» of the previous owner\'s adapter after the change ('+d.did+'): neither runner is denied (the old '+r._S.denied+', the new '+r2._S.denied+'), no status or log of it ('+JSON.stringify([...new Set(G.status)])+')',
+    !!refuseGet && d.did==='ended' && r._S.denied===false && r2!==r && r2.alive && r2._S.denied===false && !G.status.includes('denied') && !G.logs.some(e=>e.t==='denied')); }
 // B16: a running leader learns that another tab lifted the mark «loop» of a queued note
 { const cloud=new TestCloud({start:START}), db=new MemStore(), L=dev(cloud,'B16',db,'0'); await L.sync.setOwner(U('t')); await L.sync.start(); await note(L,'n1','before'); await L.sync.idle(300); await L.sync.idle(300);
-  const O=dev(cloud,'B16',db,eraNow(db)); await note(O,'n1','typed, and looping'); db.data.sync.set('meta:n:n1',{...db.get('sync','meta:n:n1'), err:'loop'}); await L.sync.reload(); await L.sync.start(); await L.sync.idle(100);
+  const O=dev(cloud,'B16',db,eraNow(db)); await note(O,'n1','typed, and looping'); db.data.sync.set('meta:n:n1',{...db.get('sync','meta:n:n1'), err:'loop'}); await L.sync.reload(); await L.sync.idle(100);
   const blocked=L.sync._S.err.get('n1')==='loop' && cloud.doc('notes','n1').blocks[0].text==='before';
   O.sync.typed('n1'); await tick(); const w=await code(note(O,'n1','typed again')); L.sync.nudge(); await L.sync.idle(300); await L.sync.idle(300);
   ok('B16 the leader held the note back for its mark ('+blocked+'); another tab typed and saved ('+w+'), and after a nudge the leader reads the mark with the queue and sends ('+cloud.doc('notes','n1').blocks[0].text+')', blocked && w==='ok' && L.sync._S.err.get('n1')===undefined && cloud.doc('notes','n1').blocks[0].text==='typed again'); }
@@ -333,23 +336,51 @@ for(const who of ['another engine','this engine','a fresh engine of the old scre
   mark(); const pin=await edit(A,'n1',(C,t)=>({...C, pinned:t})), e2=db.get('sync','meta:n:n1').err;
   mark(); const imp=await A.sync.importNote({...db.get('notes','n1'), title:'imported', updated:db.get('notes','n1').updated+10}), e3=db.get('sync','meta:n:n1').err;
   ok('B17 typed, then a save that changes nothing ('+(same.same===true)+'): the mark is lifted ('+e1+'); a pin and an import nobody typed for ('+pin.ok+', '+imp.kind+') leave a mark set since ('+e2+', '+e3+')', same.same===true && e1===undefined && pin.ok && e2==='loop' && imp.kind==='updated' && e3==='loop'); }
-// B18: the owner the store already has, asked for by an engine whose memory is of another owner and marked not loaded by a write it made
+// B18: `expectEpoch` is strict for the store's own owner too, and a repeated bind keeps the epoch
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'B18',db,'0'); await A.sync.setOwner(U('a')); await dev(cloud,'B18',db,'0').sync.setOwner(U('b')); const e2=db.get('sync','epoch').id;
-  const w=await code(note(A,'n1','accepted')), unloaded=A.sync._S.loaded===false, bad=await A.sync.setOwner(U('b'),{expectEpoch:'e-other'}).then(()=>'ok', cErr), good=await A.sync.setOwner(U('b'),{expectEpoch:e2}).then(()=>'ok', cErr);
-  ok('B18 after a save ('+w+') left the memory not loaded ('+unloaded+'), setOwner for the store\'s own owner is judged by its transaction: a wrong epoch refused ('+bad+'), the right one goes ('+good+'), the epoch stays, the memory is the store\'s ('+(A.sync.owner||{}).uid+')',
-    w==='ok' && unloaded && bad==='epoch' && good==='ok' && db.get('sync','epoch').id===e2 && A.sync.owner.uid==='b' && A.sync.epoch===e2 && !!db.get('sync','out:n:n1')); }
-// B19: the hint of a committed change on the error of the load that only refreshes the memory
-{ const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'B19',db,'0',{store:W}); await A.sync.setOwner(U('a')); await dev(cloud,'B19',db,'0').sync.setOwner(U('b'));
-  W.plan.push('freeze'); const r=await A.sync.setOwner({...U('b'), email:'renamed@test'}).then(()=>'ok', cErr);
-  ok('B19 the owner record was written ('+db.get('sync','owner').email+') and the refreshing load failed with a frozen error: it still says committed ('+r+')', r==='committed:frozen-x' && db.get('sync','owner').email==='renamed@test'); }
-// B20 (the review of #157's merge with this branch): a step that began reading the queue before this engine's own change of owner registered, and
-// read the store after its commit. A change that kept the records: the step ends idle, quietly, and asks to be run again shortly (the timer of the
-// page must not be lost). An erase: «reload», and no time asked for
-for(const erase of [false, true]){ const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'B20',db,'0',{store:W}); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); A.status.length=0; const calls=A.calls;
-  W.plan.push('hold'); const st=A.sync.step(); await tick();   // the queue's read is held
-  W.plan.push('hold'); const bind=A.sync.setOwner(U('b'), erase? {erase:true} : {}).then(()=>'ok', cErr); await tick();   // the change committed; its adopting load is held too
-  const memory=A.sync.owner.uid, store=db.get('sync','owner').uid; W.release(); const r=await st, b=await bind;
-  ok('B20 '+(erase? 'an erase' : 'a change that kept the records')+' of this engine under a step\'s read of the queue (the memory named '+memory+', the store '+store+'; bind '+b+'): the step is '+r.did+', next in '+(r.next===Infinity? '∞' : r.next-cloud.now()+' ms')+', statuses '+JSON.stringify([...new Set(A.status)])+', no cloud call ('+(A.calls-calls)+')',
-    memory==='a' && store==='b' && b==='ok' && r.did==='idle' && A.calls===calls && (erase? r.next===Infinity && A.status.includes('reload') && !A.status.includes('stale') : r.next===cloud.now()+50 && !A.status.includes('reload') && !A.status.includes('stale')) && A.sync.owner.uid==='b'); }
+  const w=await code(note(A,'n1','accepted')), bad=await A.sync.setOwner(U('b'),{expectEpoch:'e-other'}).then(()=>'ok', cErr), good=await A.sync.setOwner(U('b'),{expectEpoch:e2}).then(r=>r.changed? 'changed' : 'ok', cErr);
+  ok('B18 after a save ('+w+'), setOwner for the store\'s own owner is judged by its transaction: a wrong epoch refused ('+bad+'), the right one goes ('+good+'), the epoch stays, the job too',
+    w==='ok' && bad==='expect:epoch' && good==='ok' && db.get('sync','epoch').id===e2 && A.sync.owner.uid==='b' && A.sync.epoch===e2 && !!db.get('sync','out:n:n1')); }
+// B20 (the review of #157's merge, read again by §7.3.8): a step reading the queue while this screen's own change of owner commits. There is no
+// `own` answer: the runner ends, makes no cloud call, and the page's reconciliation follows at once, so no timer is lost. A change that kept the
+// records gives the next runner; an erase gives «reload» and none
+for(const erase of [false, true]){ const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'B20',db,'0',{store:W}); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); A.status.length=0; const calls=A.calls, r=A.sync.runner;
+  W.plan.push('hold'); r.nudge(); const st=r.step(); await tick();   // the queue's read is held
+  const bind=A.sync.writer.setOwner(U('b'), {erase, expectEpoch:epNow(db)}).then(()=>'ok', cErr); await tick(); W.release(); const d=await st, b=await bind; await tick(); const ends=A.sync.ends.join(), c1=A.calls; await A.sync.reconcile();
+  ok('B20 '+(erase? 'an erase' : 'a change that kept the records')+' of this screen under a step\'s read of the queue (bind '+b+'): the step is '+d.did+', the runner ended ('+ends+'), no cloud call of it ('+(c1-calls)+'), statuses '+JSON.stringify([...new Set(A.status)])+'; the page then has '+(A.sync.runner? 'a runner of '+A.sync.runner.owner.uid : 'no runner, '+A.sync.locked),
+    b==='ok' && d.did==='ended' && d.next===Infinity && ends==='mismatch' && c1===calls && !A.status.includes('stale') && (erase? A.sync.runner===null && A.sync.locked==='reload' && A.status.includes('reload') && A.calls===calls : A.sync.runner!==r && A.sync.runner.owner.uid==='b' && !A.status.includes('reload'))); }
+
+/* ── a writer and runners (§7.3.8): the end of a runner, at three places ── */
+// a store that can hold one readwrite transaction after its work is done and before it commits: «admitted, not yet committed»
+const gated=db=>{ const G={gate:null, admitted:null, tx:(st,mode,fn)=>db.tx(st,mode, async t=>{ const v=await fn(t); if(mode==='readwrite' && G.gate){ const g=G.gate; G.gate=null; if(G.admitted) G.admitted(); await g; } return v; })}; return G; };
+// N1: a call already out when its runner ends within one epoch (the lead lost). A late success: the attempt is not finished by the old runner, nothing
+// is written or published; the successor resolves the same attempt by its `op` and receipt, and the document is written once
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'N1',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); await note(A,'n1','sent once');
+  let rel; const hold=new Promise(r=>{ rel=r; }); cloud.fault('hold',{dev:'N1', op:'txn', promise:hold}); const r=A.sync.runner; let d; const run=(async()=>{ for(let i=0;i<6;i++){ d=await r.step(); if(d.did==='ended') break; } })();
+  for(let i=0;i<100 && !db.get('sync','try:n:n1');i++) await tick(2); const tr=db.get('sync','try:n:n1'); await tick(10);
+  r.end('lead'); A.status.length=0; A.changes.length=0; A.logs.length=0; const w0=db.writes; rel(); await run; await tick();
+  ok('N1 a late success of a runner that ended (the attempt '+(tr && tr.op? 'insured' : 'missing')+', the step «'+d.did+'»): the attempt stays in the store as it was, nothing is written ('+(db.writes-w0)+'), no event, no status ('+A.changes.length+', '+A.status.length+')',
+    !!tr && d.did==='ended' && db.writes===w0 && JSON.stringify(db.get('sync','try:n:n1'))===JSON.stringify(tr) && !!db.get('sync','out:n:n1') && !A.changes.length && !A.status.length);
+  await A.sync.reconcile(); const r2=A.sync.runner; await A.sync.idle(300); await A.sync.idle(300); const doc=cloud.doc('notes','n1');
+  ok('N1a the successor resolves the same attempt (op '+(doc && doc.op===tr.op)+'): the document is there once (rev '+(doc||{}).rev+'), the attempt and the job are gone', r2!==r && !!doc && doc.op===tr.op && doc.rev===1 && !db.get('sync','try:n:n1') && !db.get('sync','out:n:n1')); }
+// N1b: a late refusal: no backoff written, no «denied», no count of an error
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'N1b',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); await note(A,'n1','refused late');
+  let refuse; const real=A.proxy.txn; A.proxy.txn=()=>new Promise((_,rej)=>{ refuse=rej; }); const r=A.sync.runner; let d; const run=(async()=>{ for(let i=0;i<6;i++){ d=await r.step(); if(d.did==='ended') break; } })();
+  for(let i=0;i<100 && !refuse;i++) await tick(2); const job=JSON.stringify(db.get('sync','out:n:n1')), w0=db.writes; r.end('lead'); A.status.length=0; A.logs.length=0;
+  refuse(Object.assign(new Error('refused'),{code:'permission-denied'})); await run; await tick(); A.proxy.txn=real;
+  ok('N1b a late refusal of a runner that ended («'+d.did+'»): the job is as it was (no backoff, no try counted), nothing written ('+(db.writes-w0)+'), no «denied» ('+r._S.denied+', '+JSON.stringify(A.status)+'), no error logged', !!refuse && d.did==='ended' && JSON.stringify(db.get('sync','out:n:n1'))===job && db.writes===w0 && r._S.denied===false && !A.status.length && !A.logs.some(e=>e.t==='denied' || e.t==='step-error')); }
+// N2: a runner made for one epoch over a store of another: its one initialisation fails, it ends, and it makes no cloud call
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'N2',db,'0'); await A.sync.setOwner(U('a')); const e1=epNow(db), ow1=db.get('sync','owner'); await A.sync.setOwner(U('b'));
+  const ends=[], r=A.sync.writer.runner({epoch:e1, owner:ow1, cloud:{...A.proxy, uid:'a', env:'test'}, onEnd:x=>ends.push(x)}), s1=await r.start().then(()=>'started', e=>e.code), i2=await r.init().then(()=>'ok', e=>e.code), d=await r.step(); await tick();
+  ok('N2 a runner of an epoch the store has left: start fails ('+s1+'), the same result again ('+i2+'), it ended ('+r.ended+', one notice '+JSON.stringify(ends)+'), its step is «'+d.did+'», no cloud call ('+A.calls+')', s1==='epoch' && i2==='epoch' && r.alive===false && r.ended==='mismatch' && ends.join()==='mismatch' && d.did==='ended' && A.calls===0); }
+// N3: a transaction already admitted when its runner ends may finish: the records are there, the old runner publishes nothing of them, and the
+// successor reads them from the store
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), G=gated(db); cloud.write('notes',{id:'in1', title:'incoming', blocks:[{id:'b',row:1,fx:0,text:'from the cloud'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  const A=dev(cloud,'N3',db,'0',{store:G}); await A.sync.setOwner(U('a')); await A.sync.start(); const r=A.sync.runner; A.changes.length=0;
+  let open; const done=new Promise(x=>{ open=x; }); let adm; const admitted=new Promise(x=>{ adm=x; }); let d; const run=(async()=>{ for(let i=0;i<20 && !db.get('notes','in1');i++){ if(r.inboxSize() || i<3){ if(!G.gate && !db.get('notes','in1') && r.inboxSize()){ G.gate=done; G.admitted=adm; } } d=await r.step(); if(d.did==='ended') break; } })();
+  await Promise.race([admitted, tick(400)]); const before=!!db.get('notes','in1'); r.end('lead'); open(); await run; await tick();
+  ok('N3 a chunk admitted before the end commits after it (in the store before the end: '+before+', after: '+!!db.get('notes','in1')+'); the old runner gave no event of it ('+A.changes.length+') and its step is «'+d.did+'»', before===false && !!db.get('notes','in1') && !A.changes.length && d.did==='ended');
+  await A.sync.reconcile(); await A.sync.idle(300); const st=await A.sync.state('in1');
+  ok('N3a the successor works on from the store: the note is known as received (seen rev '+((st.seen||{}).rev)+'), no job for it', !!st.note && !!st.seen && !st.job); }
 
 console.log(fails? '\n'+fails+' failed' : '\nall passed'); process.exit(fails? 1 : 0);
