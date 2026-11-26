@@ -4,7 +4,8 @@
 //   3  a note that cannot be opened is in the safe mode: placement off, typing kept, no place written;
 //   4  an action's write put on the page's blocks, and the page's blocks read again, give the fields the bridge keeps;
 //   5  typing that is refused or fails: the text is the page's to save, no place of the result is written, the note goes safe;
-//   6  one state of inputs for a gesture: its measurements are stable, a change from outside cancels it, a stale result is not written;
+//   6  one state of inputs for a gesture: its measurements are stable, a change of the Measure's inputs or from outside cancels it, a
+//      stale result is not written;
 //   7  histories of random actions with the page's blocks kept beside: after each, a fresh reading of them gives the bridge's fields;
 //      and how many of those notes, opened afresh from the page's blocks, stand as the session left them (counted, reported).
 //
@@ -59,6 +60,13 @@ function page(blocks, write, bin, made) {
   ok('1e the stored fields as read: a sheet block\'s fx and row as stored and the column its fx rounds to; a child\'s parent, col and row as stored; sizes as read here', st.get('F').row === 9.4 && st.get('F').col === 7 && st.get('F').fx === blocks[1].fx && st.get('N').col < 0 && st.get('N').row === -5 && st.get('c').col === 2.4 && st.get('c').row === 1.6 && st.get('c').parent === 'R' && st.get('K').cw === 12 && st.get('K').ch === 4 && st.get('o').parent === 'gone' && st.get('R').parent === 'Z', [...st]);
 }
 
+{ // 1f: a parent given and no col
+  const r = B.read([{ id: 'o', text: 'x', parent: 'gone', fx: fxFromCol(9), row: 5 }, { id: 'R', kind: 'area', text: '', parent: 'Z', fx: fxFromCol(30), row: 6, cw: 14 }, { id: 'Q', kind: 'area', text: '', parent: 'Z', col: 7, fx: fxFromCol(12), row: 20, cw: 14 }, { id: 'k', text: 'x', parent: 'R', fx: fxFromCol(9), row: 1 }, { id: 'n', text: 'x', parent: 'gone', row: 9 }], KINDS);
+  const S = r.layout.boxes;
+  ok('1f a block with a dead parent and no col stands at the column its fx gives; an area with a parent stands by its fx, whatever col it carries; a child with no col is in column 0 whatever its fx; with neither, column 0', S.get('o').col === 9 && S.get('R').col === 30 && S.get('Q').col === 12 && r.layout.areas.get('R').boxes.get('k').col === 0 && S.get('n').col === 0, [S.get('o'), S.get('R'), S.get('Q'), S.get('n')]);
+  ok('1g their stored fields keep the parent and what they had: the fx with the column it rounds to, or the col', r.stored.get('o').parent === 'gone' && r.stored.get('o').fx === fxFromCol(9) && r.stored.get('o').col === 9 && r.stored.get('R').parent === 'Z' && r.stored.get('R').col === 30 && r.stored.get('k').parent === 'R' && r.stored.get('k').col === 0 && !('fx' in r.stored.get('k')), [...r.stored]);
+}
+
 { // 2
   const blocks = [T('A', 2, 3, { cw: 5 }), T('B', 2, 9, { cw: 5 }), { id: 'R', kind: 'area', text: '', fx: fxFromCol(24), row: rowFromY(4), cw: 14 }, { id: 'c', text: 'x', parent: 'R', col: 0, row: 0, cw: 4 }];
   const env = envOf(mapOf(blocks)), note = B.opened(blocks, env);
@@ -76,7 +84,13 @@ function page(blocks, write, bin, made) {
 { // 3
   const blocks = [T('A', 2, 3), { id: 'B', text: 'x', fx: 0.1, row: 1e20 }, T('C', 20, 3)], map = mapOf(blocks), env = envOf(map);
   const note = B.opened(blocks, env);
-  ok('3 a row out of the engine\'s range: the note opens in the safe mode, every block shown as read, with the reason', note.safe && note.errors.length === 1 && /range/.test(note.errors[0]) && note.doc.tree.boxes.size === 3 && note.doc.tree.boxes.get('A').y === 3 && note.doc.tree.boxes.get('B').y > MAXCELL, note.errors);
+  ok('3 a row out of the engine\'s range: the note opens in the safe mode with the reason, every block shown, that one within the engine\'s range, and its stored row as stored', note.safe && note.errors.length === 1 && /range/.test(note.errors[0]) && note.doc.tree.boxes.size === 3 && note.doc.tree.boxes.get('A').y === 3 && note.doc.tree.boxes.get('B').y === MAXCELL && note.doc.stored.get('B').row === 1e20, note.doc.tree.boxes.get('B'));
+  {
+    const wild = [T('A', 2, 3), { id: 'B', text: 'x', fx: 0.1, row: 1e20, ch: 1e100, cw: 1e30 }, { id: 'R', kind: 'area', text: '', fx: fxFromCol(20), row: rowFromY(4), cw: 14 }, { id: 'c', text: 'x', parent: 'R', col: 1e15, row: 1e12, ch: 1e200 }];
+    const n = B.opened(wild, envOf(mapOf(wild))), all = [...n.doc.tree.boxes.values(), ...n.doc.tree.areas.get('R').boxes.values()];
+    const within = all.every((b) => [b.col, b.y, b.w, b.h, b.cw ?? 0, b.ch ?? 0].every((v) => Number.isFinite(v) && v >= 0 && v <= MAXCELL) && b.y + b.h <= MAXCELL && b.col + b.w <= MAXCELL + 2);
+    ok('3\' a row of 1e20 with a height of 1e100, and a child at a column of 1e15 with a height of 1e200: safe, and everything shown, on the sheet and in the area, is a number within the engine\'s range; the stored fields keep the row and the child\'s place as stored', n.safe && within && n.doc.stored.get('B').row === 1e20 && n.doc.stored.get('c').col === 1e15 && n.doc.stored.get('c').row === 1e12, all.map((b) => [b.id, b.col, b.y, b.w, b.h]));
+  }
   const off = [B.create(note, { id: 'N', kind: 'text', at: { col: 1, y: 1, w: 4 } }, env), B.enter(note, { id: 'A', to: 'R', at: { col: 0, y: 0 } }, env), B.undo(note, env)];
   ok('3a placement is off: a creation, a move into an area, an undo and a carry answer «safe» and write nothing', off.every((x) => x.ok === false && x.why === 'safe' && x.write === null && x.note === note) && B.carry(note, { id: 'A', point: { x: 3, y: 3 } }, env) === null);
   map.A = { text: 'x'.repeat(300) };
@@ -84,6 +98,16 @@ function page(blocks, write, bin, made) {
   ok('3b typing stays: the text is the page\'s to save, the block is shown at its new height where it stands, the others where they stood, and no place is written', t.ok && t.content === true && t.write === null && t.note.safe && t.note.doc.tree.boxes.get('A').h > note.doc.tree.boxes.get('A').h && t.note.doc.tree.boxes.get('A').y === 3 && t.note.doc.tree.boxes.get('C').y === 3 && t.note.doc.stored === note.doc.stored);
   const r = B.remove(t.note, { id: 'C' }, env);
   ok('3c a deletion only takes the block away: named as removed, no place written, nothing moved', r.ok && r.write.removed.join() === 'C' && r.write.patch.size === 0 && !r.note.doc.tree.boxes.has('C') && !r.note.doc.stored.has('C') && r.note.doc.tree.boxes.get('B').y === t.note.doc.tree.boxes.get('B').y);
+  {
+    // an area in the safe mode: its frame is the header and its children as they now are
+    const bl = [{ id: 'R', kind: 'area', text: '', fx: fxFromCol(10), row: rowFromY(4), cw: 14 }, { id: 'c', text: 'x', parent: 'R', col: 0, row: 0, cw: 4 }, { id: 'Z', text: 'x', fx: 0.1, row: 1e20 }, T('U', 12, 8)];
+    const m = mapOf(bl), e = envOf(m), n = B.opened(bl, e), h0 = n.doc.tree.boxes.get('R').h;
+    m.R = { kind: 'area', header: 7 };
+    const t1 = B.typed(n, { id: 'R' }, e), h1 = t1.note.doc.tree.boxes.get('R').h;
+    m.c = { text: 'x'.repeat(240) };
+    const t2 = B.typed(t1.note, { box: 'R', id: 'c' }, e), h2 = t2.note.doc.tree.boxes.get('R').h, c2 = t2.note.doc.tree.areas.get('R').boxes.get('c');
+    ok(`3e in the safe mode an area's frame is its header and its children as they now are: ${h0} rows as opened, ${h1} once its header takes 7, ${h2} once its child takes ${c2.h}; the area and the block under it stay where they stood, and nothing is written`, n.safe && h0 === 2 && h1 === 8 && c2.h === 20 && h2 === 7 + 20 && t2.note.doc.tree.boxes.get('R').y === n.doc.tree.boxes.get('R').y && t2.note.doc.tree.boxes.get('U').y === n.doc.tree.boxes.get('U').y && t1.write === null && t2.write === null && t2.note.doc.stored === n.doc.stored, { h0, h1, h2, c: c2.h });
+  }
   const fixed = blocks.map((b) => (b.id === 'B' ? { ...b, row: 12 } : b)), again = B.outside(note, fixed, envOf(mapOf(fixed)));
   ok('3d the note read again with the value repaired opens placed', !again.safe && again.epoch === note.epoch + 1 && again.errors.length === 0);
 }
@@ -129,9 +153,24 @@ function page(blocks, write, bin, made) {
   const fresh = B.opened(blocks, env).doc.tree.boxes.get('A').h, at = B.preview(note, c3).boxes.get('A');
   ok(`6 the measurements of a gesture are one state: A, ${h1} rows when it was picked up and ${fresh} to a new measure, is ${at.h} rows in every later preview of the carry`, h1 > 0 && fresh > h1 && B.preview(note, c2).boxes.get('A').h === h1 && at.h === h1 && at.y === 14);
   const f = B.frozen({ rows: (() => { let n = 0; return () => ({ rows: ++n, shown: n }); })(), natural: (() => { let n = 0; return () => ++n; })() });
+  const given = { rows: 2, shown: 2 }, f2 = B.frozen({ rows: () => given, natural: () => 3 }), first = f2.rows('A', 5);
+  given.rows = 99; first.rows = 77;
+  ok('6a\' and keeps a copy: what is done later to the object it was given, or to an answer it gave, changes no answer', f2.rows('A', 5).rows === 2);
   ok('6a a frozen Measure answers a question once, each question its own', f.rows('A', 5).rows === 1 && f.rows('A', 5).rows === 1 && f.rows('A', 6).rows === 2 && f.rows('B', 5).rows === 3 && f.natural('A') === 1 && f.natural('A') === 1 && f.natural('B') === 2);
   const d = B.dropped(note, c3);
   ok('6b the drop writes the carry as it was shown', d.ok && d.write.patch.has('A') && d.note.doc.tree.boxes.get('A').y === 14 && d.note.doc.tree.boxes.get('A').h === h1);
+  // the Measure's inputs change in the middle of a carry, and the next target asks a width not asked before
+  for (const how of ['sign', 'version']) {
+    const m2 = mapOf(blocks); m2.A = { text: 'x'.repeat(60) };
+    let v = 1;
+    const e2 = { ...envOf(m2), ...(how === 'sign' ? { sign: (id) => String((m2[id]?.text || '').length) } : { version: () => v }) }, n2 = B.opened(blocks, e2);
+    let k = B.carry(n2, { id: 'A', point: p }, e2);
+    k = B.moved(n2, k, { x: 30, y: 12 });
+    const was = B.preview(n2, k);
+    m2.A = { text: 'x'.repeat(600) }; v = 2;
+    const k2 = B.moved(n2, k, { x: n2.doc.tree.cols - 0.5, y: 12 }), dk = B.dropped(n2, k2);
+    ok(`6f the measured text changed in the middle of a carry, told by ${how === 'sign' ? 'the blocks\' signatures' : 'the Measure\'s version'}, and the pointer went on to the right edge, a width not asked before: the carry is stale, the move asks nothing, the note is shown as it is, and the drop writes nothing`, !!was && B.stale(n2, k) && k2.cancelled === true && k2.g === k.g && B.preview(n2, k2) === n2.doc.tree && dk.ok === false && dk.why === 'stale' && dk.write === null, { stale: B.stale(n2, k) });
+  }
   // a change from outside
   let g = B.carry(note, { id: 'C', point: { x: 21.5, y: 3.3 } }, env);
   g = B.moved(note, g, { x: 40, y: 20 });
@@ -189,6 +228,14 @@ function page(blocks, write, bin, made) {
       re[temp ? 1 : 0][same ? 0 : 1]++;
       if (!same && !temp) firstOther = firstOther || { seed, note: i };
     }
+  }
+  {
+    // the named case of what 7a counts (found by this test and narrowed by the independent review): a sheet of 34 columns, a text of
+    // 20 characters created at column 28 with a width of 6. Reported, not repaired: it is layout.js's, and a question for step 3.
+    const m = { N: { text: 'x'.repeat(20) } }, e = envOf(m), n0 = B.opened([], e, { cols: 34 });
+    const c = B.create(n0, { id: 'N', kind: 'text', at: { col: 28, y: 3, w: 6 } }, e), bl = page([], c.write, new Map(), { id: 'N', text: m.N.text });
+    const a = c.note.doc.tree.boxes.get('N'), b = B.opened(bl, e, { cols: 34 }).doc.tree.boxes.get('N');
+    ok(`7b as built: a text created at the right edge stands at column ${a.col}, ${a.w} wide; the same note opened afresh shows it at column ${b.col}, ${b.w} wide (an elastic block's width is not stored)`, c.ok && a.col === 28 && a.w === 6 && b.col === 27 && b.w === 7 && c.note.doc.stored.get('N').cw === undefined, { a: [a.col, a.w], b: [b.col, b.w] });
   }
   ok(`7 ${notes} notes, ${actions} actions (${written} writes, ${undone} undos, ${moved} moves of carries) with the page's blocks kept beside: after each, a fresh reading of them gives the bridge's fields, the tree is valid and no action leaves a place unwritten that was not waiting before it`, notes > N / 2 && written > actions / 3 && undone > 10 && bad === 0, { bad, first, safeNotes });
   // Reported, not repaired here (open() is layout.js's): a note opened afresh from its stored fields does not always stand as the
