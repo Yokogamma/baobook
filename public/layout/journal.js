@@ -14,7 +14,8 @@ import { DEFAULT, SETTINGS } from './rules.js';
 
 /** @typedef {import('./shapes.js').Layout} Layout @typedef {import('./shapes.js').Change} Change @typedef {import('./shapes.js').Ctx} Ctx
  *  @typedef {import('./shapes.js').Measure} Measure @typedef {import('./shapes.js').Memory} Memory
- *  @typedef {{rows: Record<string, Record<string, {rows:number, shown:number, lines?:number}>>, natural: Record<string, number>}} Answers
+ *  @typedef {{rows: Record<string, Record<string, {rows:number, shown:number, lines?:number}>>, natural: Record<string, number>, version?: string}} Answers
+ *    // version: the measuring version every answer of the entry was given at (measure.js), when the Measure has one
  *  @typedef {{n:number, versions:object, tree:unknown, memory:unknown, change:unknown, rules:unknown, settings:unknown, answers:Answers, result:unknown}} Entry */
 
 /** A value as plain JSON and back: a Map as its pairs in their order, a number JSON has no word for by its name. */
@@ -142,14 +143,20 @@ function watched(o, mark, seen = new WeakMap()) {
 
 /** A Measure that keeps every answer it gives, as the numbers the engine reads and nothing else, in tables that have no prototype, so
  *  that a block named `toString` or `__proto__` is a key as any other. `threw()`: it threw; `bent()`: an answer was not numbers, and
- *  is not kept. @param {Measure} measure @returns {{measure: Measure, answers: Answers, threw: () => boolean, bent: () => boolean}} */
+ *  is not kept. A Measure that has a `version` (the app's, measure.js) is one state of inputs for the answers of a command: the
+ *  version is kept with them, and when it is another at the end than at the start, or no version the journal can keep, the answers
+ *  are not one state (`bent`). @param {Measure} measure
+ *  @returns {{measure: Measure, answers: Answers, threw: () => boolean, bent: () => boolean}} */
 export function recording(measure) {
   /** @type {Answers} */
   const answers = { rows: Object.create(null), natural: Object.create(null) };
   let threw = false, bent = false;
+  const versioned = typeof measure.version === 'function', at = () => { try { return String(measure.version()); } catch { return ''; } };
+  const v0 = versioned ? at() : null, moved = () => versioned && at() !== v0;
+  if (versioned) { if (/^[0-9.-]{1,32}$/.test(v0)) answers.version = v0; else bent = true; }
   const safely = (f) => { try { return f(); } catch (e) { threw = true; throw e; } };
   const num = (x) => typeof x === 'number';
-  return { answers, threw: () => threw, bent: () => bent, measure: Object.freeze({
+  return { answers, threw: () => threw, bent: () => bent || moved(), measure: Object.freeze({
     rows(id, cells) {
       const r = safely(() => measure.rows(id, cells));
       if (r && num(r.rows) && num(r.shown) && (r.lines == null || num(r.lines)) && num(cells)) (answers.rows[id] ??= Object.create(null))[cells] = { rows: r.rows, shown: r.shown, ...(r.lines != null ? { lines: r.lines } : {}) };

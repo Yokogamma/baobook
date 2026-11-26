@@ -171,12 +171,14 @@ export function frozen(measure) {
   return {
     rows(id, cells) { const k = id + '\u0000' + cells; if (!rows.has(k)) rows.set(k, { ...measure.rows(id, cells) }); return { ...rows.get(k) }; },
     natural(id) { if (!natural.has(id)) natural.set(id, measure.natural(id)); return natural.get(id); },
+    ...(typeof measure.version === 'function' ? { version: () => measure.version() } : {}),   // the app's Measure says what it reads
   };
 }
 const idsOf = (tree) => [...tree.order, ...[...(tree.areas || new Map()).values()].flatMap((A) => A.order)];
 /** What the Measure reads, as one value to compare: the caller's version of it, or every block's signature. */
 function inputs(tree, env) {
   if (env.version) return env.version();
+  if (typeof env.ctx.measure.version === 'function' && !env.sign) return env.ctx.measure.version();
   return env.sign ? idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001') : null;
 }
 
