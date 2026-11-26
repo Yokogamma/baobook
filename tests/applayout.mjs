@@ -127,9 +127,14 @@ const rects=pg=>pg.evaluate(()=>Object.fromEntries([...document.querySelectorAll
     {id:'A', fx:fxFromCol(4), row:3, kind:'area', cw:14, collapsed:true}, {id:'k', parent:'A', col:0, row:0, text:'One\nTwo\nThree'}, {id:'u', fx:fxFromCol(4), row:7, text:'Under'}]};
   await seed(pg, note); await go(pg,'lay3');
   await pg.locator('#sheet .blk.is-area .fold').click(); await pg.waitForTimeout(500);
-  const r1=await rects(pg), n1=await stored(pg,'lay3'); await pg.reload(); await ready(pg); const r2=await rects(pg);
+  const r1=await rects(pg), n1=await stored(pg,'lay3');
+  // with no reload between: the fold button is what is held when the header is first measured, then the empty title
+  await pg.locator('#sheet .blk.is-area .ctitle').click(); await pg.waitForTimeout(400); const rT=await rects(pg), headT=await pg.evaluate(()=>[document.querySelector('#sheet .is-area .cbar').offsetHeight, document.activeElement.className]);
+  await pg.locator('#ttl').click(); await pg.waitForTimeout(400); const rB=await rects(pg);
+  await pg.reload(); await ready(pg); const r2=await rects(pg);
   const inside=r=>r.One.x>=r.area.x && r.One.r<=r.area.r && r.One.y>=r.area.y && r.One.b<=r.area.b, clear=r=>r.Und.y>=r.area.b;
   ok('7b an area loaded collapsed and opened: its child is as wide and as tall as its three lines, inside the frame, the block under the area clear of it; the same after a reload', r1.One.h===3*G && r1.One.w>40 && inside(r1) && clear(r1) && JSON.stringify(r1)===JSON.stringify(r2) && !byId(n1).A.collapsed, {r1, r2});
+  ok('7b\' opened by its button and then its empty title held, with no reload: the header is taller ('+headT[0]+' px) and the frame holds the child; left again, the area is as it was', /ctitle/.test(headT[1]) && rT.area.h>r1.area.h && inside(rT) && clear(rT) && JSON.stringify(rB)===JSON.stringify(r1), {r1, rT, rB, headT});
   // the title: empty, held, with a character, empty again, left
   const title=pg.locator('#sheet .blk.is-area .ctitle'), steps=[]; const step=async name=>{ await pg.waitForTimeout(350); const r=await rects(pg); steps.push({name, head:await pg.evaluate(()=>document.querySelector('#sheet .is-area .cbar').offsetHeight), ok:inside(r) && clear(r), area:r.area.h, one:[r.One.y, r.One.b], under:r.Und.y}); };
   await step('empty'); await title.click(); await step('held'); await pg.keyboard.type('X'); await step('text'); await pg.keyboard.press('Backspace'); await step('empty again'); await pg.keyboard.press('Escape'); await pg.locator('#ttl').click(); await step('left');
@@ -168,7 +173,7 @@ await ctx.close();
 
 /* ── 12: two tabs: the switch changed in one reloads the other ──────────────────── */
 { const {ctx,pg,errs}=await open(DEV); const p2=await ctx.newPage(); await p2.goto(`https://${DEV}/`); await ready(p2);
-  await Promise.all([p2.waitForEvent('load'), flip(pg)]); await ready(p2);
+  await flip(pg); await p2.waitForFunction(()=>document.documentElement.dataset.started!==undefined && document.getElementById('app').classList.contains('lay01'), null, {timeout:20000}).catch(()=>{});   // the other tab reloads by itself, whenever the message reaches it
   const a=await state(pg), b=await state(p2);
   ok('12 the switch turned on in one tab: the other tab reloads and runs the engine too', a.lay && b.lay && !errs.length, {a, b, errs}); await ctx.close(); }
 
