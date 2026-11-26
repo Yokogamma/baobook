@@ -171,18 +171,22 @@ export function frozen(measure) {
   return {
     rows(id, cells) { const k = id + '\u0000' + cells; if (!rows.has(k)) rows.set(k, { ...measure.rows(id, cells) }); return { ...rows.get(k) }; },
     natural(id) { if (!natural.has(id)) natural.set(id, measure.natural(id)); return natural.get(id); },
-    ...(versioned(measure) ? { version: () => measure.version() } : {}),   // the app's Measure says what it reads
+    // the app's Measure says what it reads; read from it each time, so that one that has no version has none here, and one whose
+    // version cannot be read cannot be read here either
+    get version() { return measure.version; },
   };
 }
 const idsOf = (tree) => [...tree.order, ...[...(tree.areas || new Map()).values()].flatMap((A) => A.order)];
-const versioned = (measure) => { try { return typeof measure.version === 'function'; } catch { return false; } };
-/** What the Measure reads, as one value to compare: the caller's version of it, the Measure's own, or every block's signature.
- *  When it cannot be read, a value equal to no other: the carry is stale, and writes nothing. */
+/** What the Measure reads, as one value to compare: the caller's version of it, every block's signature, or the Measure's own
+ *  version. A Measure that has none gives nothing to compare (the answers already given are all a carry keeps). One whose version
+ *  cannot be read, a getter or a call that throws or a version that is no function, is another matter: a value equal to no other,
+ *  so the carry is stale, asks nothing and writes nothing. */
 function inputs(tree, env) {
   try {
     if (env.version) return env.version();
-    if (versioned(env.ctx.measure) && !env.sign) return env.ctx.measure.version();
-    return env.sign ? idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001') : null;
+    if (env.sign) return idsOf(tree).map((id) => id + '\u0000' + env.sign(id)).join('\u0001');
+    const f = env.ctx.measure.version;
+    return f === undefined ? null : typeof f === 'function' ? f.call(env.ctx.measure) : {};
   } catch { return {}; }
 }
 

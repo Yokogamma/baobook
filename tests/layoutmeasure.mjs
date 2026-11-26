@@ -126,13 +126,26 @@ const T = (id, col, row, o = {}) => ({ id, text: 'x', fx: fxFromCol(col), row: r
     const alone = settleTree(a.doc.tree, change, null, ctx(P.stub));
     ok(`7c ${name}: the command is answered as settleTree alone answers it, it is in the journal, unfit, with no word of the error`, !t4 && !!r4 && str(r4) === str(alone) && j4.entries().length === 1 && j4.entries()[0].unfit?.includes('answers') && !j4.export().includes('swordfish'), { t4: t4 && t4.message, unfit: j4.entries()[0]?.unfit });
   }
+  // a carry over a Measure whose version cannot be read, with no other word of what it reads: stale, whatever the way it fails
+  for (const [name, mk] of [['a getter that throws', (m) => Object.defineProperty({ rows: m.rows, natural: m.natural }, 'version', { get() { throw new Error('swordfish'); } })], ['a version that throws', (m) => ({ rows: m.rows, natural: m.natural, version() { throw new Error('swordfish'); } })], ['a version that is no function', (m) => ({ rows: m.rows, natural: m.natural, version: 7 })]]) {
+    const m9 = { A: { text: 'x'.repeat(60) }, B: { text: 'x' } }, bl = [T('A', 2, 3), T('B', 2, 20, { cw: 5 })], e9 = { ctx: ctx(mk(stubMeasure(m9))) }, n9 = B.opened(bl, e9);
+    let c9 = null, t9 = null, d9 = null;
+    try {
+      c9 = B.carry(n9, { id: 'A', point: { x: 3.5, y: 3.3 } }, e9);
+      c9 = B.moved(n9, c9, { x: 20, y: 12 });
+      m9.A = { text: 'x'.repeat(600) };   // the measured text changes, and the next target asks a width not asked before
+      c9 = B.moved(n9, c9, { x: n9.doc.tree.cols - 0.5, y: 12 });
+      d9 = B.dropped(n9, c9);
+    } catch (err) { t9 = err; }
+    ok(`7d a carry over a Measure with ${name}, the measured text changed and the pointer carried on to the right edge: nothing is thrown, the carry is stale and cancelled, the note is shown as it is, and the drop is «stale» with nothing to write`, !t9 && !!c9 && B.stale(n9, c9) && c9.cancelled === true && B.preview(n9, c9) === n9.doc.tree && d9.ok === false && d9.why === 'stale' && d9.write === null, { t9: t9 && t9.message, d9 });
+  }
   {
-    const broken = { ctx: ctx(Object.defineProperty({ rows: P.stub.rows, natural: P.stub.natural }, 'version', { get() { throw new Error('swordfish'); } })) }, nb = B.opened(blocks, broken);
-    let cb = null, tb = null; try { cb = B.carry(nb, { id: 'C', point: { x: 21.5, y: 3.3 } }, broken); cb = B.moved(nb, cb, { x: 44, y: 20 }); } catch (err) { tb = err; }
-    ok('7d a carry over such a Measure throws nothing; with its version unreadable it keeps the answers it was given', !tb && !!cb && !B.stale(nb, cb), tb && tb.message);
-    const half = { ctx: ctx({ ...P.stub, version() { throw new Error('swordfish'); } }) }, nh = B.opened(blocks, half);
-    let ch = null, th = null; try { ch = B.carry(nh, { id: 'C', point: { x: 21.5, y: 3.3 } }, half); ch = B.moved(nh, ch, { x: 44, y: 20 }); } catch (err) { th = err; }
-    ok('7e and over one whose version throws when asked the carry is stale: it asks nothing and its drop writes nothing', !th && B.stale(nh, ch) && ch.cancelled === true && B.dropped(nh, ch).why === 'stale', th && th.message);
+    // a Measure with no version at all is the laboratory's: the answers already given are kept, and that is all
+    const m9 = { A: { text: 'x'.repeat(60) }, B: { text: 'x' } }, bl = [T('A', 2, 3), T('B', 2, 20, { cw: 5 })], e9 = { ctx: ctx(stubMeasure(m9)) }, n9 = B.opened(bl, e9);
+    let c9 = B.carry(n9, { id: 'A', point: { x: 3.5, y: 3.3 } }, e9);
+    c9 = B.moved(n9, c9, { x: 20, y: 12 });
+    const f = B.frozen({ rows: () => ({ rows: 1, shown: 1 }), natural: () => 1 }), g = B.frozen(Object.defineProperty({}, 'version', { get() { throw new Error('x'); } }));
+    ok('7e a Measure with no version has none through a frozen one either, and a carry over it is not stale by that; a version that cannot be read cannot be read through a frozen one', !B.stale(n9, c9) && f.version === undefined && (() => { try { return g.version && false; } catch { return true; } })());
   }
 
   // 8: a carry
