@@ -1,7 +1,6 @@
 // The bridge, its pure part (LAYOUT-ENGINE-PLAN §2, §3.4, §3.5, §4.2; LAYOUT-SEAMS-PLAN §8): the only module that knows the page's block
 // objects. It reads them into a tree and the stored fields as read, opens the note, runs the slice's actions through ops.js, and says
-// what to write back: the place fields of the blocks an action wrote. First version: no DOM here; the wiring into index.html and the
-// browser's Measure are S5d's.
+// what to write back: the place fields of the blocks an action wrote. No DOM here: the page's side is page.js and view.js.
 //
 // The safe mode (§3.5, §4.2). A note that cannot be opened, and a note whose content changed in a way the engine could not place
 // (typing that SETTLE refused or failed), is shown with every block at its last accepted place and its size there; placement is off
@@ -162,6 +161,52 @@ export function undo(note, env) {
 /** The note changed from outside (another tab or device, an import): read and opened again, its entries dropped, and every carry
  *  begun before it stale. @param {Note} note @param {Block[]} blocks */
 export function outside(note, blocks, env, o) { return { ...opened(blocks, env, o), epoch: note.epoch + 1 }; }
+
+// ---- a command of the page
+const placeOf = (tree) => { const m = new Map(tree.order.map((id) => [id, null])); for (const [a, A] of tree.areas || []) for (const id of A.order) m.set(id, a); return m; };
+const boxOf = (tree, box, id) => (box == null ? tree : tree.areas.get(box)).boxes.get(id);
+const sameStored = (a, b) => PLACE_FIELDS.every((f) => (a[f] ?? null) === (b[f] ?? null));
+
+/** The page's blocks after a command of the page's own (S5d-2): what the engine makes of what the page now holds. The page changes
+ *  its blocks as it always did (a keystroke, a block made, a block taken away, a command of a menu) and then asks here.
+ *  - `same`: the blocks the engine holds are the page's, each in its container, of its kind, with the stored fields the note keeps;
+ *    nothing to do. With `changed`, the block whose content changed: `typed`.
+ *  - `create`: one block more, and nothing else: made at its cell with the sizes it has.
+ *  - `remove`: one block less, or an area with every child of it.
+ *  - `outside`: anything else (a stored field changed by the page's own code, a block of another kind under the same id, several
+ *    blocks at once, a creation the engine refused): the note is read and opened again, as after a change from outside; a carry
+ *    begun before is stale, and nothing is written.
+ *  The result has `how`, the note and the write, as the action taken gives them. A `typed` that put the note into the safe mode says
+ *  `ok: false`, the content being the page's to save all the same.
+ *  @param {Note} note @param {Block[]} blocks @param {Env} env @param {{changed?:?string, cols?:number, temp?:Map<string, number>}} [o] */
+export function page(note, blocks, env, o = {}) {
+  const cols = o.cols ?? note.doc.tree.cols, again = () => ({ how: 'outside', ok: true, note: outside(note, blocks, env, { cols, temp: o.temp }), write: null });
+  const r = read(blocks, env.ctx.kinds, cols), T = note.doc.tree, have = placeOf(T), now = placeOf(r.layout);
+  for (const [id, box] of now) {
+    if (!have.has(id)) continue;
+    const s = note.doc.stored.get(id);
+    if (have.get(id) !== box || boxOf(T, box, id).kind !== boxOf(r.layout, box, id).kind || !s || !sameStored(s, r.stored.get(id))) return again();
+  }
+  const added = [...now.keys()].filter((id) => !have.has(id)), gone = [...have.keys()].filter((id) => !now.has(id));
+  if (!added.length && !gone.length) {
+    if (o.changed == null || !have.has(o.changed)) return { how: 'same', ok: true, note, write: null };
+    return { how: 'typed', ...typed(note, { box: have.get(o.changed), id: o.changed }, env) };
+  }
+  if (added.length === 1 && !gone.length && !note.safe) {
+    const id = added[0], box = now.get(id), b = boxOf(r.layout, box, id);
+    if (b.collapsed) return again();
+    const set = { ...(b.cw != null ? { cw: b.cw } : {}), ...(b.ch != null ? { ch: b.ch } : {}), ...(b.open ? { open: true } : {}) };
+    const c = create(note, { box, id, kind: b.kind, at: { col: b.col, y: b.y, w: (b.cw ?? env.ctx.kinds[b.kind].minCells()) + 1 }, ...(Object.keys(set).length ? { set } : {}) }, env);
+    return c.ok ? { how: 'create', ...c } : again();
+  }
+  if (gone.length && !added.length) {
+    // one block, or an area of the sheet with every child it has
+    const top = gone.filter((id) => !(have.get(id) != null && gone.includes(have.get(id))));
+    const all = top.length === 1 && have.get(top[0]) == null && T.areas.has(top[0]) ? 1 + T.areas.get(top[0]).order.length : 1;
+    if (top.length === 1 && gone.length === all) { const d = remove(note, { box: have.get(top[0]), id: top[0] }, env); if (d.ok) return { how: 'remove', ...d }; }
+  }
+  return again();
+}
 
 // ---- a carry
 /** A Measure that answers a question once and gives that answer again, as a copy of what it was first given, so that nothing done
