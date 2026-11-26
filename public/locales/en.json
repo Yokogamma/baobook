@@ -534,5 +534,8 @@
   "boot.waiting": "Loading your notes…",
   "boot.slow": "The browser storage is slow to answer. Your notes appear as soon as it does; no need to close the app.",
   "boot.snapWait": "Loading your notes…",
-  "boot.snapLocked": "These notes are on this device but cannot be read right now:"
+  "boot.snapLocked": "These notes are on this device but cannot be read right now:",
+  "layout.switch": "New layout (0.1)",
+  "layout.journal": "Layout journal",
+  "layout.safe": "The layout of this note could not be built: blocks stay where they are, text is saved"
 }
