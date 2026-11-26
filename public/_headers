@@ -1,0 +1,11 @@
+# Security headers for the static files of public/ (developers.cloudflare.com/workers/static-assets/headers/). Cloudflare applies this
+# file to asset responses only: the Worker's answers under /__/ (the Firebase Auth pages, wrangler.jsonc run_worker_first) keep their own
+# headers, so the sign-in iframe and popup are not affected. The file itself is not served. tests/lib/server.mjs applies it the same way,
+# and tests/appheaders.mjs checks it, locally and with --live against a deployed site.
+# There is no script-src here on purpose: a policy for scripts needs a report-only round first.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
