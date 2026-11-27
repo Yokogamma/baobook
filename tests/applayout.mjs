@@ -94,7 +94,7 @@ await pg.keyboard.press('Escape');
 // delete «Beta two» from its menu, and bring it back
 { const g0=await geo(pg); await pg.locator('#sheet .blk').filter({hasText:'Beta two'}).locator('.grip').click({button:'right'}); await pg.waitForTimeout(200);
   const items=await pg.locator('.bm .mi').allInnerTexts();
-  ok('4b the block\'s menu in the slice: copy, the link and delete; no position mode, no «В область», no size', items.length===3 && /Видалити/.test(items.join('|')) && !/Розмір|Виділити|область/i.test(items.join('|')), items);
+  ok('4b the block\'s menu in the slice: copy, the link, «В область…» and delete; no position mode, no size', items.length===4 && /Видалити/.test(items.join('|')) && /В область/.test(items.join('|')) && !/Розмір|Виділити/i.test(items.join('|')), items);
   await pg.locator('.bm .mi.danger').first().click(); await pg.waitForTimeout(700);
   const g1=await geo(pg), n=await stored(pg,'lay1');
   ok('4c deleted: the block is gone from the page and from the stored note, the others stay', !g1['Beta t'] && !n.blocks.some(b=>b.id==='t2') && g1.Gamma.t===g0.Gamma.t && g1.Alpha.t===g0.Alpha.t, g1);
@@ -102,15 +102,76 @@ await pg.keyboard.press('Escape');
   const g2=await geo(pg), n2=byId(await stored(pg,'lay1'));
   ok('4d «Скасувати» brings it back at its cell', !!g2['Beta t'] && g2['Beta t'].t===g0['Beta t'].t && g2['Beta t'].l===g0['Beta t'].l && n2.t2 && n2.t2.row===5, g2['Beta t']); }
 
-/* ── 5: what the slice leaves out ───────────────────────────────────────────────── */
-{ const g0=await geo(pg), grip=await pg.locator('#sheet .blk').filter({hasText:'Gamma three'}).locator('.grip').boundingBox();
-  await pg.mouse.move(grip.x+4, grip.y+8); await pg.mouse.down(); await pg.mouse.move(grip.x+200, grip.y+150, {steps:8}); await pg.mouse.up(); await pg.waitForTimeout(400);
-  const g1=await geo(pg), rz=await pg.locator('#sheet .blk .rz').evaluateAll(els=>els.filter(e=>getComputedStyle(e).display!=='none').length);
-  ok('5 the carry is not in this part: a drag by the grip moves nothing; no resize handle is shown', JSON.stringify(g0)===JSON.stringify(g1) && rz===0, {rz}); }
+/* ── 5: the carry ───────────────────────────────────────────────────────────────── */
+const gripOf=t=>pg.locator('#sheet .blk:not(.is-area)').filter({hasText:t}).locator('.grip').first();
+/** Two readings of the page are the same, whatever the order of the elements in the document. */
+const same=(a,b)=>JSON.stringify(Object.keys(a).sort().map(k=>[k,a[k]]))===JSON.stringify(Object.keys(b).sort().map(k=>[k,b[k]]));
+/** A block carried by its grip by so many cells, in steps; `end`: what ends it. */
+const carry=async(t,dx,dy,end='up')=>{ const g=await gripOf(t).boundingBox(), x=g.x+g.width/2, y=g.y+g.height/2; await pg.mouse.move(x,y); await pg.mouse.down(); await pg.mouse.move(x+dx*G/2, y+dy*G/2, {steps:6}); await pg.mouse.move(x+dx*G, y+dy*G, {steps:6}); await pg.waitForTimeout(80);
+  if(end==='esc'){ await pg.keyboard.press('Escape'); await pg.waitForTimeout(80); await pg.mouse.up(); } else if(end==='hold') return; else await pg.mouse.up(); await pg.waitForTimeout(500); };
+const undoKey=async()=>{ await pg.locator('#ttl').click(); await pg.keyboard.press('Escape'); await pg.evaluate(()=>document.activeElement.blur()); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(500); };
+{ const g0=await geo(pg), n0=byId(await stored(pg,'lay1'));
+  await carry('Gamma three', 12, 4);
+  const g1=await geo(pg), n1=byId(await stored(pg,'lay1')), rz=await pg.locator('#sheet .blk .rz').evaluateAll(els=>els.filter(e=>getComputedStyle(e).display!=='none').length);
+  ok('5 a block carried by its grip twelve columns right and four rows down stands there, stored at that cell; nothing else moved; no resize handle is shown', g1.Gamma.l===g0.Gamma.l+12*G && g1.Gamma.t===g0.Gamma.t+4*G && n1.t3.row===n0.t3.row+4 && Math.abs(n1.t3.fx-fxFromCol(15))<1e-9 && ['Alpha','Beta t','const','area'].every(k=>g1[k].l===g0[k].l && g1[k].t===g0[k].t) && rz===0, {a:g0.Gamma, b:g1.Gamma, row:n1.t3.row, fx:n1.t3.fx});
+  await undoKey();
+  const g2=await geo(pg), n2=byId(await stored(pg,'lay1'));
+  ok('5a Ctrl+Z puts it back, on the page and in the stored note', same(g2, g0) && n2.t3.row===n0.t3.row && n2.t3.fx===n0.t3.fx, {g2:g2.Gamma, n:n2.t3});
+  await carry('Gamma three', 12, 4, 'esc');
+  const g3=await geo(pg), n3=await stored(pg,'lay1');
+  ok('5b a carry given up with Esc: every block where it stood, nothing written', same(g3, g0) && JSON.stringify(byId(n3))===JSON.stringify(n2), g3.Gamma);
+  // onto another block: the engine makes room, and nothing overlaps
+  await carry('Gamma three', 0, -4);
+  const g4=await geo(pg), over=(a,b)=>a.l<b.l+b.ew && b.l<a.l+a.ew && a.t<b.t+b.h && b.t<a.t+a.h;
+  ok('5c carried up onto «Beta two»: the two do not overlap after the drop', !over(g4.Gamma, g4['Beta t']) && !over(g4.Gamma, g4.Alpha), {gamma:g4.Gamma, beta:g4['Beta t']});
+  await undoKey();
+  ok('5c\' and Ctrl+Z gives the layout before', same(await geo(pg), g0)); }
+// into an area and out of it, by the pointer
+{ const g0=await geo(pg), a=await pg.locator('#sheet .blk.is-area .abody').boundingBox(), gr=await gripOf('Gamma three').boundingBox();
+  await carry('Gamma three', Math.round((a.x+8*G-gr.x)/G), Math.round((a.y+a.height-G/2-gr.y)/G));
+  const g1=await geo(pg), n1=byId(await stored(pg,'lay1'));
+  ok('5d carried into the area: a child of it on the page and in the stored note, with its column and row there and no `fx`', g1.Gamma.in && n1.t3.parent==='A' && Number.isInteger(n1.t3.col) && Number.isInteger(n1.t3.row) && n1.t3.fx===undefined, {g:g1.Gamma, n:n1.t3});
+  await undoKey();
+  const g2=await geo(pg), n2=byId(await stored(pg,'lay1'));
+  ok('5e Ctrl+Z takes it out again: on the sheet where it stood, stored with its `fx` and no parent', same(g2, g0) && n2.t3.parent===undefined && n2.t3.col===undefined && Math.abs(n2.t3.fx-fxFromCol(3))<1e-9, {g:g2.Gamma, n:n2.t3});
+  await carry('Kid two', -14, 6);
+  const g3=await geo(pg), n3=byId(await stored(pg,'lay1'));
+  ok('5f a child carried out of the area: on the sheet, stored with `fx` and no parent', !g3['Kid tw'].in && n3.k2.parent===undefined && n3.k2.col===undefined && typeof n3.k2.fx==='number', {g:g3['Kid tw'], n:n3.k2});
+  await undoKey();
+  ok('5f\' and back by Ctrl+Z', same(await geo(pg), g0) && byId(await stored(pg,'lay1')).k2.parent==='A'); }
+// by the menu
+{ const g0=await geo(pg);
+  await gripOf('Gamma three').click({button:'right'}); await pg.waitForTimeout(200); await pg.locator('.bm .mi').filter({hasText:'В область'}).click(); await pg.waitForTimeout(200); await pg.locator('.bm .mi').first().click(); await pg.waitForTimeout(500);
+  const g1=await geo(pg), n1=byId(await stored(pg,'lay1')), toast=await pg.locator('#undo .umsg').innerText();
+  ok('5g «В область…»: the block is a child of the area, under its lowest block, and the toast says so', g1.Gamma.in && n1.t3.parent==='A' && n1.t3.col===0 && n1.t3.row>n1.k2.row && /перенесено в область/.test(toast), {g:g1.Gamma, n:n1.t3, toast});
+  await pg.locator('#undo .ubtn').click(); await pg.waitForTimeout(500);
+  ok('5g\' «Скасувати» takes it out again', same(await geo(pg), g0));
+  await gripOf('Kid two').click({button:'right'}); await pg.waitForTimeout(200); await pg.locator('.bm .mi').filter({hasText:'З області'}).click(); await pg.waitForTimeout(500);
+  const g2=await geo(pg), n2=byId(await stored(pg,'lay1'));
+  ok('5h «З області»: the child stands on the sheet under the area, in the column it had inside', !g2['Kid tw'].in && n2.k2.parent===undefined && g2['Kid tw'].t>=g2.area.t+g2.area.h && Math.abs(n2.k2.fx-fxFromCol(37))<1e-9, {g:g2['Kid tw'], area:g2.area, n:n2.k2});
+  await pg.locator('#undo .ubtn').click(); await pg.waitForTimeout(500);
+  ok('5h\' and back', same(await geo(pg), g0)); }
+// the exact undo only: after anything else happened to the note the entry is gone
+{ await carry('Gamma three', 12, 4); const g1=await geo(pg);
+  await txt('Alpha one').click(); await pg.keyboard.press('Control+End'); await pg.keyboard.type('!'); await pg.waitForTimeout(400);
+  await undoKey(); const g2=await geo(pg), n=byId(await stored(pg,'lay1'));
+  ok('5i a carry, then typing in another block, then Ctrl+Z outside the fields: the carry is not undone (its entry went with the typing), the block stays where it was dropped', g2.Gamma.l===g1.Gamma.l && g2.Gamma.t===g1.Gamma.t && n.t3.row===13, {g1:g1.Gamma, g2:g2.Gamma, row:n.t3.row});
+  await carry('Gamma three', -12, -4); await undoKey(); await txt('Alpha one').click(); await pg.keyboard.press('Control+End'); await pg.keyboard.press('Backspace'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape'); }
+
+// an area carried with its children; the journal of all these carries
+{ const g0=await geo(pg), ag=await pg.locator('#sheet .blk.is-area > .grip').boundingBox();
+  await pg.mouse.move(ag.x+ag.width/2, ag.y+ag.height/2); await pg.mouse.down(); await pg.mouse.move(ag.x+ag.width/2, ag.y+ag.height/2+3*G, {steps:8}); await pg.waitForTimeout(80); await pg.mouse.up(); await pg.waitForTimeout(500);
+  const g1=await geo(pg), n1=byId(await stored(pg,'lay1'));
+  ok('5j an area carried three rows down by its grip: its children go with it, their places inside unchanged', g1.area.t===g0.area.t+3*G && g1.area.l===g0.area.l && ['Kid on','Kid tw','Kid th'].every(k=>g1[k].in && g1[k].l===g0[k].l && g1[k].t===g0[k].t) && n1.A.row===6 && n1.k1.row===0, {a0:g0.area, a1:g1.area, row:n1.A.row});
+  await undoKey(); ok('5j\' and back by Ctrl+Z', same(await geo(pg), g0));
+  await pg.locator('#setBtn').click(); const [dl]=await Promise.all([pg.waitForEvent('download'), pg.locator('#layJournal').click()]); await pg.keyboard.press('Escape');
+  const es=entriesOf(fs.readFileSync(await dl.path(),'utf8')), kinds={}; for(const e of es) kinds[e.change.type]=(kinds[e.change.type]||0)+1;
+  const res=es.filter(e=>!e.unfit).map(e=>replay(e, KINDS));
+  ok(`5l the journal of these carries (${Object.entries(kinds).map(([k,n])=>k+' '+n).join(', ')}): every command fit and replayed in Node to the recorded answer`, es.length>30 && es.every(e=>!e.unfit) && res.every(r=>r.same===true) && kinds.carry>20 && kinds.enter>0 && kinds.leave>0, {n:es.length, kinds, unfit:es.map((e,i)=>e.unfit&&[i,e.change.type,e.change.id,e.unfit,e.answers.version,es[i-1]&&es[i-1].answers.version,es[i-1]&&es[i-1].change.type]).filter(Boolean), differ:res.filter(r=>r.same!==true).length}); }
 
 /* ── 6: a reload, and the note stands as it was left; nothing is written by opening ── */
 { const g0=await geo(pg), n0=await stored(pg,'lay1'); await pg.reload(); await ready(pg); const g1=await geo(pg), n1=await stored(pg,'lay1');
-  ok('6 reloaded: every block where it stood, and the stored note unchanged', JSON.stringify(g0)===JSON.stringify(g1) && JSON.stringify(n0)===JSON.stringify(n1), {g0, g1}); }
+  ok('6 reloaded: every block where it stood, and the stored note unchanged', same(g0, g1) && JSON.stringify(n0)===JSON.stringify(n1), {g0, g1}); }
 
 /* ── 7: the journal ─────────────────────────────────────────────────────────────── */
 await txt('Gamma three').click(); await pg.keyboard.press('Control+End'); await pg.keyboard.press('Enter'); await pg.keyboard.type('more'); await pg.waitForTimeout(400); await pg.keyboard.press('Escape');

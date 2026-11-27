@@ -64,7 +64,7 @@ export function probeOf(host) {
     (home && home.offsetParent !== null ? home : host.sheet).appendChild(c);
     try { return read(c, card, g); } finally { c.remove(); }
   }
-  const empty = (b) => !b.kind && !(b.txt && b.txt.textContent.replace(/​/g, '').trim());
+  const empty = (b) => !b.kind && !(b.txt && b.txt.textContent.replace(/\u200b/g, '').trim());
   return {
     probe: {
       rows(id, cells) {
@@ -108,7 +108,8 @@ export function sheetWidth(host) { host.sheet.style.width = W0PX * host.px().g /
 export function draw(tree, host) {
   const { g, cl } = host.px(), all = host.blocks(), by = new Map(all.map((b) => [b.id, b]));
   const place = (b, box, area) => {
-    const col = area ? box.col : box.col + 1, row = area ? box.y : box.y + SHEET_ROW0, s = b.el.style;
+    const col = area ? box.col : box.col + 1, row = area ? box.y : box.y + SHEET_ROW0, s = b.el.style, home = area ? area.abody : host.sheet;
+    if (b.el.parentNode !== home) home.appendChild(b.el);   // a carry's preview and a drop may have it in another container than the page's field says
     b.vcol = col; b.vrow = row; b.lines = box.h; b.w = cl + (box.w - 1) * g;
     s.left = host.left(col, area) + 'px'; s.top = host.top(row, area) + 'px'; s.width = b.w + 'px';
     b.card.style.width = b.cw ? b.w - cl + 'px' : '';
@@ -130,6 +131,12 @@ export function draw(tree, host) {
     for (const id of A.order) { const b = by.get(id); if (b) { place(b, A.boxes.get(id), area); seen.add(b); } }
   }
   for (const b of all) if (!seen.has(b)) { delete b.vcol; delete b.vrow; host.plain(b); }
+}
+
+/** A point of the window in the sheet's cells, fractional, as drag.js reads it: x in the engine's columns, y in its rows. */
+export function cellsAt(host, x, y) {
+  const r = host.sheet.getBoundingClientRect(), { g } = host.px();
+  return { x: (x - r.left - host.left(1, null)) / g, y: (y - r.top - host.top(SHEET_ROW0, null)) / g };
 }
 
 /** A text given to the person as a file. */

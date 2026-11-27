@@ -14,7 +14,7 @@
  *  @typedef {{rows(id:string, cells:number):{height:number, extra?:number, lines?:number}, natural(id:string):number}} Probe
  *    // the page's side, in pixels: a block's height at a card width of `cells`, the temporary part shown on top of it (`extra`), its
  *    // content's lines; its natural width. A placeholder is never measured (PR-8): the page answers 0 for an empty block.
- *  @typedef {Measure & {version():string, sign(id:string):string, changed(id:string):void, invalidate():void, stats():{asked:number, probed:number, kept:number}}} AppMeasure */
+ *  @typedef {Measure & {version():string, sign(id:string):string, changed(id:string):void, look(ids:string[]):void, invalidate():void, stats():{asked:number, probed:number, kept:number}}} AppMeasure */
 
 /** @param {{probe:Probe, sign:(id:string)=>string, cell:number, keep?:number}} o `cell`, the pixels of one cell; `keep`, the answers
  *  kept at most, after which the oldest epoch's are dropped whole. @returns {AppMeasure} */
@@ -55,6 +55,9 @@ export function createMeasure({ probe, sign, cell, keep = 4000 }) {
     /** What the Measure reads, as one value: it changes with every `invalidate()`, every `changed(id)`, and when a block is found
      *  with another signature than it was last measured with. Digits and a dot only, so the journal can keep it. */
     version: state,
+    /** The blocks looked at before a command starts: a signature that changed with no word from the page (a field tidied when
+     *  the caret left it) is found now, not in the middle of the command, whose answers are then of one version. */
+    look(ids) { for (const id of ids) if (seen.has(id)) signed(id); },
     /** A block's content changed (typing, a chip relabelled, a fold of its own): said before the change is settled, so that the
      *  command that settles it has one version from its start to its end. */
     changed(id) { changes++; seen.delete(id); },
