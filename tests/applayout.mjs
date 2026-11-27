@@ -169,6 +169,28 @@ const undoKey=async()=>{ await pg.locator('#ttl').click(); await pg.keyboard.pre
   const res=es.filter(e=>!e.unfit).map(e=>replay(e, KINDS));
   ok(`5l the journal of these carries (${Object.entries(kinds).map(([k,n])=>k+' '+n).join(', ')}): every command fit and replayed in Node to the recorded answer`, es.length>30 && es.every(e=>!e.unfit) && res.every(r=>r.same===true) && kinds.carry>20 && kinds.enter>0 && kinds.leave>0, {n:es.length, kinds, unfit:es.map((e,i)=>e.unfit&&[i,e.change.type,e.change.id,e.unfit,e.answers.version,es[i-1]&&es[i-1].answers.version,es[i-1]&&es[i-1].change.type]).filter(Boolean), differ:res.filter(r=>r.same!==true).length}); }
 
+// the life of the gesture in the browser: the focus, the tab hidden
+{ const g0=await geo(pg), n0=await stored(pg,'lay1');
+  await pg.locator('#sheet .blk.is-code .ctitle').click(); await pg.waitForTimeout(300);
+  await carry('Gamma three', 4, 4);
+  const g1=await geo(pg);
+  ok('5m with the caret in a code block\'s empty title, another block carried: it stands at its target at the first try (the title is left before the block is picked up)', g1.Gamma.l===g0.Gamma.l+4*G && g1.Gamma.t===g0.Gamma.t+4*G, {a:g0.Gamma, b:g1.Gamma});
+  await undoKey(); ok('5m\' and back by Ctrl+Z', same(await geo(pg), g0));
+  // the code block itself, its own title held, into the area: moving its element takes no focus away in the middle
+  await pg.locator('#sheet .blk.is-code .ctitle').click(); await pg.waitForTimeout(300);
+  const a=await pg.locator('#sheet .blk.is-area .abody').boundingBox(), cg=await pg.locator('#sheet .blk.is-code > .grip').boundingBox();
+  await pg.mouse.move(cg.x+cg.width/2, cg.y+cg.height/2); await pg.mouse.down(); await pg.mouse.move(a.x+2*G, a.y+a.height-G/2, {steps:12}); await pg.waitForTimeout(80); await pg.mouse.up(); await pg.waitForTimeout(500);
+  const g2=await geo(pg), n2=byId(await stored(pg,'lay1'));
+  ok('5n a code block carried into the area with the caret in its own title: a child of the area', g2.const.in && n2.c1.parent==='A', {g:g2.const, n:{parent:n2.c1.parent, col:n2.c1.col, row:n2.c1.row}});
+  await undoKey(); ok('5n\' and back by Ctrl+Z', same(await geo(pg), g0) && byId(await stored(pg,'lay1')).c1.parent===undefined);
+  // the tab is hidden while the block is carried
+  await carry('Gamma three', 4, 4, 'hold');
+  const mid=await geo(pg);
+  await pg.evaluate(()=>{ Object.defineProperty(document,'hidden',{value:true,configurable:true}); document.dispatchEvent(new Event('visibilitychange')); delete document.hidden; });
+  await pg.mouse.up(); await pg.waitForTimeout(500);
+  const g3=await geo(pg), n3=await stored(pg,'lay1');
+  ok('5o the tab hidden while a block is carried: the carry is given up, every block where it stood, nothing written by the release', mid.Gamma.t===g0.Gamma.t+4*G && same(g3, g0) && JSON.stringify(byId(n3).t3)===JSON.stringify(byId(n0).t3), {mid:mid.Gamma, after:g3.Gamma}); }
+
 /* ── 6: a reload, and the note stands as it was left; nothing is written by opening ── */
 { const g0=await geo(pg), n0=await stored(pg,'lay1'); await pg.reload(); await ready(pg); const g1=await geo(pg), n1=await stored(pg,'lay1');
   ok('6 reloaded: every block where it stood, and the stored note unchanged', same(g0, g1) && JSON.stringify(n0)===JSON.stringify(n1), {g0, g1}); }
@@ -241,5 +263,16 @@ await ctx.close();
   await flip(pg); await p2.waitForFunction(()=>document.documentElement.dataset.started!==undefined && document.getElementById('app').classList.contains('lay01'), null, {timeout:20000}).catch(()=>{});   // the other tab reloads by itself, whenever the message reaches it
   const a=await state(pg), b=await state(p2);
   ok('12 the switch turned on in one tab: the other tab reloads and runs the engine too', a.lay && b.lay && !errs.length, {a, b, errs}); await ctx.close(); }
+
+/* ── 13: the tab turns view-only while a block is carried ───────────────────────── */
+{ const {ctx,pg,errs}=await open(DEV); await seed(pg, NOTE); await setting(pg,{layout:true}); await go(pg,'lay1');
+  const g0=await geo(pg), n0=await stored(pg,'lay1'), gr=await pg.locator('#sheet .blk:not(.is-area)').filter({hasText:'Gamma three'}).locator('.grip').boundingBox(), x=gr.x+gr.width/2, y=gr.y+gr.height/2;
+  await pg.mouse.move(x,y); await pg.mouse.down(); await pg.mouse.move(x+2*G, y+2*G, {steps:6}); await pg.mouse.move(x+4*G, y+4*G, {steps:6}); await pg.waitForTimeout(80);
+  const mid=await geo(pg);
+  await pg.evaluate(()=>{ const c=new BroadcastChannel('sheet:notes'); c.postMessage({t:'format', v:1e6}); c.close(); }); await pg.waitForTimeout(400);   // a tab of a newer format recorded it: this one may write no more
+  const locked=await pg.evaluate(()=>document.getElementById('app').classList.contains('locked')), g1=await geo(pg);
+  await pg.mouse.move(x+6*G, y+6*G, {steps:4}); await pg.mouse.up(); await pg.waitForTimeout(500);
+  const g2=await geo(pg), n2=await stored(pg,'lay1');
+  ok('13 the tab turned view-only while a block was carried: the carry is given up at once, the block is shown where the note has it, and the release accepts nothing', (await state(pg)).lay && mid.Gamma.t===g0.Gamma.t+4*G && locked && g1.Gamma.t===g0.Gamma.t && g1.Gamma.l===g0.Gamma.l && g2.Gamma.t===g0.Gamma.t && g2.Gamma.l===g0.Gamma.l && JSON.stringify(n2)===JSON.stringify(n0) && !errs.length, {locked, mid:mid.Gamma, g1:g1.Gamma, g2:g2.Gamma, errs}); await ctx.close(); }
 
 await br.close(); process.exit(fails? 1 : 0);

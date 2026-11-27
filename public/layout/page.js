@@ -123,16 +123,18 @@ export function start(host) {
   /** The pointer moved: the preview drawn. False when the carry is over (the note changed under it): the caller ends it. */
   function move(x, y) {
     if (!held) return false;
+    if (!able()) return false;   // the tab turned view-only, or the note went safe, under the carry: it is over
     held = B.moved(note, held, cellsAt(host, x, y));
     if (held.cancelled) return false;
     draw(B.preview(note, held), host); host.grow();
     return true;
   }
-  /** The drop, or the carry given up: the note as it was, or the accepted layout written. */
+  /** The drop, or the carry given up: the note as it was, or the accepted layout written. Nothing is accepted once the note may
+   *  not be written (a lock that came while the block was carried): the layout shown is the note's again. */
   function drop(cancel) {
     const c = held; held = null;
     if (!c) return null;
-    const entries = note.doc.undo.length, r = cancel || c.cancelled ? null : B.dropped(note, c);
+    const entries = note.doc.undo.length, r = cancel || c.cancelled || !able() ? null : B.dropped(note, c);
     if (!r || !r.ok) { show(); return null; }
     return took(r, entries);
   }
