@@ -52,6 +52,9 @@ function play(E, note, map, commands, temp = new Map()) {
   const before = now.trees.slice(0, -1).every((T) => off(A, T, map).length === 0), en = off(A, now.tree, map);
   ok('1 the case: every tree before the last command at rest', before, before);
   ok('1a this engine\'s answer at rest by the formula, valid, a rest after the first reported', en.length === 0 && validate(now.tree, now.ctx).length === 0 && now.again > 0, [en, validate(now.tree, now.ctx), now.again]);
+  // the places it ends at, written down: the sheet's blocks as (column, row, width, rows), the area empty again
+  const want = '[[null,[["B0",16,6,2,7],["B1",17,13,4,1],["B2",0,3,2,3],["B3",9,6,8,2],["B4",17,2,5,1],["B5",9,11,7,2],["D",2,1,14,4]]],["D",[]]]';
+  ok('1b and every block stands where this case ends: B0 out of the area at column 16, row 6; B5 under it at row 11, seven cells wide; the area at row 1', places(now.tree) === want, places(now.tree));
   // and so a later action far away changes nothing of it: a text made far below and deleted again
   const far = { type: 'create', box: null, id: 'Z', kind: 'text', at: { col: 24, y: 60, frow: 60, w: 3 }, away: false, set: { cw: 2 } };
   const more = play(A, note, map, [...commands, far]);
