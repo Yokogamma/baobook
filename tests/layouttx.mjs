@@ -10,7 +10,6 @@ import { validate } from '../public/layout/validate.js';
 import { readingOrder } from '../public/layout/geometry.js';
 import { framesAgainstRef } from './lab/frame-ref.mjs';
 import { chars, ctxOf, tally } from './lib/primcase.mjs';
-import { load, OLD } from './lib/layout/pair.mjs';
 
 const t = tally(), ok = t.ok;
 const S = (id, col, y, cw) => ({ id, kind: 'text', col, y, cw });
@@ -138,9 +137,5 @@ const go = (tree, change, ctx) => settleTree(tree, change, emptyMemory(), ctx);
   const a0 = own.tree.boxes.get('R'), narrow = { type: 'areaSide', box: null, id: 'R', side: 'right', col: 0, cols: 14 };
   const r = go(own.tree, narrow, own.ctx);
   ok(`4 ${a0.h - a0.t} rows showing ${a0.h}, narrowed so that the child needs a third row: refused, the area as it was`, a0.h === 4 && a0.t === 1 && !r.ok && r.why === 'refused', r.ok ? r.layout.boxes.get('R') : r.why);
-  const E = await load(OLD), octx = { rules: E.DEFAULT, settings: E.SETTINGS, kinds: E.KINDS, measure: own.ctx.measure };
-  const oo = E.open(note([{ id: 'R', kind: 'area', col: 0, y: 1, cw: 14 }], { R: [T('c', 0, 0)] }), octx), os = E.show(oo.layout, new Map([['R', 1]]), octx);
-  const old = E.settleTree(os, narrow, E.emptyMemory(), octx), ob = old.ok && old.layout.boxes.get('R');
-  ok('4a (the engine before it, pinned at 0d94f29, accepts it: four rows, none temporary)', !!ob && ob.h === 4 && (ob.t || 0) === 0, old.ok ? ob : old);
 }
 process.exit(t.fails ? 1 : 0);

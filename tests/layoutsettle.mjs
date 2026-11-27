@@ -108,6 +108,8 @@ const ctx = ctxOf();
   const S = sheet(20, [set('S', 0, 5, 11, 1)]);
   const s = settle(S, carry('S', 15, 0, 11), emptyMemory(), ctx);
   ok('10a a set width stops at the last column where it fits whole (col 9)', s.ok && eq(places(s.layout).S, [9, 0, 11, 1]), s.ok ? places(s.layout) : s);
+  const offc = ctxOf({ T: { text: chars(30) } }, resolve({ 'SIZE.1': false })), ro = settle(L, carry('T', 15, -2, 11), emptyMemory(), offc), so = settle(S, carry('S', 15, 0, 11), emptyMemory(), ctxOf({}, resolve({ 'SIZE.1': false })));
+  ok('10b the same with SIZE.1 off: the text takes the width that is left at its target and narrows no further by itself (column 15, 4 cells, three rows); the set width is as before', ro.ok && eq(places(ro.layout).T, [15, 0, 5, 3]) && sound(ro) && so.ok && eq(places(so.layout).S, [9, 0, 11, 1]), [ro.ok ? places(ro.layout) : ro, so.ok ? places(so.layout) : so]);
 }
 
 /* ── 11. a carry into a block that stood above in start: it keeps its side (DRAG.B2) and, at row 0, lowers the moved block (P-UP); phase 9
