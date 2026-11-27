@@ -654,15 +654,16 @@ function makeSync(deps){
     const snap=await snapRead('n',id), got=await net(()=>S.cloud.get('notes',id), {read:true, kind:'check'});
     if(got.error){ if(S.denied) return; await tx(['sync'], async(t,after)=>{ if(await same(t)) dropTry(t,id,after); }); await backoff(id, got.error); return; }
     countRead(1); const R=got.value? {...got.value, id} : null;
-    await tx(['notes','sync','versions','blobs'], async(t,after)=>{ if(!(await same(t))) return;
-      if((R? R.rev : 0)!==tr.expect){ log({t:'refused-moved', id, expect:tr.expect, rev:R? R.rev : null}); return finishCore(t, id, tr, R && R.rev>tr.expect? {kind:'rejected'} : {kind:'invariant', D:R}, after, snap); }
+    await tx(['notes','sync','versions','blobs'], async(t,after)=>{ if(!(await same(t))) return; if(await moved(t,'n',id,snap)) return;   // the record moved under the check read: neither «another device wrote first» nor «this content is refused» is concluded from it
+      if((R? R.rev : 0)!==tr.expect){ log({t:'refused-moved', id, expect:tr.expect, rev:R? R.rev : null}); return finishCore(t, id, tr, R && R.rev>tr.expect? {kind:'rejected'} : {kind:'invariant', D:R}, after); }
       dropTry(t,id,after); const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id));
       if(meta.lrev!==tr.sentLrev){ log({t:'rejected-write', id, code:'permission-denied', stale:true}); if(job) setJob(t,id,{...job, tries:0, next:0},after); return; }   // the refused content was edited meanwhile: the newer record goes as a new attempt, unmarked
       log({t:'rejected-write', id, code:'permission-denied'}); meta.err='invalid'; putMeta(t,meta,after); }); }
   // §4.5 step 5: the finish, only if the attempt is still the same one
-  // snap (a runner): the state the cloud call was made over. An outcome that rests on what the cloud READ (no such document, an older one, a later one
-  // to apply) is not acted on when the record moved meanwhile: the attempt stays and is run again. A write accepted by its receipt stands whatever moved
-  async function finishCore(t, id, tr, outcome, after, snap){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.tries.get(id)===tr) S.tries.delete(id); S.queueAt=0; }); return 'stale'; } const stale=await moved(t,'n',id,snap); if(stale && outcome.kind==='invariant') return 'reread';   // another runner finished it (§4.5 step 5): this memory forgets the attempt and reads the queue again
+  // snap (a runner): the state the cloud call was made over. An outcome that rests on what the cloud READ (no such document, an older one, a later one,
+  // one at its limit of receipts, a later one to apply) is not acted on when the record moved meanwhile: the attempt stays and is run again. A write
+  // accepted by its receipt stands whatever moved. The table of every such decision is docs/OWNER-ERA-PLAN.md §7.3.10
+  async function finishCore(t, id, tr, outcome, after, snap){ const cur=await t.get('sync',K.tr('n',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.tries.get(id)===tr) S.tries.delete(id); S.queueAt=0; }); return 'stale'; } const stale=await moved(t,'n',id,snap); if(stale && outcome.kind!=='accepted') return 'reread';   // another runner finished it (§4.5 step 5): this memory forgets the attempt and reads the queue again
     const meta=await getMeta(t,'n',id), job=await t.get('sync',K.out('n',id)), Srec=await t.get('notes',id), seen=(await t.get('sync',K.seen('n',id)))||null;
     if(outcome.kind==='accepted'){ const rev=outcome.rev, after_=meta.base? meta.base.srv||null : null; const sends=(meta.sends||[]).filter(x=>x>now()-pace.loopWindow); sends.push(now()); meta.sends=sends;
       if(tr.result && tr.result.purged){ setSeen(t,'n',id,{rev:Math.max(rev, seen? seen.rev : 0), srv:outcome.srv, after:after_});
@@ -876,9 +877,9 @@ function makeSync(deps){
   async function refusedVWrite(id, tr){ const same=async t=>{ const c=await t.get('sync',K.tr('v',id)); return !!c && c.op===tr.op; };
     const drop=async error=>{ if(S.denied) return; await tx(['sync'], async(t,after)=>{ if(await same(t)) dropVTry(t,id,after); }); await vbackoff(id, error); };
     const snap=await snapRead('v',id), got=await net(()=>S.cloud.get('versions',id), {read:true, kind:'check'}); if(got.error) return drop(got.error); countRead(1); const R=got.value? {...got.value, id} : null;
-    if((R? R.rev : 0)!==tr.expect){ await tx(['notes','versions','blobs','sync'], async(t,after)=>{ if(!(await same(t))) return; log({t:'refused-moved', col:'v', id}); await finishV(t, id, tr, R && R.rev>tr.expect? {kind:'rejected'} : {kind:'invariant', D:R}, after, snap); }); return; }
+    if((R? R.rev : 0)!==tr.expect){ await tx(['notes','versions','blobs','sync'], async(t,after)=>{ if(!(await same(t))) return; if(await moved(t,'v',id,snap)) return; log({t:'refused-moved', col:'v', id}); await finishV(t, id, tr, R && R.rev>tr.expect? {kind:'rejected'} : {kind:'invariant', D:R}, after); }); return; }
     let N=null, nsnap; if(!tr.result.deleted){ nsnap=await snapRead('n',tr.result.note); const g=await net(()=>S.cloud.get('notes',tr.result.note), {read:true, kind:'check'}); if(g.error) return drop(g.error); countRead(1); N=g.value||null; }
-    await tx(['notes','versions','blobs','sync'], async(t,after)=>{ if(!(await same(t))) return; if(!tr.result.deleted && !N && await moved(t,'n',tr.result.note,nsnap)) return;   // the parent's record moved under the read that says it is gone: nothing of the parent is reset, the attempt is run again
+    await tx(['notes','versions','blobs','sync'], async(t,after)=>{ if(!(await same(t))) return; if(await moved(t,'v',id,snap)) return; if(!tr.result.deleted && !N && await moved(t,'n',tr.result.note,nsnap)) return;   // the parent's record moved under the read that says it is gone: nothing of the parent is reset, the attempt is run again
       dropVTry(t,id,after); const meta=await getMeta(t,'v',id), job=await t.get('sync',K.out('v',id)), note=tr.result.note;
       if(!tr.result.deleted && !N){ log({t:'invariant', id:note, kind:'vanished', by:'version'}); const nm=await getMeta(t,'n',note); nm.base=null; nm.baseLrev=0; putMeta(t,nm,after); t.del('sync',K.seen('n',note));   // the note vanished past the rules: it goes again first, the version waits for it
         if(await t.get('notes',note) && !(await t.get('sync',K.out('n',note)))) setJob(t,note,{k:K.out('n',note), tries:0, next:0},after); if(job) setVJob(t,id,{...job, tries:0, next:0},after); after(()=>S.vblocked.add(id)); return; }
@@ -896,7 +897,7 @@ function makeSync(deps){
     if(meta.base){ const rec=await t.get('versions',id); if(rec) t.del('versions',id); setVJob(t,id,vjob(id,{tomb:true}),after); return; }
     if(job) dropVJob(t,id,after); }
   // §4.5 step 5 for a version, only if the attempt is still the same one
-  async function finishV(t, id, tr, outcome, after, snap){ const cur=await t.get('sync',K.tr('v',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.vtries.get(id)===tr) S.vtries.delete(id); S.queueAt=0; }); return 'stale'; } const stale=await moved(t,'v',id,snap); if(stale && outcome.kind==='invariant') return 'reread';
+  async function finishV(t, id, tr, outcome, after, snap){ const cur=await t.get('sync',K.tr('v',id)); if(!cur || cur.op!==tr.op){ after(()=>{ if(S.vtries.get(id)===tr) S.vtries.delete(id); S.queueAt=0; }); return 'stale'; } const stale=await moved(t,'v',id,snap); if(stale && outcome.kind!=='accepted') return 'reread';
     if(tr.result.note) after.ev(()=>emit(deps.onChange,{id, kind:'version', note:tr.result.note}));   // its state in «Історія» moved (sent, refused, blocked)
     const meta=await getMeta(t,'v',id), job=await t.get('sync',K.out('v',id)), seen=await t.get('sync',K.seen('v',id)); dropVTry(t,id,after);
     if(outcome.kind==='accepted'){ const rev=outcome.rev, after_=meta.base? meta.base.srv||null : null;
