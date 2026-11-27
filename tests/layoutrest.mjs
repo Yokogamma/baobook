@@ -4,7 +4,7 @@
 //
 //   node tests/layoutrest.mjs
 
-import { load, NEW, OLD } from './lib/layout/pair.mjs';
+import { load, NEW } from './lib/layout/pair.mjs';
 import { stubMeasure } from './lib/measure.mjs';
 import { restAgainstRef } from './lab/rest-ref.mjs';
 import { rest } from '../public/layout/settle.js';
@@ -13,7 +13,7 @@ import { validate } from '../public/layout/validate.js';
 let fails = 0;
 const ok = (n, c, got) => { if (!c) fails++; console.log((c ? '✓ ' : '✗ ') + n + (c || got === undefined ? '' : ': ' + JSON.stringify(got).slice(0, 1500))); };
 
-const A = await load(NEW), B = await load(OLD);
+const A = await load(NEW);
 const lay = (E, cols, boxes, areas = {}) => ({ cols, measure: 'canonical', boxes: new Map(boxes.map((b) => [b.id, b])), order: E.readingOrder(boxes),
   areas: new Map(Object.entries(areas).map(([id, bs]) => [id, { cols: 0, measure: 'canonical', boxes: new Map(bs.map((b) => [b.id, b])), order: E.readingOrder(bs), areas: new Map() }])) });
 const ctxOf = (E, map) => ({ rules: E.DEFAULT, settings: E.SETTINGS, kinds: E.KINDS, measure: stubMeasure(map) });
@@ -47,12 +47,11 @@ function play(E, note, map, commands, temp = new Map()) {
     { type: 'enter', box: null, id: 'B0', to: 'D', at: { col: 4, y: 1 } },
     { type: 'leave', box: 'D', id: 'B0', to: null, at: { col: 16, y: 6 } },
   ];
-  const old = play(B, note, map, commands), now = play(A, note, map, commands);
-  const before = old.trees.slice(0, -1).every((T) => off(B, T, map).length === 0), eo = off(B, old.tree, map), en = off(A, now.tree, map);
-  ok(`1 the case: every tree before the last command at rest, and the pinned engine's last answer off it (${eo[0]})`, before && eo.length === 1, [before, eo]);
+  // (the engine pinned at 0d94f29, which went when the stage ended, left B5 off its rest width here until the next action)
+  const now = play(A, note, map, commands);
+  const before = now.trees.slice(0, -1).every((T) => off(A, T, map).length === 0), en = off(A, now.tree, map);
+  ok('1 the case: every tree before the last command at rest', before, before);
   ok('1a this engine\'s answer at rest by the formula, valid, a rest after the first reported', en.length === 0 && validate(now.tree, now.ctx).length === 0 && now.again > 0, [en, validate(now.tree, now.ctx), now.again]);
-  const r = rest({ ...old.tree, areas: new Map() }, now.ctx);
-  ok('1b it is what the next action would have brought: phases 9 and 10 alone on the pinned answer\'s sheet give this answer\'s sheet', r.ok && places({ ...r.layout, areas: new Map() }) === places({ ...now.tree, areas: new Map() }), [r.ok && places({ ...r.layout, areas: new Map() }), places({ ...now.tree, areas: new Map() })]);
   // and so a later action far away changes nothing of it: a text made far below and deleted again
   const far = { type: 'create', box: null, id: 'Z', kind: 'text', at: { col: 24, y: 60, frow: 60, w: 3 }, away: false, set: { cw: 2 } };
   const more = play(A, note, map, [...commands, far]);
@@ -77,8 +76,8 @@ function play(E, note, map, commands, temp = new Map()) {
 }
 
 // ---- 3. G25: an undo and the width of a text it does not reach. The same A, its width at rest against W on the rows shown. F is
-// deleted and made again by an undo, whose SETTLE runs on the canonical layout (G23), where W is not beside A. The pinned engine rests A
-// by those rows and widens it; this one gives a rest width by canonical rows to the block the undo brings back alone, and leaves A
+// deleted and made again by an undo, whose SETTLE runs on the canonical layout (G23), where W is not beside A. The engine before G25 rested A
+// by those rows and widened it; this one gives a rest width by canonical rows to the block the undo brings back alone, and leaves A
 {
   const map = { A: { text: 'x'.repeat(50), temp: 2 }, W: { text: 'x' }, F: { text: 'x' } };
   const note = { cols: 44, boxes: [{ id: 'A', kind: 'text', col: 2, y: 0, cw: 8 }, { id: 'W', kind: 'text', col: 14, y: 2, cw: 1, ch: 9 }, { id: 'F', kind: 'text', col: 36, y: 30, cw: 3 }] };
@@ -87,8 +86,7 @@ function play(E, note, map, commands, temp = new Map()) {
     const f = play(E, note, map, [first[0]]).tree.boxes.get('F');
     return [...first, { type: 'create', box: null, id: 'F', kind: 'text', at: { col: f.col, y: f.y, frow: f.y, w: f.w }, away: true, set: { cw: f.cw }, canonical: true }];
   };
-  const old = play(B, note, map, commands(B)), now = play(A, note, map, commands(A)), w = (p, i) => p.trees[i].boxes.get('A').w - 1;
-  ok(`3 the pinned engine's undo far away widens A (${w(old, 2)} cells, then ${w(old, 3)}) and moves W, which it does not reach either (row ${old.trees[2].boxes.get('W').y}, then ${old.tree.boxes.get('W').y})`, w(old, 3) > w(old, 2) && old.tree.boxes.get('W').y !== old.trees[2].boxes.get('W').y, [w(old, 2), w(old, 3)]);
+  const now = play(A, note, map, commands(A)), w = (p, i) => p.trees[i].boxes.get('A').w - 1;
   ok(`3a this engine's undo leaves A's width (${w(now, 2)} cells, then ${w(now, 3)}) and W's row, at rest, and F is back at its place`, w(now, 3) === w(now, 2) && off(A, now.tree, map).length === 0
     && JSON.stringify([now.tree.boxes.get('F').col, now.tree.boxes.get('F').y]) === JSON.stringify([now.trees[1].boxes.get('F').col, now.trees[1].boxes.get('F').y]) && now.tree.boxes.get('W').y === now.trees[2].boxes.get('W').y && validate(now.tree, now.ctx).length === 0, [w(now, 2), w(now, 3), off(A, now.tree, map)]);
 }

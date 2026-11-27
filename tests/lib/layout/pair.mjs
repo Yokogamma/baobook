@@ -12,7 +12,9 @@ import { sequences, canon } from './seq.mjs';
 export { canon };
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-export const NEW = join(ROOT, 'public', 'layout'), OLD = join(ROOT, 'tests', 'lab', 'engine-0d94f29');
+/** The engine. A refactor meant to keep the behaviour pins a copy of it beside (tests/lab/engine-<sha>/) and gives `run` both folders;
+ *  the copy of the seams stage, at 0d94f29, went when the stage ended. */
+export const NEW = join(ROOT, 'public', 'layout');
 
 /** The modules of one engine, from its folder. */
 export async function load(dir) {
