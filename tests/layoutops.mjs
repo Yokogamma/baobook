@@ -10,6 +10,8 @@
 //   7  a signature that changed makes the undo stale;
 //   9  the stored fields as read: a place another container only shows is not written by an action elsewhere (§3.4);
 //  10  an area deleted with its children, and its undo;
+//  11  letting through (DRAG.B4): a pressed neighbour is pushed; with Shift, or the hold run out, it lets the block through and the two
+//      swap, a text and an area alike; the drop, its undo, the journal;
 //   8  histories of random actions: after each the tree is valid and the stored fields are the canonical layout's; the journal replays.
 //
 //   node tests/layoutops.mjs [seed] [notes]
@@ -219,6 +221,39 @@ const fixture = () => {
   ok('10a its undo: both named to bring back, each with every stored field it had, the child with its parent', u.ok && u.doc.tree === doc.tree && u.restored.join() === 'R,c' && u.patch.get('c').parent === 'R' && u.patch.get('c').col === doc.stored.get('c').col && 'fx' in u.patch.get('R') && flat(u.doc.stored) === flat(doc.stored) && flat(written(r.doc.stored, u.patch, u.removed)) === flat(doc.stored) && inStep(u.doc, env), [...u.patch]);
   const rc = remove(doc, { box: 'R', id: 'c' }, env);
   ok('10b a child deleted alone: it only', rc.ok && rc.removed.join() === 'c' && rc.doc.stored.has('R') && inStep(rc.doc, env));
+}
+
+{ // 11: letting through
+  const map = { A: { text: 'x'.repeat(30) }, B: { text: 'x' }, R: { kind: 'area' }, Q: { kind: 'area' }, c: { text: 'x' } };
+  const mk = () => opened(noteOf(60, [{ id: 'A', kind: 'text', col: 2, y: 3, cw: 5 }, { id: 'B', kind: 'text', col: 2, y: 9, cw: 5 },
+    { id: 'R', kind: 'area', col: 24, y: 2, cw: 14 }, { id: 'Q', kind: 'area', col: 24, y: 14, cw: 10 }], { R: [{ id: 'c', kind: 'text', col: 0, y: 0, cw: 4 }], Q: [] }), map);
+  const y = (g, id) => preview(g).boxes.get(id).y;
+  /** `id` carried straight down `rows` rows, a row at a time, each move with `through(d, g)`. */
+  const down = (o, id, rows, through) => {
+    const p = centre(o.doc.tree, null, id, o.env.ctx);
+    let g = carry(o.doc, { id, point: p }, o.env);
+    for (let d = 1; d <= rows; d++) g = moved(g, { x: p.x, y: p.y + d }, o.env, through(d, g));
+    return g;
+  };
+  for (const [id, n, name] of [['A', 'B', 'a text'], ['R', 'Q', 'an area']]) {
+    const o = mk(), n0 = o.doc.tree.boxes.get(n).y, x0 = o.doc.tree.boxes.get(id).y;
+    const pushed = down(o, id, 16, () => undefined);
+    ok(`11 ${name} carried down onto its neighbour with no word: the neighbour is pushed as far as it is carried`, y(pushed, id) === x0 + 16 && y(pushed, n) > n0 && y(pushed, n) > y(pushed, id) && pushed.pressed === n && !pushed.memory.through, { x: y(pushed, id), n: y(pushed, n) });
+    const o2 = mk(), sh = down(o2, id, 16, () => 'shift');
+    ok(`11a ${name} with Shift held: the neighbour lets it through, the two swap, and it goes on under the neighbour`, y(sh, id) === x0 + 16 && y(sh, n) < n0 && y(sh, n) < y(sh, id) && sh.pressed == null, { x: y(sh, id), n: y(sh, n), n0 });
+    const d = dropped(sh, o2.env), u = d.ok && undo(d.doc, o2.env);
+    ok(`11b its drop writes both, valid and in step with the stored fields; one undo puts the tree back`, d.ok && d.patch.has(id) && d.patch.has(n) && validate(d.doc.tree, o2.env.ctx).length === 0 && inStep(d.doc, o2.env) && u.ok && u.doc.tree === o2.doc.tree && flat(u.doc.stored) === flat(o2.doc.stored), { ok: d.ok, patch: d.ok && [...d.patch.keys()] });
+    ok(`11c the commands of that carry, the word with them, are in the journal and replay`, entriesOf(o2.journal.export()).some((e) => e.change.through === 'shift') && replays(o2.journal) === 0, replays(o2.journal));
+    // the hold: pushed while the pointer moves, then the word once, standing; the neighbour stays where it stopped and the block stands against it
+    const o3 = mk(), p = centre(o3.doc.tree, null, id, o3.env.ctx);
+    let g = carry(o3.doc, { id, point: p }, o3.env), d1 = 0;
+    while (!g.pressed && d1 < 16) g = moved(g, { x: p.x, y: p.y + ++d1 }, o3.env);
+    g = moved(g, { x: p.x, y: p.y + ++d1 }, o3.env);
+    const at = { x: y(g, id), n: y(g, n) }, stood = moved(g, { x: p.x, y: p.y + d1 }, o3.env, 'hold');
+    ok(`11d ${name} held still against the neighbour it pushed: the hold run out, the neighbour is in the memory and nothing moves`, at.n > n0 && stood.memory.through && stood.memory.through.id === n && stood.pressed === n && y(stood, id) === at.x && y(stood, n) === at.n, { at, th: stood.memory.through });
+    let h = stood; for (let k = 1; k <= 8; k++) h = moved(h, { x: p.x, y: p.y + d1 + k }, o3.env);
+    ok(`11e carried on with no word, the held neighbour lets it through: it does not go down with the block, and the two swap`, y(h, n) < y(h, id) && y(h, n) <= at.n && !h.memory.through, { x: y(h, id), n: y(h, n), at });
+  }
 }
 
 { // 8

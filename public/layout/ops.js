@@ -124,11 +124,12 @@ export const preview = (g) => g.last || g.doc.tree;
 
 /** The pointer moved: the preview of the carry there. At home and outside the carry is as it started, before any swap and any crossing
  *  (INV-7 a, DRAG.C1), and a drop there stores nothing (DRAG.C3); a move that is refused keeps the last accepted preview; a failure
- *  stays for the rest of the gesture, whose drop writes nothing. */
-export function moved(g, point, env) {
+ *  stays for the rest of the gesture, whose drop writes nothing. `through`: the hold ran out or Shift is held (DRAG.B4); the neighbour
+ *  SETTLE says is pressed is the gesture's `pressed`, which the input's hold timer reads. */
+export function moved(g, point, env, through) {
   if (g.failed) return g;
   for (let i = 0; i < 3; i++) {
-    const n = next(g.drag, g.cur, g.start, point, env.ctx.settings);
+    const n = next(g.drag, g.cur, g.start, point, env.ctx.settings, through);
     if (n.state !== 'move') return { ...g, drag: { ...g.drag, away: false }, cur: g.drag.home.box, start: g.doc.tree, memory: emptyMemory(), last: null, pressed: null, ran: [], state: n.state };
     const crossing = n.change.type !== 'carry';
     const r = run(env, g.start, n.change, crossing ? emptyMemory() : g.memory);

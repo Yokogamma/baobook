@@ -275,4 +275,46 @@ await ctx.close();
   const g2=await geo(pg), n2=await stored(pg,'lay1');
   ok('13 the tab turned view-only while a block was carried: the carry is given up at once, the block is shown where the note has it, and the release accepts nothing', (await state(pg)).lay && mid.Gamma.t===g0.Gamma.t+4*G && locked && g1.Gamma.t===g0.Gamma.t && g1.Gamma.l===g0.Gamma.l && g2.Gamma.t===g0.Gamma.t && g2.Gamma.l===g0.Gamma.l && JSON.stringify(n2)===JSON.stringify(n0) && !errs.length, {locked, mid:mid.Gamma, g1:g1.Gamma, g2:g2.Gamma, errs}); await ctx.close(); }
 
+/* ── 14: letting through (DRAG.B4): Shift, and the hold ─────────────────────────── */
+{ const {ctx,pg,errs}=await open(DEV);
+  const N3={id:'lay3', title:'Through', created:3, updated:Date.now()+60000, blocks:[
+    {id:'t1', fx:fxFromCol(3), row:2, text:'Alpha one'}, {id:'t2', fx:fxFromCol(3), row:6, text:'Beta two'},
+    {id:'U', fx:fxFromCol(30), row:4, kind:'area', cw:14, title:'Upper'}, {id:'u1', parent:'U', col:0, row:0, text:'Kid up'},
+    {id:'L', fx:fxFromCol(30), row:12, kind:'area', cw:14, title:'Lower'}, {id:'l1', parent:'L', col:0, row:0, text:'Kid low'}]};
+  await seed(pg, N3); await setting(pg,{layout:true}); await go(pg,'lay3');
+  /** The top of every block of the sheet, in pixels, by the start of its text or its title. */
+  const tops=()=>pg.evaluate(()=>Object.fromEntries([...document.querySelectorAll('#sheet > .blk')].map(e=>[(e.classList.contains('is-area')? e.querySelector('.ctitle') : e.querySelector('.txt')).textContent.split(' ')[0], parseFloat(e.style.top)])));
+  const grip=async t=>{ const g=await pg.locator('#sheet > .blk').filter({hasText:t}).locator('> .grip').boundingBox(); return {x:g.x+g.width/2, y:g.y+g.height/2}; };
+  /** A block picked up by its grip and carried down so many rows, a row at a time; it stays in the hand. */
+  const down=async(p,from,to)=>{ for(let d=from+1; d<=to; d++){ await pg.mouse.move(p.x, p.y+d*G-G/2, {steps:2}); await pg.mouse.move(p.x, p.y+d*G, {steps:2}); } await pg.waitForTimeout(60); };
+  const pickUp=async t=>{ const p=await grip(t); await pg.mouse.move(p.x,p.y); await pg.mouse.down(); return p; };
+  const places=n=>JSON.stringify(n.blocks.map(b=>[b.id, b.parent||null, b.row, b.parent? b.col : Math.round(b.fx*1e9)]).sort());   // where the note stores every block
+  const t0=await tops(), n0=await stored(pg,'lay3');
+
+  let p=await pickUp('Upper'); await down(p,0,16); const pushed=await tops();
+  await pg.keyboard.press('Escape'); await pg.mouse.up(); await pg.waitForTimeout(300); const back=await tops();
+  ok('14 an area carried down onto another with no key: the lower one is pushed down under it; given up, both stand as they stood', pushed.Upper===t0.Upper+16*G && pushed.Lower>t0.Lower && pushed.Lower>pushed.Upper && same(back,t0) && places(await stored(pg,'lay3'))===places(n0), {t0, pushed, back});
+
+  await pg.keyboard.down('Shift'); p=await pickUp('Upper'); await down(p,0,16); const through=await tops();
+  await pg.mouse.up(); await pg.keyboard.up('Shift'); await pg.waitForTimeout(500);
+  const t1=await tops(), n1=byId(await stored(pg,'lay3'));
+  ok('14a the same carry with Shift held: the lower area lets it through and stands above it, not pushed; the drop stores both there', through.Upper===t0.Upper+16*G && through.Lower<through.Upper && through.Lower<=t0.Lower && same(t1,through) && n1.U.row===N3.blocks[2].row+16 && n1.L.row<n1.U.row && n1.L.row<=12, {t0, through, U:n1.U.row, L:n1.L.row});
+  const undo=async()=>{ await pg.locator('#ttl').click(); await pg.keyboard.press('Escape'); await pg.evaluate(()=>document.activeElement.blur()); await pg.keyboard.press('Control+z'); await pg.waitForTimeout(500); };
+  await undo();
+  ok('14b one undo puts both areas back, on the page and in the stored note', same(await tops(), t0) && places(await stored(pg,'lay3'))===places(n0), await tops());
+
+  // the hold: a text pushes its neighbour while the pointer moves; standing HOLD against it, the neighbour lets it through
+  p=await pickUp('Alpha'); await down(p,0,5); const a5=await tops(); await down(p,5,8); const a8=await tops();
+  await pg.keyboard.press('Escape'); await pg.mouse.up(); await pg.waitForTimeout(300);
+  p=await pickUp('Alpha'); await down(p,0,5); await pg.waitForTimeout(1000); const stood=await tops(); await down(p,5,8); const h8=await tops();
+  await pg.mouse.up(); await pg.waitForTimeout(500); const n2=byId(await stored(pg,'lay3'));
+  ok('14c a text carried down without a stop pushes its neighbour all the way; stopped against it for the hold, nothing moves, and carried on it passes: the neighbour stays above, and the drop stores that',
+    a5.Beta>t0.Beta && a8.Beta>a5.Beta && a8.Beta>a8.Alpha && same(stood,a5) && h8.Alpha===a8.Alpha && h8.Beta<h8.Alpha && h8.Beta<=a5.Beta && n2.t2.row<n2.t1.row, {t0, a5, a8, stood, h8, t1:n2.t1.row, t2:n2.t2.row});
+  await undo();
+  // Shift pressed and let go with the pointer standing: the neighbour is let through from then on
+  p=await pickUp('Alpha'); await down(p,0,5); await pg.keyboard.down('Shift'); await pg.waitForTimeout(60); await pg.keyboard.up('Shift'); await pg.waitForTimeout(60); const s5=await tops(); await down(p,5,8); const s8=await tops();
+  await pg.keyboard.press('Escape'); await pg.mouse.up(); await pg.waitForTimeout(300);
+  ok('14d Shift pressed while the pointer stands, with no move of it: the neighbour pushed so far lets the block through as it is carried on; given up, the note is as it was', same(s5,a5) && s8.Beta<s8.Alpha && same(await tops(), t0) && places(await stored(pg,'lay3'))===places(n0), {a5, s5, s8});
+  ok('14e no page errors', !errs.length, errs); await ctx.close(); }
+
 await br.close(); process.exit(fails? 1 : 0);
