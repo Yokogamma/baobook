@@ -71,7 +71,7 @@ Each PR names its named cases first, then the class it adds to the sequence gene
 | D12 | The scale and the hand | D11 | a narrower window scales the note |
 | D13 | The phone and the narrow view | D12 | the engine on touch, reading and writing |
 | D14 | The dev look and «Правила» | D9 | the testing look; the list on `.dev` |
-| D15 | The budgets, `PRECACHE`, the scenario table: the point where every functional PR meets | D1–D14 | the engine starts offline |
+| D15 | The budgets, `PRECACHE`, the scenario table: the point where every functional PR meets (its harness, D15a, can come early, §8) | D1–D14 | the engine starts offline |
 | D16 | The engine the default on `.dev` | D15 | the engine for everyone on `.dev` |
 | D17 | Today's layout code removed | D16, Q19, the rehearsals of §5 | none visible |
 
@@ -200,6 +200,38 @@ Two rounds of the review found findings of one class, the relation between the c
 - **Not changed:** the core, GAP's two measures in one tree (rows `y` and `yc` stay), Q4, and §3.4. `show` stays for `open()` with temporary rows (G26's case) and for an area's frame.
 
 Asked of the independent review: whether these operations close both examples, and whether `fold` can refuse where an action was accepted (ending temporary rows only widens blocks back and lifts rows, so a refusal there is a bug and the action is then refused whole).
+
+## 8. How the work is run (proposed)
+
+The owner's wish of 2026-11-27: this plan's session is the controller, and the PRs are built in child sessions, so that the thread of the work is kept in one place.
+
+**The controller** (the session that wrote this plan) holds the plan and its questions, answers what a child asks or brings it to the owner, writes each child's brief, reads every child PR before the owner does (an internal review), relays the independent reviewer's findings, keeps `CLAUDE.md`'s status line and this document current, merges on the owner's «вливай» only, checks `.dev` after a merge, and sends the stage's handoff when it ends. It writes no feature code itself.
+
+**A child session** builds one PR of §4 (two at most, when they are one lane and small) on its own branch from `origin/main` (`layout/d<N>-<name>`), with the tests that PR names; it decides nothing the plan leaves open: a question goes to the controller (`send_message`), which answers from the plan or asks the owner; it opens the PR into `main`, answers review rounds in its own branch, merges `main` into it when `main` moves, and never merges. Its brief names: the PR's section of this plan and §7, the documents to read, the files it may touch, the lane's other PRs in flight, and the report it sends when done (the PR, what was built, what was found, what is left).
+
+**Lanes**, so that parallel PRs touch different files:
+
+| Lane | PRs | Main files |
+|---|---|---|
+| A, undo and geometry | D1 → D3 → D4 → D5 → D6 | `reconcile.js`, `ops.js`, `bridge.js`, `page.js`, `measure.js`, `view.js`'s `sign` |
+| A′, removal | D2 (after D1, beside D3) | `settle.js`, `gap.js`, `shapes.js`, `primitives.js`, the lab and the tests of the inverse path |
+| B, gestures | D7 → D8 → D9 → D10 | `drag.js`, `ops.js`'s gestures, `edit.js`, the page's handlers in `index.html` |
+| C, look | D11 → D12 → D13 | `view.js`'s drawing, the CSS, the narrow view |
+| D, rules | D14 | `panel.js`, `rules.js` read only, the settings menu |
+| E, budgets and release | D15a (the fixture and the measuring harness, early, tests only) → D15b (the budgets met, `PRECACHE`, the scenario table) → D16 → D17 | `tests/fixtures/`, `tests/applayoutperf.mjs`, `sw.js`, `tests/README.md` |
+
+**Waves** (at most three child sessions at once: each PR waits for the owner's word and the reviewer's rounds, and more at once would queue there):
+
+| Wave | Starts when | Sessions |
+|---|---|---|
+| 0 | now | the plan: the owner's answers to Q11–Q24, the reviewer's round on §7 |
+| 1 | the plan approved | D1 (A); D7 (B); D15a (E) |
+| 2 | D1 merged, D7 merged | D3 (A) with D2 (A′) beside it; D11 (C) |
+| 3 | D3 merged | D4 → D5 → D6 (A, one session after another); D12 (C); D14 (D) |
+| 4 | D4 and D5 merged | D8 → D9 → D10 (B); D13 (C) |
+| 5 | D1–D14 merged | D15b, then D16, the rehearsals of §5, D17 (E) |
+
+**Shared ground.** `public/index.html` and `page.js` are touched by several lanes: a child merges `main` into its branch before review and again before the merge, and the second of two PRs merged on one day raises `BUILD` again. A finding in one lane that changes another's contract (a shape in `shapes.js`, an entry's fields) goes to the controller first, which updates §4 or §7 before the other lane builds on it.
 
 ## Review log
 
