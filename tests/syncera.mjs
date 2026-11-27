@@ -9,7 +9,8 @@
 //   5s.  the cases of #146 (`syncguard` 5s–5s10) read again by §8.3 and §7.3.8;
 //   B.   the cases beside the matrix (§8.1), the rules of §3.3, §3.4, §3.6 and §3.7 one by one, and the cases of the review rounds, on the end of an instance;
 //   N.   the end of a runner (§7.3.2): a call already out, an identity the store has left, a transaction already admitted;
-//   P.   runners of one epoch (§7.3.5), the quota as deltas and the sweep (§7.3.2), as §7.3.9 pins them.
+//   P.   runners of one epoch (§7.3.5), the quota as deltas and the sweep (§7.3.2), as §7.3.9 pins them;
+//   Q.   the cases of the internal review of the build.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
@@ -456,8 +457,9 @@ const gated=db=>{ const G={gate:null, admitted:null, tx:(st,mode,fn)=>db.tx(st,m
   cloud.advance(2*60000); for(let i=0;i<60 && !A.logs.some(e=>e.t==='scan-taken');i++) await r.step(); for(let i=0;i<40;i++) await r.step(); const sc=db.get('sync','scan:notes'), g=k=>db.get('sync',k);
   ok('P6a left untouched for two minutes, it is taken over under a new token ('+(sc.token!=='p-other')+', scan calls '+scans+'); k2 was read, found gone, declared missing and so created again from the device ('+A.logs.some(e=>e.t==='vanished' && e.id==='k2')+', in the cloud '+!!cloud.doc('notes','k2')+'); the day\'s share ended there: the phase «'+sc.phase+'» waits with '+JSON.stringify(sc.cand)+', the pass still active ('+sc.active+')',
     A.logs.some(e=>e.t==='scan-taken') && sc.token!=='p-other' && scans===1 && A.logs.some(e=>e.t==='vanished' && e.id==='k2') && !!cloud.doc('notes','k2') && !cloud.doc('notes','k4') && sc.active===true && sc.phase==='confirm' && sc.cand.join()==='k3,k4' && !!g('seen:n:k4'));
+  cloud.write('notes',{id:'k0', title:'only a pass would find it', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone', commitAt:cloud.now()+1e9});   // not seen by a listener or a page: a pass's page is the one way to this device
   const before=JSON.stringify(db.get('sync','scan:notes')), seen4=JSON.stringify(g('seen:n:k4')); old._S.scan.notes={...other}; for(let i=0;i<30 && !old.log.some(e=>e.t==='scan-lost');i++) await old.step();
-  ok('P6b the runner that lost the pass meets the new token and writes nothing of it ('+old.log.filter(e=>e.t==='scan-lost').length+' loss logged; the record and k4 as they were)', old.log.some(e=>e.t==='scan-lost') && JSON.stringify(db.get('sync','scan:notes'))===before && JSON.stringify(g('seen:n:k4'))===seen4);
+  ok('P6b the runner that lost the pass meets the new token and writes nothing of it ('+old.log.filter(e=>e.t==='scan-lost').length+' loss logged; the record and k4 as they were; a document of its page is not applied: '+!db.get('notes','k0')+')', old.log.some(e=>e.t==='scan-lost') && JSON.stringify(db.get('sync','scan:notes'))===before && JSON.stringify(g('seen:n:k4'))===seen4 && !db.get('notes','k0'));
   old.end('page'); cloud.advance(24*3600000); for(let i=0;i<80 && (db.get('sync','scan:notes')||{}).active;i++){ await r.step(); cloud.advance(50); } const done=db.get('sync','scan:notes');
   ok('P6c the next day the pass ends ('+(done.active===false)+'): k4 confirmed and declared missing ('+!g('seen:n:k4')+'); k3, which has a job of its own, was left to the send path by the pass (its job, its `seen` and its base kept: '+[!!g('out:n:k3'), !!g('seen:n:k3'), !!(g('meta:n:k3')||{}).base].join(', ')+')', done.active===false && !g('seen:n:k4') && !!g('out:n:k3') && !!g('seen:n:k3') && !!g('meta:n:k3').base); }
 // P7: the sweep. A runner that ends while the page's sweep runs writes nothing after it; a runner that was ended makes no sweep at all
@@ -471,5 +473,38 @@ const gated=db=>{ const G={gate:null, admitted:null, tx:(st,mode,fn)=>db.tx(st,m
   let go; const hold=new Promise(x=>{ go=x; }); let held; const isHeld=new Promise(x=>{ held=x; }); r2._S.sweptOnce=false; full.n=9; full.hold=hold; full.held=held; let d2; const st2=(async()=>{ for(let i=0;i<6;i++){ d2=await r2.step(); if(d2.did==='ended') break; } })(); await Promise.race([isHeld, tick(400)]);
   r2.end('lead'); go(); await st2; full.n=0;
   ok('P7a a runner that ended before the store answered «full» asks for no sweep ('+(sweeps-1)+' more), its step is «'+d2.did+'»', sweeps===1 && d2.did==='ended'); }
+
+/* ── the internal review of the build (at 0237e84) ── */
+// Q1: a stored wait whose replay does not clear it is not replayed at every read of the queue. A version the device's rules refuse waited for its
+// note; the note came; the replay put it in quarantine and left the wait. The runner goes idle, and ten more saves replay nothing
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'Q1',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300);
+  cloud.rewrite('versions','vbad',{v:1, rev:1, op:'w1', dev:'phone', rcpt:{phone:'w1'}, note:'par', name:'Bad', title:'', blocks:[]}); await A.sync.idle(300); await A.sync.idle(300);   // no `t`: the normalizer refuses the shape
+  const waits=!!(db.get('sync','meta:v:vbad')||{}).wait; await note(A,'par','the parent'); let steps=0, d; for(;steps<60;steps++){ d=await A.sync.runner.step(); if(d.did==='idle' && d.next>cloud.now()) break; }
+  const q0=A.changes.filter(e=>e.kind==='quarantine').length; for(let i=0;i<10;i++){ await note(A,'other','save '+i); await A.sync.idle(300); } const q1=A.changes.filter(e=>e.kind==='quarantine').length;
+  ok('Q1 a waiting version ('+waits+') that its replay leaves waiting ('+!!(db.get('sync','meta:v:vbad')||{}).wait+'): the runner goes idle ('+steps+' steps), one quarantine when the parent came ('+q0+') and none more after ten saves ('+q1+')', waits && steps<60 && q0===1 && q1===1); }
+// Q2 (§7.3.3 item 7): a runner stamps the next document with the name the writer gave the device
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'Q2',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await note(A,'n1','first'); await A.sync.idle(300); await A.sync.idle(300);
+  const dn1=cloud.doc('notes','n1').dn, r0=A.sync.runner; await A.sync.deviceName('Kitchen tablet'); await note(A,'n2','second'); await A.sync.idle(300); await A.sync.idle(300);
+  ok('Q2 the device renamed through the writer («'+dn1+'» before): the same runner stamps the next document «'+(cloud.doc('notes','n2')||{}).dn+'»', dn1==='Device Q2' && A.sync.runner===r0 && (cloud.doc('notes','n2')||{}).dn==='Kitchen tablet'); }
+// Q3 (§7.3.2 check 4): a transaction asked for before the end and admitted after it is refused at its admission
+{ const cloud=new TestCloud({start:START}), db=new MemStore(); let wait=null; const late={asked:null, tx:(st,mode,fn)=>{ if(mode==='readwrite' && wait){ const w=wait; wait=null; if(late.asked) late.asked(); return w.then(()=>db.tx(st,mode,fn)); } return db.tx(st,mode,fn); }};
+  const A=dev(cloud,'Q3',db,'0',{store:late}); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); const r=A.sync.runner;
+  cloud.write('notes',{id:'in1', title:'incoming', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); cloud.pump(); await tick(); const had=r.inboxSize();
+  let go; wait=new Promise(x=>{ go=x; }); let asked; const isAsked=new Promise(x=>{ asked=x; }); late.asked=asked; const st=r.step(); await Promise.race([isAsked, tick(300)]); r.end('lead'); go(); const d=await st; await tick();
+  ok('Q3 a delivery ('+had+') whose transaction was asked for before the runner ended and reached the store after: refused at its admission, nothing written (the note: '+!!db.get('notes','in1')+', the step «'+d.did+'»)', had>0 && !db.get('notes','in1') && !db.get('sync','seen:n:in1') && d.did==='ended'); }
+// Q4 (§7.3.3 item 5): «never in the cloud» by the store. A note written after this epoch's catch-up of notes ended and never sent is deleted for
+// good with no tombstone; the same note with a `refetch` waiting, or before the catch-up ended, leaves one
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'Q4',db,'0'); await A.sync.setOwner(U('a')); await note(A,'early','before any catch-up'); const e=await A.sync.purgeLocal('early',{reach:'all'});
+  await A.sync.start(); await A.sync.idle(300); await A.sync.idle(300); const caught=!!(db.get('sync','cursor:notes')||{}).caught; A.sync.online(false);
+  await note(A,'n1','never sent'); await note(A,'n2','never sent, to be read again'); db.data.sync.set('refetch:n:n2',{k:'refetch:n:n2'});
+  const r1=await A.sync.purgeLocal('n1',{reach:'all'}), r2=await A.sync.purgeLocal('n2',{reach:'all'});
+  ok('Q4 before the catch-up of notes ended a deletion leaves a tombstone job ('+e.tomb+'); after it (the mark: '+caught+') a note that never left the device goes with none ('+r1.tomb+', no job: '+!db.get('sync','out:n:n1')+'), and one with a `refetch` waiting keeps its tombstone ('+r2.tomb+')', e.tomb===true && caught && r1.ok && r1.tomb===false && !db.get('sync','out:n:n1') && !db.get('sync','purged:n:n1') && r2.tomb===true && (db.get('sync','out:n:n2')||{}).tomb===true); }
+// Q5 (§7.3.9): a stored wait is woken by the deletion of its parent too, and a queue of waiting records only is read again after a bounded delay
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'Q5',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300);
+  cloud.write('notes',{id:'par', title:'Parent', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone', commitAt:cloud.now()+1e9}); cloud.write('versions',{id:'vw', note:'par', t:cloud.now(), name:'Waited', title:'Parent', blocks:[]},{dev:'phone'}); await A.sync.idle(300); await A.sync.idle(300);
+  const r=A.sync.runner, waits=!!(db.get('sync','meta:v:vw')||{}).wait, st=await r.step(), bound=st.next-cloud.now();
+  db.data.sync.set('purged:n:par',{k:'purged:n:par', rev:0});   // the parent was deleted for good on this device (another tab's write)
+  A.sync.online(false); r.nudge(); await A.sync.idle(300);
+  ok('Q5 a runner that holds only a waiting version ('+waits+') asks to be run again within a minute ('+bound+' ms), not never; the deletion of the parent wakes the wait: no record, a tombstone job over the version ('+!!(db.get('sync','out:v:vw')||{}).tomb+')', waits && st.did==='idle' && bound>0 && bound<=60001 && !db.get('versions','vw') && (db.get('sync','out:v:vw')||{}).tomb===true && !(db.get('sync','meta:v:vw')||{}).wait); }
 
 console.log(fails? '\n'+fails+' failed' : '\nall passed'); process.exit(fails? 1 : 0);

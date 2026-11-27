@@ -6,6 +6,9 @@
 //   - setOwner takes the epoch the store has when it is called as the epoch of the decision, unless the test names one;
 //   - a test adapter that names no namespace is named for the owner it is connected under (public/cloud.js binds its root the same way);
 //   - a runner that ended is replaced at the next reconciliation: after setOwner, start, setCloud, and at a step that finds none alive.
+// What it does NOT model, and stage 3's page must have (§7.3.4): the recovery read after a runner ended and when the lead is granted; no loop of new
+// runners on a storage error at initialisation (item 6: this model makes one at every step); the lead and its generation; a real adapter, which
+// today names `uid` and `root` but no `env` (public/cloud.js), so the page must hand the runner an adapter that names both.
 export function eraPage(C, deps){
   const W=C.makeSync(deps); let R=null, cloud=deps.cloud||null, started=false, on=true, busy=null; const ends=[], named=new Map();
   const nameOf=(c, ow)=>{ if(c.uid!==undefined || c.env!==undefined) return c; const k=ow.env+'/'+ow.uid; let m=named.get(c); if(!m){ m=new Map(); named.set(c,m); } if(!m.has(k)) m.set(k, Object.assign(Object.create(c), {uid:ow.uid, env:ow.env})); return m.get(k); };
@@ -31,7 +34,6 @@ export function eraPage(C, deps){
   F.idle=async(limit=200)=>{ let r; for(let i=0;i<limit;i++){ r=await F.step(); if(r.did==='idle' && !(r.next<=deps.now() && R && R._S.asked)) break; } return r; };
   F.status=()=>R? R.status() : {code:'idle', n:0};
   F.checkOwner=async()=>{ try{ const st=await W.ownerNow(); return !R || R.epoch===st.epoch; }catch(e){ return false; } };
-  F.autoPurge=t=>R? R.autoPurge(t) : [];
   F.usedToday=()=>R? R.usedToday() : {reads:0, writes:0};
   for(const k of ['jobs','tries','vjobs','vtries']) F[k]=()=>R? R[k]() : [];
   F.inboxSize=()=>R? R.inboxSize() : 0; F.isOnline=()=>on; F.hasOwner=()=>!!F.owner; F.busyMs=()=>W.busyMs();
