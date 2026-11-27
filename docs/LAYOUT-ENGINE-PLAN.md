@@ -389,6 +389,8 @@ Its minimum, whether it hides lines and its fold are the passport's, and whether
 
 ## 5. Steps
 
+**What remains of steps 3–6 after the slice is planned in [`LAYOUT-01-REST-PLAN.md`](LAYOUT-01-REST-PLAN.md) (proposed, 2026-11-27)**; the table below is the record of the plan as approved, and where the two differ that plan wins.
+
 Each step is one PR into `main` with every test green and the build marker raised. Every file a step adds under `public/layout/` gets a row `'layout/<file>':'sha384-0'` in the `SRI` table of `index.html` (809) by hand: `tests/hashes.mjs` finds every `public/<feature>/*.js` by itself and fails while one has no row, and it finds a value only in the form `sha384-…`, so the placeholder cannot be empty; then `node tests/hashes.mjs --write` fills the hashes. The row also puts the file into the import map through `MODS` (815–817), which loads nothing until step 5 imports it; `sw.js`'s `PRECACHE` (18) lists the files at step 5, as it lists `account/`'s. Each step also adds a row per new test file to the table of `tests/README.md`, the Node ones marked «Node:» as the `sync*.mjs` rows are; CI runs them in the same `tests/*.mjs` loop (`tests/lib/shard.mjs`), and a slow one gets a weight in its `WEIGHTS`. Steps 1–4 add the engine with no effect on the app; step 5 wires it behind the switch; step 6 makes it the default and removes today's layout code.
 
 | Step | What | Tests | Effect on the app |
