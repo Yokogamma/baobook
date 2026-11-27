@@ -10,7 +10,8 @@
 //   B.   the cases beside the matrix (§8.1), the rules of §3.3, §3.4, §3.6 and §3.7 one by one, and the cases of the review rounds, on the end of an instance;
 //   N.   the end of a runner (§7.3.2): a call already out, an identity the store has left, a transaction already admitted;
 //   P.   runners of one epoch (§7.3.5), the quota as deltas and the sweep (§7.3.2), as §7.3.9 pins them;
-//   Q.   the cases of the internal review of the build.
+//   Q.   the cases of the internal review of the build;
+//   R.   the sequences of the independent review of the build, each judged by the cloud and the store at the end.
 import { loadCore } from './lib/core.mjs';
 import { MemStore } from './lib/memstore.mjs';
 import { TestCloud } from './lib/cloud.mjs';
@@ -441,7 +442,7 @@ const gated=db=>{ const G={gate:null, admitted:null, tx:(st,mode,fn)=>db.tx(st,m
   let rel; const hold=new Promise(x=>{ rel=x; }); cloud.fault('hold',{dev:'P6d', op:'get', promise:hold}); await A.sync.start(); const r=A.sync.runner; r._S.snapshot.notes=false; let d; const run=(async()=>{ for(let i=0;i<40;i++){ d=await r.step(); if(d.did==='scan') break; } })();
   for(let i=0;i<100 && !A.logs.some(e=>e.t==='scan-taken');i++) await tick(2); await tick(10); const seen0=JSON.stringify(db.get('sync','seen:n:kx'));
   db.data.sync.set('meta:n:kx',{...db.get('sync','meta:n:kx'), lrev:(db.get('sync','meta:n:kx').lrev||0)+1});   // the record moved meanwhile (another tab's write would do it through a transaction; the store is held by nothing here)
-  rel(); await run; const stale=A.logs.some(e=>e.t==='stale-read' && e.col==='notes' && e.id==='kx');
+  rel(); await run; const stale=A.logs.some(e=>e.t==='stale-read' && e.id==='kx');
   ok('P6d the confirming read answered «gone» over a record that changed since it was asked: nothing is declared (logged stale: '+stale+', `seen` kept: '+(JSON.stringify(db.get('sync','seen:n:kx'))===seen0)+', the base kept: '+!!db.get('sync','meta:n:kx').base+')', stale && !!seen0 && JSON.stringify(db.get('sync','seen:n:kx'))===seen0 && !!db.get('sync','meta:n:kx').base && !A.logs.some(e=>e.t==='vanished')); }
 // P6: a full pass under runners. Another runner's fresh pass is not run twice; one left without a runner is taken over from its position; the runner
 // that lost it writes nothing of it; a record is declared missing only after its own read confirmed it and with no job of its own; when the day's
@@ -476,12 +477,13 @@ const gated=db=>{ const G={gate:null, admitted:null, tx:(st,mode,fn)=>db.tx(st,m
 
 /* ── the internal review of the build (at 0237e84) ── */
 // Q1: a stored wait whose replay does not clear it is not replayed at every read of the queue. A version the device's rules refuse waited for its
-// note; the note came; the replay put it in quarantine and left the wait. The runner goes idle, and ten more saves replay nothing
+// note; the note came; the replay put it in quarantine. That decision is final for this state of the document, so the wait goes with it; the runner
+// goes idle, and ten more saves replay nothing
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'Q1',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300);
   cloud.rewrite('versions','vbad',{v:1, rev:1, op:'w1', dev:'phone', rcpt:{phone:'w1'}, note:'par', name:'Bad', title:'', blocks:[]}); await A.sync.idle(300); await A.sync.idle(300);   // no `t`: the normalizer refuses the shape
   const waits=!!(db.get('sync','meta:v:vbad')||{}).wait; await note(A,'par','the parent'); let steps=0, d; for(;steps<60;steps++){ d=await A.sync.runner.step(); if(d.did==='idle' && d.next>cloud.now()) break; }
   const q0=A.changes.filter(e=>e.kind==='quarantine').length; for(let i=0;i<10;i++){ await note(A,'other','save '+i); await A.sync.idle(300); } const q1=A.changes.filter(e=>e.kind==='quarantine').length;
-  ok('Q1 a waiting version ('+waits+') that its replay leaves waiting ('+!!(db.get('sync','meta:v:vbad')||{}).wait+'): the runner goes idle ('+steps+' steps), one quarantine when the parent came ('+q0+') and none more after ten saves ('+q1+')', waits && steps<60 && q0===1 && q1===1); }
+  ok('Q1 a waiting version ('+waits+') whose replay puts it in quarantine: it waits no more ('+!(db.get('sync','meta:v:vbad')||{}).wait+'), the runner goes idle ('+steps+' steps), one quarantine when the parent came ('+q0+') and none more after ten saves ('+q1+')', waits && !(db.get('sync','meta:v:vbad')||{}).wait && steps<60 && q0===1 && q1===1); }
 // Q2 (§7.3.3 item 7): a runner stamps the next document with the name the writer gave the device
 { const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'Q2',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await note(A,'n1','first'); await A.sync.idle(300); await A.sync.idle(300);
   const dn1=cloud.doc('notes','n1').dn, r0=A.sync.runner; await A.sync.deviceName('Kitchen tablet'); await note(A,'n2','second'); await A.sync.idle(300); await A.sync.idle(300);
@@ -506,5 +508,77 @@ const gated=db=>{ const G={gate:null, admitted:null, tx:(st,mode,fn)=>db.tx(st,m
   db.data.sync.set('purged:n:par',{k:'purged:n:par', rev:0});   // the parent was deleted for good on this device (another tab's write)
   A.sync.online(false); r.nudge(); await A.sync.idle(300);
   ok('Q5 a runner that holds only a waiting version ('+waits+') asks to be run again within a minute ('+bound+' ms), not never; the deletion of the parent wakes the wait: no record, a tombstone job over the version ('+!!(db.get('sync','out:v:vw')||{}).tomb+')', waits && st.did==='idle' && bound>0 && bound<=60001 && !db.get('versions','vw') && (db.get('sync','out:v:vw')||{}).tomb===true && !(db.get('sync','meta:v:vw')||{}).wait); }
+
+/* ── the independent review of the build (at 0237e84): returned. Each case is the sequence of a finding, judged by the cloud and the store at the end ── */
+// a store whose writes of chosen `sync` records fail (the whole transaction with them), while `bad` says so
+const flaky=db=>{ const F={bad:null, tx:(st,mode,fn)=>db.tx(st,mode, async t=>{ if(mode!=='readwrite' || !F.bad) return fn(t); const T=Object.create(t); T.put=(s,v)=>{ if(F.bad && F.bad(s,v)) throw Object.assign(new Error('disk'),{name:'UnknownError'}); return t.put(s,v); }; return fn(T); })}; return F; };
+const quiet=cloud=>name=>{ cloud.fault('fail',{dev:name, op:'listen', n:1000}); };   // a runner with no listener: what it knows of the cloud it reads itself
+// R1 (high): the answer of an attempt that READ «no such document» comes late. The document is back by then and the user has deleted the note for
+// good. The attempt's finish does not reset the record or take the new tombstone job away: it is run again, and the tombstone reaches the cloud
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'R1',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await note(A,'n1','one'); await A.sync.idle(300); await A.sync.idle(300); const r=A.sync.runner;
+  let go; const gate=new Promise(x=>{ go=x; }); let out; const answered=new Promise(x=>{ out=x; }); const real=A.proxy.txn; let kept=null;
+  A.proxy.txn=async(col,id,f)=>{ if(col==='notes' && id==='n1' && !kept){ kept=cloud.docs.notes.get('n1'); cloud.docs.notes.delete('n1'); const v=await real(col,id,f); out(v); await gate; return v; } return real(col,id,f); };   // the document is gone when the transaction reads it
+  await note(A,'n1','two'); let d; const run=(async()=>{ for(let i=0;i<8;i++){ d=await r.step(); if(d.did==='try' || d.did==='send') break; } })(); const ans=await Promise.race([answered, tick(500)]);
+  cloud.docs.notes.set('n1',kept); const del=await A.sync.purgeLocal('n1',{reach:'all'}), job=db.get('sync','out:n:n1'); go(); await run; const after=db.get('sync','out:n:n1'), tried=!!db.get('sync','try:n:n1'); A.proxy.txn=real; await A.sync.idle(300); await A.sync.idle(300);
+  ok('R1 an attempt whose transaction read «gone» and wrote nothing ('+JSON.stringify(ans && {read:ans.read, wrote:ans.wrote})+'), answered after the document came back and the user queued the deletion ('+del.tomb+'): the tombstone job stays ('+!!(after||{}).tomb+'), the attempt too ('+tried+'), and in the end the cloud holds the tombstone ('+!!(cloud.doc('notes','n1')||{}).purged+'), the device no note ('+!db.get('notes','n1')+')',
+    !!ans && ans.read===null && ans.wrote===false && del.tomb===true && !!job && job.tomb===true && !!after && after.tomb===true && tried && !!(cloud.doc('notes','n1')||{}).purged && !db.get('notes','n1')); }
+// R1b (high): the snapshot holds the identity of what was seen, not its revision alone. A send's read says «gone»; meanwhile another runner of the
+// epoch applied the document back at the same revision (a new server time). The late answer is not acted on
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'R1b',db,'0'); quiet(cloud)('R1b'); await A.sync.setOwner(U('a')); await A.sync.start(); await note(A,'n1','one'); await A.sync.idle(300); await A.sync.idle(300); const r=A.sync.runner;
+  await A.sync.purgeLocal('n1',{reach:'all'}); const doc=cloud.docs.notes.get('n1'); cloud.docs.notes.delete('n1');   // the tombstone is queued; the document left the cloud past the rules
+  let rel; const hold=new Promise(x=>{ rel=x; }); cloud.fault('hold',{dev:'R1b', op:'get', promise:hold}); r.nudge(); let d; const run=(async()=>{ for(let i=0;i<6;i++){ d=await r.step(); if(d.did==='send') break; } })(); await tick(20);
+  const s0=db.get('sync','seen:n:n1'); cloud.advance(60000); cloud.rewrite('notes','n1',{...cloud.out(doc), id:undefined});
+  const B=dev(cloud,'R1bB',db,eraNow(db)), rb=B.sync.writer.runner({epoch:epNow(db), owner:db.get('sync','owner'), cloud:{...B.proxy, uid:'a', env:'test'}}); rb.online(false); await rb.start(); for(let i=0;i<30;i++) await rb.step(); rb.end('lead');   // it receives, and sends nothing
+  const s1=db.get('sync','seen:n:n1'), sameRev=!!s0 && !!s1 && s0.rev===s1.rev && JSON.stringify(s0.srv)!==JSON.stringify(s1.srv); rel(); await run; const job=db.get('sync','out:n:n1'); await A.sync.idle(300); await A.sync.idle(300);
+  ok('R1b another runner applied the document back at the same revision with a new server time ('+sameRev+') under a send\'s read that says «gone»: the tombstone job is not taken away ('+(!!(job||{}).tomb || !!(cloud.doc('notes','n1')||{}).purged)+'), and the tombstone reaches the cloud ('+!!(cloud.doc('notes','n1')||{}).purged+')', sameRev && A.logs.some(e=>e.t==='stale-read' && e.id==='n1') && !!(cloud.doc('notes','n1')||{}).purged); }
+// R2 (high): a late POSITIVE answer. A send read revision 2; another runner applied revision 3 meanwhile. The old document is not applied as a
+// server read: `seen` does not go back, nothing is put in quarantine
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'R2',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await note(A,'n1','one'); await A.sync.idle(300); await A.sync.idle(300);
+  A.sync.stop(); quiet(cloud)('R2'); cloud.fault('fail',{dev:'R2', op:'page', n:1000}); await A.sync.start(); const r=A.sync.runner;   // this runner hears nothing of the cloud by itself
+  const body=n=>({title:'n1', blocks:[{id:'b',row:1,fx:0,text:'from the phone '+n}], created:cloud.now(), updated:cloud.now()+n});
+  cloud.advance(1000); cloud.write('notes',{id:'n1', ...body(2)},{dev:'phone'}); await edit(A,'n1',(C,t)=>({...C, blocks:[...C.blocks, {id:'c',row:2,fx:0,text:'added here'}], updated:t}));
+  let rel; const hold=new Promise(x=>{ rel=x; }); cloud.fault('hold',{dev:'R2', op:'get', promise:hold}); r.nudge(); let d; const run=(async()=>{ for(let i=0;i<6;i++){ d=await r.step(); if(d.did==='send') break; } })(); await tick(20);
+  cloud.advance(1000); cloud.write('notes',{id:'n1', ...body(3)},{dev:'phone'});
+  const B=dev(cloud,'R2B',db,eraNow(db)), rb=B.sync.writer.runner({epoch:epNow(db), owner:db.get('sync','owner'), cloud:{...B.proxy, uid:'a', env:'test'}}); await rb.start(); for(let i=0;i<30 && (db.get('sync','seen:n:n1')||{}).rev<3;i++) await rb.step(); rb.end('lead');
+  const mid=(db.get('sync','seen:n:n1')||{}).rev; rel(); await run; const seen=(db.get('sync','seen:n:n1')||{}).rev, meta=db.get('sync','meta:n:n1')||{};
+  ok('R2 a send\'s read of revision 2 answered after another runner applied revision 3 (seen '+mid+'): `seen` does not go back ('+seen+'), the note is not marked damaged ('+meta.err+') and nothing is in quarantine ('+!db.get('sync','quarantine:n:n1')+')', mid===3 && seen>=3 && meta.err===undefined && !db.get('sync','quarantine:n:n1') && A.logs.some(e=>e.t==='stale-read' && e.id==='n1')); }
+// R3 (high): «caught up» is not written over a page a document of which could be neither applied nor marked to be read again. The store refuses
+// the incoming record and the mark; the page is asked for again; a local note of that id is not judged «never in the cloud»
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), F=flaky(db), A=dev(cloud,'R3',db,'0',{store:F}); quiet(cloud)('R3'); for(const op of ['get','txn']) cloud.fault('fail',{dev:'R3', op, n:1000});
+  cloud.write('notes',{id:'x', title:'in the cloud', blocks:[{id:'b',row:1,fx:0,text:'the cloud\'s'}], created:cloud.now(), updated:cloud.now()},{dev:'phone'});
+  await A.sync.setOwner(U('a')); await note(A,'x','a local note of the same id'); F.bad=(s,v)=>s==='sync' && (v.k==='seen:n:x' || v.k==='refetch:n:x'); await A.sync.start(); const r=A.sync.runner; for(let i=0;i<12;i++){ await r.step(); cloud.advance(60); }
+  const caught=!!(db.get('sync','cursor:notes')||{}).caught, trace=!!db.get('sync','seen:n:x') || !!db.get('sync','refetch:n:x'), owed=r._S.owed.size;
+  ok('R3 a page whose document the store would neither take nor mark ('+(trace? 'a trace' : 'no trace')+' of it, '+owed+' owed): «caught up» is not written ('+caught+'), the cursor does not pass it ('+JSON.stringify((db.get('sync','cursor:notes')||{}).id||null)+')', !trace && !caught && owed===1 && !(db.get('sync','cursor:notes')||{}).id);
+  F.bad=null; for(let i=0;i<400 && !(db.get('sync','cursor:notes')||{}).caught;i++){ await r.step(); cloud.advance(5); } const c2=!!(db.get('sync','cursor:notes')||{}).caught, t2=!!db.get('sync','seen:n:x'), del=await A.sync.purgeLocal('x',{reach:'all'});
+  ok('R3a the store works again: the document is received (seen '+t2+'), then «caught up» is written ('+c2+'); deleting the note for good leaves a tombstone job ('+del.tomb+')', t2 && c2 && del.tomb===true); }
+// R5 (medium): a full pass whose own writes fail. The final record fails once: the pass is not lost between a memory that says «done» and a store
+// that says «active»; an error of a confirming read stops the confirmations, spends nothing more and keeps the candidates
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), F=flaky(db), A=dev(cloud,'R5',db,'0',{store:F}); await A.sync.setOwner(U('a')); await A.sync.start(); for(const id of ['k1','k2','k3','k4','k5']) await note(A,id,'text of '+id); await A.sync.idle(400); await A.sync.idle(400); A.sync.stop();
+  for(const id of ['k2','k3','k4','k5']) cloud.docs.notes.delete(id); const day=S.dayKey(cloud.now());
+  db.data.sync.set('scan:notes',{k:'scan:notes', active:true, after:null, found:0, ids:[], phase:'confirm', cand:['k2','k3','k4','k5'], startedDay:day, day, allow:3, token:'p-gone', at:cloud.now()-10*60000});
+  let gets=0; const real=A.proxy.get; A.proxy.get=(col,id,...a)=>{ if(col==='notes' && /^k[2-5]$/.test(id)){ gets++; return Promise.reject(Object.assign(new Error('offline'),{code:'unavailable'})); } return real(col,id,...a); };
+  await A.sync.start(); const r=A.sync.runner; for(let i=0;i<40;i++) await r.step(); const sc=db.get('sync','scan:notes');
+  ok('R5 a confirming read that errors: the confirmations stop there ('+gets+' read in forty steps of one moment), every candidate stays ('+JSON.stringify(sc.cand)+'), the share is not spent ('+sc.allow+'), the pass is not called done ('+sc.active+')', gets===1 && sc.cand.length===4 && sc.allow===3 && sc.active===true);
+  A.proxy.get=real; let failed=0; F.bad=(s,v)=>{ if(s==='sync' && v.k==='scan:notes' && v.active===false && !failed){ failed=1; return true; } return false; };
+  for(let i=0;i<200 && !(db.get('sync','scan:notes').active===false);i++){ await r.step(); cloud.advance(i%20===19? 24*3600000 : 200); } const end=db.get('sync','scan:notes');
+  ok('R5a the write that ends the pass fails once ('+failed+'): the pass still ends in the store ('+(end.active===false)+'), with the records confirmed gone declared so ('+['k2','k3','k4','k5'].filter(id=>!db.get('sync','seen:n:'+id) || !!cloud.doc('notes',id)).length+' of 4)', failed===1 && end.active===false && ['k2','k3','k4','k5'].every(id=>!db.get('sync','seen:n:'+id) || !!cloud.doc('notes',id))); }
+// R6 (medium): what a live runner spent and had not written is not lost at the turn of the day
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'R6',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await A.sync.idle(300); const r=A.sync.runner, q0=db.get('sync','quota');
+  cloud.write('notes',{id:'in1', title:'one read', blocks:[], created:cloud.now(), updated:cloud.now()},{dev:'phone'}); cloud.pump(); await tick(); const tail=r._S.quota.reads-q0.reads;   // the listener counted a read outside a step
+  A.sync.online(false); cloud.advance(24*3600000); await r.step(); const q1=db.get('sync','quota');
+  ok('R6 a read counted by a listener and not yet written ('+tail+') when the day turns: the first flush of the new day records it ('+q0.day+' '+q0.reads+' → '+q1.day+' '+q1.reads+')', tail===1 && q1.day!==q0.day && q1.reads===tail); }
+// R7 (medium): a step waits for the one initialisation, and its failure ends the runner with nothing published; a step asked of an ended runner
+// answers at once, also while an earlier step of it is still waiting for the network; a cancelled call leaves no retry in its memory
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), W=planned(db), A=dev(cloud,'R7',db,'0',{store:W}); await A.sync.setOwner(U('a')); const ends=[];
+  const r=A.sync.writer.runner({epoch:epNow(db), owner:db.get('sync','owner'), cloud:{...A.proxy, uid:'a', env:'test'}, onEnd:x=>ends.push(x)}); A.status.length=0;
+  W.plan.push('holdfail'); const init=r.init().then(()=>'ok', e=>e.name); await tick(); let stepped=null; const st=r.step().then(d=>{ stepped=d; return d; }); await tick(30); const early=stepped; W.release(); const d=await st, i=await init; await tick();
+  ok('R7 a step asked while the initialisation is held answers nothing before it ends ('+(early===null)+'); the initialisation fails ('+i+'): the step is «'+d.did+'», the runner ended ('+ends.join()+'), no status went out ('+A.status.length+')', early===null && i==='UnknownError' && d.did==='ended' && ends.join()==='storage' && !A.status.length);
+  const B=dev(cloud,'R7b',new MemStore(),'0'); await B.sync.setOwner(U('a')); await B.sync.start(); await B.sync.idle(300); await note(B,'n1','text'); let rel; const hold=new Promise(x=>{ rel=x; }); cloud.fault('hold',{dev:'R7b', op:'get', promise:hold}); const rb=B.sync.runner; rb._S.snapshot.notes=false; rb._S.lastDelivered.delete('n1');
+  let d1; const run=(async()=>{ for(let k=0;k<6;k++){ d1=await rb.step(); if(d1.did==='send' || d1.did==='ended') break; } })(); await tick(20); rb.end('lead'); const t0=Date.now(), d2=await Promise.race([rb.step(), tick(200).then(()=>null)]); const job0=JSON.stringify(rb._S.jobs.get('n1')||null); rel(); await run;
+  ok('R7a a step asked after the end, while an earlier one still waits for the network, answers at once («'+(d2 && d2.did)+'»); the cancelled call leaves the job in its memory as it was (no try counted, no retry time, no code)', !!d2 && d2.did==='ended' && JSON.stringify(rb._S.jobs.get('n1')||null)===job0 && !(rb._S.jobs.get('n1')||{}).err); }
+// R8 (medium): the name a document is stamped with is read when the attempt is prepared, an emptied name included
+{ const cloud=new TestCloud({start:START}), db=new MemStore(), A=dev(cloud,'R8',db,'0'); await A.sync.setOwner(U('a')); await A.sync.start(); await note(A,'n1','first'); await A.sync.idle(300); await A.sync.idle(300);
+  await A.sync.deviceName(''); await note(A,'n2','second'); await A.sync.idle(300); await A.sync.idle(300); const d2=cloud.doc('notes','n2')||{};
+  ok('R8 the device\'s name taken away through the writer («'+cloud.doc('notes','n1').dn+'» before): the next document carries no name ('+('dn' in d2? '«'+d2.dn+'»' : 'none')+')', cloud.doc('notes','n1').dn==='Device R8' && !!d2.rev && !('dn' in d2)); }
 
 console.log(fails? '\n'+fails+' failed' : '\nall passed'); process.exit(fails? 1 : 0);
