@@ -19,6 +19,7 @@ import { DEFAULT, SETTINGS } from './rules.js';
 import { PLACE_FIELDS } from './shapes.js';
 import { SHEETW, colFromFx } from './geometry.js';
 import { probeOf, draw, sheetWidth, save, cellsAt } from './view.js';
+import { holdAt, holdLeft } from './drag.js';
 
 /** @typedef {import('./view.js').ViewHost & {build:number|string, ro():boolean, dirty():void, grow():void, safe(on:boolean, errors:string[]):void, stale():void}} Host
  *    // ro: nothing of the note may be written now (the trash, a version shown, a lock); dirty: the note changed, save it; grow: the
@@ -29,7 +30,7 @@ import { probeOf, draw, sheetWidth, save, cellsAt } from './view.js';
 export function start(host) {
   const doc = host.sheet.ownerDocument, { probe, sign } = probeOf(host);
   // a block's signature is read from its element once for a command: the Measure asks for it with every answer
-  let memo = new Map(), M = null, cell = 0, note = null, hold = 0, safe = false, held = null;   // held: the carry in the hand
+  let memo = new Map(), M = null, cell = 0, note = null, hold = 0, safe = false, held = null, wait = null;   // held: the carry in the hand; wait: its hold (DRAG.B4)
   const measure = () => {
     cell = host.px().g;
     M = createMeasure({ probe, sign: (id) => { if (!memo.has(id)) memo.set(id, sign(id)); return memo.get(id); }, cell });
@@ -118,21 +119,31 @@ export function start(host) {
     look();
     const w = where(b.id);
     held = w && B.carry(note, { box: w.box, id: b.id, point: cellsAt(host, x, y) }, env());
+    wait = null;
     return !!held;
   }
-  /** The pointer moved: the preview drawn. False when the carry is over (the note changed under it): the caller ends it. */
-  function move(x, y) {
+  const clock = () => doc.defaultView.performance.now();
+  /** The pointer moved, or stood while the hold ran out or Shift went down or up: the preview drawn. Letting through (DRAG.B4): with
+   *  `shift` the neighbour the block presses lets it through at once, otherwise once the pointer has stood `HOLD` within `STILL` pixels
+   *  against the same neighbour. False when the carry is over (the note changed under it): the caller ends it. */
+  function move(x, y, shift) {
     if (!held) return false;
     if (!able()) return false;   // the tab turned view-only, or the note went safe, under the carry: it is over
-    held = B.moved(note, held, cellsAt(host, x, y));
+    const now = clock(), px = { x, y };
+    wait = holdAt(wait, B.pressed(held), px, now, SETTINGS);   // the pointer that left the hold point starts the hold anew before it is read
+    held = B.moved(note, held, cellsAt(host, x, y), shift ? 'shift' : holdLeft(wait, now, SETTINGS) === 0 ? 'hold' : undefined);
     if (held.cancelled) return false;
+    wait = holdAt(wait, B.pressed(held), px, now, SETTINGS);
     draw(B.preview(note, held), host); host.grow();
     return true;
   }
+  /** How long the pointer has to stand yet for the pressed neighbour to let the block through, in ms; null when nothing waits (no
+   *  neighbour is pressed, or the hold ran out and was told). The caller calls `move` again at the same point then. */
+  const waits = () => { const left = held ? holdLeft(wait, clock(), SETTINGS) : null; return left ? left : null; };
   /** The drop, or the carry given up: the note as it was, or the accepted layout written. Nothing is accepted once the note may
    *  not be written (a lock that came while the block was carried): the layout shown is the note's again. */
   function drop(cancel) {
-    const c = held; held = null;
+    const c = held; held = null; wait = null;
     if (!c) return null;
     const entries = note.doc.undo.length, r = cancel || c.cancelled || !able() ? null : B.dropped(note, c);
     if (!r || !r.ok) { show(); return null; }
@@ -174,7 +185,7 @@ export function start(host) {
   if (doc.fonts && doc.fonts.addEventListener) doc.fonts.addEventListener('loadingdone', remeasure);
 
   return {
-    settle, batch, reopen, remeasure, pick, move, drop, enter, leave, undo,
+    settle, batch, reopen, remeasure, pick, move, waits, drop, enter, leave, undo,
     /** The action journal as a file: ids, kinds and numbers, no content of a note. */
     exportJournal() { save(doc, 'baobook-layout-journal-' + host.build + '.json', journal.export()); },
     journal: () => journal,

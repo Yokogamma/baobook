@@ -3,11 +3,12 @@
 //   2  sticking to the column and to the row it was taken from (DRAG.A2);
 //   3  home and outside ask nothing (DRAG.A4, A3b, PR-1);
 //   4  away set with no column shared, cleared only with a column and a row shared (DRAG.B1);
-//   5  the pointer inside an area's frame asks to enter, outside it to leave; the lowered bottom; what never goes in (AREA.7).
+//   5  the pointer inside an area's frame asks to enter, outside it to leave; the lowered bottom; what never goes in (AREA.7);
+//   6  letting through (DRAG.B4): the hold's timer, and the word a carry's change takes with it.
 //
 //   node tests/layoutdrag.mjs
 
-import { pick, aim, over, awayAt, next } from '../public/layout/drag.js';
+import { pick, aim, over, awayAt, next, holdAt, holdLeft } from '../public/layout/drag.js';
 import { open } from '../public/layout/layout.js';
 import { KINDS } from '../public/layout/kinds.js';
 import { DEFAULT, SETTINGS } from '../public/layout/rules.js';
@@ -70,6 +71,20 @@ const p0 = { x: A.col + 1.5, y: A.y + 0.25 }, at = (dx, dy) => ({ x: p0.x + dx, 
   ok('5f an area never goes into an area', over(gR, { x: Q.col + 3, y: Q.y + 1.5 }) === null);
   const gW = pick(T, null, 'W', { x: 41, y: 20.5 }, ctx), fq = gW.frames.get('Q');
   ok('5g a set width wider than the area never goes in; into a wider area it does', gW.w > fq.cols && over(gW, { x: fq.c0 + 1, y: fq.top + 0.5 }) === null && gW.w <= f.cols === (over(gW, { x: f.c0 + 1, y: f.top + 0.5 }) === 'R'), { w: gW.w, q: fq.cols, r: f.cols });
+}
+
+{ // 6
+  const ms = S.HOLD * 1000, h0 = holdAt(null, 'B', { x: 100, y: 200 }, 1000, S);
+  ok('6 a pressed neighbour starts the hold at the pointer; with none pressed there is no hold', h0.pressed === 'B' && h0.t === 1000 && holdLeft(h0, 1000, S) === ms && holdAt(h0, null, { x: 100, y: 200 }, 1100, S) === null && holdLeft(null, 1100, S) === null);
+  const still = holdAt(h0, 'B', { x: 100 + S.STILL * 0.6, y: 200 - S.STILL * 0.6 }, 1300, S);
+  ok('6a within STILL of the hold point against the same neighbour the hold goes on, and runs out after HOLD', still === h0 && holdLeft(still, 1300, S) === ms - 300 && holdLeft(still, 1000 + ms, S) === 0 && holdLeft(still, 5000, S) === 0);
+  const far = holdAt(h0, 'B', { x: 100 + S.STILL + 1, y: 200 }, 1300, S), other = holdAt(h0, 'C', { x: 100, y: 200 }, 1300, S);
+  ok('6b the pointer leaving STILL starts it anew at the new point, and so does another neighbour', far.t === 1300 && far.x === 100 + S.STILL + 1 && holdLeft(far, 1300, S) === ms && other.t === 1300 && other.pressed === 'C', { far, other });
+  const g = pick(T, null, 'A', p0, ctx);
+  const plain = next(g, null, T, at(0, 2), S), sh = next(g, null, T, at(0, 2), S, 'shift'), hd = next(g, null, T, at(0, 2), S, 'hold');
+  ok('6c a carry\'s change says that Shift is held or the hold ran out; without either it has no such field', !('through' in plain.change) && sh.change.through === 'shift' && hd.change.through === 'hold' && sh.change.type === 'carry', { plain: plain.change, sh: sh.change });
+  const cross = next(g, null, T, { x: R.col + 3, y: R.y + 1.5 }, S, 'shift');
+  ok('6d a crossing lets nothing through', cross.change.type === 'enter' && !('through' in cross.change), cross.change);
 }
 
 process.exit(fails ? 1 : 0);

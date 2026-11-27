@@ -244,8 +244,10 @@ export function carry(note, a, env) {
 /** A carry is stale when the note changed since it began (from outside, or by any action or change of content), or what the Measure
  *  reads did (a font, a relabelled chip, the text size): a width it has not asked yet would be measured for another state. */
 export const stale = (note, c) => note.epoch !== c.epoch || note.doc !== c.doc || note.safe || c.read() !== c.inputs;
-/** The pointer moved. A stale carry asks nothing and is cancelled. */
-export function moved(note, c, point) { return stale(note, c) ? { ...c, cancelled: true } : { ...c, g: ops.moved(c.g, point, c.env) }; }
+/** The pointer moved. A stale carry asks nothing and is cancelled. `through`: the hold ran out, or Shift is held (DRAG.B4). */
+export function moved(note, c, point, through) { return stale(note, c) ? { ...c, cancelled: true } : { ...c, g: ops.moved(c.g, point, c.env, through) }; }
+/** The neighbour the carry presses, as SETTLE said with its last move: what the hold timer watches (DRAG.B4). */
+export const pressed = (c) => (c.cancelled ? null : c.g.pressed);
 /** The layout a carry shows; the note's own once it is cancelled. */
 export const preview = (note, c) => (c.cancelled || stale(note, c) ? note.doc.tree : ops.preview(c.g));
 /** The drop. A stale or cancelled carry writes nothing. */

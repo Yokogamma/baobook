@@ -1,7 +1,7 @@
 // The carry of a block as the pointer makes it (LAYOUT-RULES §6.A, DRAG.B1, AREA.7; LAYOUT-ENGINE-PLAN §2): the target from the pointer's
 // cells, «home» and «outside», away, and the change that asks for it: a carry in the block's container, or an `enter` or a `leave` when
-// the pointer crosses an area's frame. It builds targets and changes and runs nothing; ops.js runs them. First version, for the narrow
-// slice of LAYOUT-SEAMS-PLAN §8: the hold and Shift (DRAG.B4) are not here.
+// the pointer crosses an area's frame, and DRAG.B4's hold: the timer's state, with the time given to it. It builds targets and changes
+// and runs nothing; ops.js runs them. First version, for the narrow slice of LAYOUT-SEAMS-PLAN §8.
 //
 // Every point is in the sheet's cells, fractional: x in columns, y in rows from the sheet's row 0.
 
@@ -14,7 +14,9 @@ import { isArea, sharesCol, extent } from './geometry.js';
  *    // sheet row of its children's row 0, and the columns its children have
  *  @typedef {{box:?string, id:string, area:boolean, set:boolean, w:number, home:{box:?string, col:number, y:number}, grab:{dx:number, dy:number},
  *             from:Point, cols:number, away:boolean, frames:Map<string, Frame>}} Drag
- *  @typedef {{state:'outside'}|{state:'home'}|{state:'move', drag:Drag, to:?string, change:object}} Step */
+ *  @typedef {{state:'outside'}|{state:'home'}|{state:'move', drag:Drag, to:?string, change:object}} Step
+ *  @typedef {{pressed:string, x:number, y:number, t:number}} Hold
+ *    // DRAG.B4's hold: the neighbour SETTLE said is pressed, the hold point in the window's pixels, and when the timer started (ms) */
 
 const inside = (tree, box) => (box == null ? tree : tree.areas.get(box));
 
@@ -79,8 +81,10 @@ export function awayAt(away, start, id, at) {
 /** One move of the pointer: what the carry asks next. `cur`, the container the block is in now (`start`, the tree of the last result,
  *  has it there). Outside the sheet's box and exactly at home nothing is asked (PR-1). A pointer that crossed a frame asks for the
  *  crossing, a `leave` to the sheet first when it came out of an area: the caller runs it and asks again with the same point.
- *  @param {Drag} drag @param {?string} cur @param {Layout} start @param {Point} point @param {Settings} settings @returns {Step} */
-export function next(drag, cur, start, point, settings) {
+ *  `through`: the hold ran out, or Shift is held (DRAG.B4); it goes with a carry in the block's container, a crossing lets nothing through.
+ *  @param {Drag} drag @param {?string} cur @param {Layout} start @param {Point} point @param {Settings} settings
+ *  @param {'hold'|'shift'} [through] @returns {Step} */
+export function next(drag, cur, start, point, settings, through) {
   const to = over(drag, point);
   if (to === undefined) return { state: 'outside' };
   if (to !== cur) {
@@ -92,5 +96,17 @@ export function next(drag, cur, start, point, settings) {
   const at = aim(drag, cur, point, settings);
   if (cur === drag.home.box && at.col === drag.home.col && at.y === drag.home.y) return { state: 'home' };
   const away = awayAt(drag.away, inside(start, cur), drag.id, at);
-  return { state: 'move', drag: { ...drag, away }, to: cur, change: { type: 'carry', box: cur, id: drag.id, at, away } };
+  return { state: 'move', drag: { ...drag, away }, to: cur, change: { type: 'carry', box: cur, id: drag.id, at, away, ...(through ? { through } : {}) } };
 }
+
+/** The hold after a move (DRAG.B4): none while SETTLE presses no neighbour; started anew, at this point and this time, when the pressed
+ *  neighbour changed or the pointer left `STILL` pixels of the hold point; otherwise as it was.
+ *  @param {?Hold} hold @param {?string} pressed @param {{x:number, y:number}} px the pointer in the window's pixels @param {number} now ms
+ *  @param {Settings} settings @returns {?Hold} */
+export function holdAt(hold, pressed, px, now, settings) {
+  if (!pressed) return null;
+  if (!hold || hold.pressed !== pressed || Math.hypot(px.x - hold.x, px.y - hold.y) > settings.STILL) return { pressed, x: px.x, y: px.y, t: now };
+  return hold;
+}
+/** The time left of a hold, in ms: 0 once it ran out; null with no hold. @param {?Hold} hold @param {number} now @param {Settings} settings */
+export function holdLeft(hold, now, settings) { return hold ? Math.max(0, hold.t + settings.HOLD * 1000 - now) : null; }
