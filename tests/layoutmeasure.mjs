@@ -51,6 +51,10 @@ const T = (id, col, row, o = {}) => ({ id, text: 'x', fx: fxFromCol(col), row: r
   map.B = { text: 'x'.repeat(30) };
   const before = M.version(), rb = M.rows('B', 5), after = M.version();
   ok('4 a change the page did not tell: the block is still measured for its content as it is, and the version changes when that is found', rb.rows === 2 && after !== before && M.rows('B', 5).rows === 2 && M.version() === after, { before, after });
+  // looked at before a command: the change is counted then, and the command's measurements are of one version
+  map.B = { text: 'x'.repeat(45) };
+  const b4 = M.version(); M.look(['A', 'B', 'never-measured']); const a4 = M.version(), r4 = M.rows('B', 5);
+  ok('4a the blocks looked at before a command: a signature changed with no word is counted then, a block never measured is not asked, and measuring afterwards does not change the version', a4 !== b4 && r4.rows === 3 && M.version() === a4 && (M.look(['A', 'B']), M.version() === a4), { b4, a4, now: M.version() });
   const s0 = M.sign('A'), n0 = P.calls.rows;
   M.invalidate();
   ok('3 a font loaded: no answer is kept, the version and every block\'s signature are others, and the page is asked again', M.stats().kept === 0 && M.version() !== after && M.sign('A') !== s0 && M.rows('A', 5).rows === 8 && P.calls.rows === n0 + 1 && /^[0-9.]+$/.test(M.version()), M.version());
